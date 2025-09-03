@@ -35,24 +35,38 @@ import {
   PropertySignature,
   TypeParameter,
   TypeAlias,
-  Parameter
+  Parameter,
+  AwaitExpression,
+  NewExpression,
+  TryStatement,
+  CatchClause,
+  ThrowStatement
 } from './types';
 
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
+  private errors: string[] = [];
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
   }
 
+  getErrors(): string[] {
+    return this.errors;
+  }
+
   parse(): Program {
     const body: Statement[] = [];
+    this.errors = []; // Reset errors
     
     while (!this.isAtEnd()) {
       const stmt = this.statement();
       if (stmt) {
         body.push(stmt);
+      } else {
+        // Skip to next statement on error
+        this.advance();
       }
     }
     
@@ -96,7 +110,7 @@ export class Parser {
         this.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
         const func = this.functionDeclaration();
         // Mark as async (we'll handle this in codegen)
-        (func as any).async = true;
+        (func as FunctionDeclaration & { async?: boolean }).async = true;
         return func;
       }
       
@@ -130,8 +144,10 @@ export class Parser {
       
       return this.expressionStatement();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.errors.push(errorMessage);
       this.synchronize();
-      throw error;
+      return null; // Continue parsing after error
     }
   }
 
@@ -484,7 +500,7 @@ export class Parser {
         argument,
         line: awaitToken.line,
         column: awaitToken.column
-      } as any;
+      } as AwaitExpression;
     }
     
     if (this.match(TokenType.НАВ)) {
@@ -508,7 +524,7 @@ export class Parser {
         arguments: args,
         line: newToken.line,
         column: newToken.column
-      } as any;
+      } as NewExpression;
     }
     
     return this.call();
@@ -687,7 +703,16 @@ export class Parser {
     if (this.check(type)) return this.advance();
     
     const token = this.peek();
-    throw new Error(`${message}. Got '${token.value}' at line ${token.line}, column ${token.column}`);
+    const errorMsg = `${message}. Got '${token.value}' at line ${token.line}, column ${token.column}`;
+    this.errors.push(errorMsg);
+    
+    // Try to recover by returning a dummy token
+    return {
+      type: type,
+      value: '',
+      line: token.line,
+      column: token.column
+    };
   }
 
   private importDeclaration(): ImportDeclaration {
@@ -809,7 +834,7 @@ export class Parser {
       TokenType.ЧОП, TokenType.САБТ, TokenType.ХАТО, TokenType.ОГОҲӢ, TokenType.МАЪЛУМОТ,
       TokenType.РӮЙХАТ, TokenType.ИЛОВА, TokenType.БАРОВАРДАН, TokenType.ДАРОЗӢ,
       TokenType.ХАРИТА, TokenType.ФИЛТР, TokenType.КОФТАН,
-      TokenType.САТР_ОБЪЕКТ, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
+      TokenType.САТР_МЕТОДҲО, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
       TokenType.ОБЪЕКТ, TokenType.КАЛИДҲО, TokenType.ҚИМАТҲО,
       TokenType.МАТЕМАТИКА, TokenType.ҶАМЪ, TokenType.ТАРҲ, TokenType.ЗАРБ, TokenType.ТАҚСИМ,
       // Note: We don't include control flow keywords here as they have special parsing
@@ -844,17 +869,17 @@ export class Parser {
     } as ArrayExpression;
   }
 
-  private tryStatement(): any {
+  private tryStatement(): TryStatement {
     const tryToken = this.previous();
     
     // Consume the opening brace for try block
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after 'кӯшиш'");
     const block = this.blockStatement();
     
-    let handler: any = undefined;
+    let handler: CatchClause | undefined = undefined;
     if (this.match(TokenType.ГИРИФТАН)) {
       this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'гирифтан'");
-      let param: any = undefined;
+      let param: Identifier | undefined = undefined;
       if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
         const paramToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
         param = {
@@ -877,7 +902,7 @@ export class Parser {
       };
     }
     
-    let finalizer: any = undefined;
+    let finalizer: BlockStatement | undefined = undefined;
     if (this.match(TokenType.НИҲОЯТ)) {
       this.consume(TokenType.LEFT_BRACE, "Expected '{' after 'ниҳоят'");
       finalizer = this.blockStatement();
@@ -893,7 +918,7 @@ export class Parser {
     };
   }
 
-  private throwStatement(): any {
+  private throwStatement(): ThrowStatement {
     const throwToken = this.previous();
     const argument = this.expression();
     this.consume(TokenType.SEMICOLON, "Expected ';' after throw statement");
@@ -957,7 +982,7 @@ export class Parser {
       const types = [type];
       do {
         types.push(this.primaryType());
-      } while (this.match(TokenType.OR));
+      } while (this.match(TokenType.PIPE));
       
       type = {
         type: 'UnionType',

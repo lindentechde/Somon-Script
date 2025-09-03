@@ -21,8 +21,14 @@ import {
   ArrayExpression,
   InterfaceDeclaration,
   TypeAlias,
-  Parameter
+  Parameter,
+  TryStatement,
+  ThrowStatement,
+  AwaitExpression,
+  NewExpression,
+  ASTNode
 } from './types';
+// import { BaseVisitor } from './visitor'; // Simplified for now
 
 export class CodeGenerator {
   private indentLevel: number = 0;
@@ -47,7 +53,7 @@ export class CodeGenerator {
     ['кофтан', 'find'],
     
     // String methods
-    ['сатр_объект', 'String'],
+    ['сатр_методҳо', 'String'],
     ['дарозии_сатр', 'length'],
     ['пайвастан', 'concat'],
     ['ҷойивазкунӣ', 'replace'],
@@ -110,9 +116,9 @@ export class CodeGenerator {
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
-        return this.generateTryStatement(node as any);
+        return this.generateTryStatement(node as TryStatement);
       case 'ThrowStatement':
-        return this.generateThrowStatement(node as any);
+        return this.generateThrowStatement(node as ThrowStatement);
       case 'InterfaceDeclaration':
         return this.generateInterfaceDeclaration(node as InterfaceDeclaration);
       case 'TypeAlias':
@@ -131,7 +137,7 @@ export class CodeGenerator {
   }
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
-    const async = (node as any).async ? 'async ' : '';
+    const async = (node as FunctionDeclaration & { async?: boolean }).async ? 'async ' : '';
     const name = this.generateIdentifier(node.name);
     
     // Handle new Parameter type or legacy Identifier type
@@ -141,7 +147,7 @@ export class CodeGenerator {
         return this.generateIdentifier(p.name);
       } else {
         // Legacy Identifier type
-        return this.generateIdentifier(param as any);
+        return this.generateIdentifier((param as Parameter).name);
       }
     }).join(', ');
     
@@ -233,9 +239,9 @@ export class CodeGenerator {
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
       case 'AwaitExpression':
-        return this.generateAwaitExpression(node as any);
+        return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
-        return this.generateNewExpression(node as any);
+        return this.generateNewExpression(node as NewExpression);
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }
@@ -250,15 +256,15 @@ export class CodeGenerator {
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      importParts.push((defaultImports[0] as any).local.name);
+      importParts.push(defaultImports[0].local.name);
     }
     
     // Handle named imports
     const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier');
     if (namedImports.length > 0) {
       const namedPart = '{ ' + namedImports.map(spec => {
-        const imported = (spec as any).imported.name;
-        const local = (spec as any).local.name;
+        const imported = spec.imported.name;
+        const local = spec.local.name;
         return imported === local ? imported : `${imported} as ${local}`;
       }).join(', ') + ' }';
       importParts.push(namedPart);
@@ -358,7 +364,7 @@ export class CodeGenerator {
     return `[${elements.join(', ')}]`;
   }
 
-  private generateTryStatement(node: any): string {
+  private generateTryStatement(node: TryStatement): string {
     let result = this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
     
     if (node.handler) {
@@ -379,19 +385,19 @@ export class CodeGenerator {
     return result;
   }
 
-  private generateThrowStatement(node: any): string {
+  private generateThrowStatement(node: ThrowStatement): string {
     const argument = this.generateExpression(node.argument);
     return this.indent(`throw ${argument};`);
   }
 
-  private generateAwaitExpression(node: any): string {
+  private generateAwaitExpression(node: AwaitExpression): string {
     const argument = this.generateExpression(node.argument);
     return `await ${argument}`;
   }
 
-  private generateNewExpression(node: any): string {
+  private generateNewExpression(node: NewExpression): string {
     const callee = this.generateExpression(node.callee);
-    const args = node.arguments ? node.arguments.map((arg: any) => this.generateExpression(arg)).join(', ') : '';
+    const args = node.arguments ? node.arguments.map((arg: Expression) => this.generateExpression(arg)).join(', ') : '';
     return `new ${callee}(${args})`;
   }
 

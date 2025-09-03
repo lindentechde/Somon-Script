@@ -13,7 +13,8 @@ import {
   GenericType,
   TypeAnnotation,
   Identifier,
-  Parameter
+  Parameter,
+  Literal
 } from './types';
 
 export interface TypeCheckError {
@@ -232,7 +233,7 @@ export class TypeChecker {
   private inferExpressionType(expression: Expression): Type {
     switch (expression.type) {
       case 'Literal':
-        const literal = expression as any;
+        const literal = expression as Literal;
         if (typeof literal.value === 'string') {
           return { kind: 'primitive', name: 'string' };
         } else if (typeof literal.value === 'number') {

@@ -118,22 +118,28 @@ describe('TypeChecker', () => {
     });
   });
 
-  // Union types are planned for Phase 2
-  // describe('Union Type Checking', () => {
-  //   test('should handle union types', () => {
-  //     const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
-  //     const result = checkTypes(source);
-  //     
-  //     expect(result.errors).toHaveLength(0);
-  //   });
+  describe('Union Type Checking', () => {
+    test('should handle union types', () => {
+      const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
+      const result = checkTypes(source);
+      
+      expect(result.errors).toHaveLength(0);
+    });
 
-  //   test('should validate union type assignment', () => {
-  //     const source = 'тағйирёбанда қимат: сатр | рақам = 42;';
-  //     const result = checkTypes(source);
-  //     
-  //     expect(result.errors).toHaveLength(0);
-  //   });
-  // });
+    test('should validate union type assignment', () => {
+      const source = 'тағйирёбанда қимат: сатр | рақам = 42;';
+      const result = checkTypes(source);
+      
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('should detect invalid union type assignment', () => {
+      const source = 'тағйирёбанда қимат: сатр | рақам = дуруст;';
+      const result = checkTypes(source);
+      
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+  });
 
   describe('Type Alias', () => {
     test('should handle type alias declaration', () => {

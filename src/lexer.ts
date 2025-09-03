@@ -48,7 +48,7 @@ export class Lexer {
     ['кофтан', TokenType.КОФТАН],
     
     // String methods
-    ['сатр_объект', TokenType.САТР_ОБЪЕКТ],
+    ['сатр_методҳо', TokenType.САТР_МЕТОДҲО],
     ['дарозии_сатр', TokenType.ДАРОЗИИ_САТР],
     ['пайвастан', TokenType.ПАЙВАСТАН],
     ['ҷойивазкунӣ', TokenType.ҶОЙИВАЗКУНӢ],
@@ -200,10 +200,15 @@ export class Lexer {
       return this.createToken(TokenType.AND, '&&', startLine, startColumn);
     }
 
-    if (char === '|' && this.peek() === '|') {
-      this.advance();
-      this.advance();
-      return this.createToken(TokenType.OR, '||', startLine, startColumn);
+    if (char === '|') {
+      if (this.peek() === '|') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.OR, '||', startLine, startColumn);
+      } else {
+        this.advance();
+        return this.createToken(TokenType.PIPE, '|', startLine, startColumn);
+      }
     }
 
     // String literals

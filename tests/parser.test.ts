@@ -166,16 +166,15 @@ describe('Parser', () => {
       expect((stmt as any).typeAnnotation.typeAnnotation.elementType.type).toBe('PrimitiveType');
     });
 
-    // Union types are planned for Phase 2
-    // test('should parse union type annotation', () => {
-    //   const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
-    //   const ast = parseSource(source);
+    test('should parse union type annotation', () => {
+      const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
+      const ast = parseSource(source);
 
-    //   const stmt = ast.body[0];
-    //   expect(stmt.type).toBe('VariableDeclaration');
-    //   expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('UnionType');
-    //   expect((stmt as any).typeAnnotation.typeAnnotation.types).toHaveLength(2);
-    // });
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('VariableDeclaration');
+      expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('UnionType');
+      expect((stmt as any).typeAnnotation.typeAnnotation.types).toHaveLength(2);
+    });
 
     test('should parse type alias', () => {
       const source = 'навъ КорбарИД = сатр;';

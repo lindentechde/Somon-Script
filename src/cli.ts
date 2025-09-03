@@ -23,7 +23,14 @@ program
   .option('--minify', 'Minify output')
   .option('--no-type-check', 'Disable type checking')
   .option('--strict', 'Enable strict type checking')
-  .action((input: string, options: any) => {
+  .action((input: string, options: {
+    output?: string;
+    target?: string;
+    sourceMap?: boolean;
+    minify?: boolean;
+    noTypeCheck?: boolean;
+    strict?: boolean;
+  }) => {
     try {
       // Read input file
       if (!fs.existsSync(input)) {
@@ -35,7 +42,7 @@ program
       
       // Compile
       const result = compile(source, {
-        target: options.target,
+        target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
         sourceMap: options.sourceMap,
         minify: options.minify,
         typeCheck: !options.noTypeCheck,

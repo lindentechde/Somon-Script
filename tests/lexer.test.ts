@@ -1,4 +1,9 @@
 import { Lexer } from '../src/lexer';
+
+function tokenize(source: string) {
+  const lexer = new Lexer(source);
+  return lexer.tokenize();
+}
 import { TokenType } from '../src/types';
 
 describe('Lexer', () => {
@@ -84,5 +89,35 @@ describe('Lexer', () => {
     expect(tokens[1].line).toBe(1); // newline token
     expect(tokens[2].line).toBe(2);
     expect(tokens[2].column).toBe(1);
+  });
+
+  test('should tokenize pipe operator for union types', () => {
+    const source = 'сатр | рақам';
+    const tokens = tokenize(source);
+    
+    expect(tokens).toHaveLength(4); // САТР, PIPE, РАҚАМ, EOF
+    expect(tokens[0].type).toBe('САТР');
+    expect(tokens[1].type).toBe('PIPE');
+    expect(tokens[1].value).toBe('|');
+    expect(tokens[2].type).toBe('РАҚАМ');
+  });
+
+  test('should distinguish pipe from logical OR', () => {
+    const source = 'а | б || в';
+    const tokens = tokenize(source);
+    
+    expect(tokens).toHaveLength(6); // а, |, б, ||, в, EOF
+    expect(tokens[1].type).toBe('PIPE');
+    expect(tokens[1].value).toBe('|');
+    expect(tokens[3].type).toBe('OR');
+    expect(tokens[3].value).toBe('||');
+  });
+
+  test('should tokenize string methods with new naming', () => {
+    const source = 'сатр_методҳо.дарозии_сатр';
+    const tokens = tokenize(source);
+    
+    expect(tokens[0].type).toBe('САТР_МЕТОДҲО');
+    expect(tokens[2].type).toBe('ДАРОЗИИ_САТР');
   });
 });
