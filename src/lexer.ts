@@ -48,7 +48,7 @@ export class Lexer {
     ['кофтан', TokenType.КОФТАН],
     
     // String methods
-    ['сатр', TokenType.САТР],
+    ['сатр_объект', TokenType.САТР_ОБЪЕКТ],
     ['дарозии_сатр', TokenType.ДАРОЗИИ_САТР],
     ['пайвастан', TokenType.ПАЙВАСТАН],
     ['ҷойивазкунӣ', TokenType.ҶОЙИВАЗКУНӢ],
@@ -78,6 +78,23 @@ export class Lexer {
     ['ҳамзамон', TokenType.ҲАМЗАМОН],
     ['интизор', TokenType.ИНТИЗОР],
     ['ваъда', TokenType.ВАЪДА],
+    
+    // Type system
+    ['сатр', TokenType.САТР],
+    ['рақам', TokenType.РАҚАМ],
+    ['мантиқӣ', TokenType.МАНТИҚӢ],
+    ['интерфейс', TokenType.ИНТЕРФЕЙС],
+    ['навъ', TokenType.НАВЪ],
+    ['якхела', TokenType.ЯКХЕЛА],
+    ['мерос', TokenType.МЕРОС],
+    ['татбиқ', TokenType.ТАТБИҚ],
+    ['конструктор', TokenType.КОНСТРУКТОР],
+    ['хосусӣ', TokenType.ХОСУСӢ],
+    ['муҳофизатшуда', TokenType.МУҲОФИЗАТШУДА],
+    ['ҷамъиятӣ', TokenType.ҶАМЪИЯТӢ],
+    ['статикӣ', TokenType.СТАТИКӢ],
+    ['мавҳум', TokenType.МАВҲУМ],
+    ['номфазо', TokenType.НОМФАЗО],
   ]);
 
   constructor(input: string) {
@@ -132,6 +149,7 @@ export class Lexer {
       case ',': return this.singleCharToken(TokenType.COMMA);
       case '.': return this.singleCharToken(TokenType.DOT);
       case ':': return this.singleCharToken(TokenType.COLON);
+      case '?': return this.singleCharToken(TokenType.QUESTION);
       case '\n':
         this.advance();
         this.line++;

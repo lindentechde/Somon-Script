@@ -18,7 +18,10 @@ import {
   MemberExpression,
   ImportDeclaration,
   ExportDeclaration,
-  ArrayExpression
+  ArrayExpression,
+  InterfaceDeclaration,
+  TypeAlias,
+  Parameter
 } from './types';
 
 export class CodeGenerator {
@@ -44,7 +47,7 @@ export class CodeGenerator {
     ['кофтан', 'find'],
     
     // String methods
-    ['сатр', 'String'],
+    ['сатр_объект', 'String'],
     ['дарозии_сатр', 'length'],
     ['пайвастан', 'concat'],
     ['ҷойивазкунӣ', 'replace'],
@@ -110,6 +113,10 @@ export class CodeGenerator {
         return this.generateTryStatement(node as any);
       case 'ThrowStatement':
         return this.generateThrowStatement(node as any);
+      case 'InterfaceDeclaration':
+        return this.generateInterfaceDeclaration(node as InterfaceDeclaration);
+      case 'TypeAlias':
+        return this.generateTypeAlias(node as TypeAlias);
       default:
         throw new Error(`Unknown statement type: ${node.type}`);
     }
@@ -126,7 +133,18 @@ export class CodeGenerator {
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
     const async = (node as any).async ? 'async ' : '';
     const name = this.generateIdentifier(node.name);
-    const params = node.params.map(param => this.generateIdentifier(param)).join(', ');
+    
+    // Handle new Parameter type or legacy Identifier type
+    const params = node.params.map(param => {
+      if (param.type === 'Parameter') {
+        const p = param as Parameter;
+        return this.generateIdentifier(p.name);
+      } else {
+        // Legacy Identifier type
+        return this.generateIdentifier(param as any);
+      }
+    }).join(', ');
+    
     const body = this.generateBlockStatement(node.body);
     
     return this.indent(`${async}function ${name}(${params}) ${body}`);
@@ -375,6 +393,18 @@ export class CodeGenerator {
     const callee = this.generateExpression(node.callee);
     const args = node.arguments ? node.arguments.map((arg: any) => this.generateExpression(arg)).join(', ') : '';
     return `new ${callee}(${args})`;
+  }
+
+  private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
+    // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
+    const name = this.generateIdentifier(node.name);
+    return this.indent(`// Interface: ${name}`);
+  }
+
+  private generateTypeAlias(node: TypeAlias): string {
+    // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
+    const name = this.generateIdentifier(node.name);
+    return this.indent(`// Type alias: ${name}`);
   }
 
   private needsParentheses(node: BinaryExpression): boolean {

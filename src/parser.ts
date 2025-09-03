@@ -23,7 +23,19 @@ import {
   ImportDefaultSpecifier,
   ExportDeclaration,
   ExportSpecifier,
-  ArrayExpression
+  ArrayExpression,
+  TypeAnnotation,
+  TypeNode,
+  PrimitiveType,
+  ArrayType,
+  UnionType,
+  GenericType,
+  InterfaceDeclaration,
+  InterfaceBody,
+  PropertySignature,
+  TypeParameter,
+  TypeAlias,
+  Parameter
 } from './types';
 
 export class Parser {
@@ -65,6 +77,14 @@ export class Parser {
       
       if (this.match(TokenType.СОДИР)) {
         return this.exportDeclaration();
+      }
+      
+      if (this.match(TokenType.ИНТЕРФЕЙС)) {
+        return this.interfaceDeclaration();
+      }
+      
+      if (this.match(TokenType.НАВЪ)) {
+        return this.typeAlias();
       }
       
       if (this.match(TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ)) {
@@ -134,6 +154,12 @@ export class Parser {
       column: name.column
     };
     
+    // Parse optional type annotation
+    let typeAnnotation: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      typeAnnotation = this.typeAnnotation();
+    }
+    
     let init: Expression | undefined;
     if (this.match(TokenType.ASSIGN)) {
       init = this.expression();
@@ -145,6 +171,7 @@ export class Parser {
       type: 'VariableDeclaration',
       kind,
       identifier,
+      typeAnnotation,
       init,
       line: kindToken.line,
       column: kindToken.column
@@ -164,20 +191,22 @@ export class Parser {
     
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
     
-    const params: Identifier[] = [];
+    const params: Parameter[] = [];
     if (!this.check(TokenType.RIGHT_PAREN)) {
       do {
-        const param = this.consume(TokenType.IDENTIFIER, "Expected parameter name");
-        params.push({
-          type: 'Identifier',
-          name: param.value,
-          line: param.line,
-          column: param.column
-        });
+        const param = this.parseParameter();
+        params.push(param);
       } while (this.match(TokenType.COMMA));
     }
     
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
+    
+    // Parse optional return type
+    let returnType: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
+    }
+    
     this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
     
     const body = this.blockStatement();
@@ -191,6 +220,7 @@ export class Parser {
         column: name.column
       },
       params,
+      returnType,
       body,
       line: funcToken.line,
       column: funcToken.column
@@ -779,7 +809,7 @@ export class Parser {
       TokenType.ЧОП, TokenType.САБТ, TokenType.ХАТО, TokenType.ОГОҲӢ, TokenType.МАЪЛУМОТ,
       TokenType.РӮЙХАТ, TokenType.ИЛОВА, TokenType.БАРОВАРДАН, TokenType.ДАРОЗӢ,
       TokenType.ХАРИТА, TokenType.ФИЛТР, TokenType.КОФТАН,
-      TokenType.САТР, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
+      TokenType.САТР_ОБЪЕКТ, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
       TokenType.ОБЪЕКТ, TokenType.КАЛИДҲО, TokenType.ҚИМАТҲО,
       TokenType.МАТЕМАТИКА, TokenType.ҶАМЪ, TokenType.ТАРҲ, TokenType.ЗАРБ, TokenType.ТАҚСИМ,
       // Note: We don't include control flow keywords here as they have special parsing
@@ -876,6 +906,266 @@ export class Parser {
     };
   }
 
+  private parseParameter(): Parameter {
+    let paramName: Token;
+    if (this.check(TokenType.IDENTIFIER)) {
+      paramName = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      paramName = this.previous();
+    } else {
+      throw new Error(`Expected parameter name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
+    
+    // Parse optional type annotation
+    let typeAnnotation: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      typeAnnotation = this.typeAnnotation();
+    }
+    
+    return {
+      type: 'Parameter',
+      name: {
+        type: 'Identifier',
+        name: paramName.value,
+        line: paramName.line,
+        column: paramName.column
+      },
+      typeAnnotation,
+      line: paramName.line,
+      column: paramName.column
+    };
+  }
+
+  private typeAnnotation(): TypeAnnotation {
+    const typeNode = this.parseType();
+    return {
+      type: 'TypeAnnotation',
+      typeAnnotation: typeNode,
+      line: typeNode.line,
+      column: typeNode.column
+    };
+  }
+
+  private parseType(): TypeNode {
+    return this.unionType();
+  }
+
+  private unionType(): TypeNode {
+    let type = this.primaryType();
+    
+    while (this.match(TokenType.OR)) {
+      const types = [type];
+      do {
+        types.push(this.primaryType());
+      } while (this.match(TokenType.OR));
+      
+      type = {
+        type: 'UnionType',
+        types,
+        line: type.line,
+        column: type.column
+      } as UnionType;
+    }
+    
+    return type;
+  }
+
+  private primaryType(): TypeNode {
+    // Primitive types
+    if (this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ)) {
+      const token = this.previous();
+      const primitiveType: PrimitiveType = {
+        type: 'PrimitiveType',
+        name: token.value as 'сатр' | 'рақам' | 'мантиқӣ',
+        line: token.line,
+        column: token.column
+      };
+      
+      // Check for array type
+      if (this.match(TokenType.LEFT_BRACKET)) {
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+        return {
+          type: 'ArrayType',
+          elementType: primitiveType,
+          line: primitiveType.line,
+          column: primitiveType.column
+        } as ArrayType;
+      }
+      
+      return primitiveType;
+    }
+    
+    // Generic or identifier types
+    if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
+      const nameToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
+      const name: Identifier = {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column
+      };
+      
+      // Check for generic type parameters
+      let typeParameters: TypeNode[] | undefined;
+      if (this.match(TokenType.LESS_THAN)) {
+        typeParameters = [];
+        do {
+          typeParameters.push(this.parseType());
+        } while (this.match(TokenType.COMMA));
+        this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
+      }
+      
+      const genericType: GenericType = {
+        type: 'GenericType',
+        name,
+        typeParameters,
+        line: name.line,
+        column: name.column
+      };
+      
+      // Check for array type
+      if (this.match(TokenType.LEFT_BRACKET)) {
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+        return {
+          type: 'ArrayType',
+          elementType: genericType,
+          line: genericType.line,
+          column: genericType.column
+        } as ArrayType;
+      }
+      
+      return genericType;
+    }
+    
+    throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);
+  }
+
+  private interfaceDeclaration(): InterfaceDeclaration {
+    const interfaceToken = this.previous();
+    
+    let name: Token;
+    if (this.check(TokenType.IDENTIFIER)) {
+      name = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      name = this.previous();
+    } else {
+      throw new Error(`Expected interface name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
+    
+    // Parse optional type parameters
+    let typeParameters: TypeParameter[] | undefined;
+    if (this.match(TokenType.LESS_THAN)) {
+      typeParameters = [];
+      do {
+        const paramName = this.consume(TokenType.IDENTIFIER, "Expected type parameter name");
+        typeParameters.push({
+          type: 'TypeParameter',
+          name: {
+            type: 'Identifier',
+            name: paramName.value,
+            line: paramName.line,
+            column: paramName.column
+          },
+          line: paramName.line,
+          column: paramName.column
+        });
+      } while (this.match(TokenType.COMMA));
+      this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
+    }
+    
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after interface name");
+    
+    const properties: PropertySignature[] = [];
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      // Skip newlines
+      if (this.match(TokenType.NEWLINE)) {
+        continue;
+      }
+      
+      const property = this.propertySignature();
+      properties.push(property);
+    }
+    
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after interface body");
+    
+    return {
+      type: 'InterfaceDeclaration',
+      name: {
+        type: 'Identifier',
+        name: name.value,
+        line: name.line,
+        column: name.column
+      },
+      typeParameters,
+      body: {
+        type: 'InterfaceBody',
+        properties,
+        line: interfaceToken.line,
+        column: interfaceToken.column
+      },
+      line: interfaceToken.line,
+      column: interfaceToken.column
+    };
+  }
+
+  private propertySignature(): PropertySignature {
+    let keyName: Token;
+    if (this.check(TokenType.IDENTIFIER)) {
+      keyName = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      keyName = this.previous();
+    } else {
+      throw new Error(`Expected property name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
+    
+    // Check for optional property
+    const optional = this.match(TokenType.QUESTION);
+    
+    this.consume(TokenType.COLON, "Expected ':' after property name");
+    const typeAnnotation = this.typeAnnotation();
+    
+    this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
+    
+    return {
+      type: 'PropertySignature',
+      key: {
+        type: 'Identifier',
+        name: keyName.value,
+        line: keyName.line,
+        column: keyName.column
+      },
+      typeAnnotation,
+      optional: optional || false,
+      line: keyName.line,
+      column: keyName.column
+    };
+  }
+
+  private typeAlias(): TypeAlias {
+    const typeToken = this.previous();
+    
+    const name = this.consume(TokenType.IDENTIFIER, "Expected type alias name");
+    
+    this.consume(TokenType.ASSIGN, "Expected '=' after type alias name");
+    
+    const typeAnnotation = this.typeAnnotation();
+    
+    this.consume(TokenType.SEMICOLON, "Expected ';' after type alias");
+    
+    return {
+      type: 'TypeAlias',
+      name: {
+        type: 'Identifier',
+        name: name.value,
+        line: name.line,
+        column: name.column
+      },
+      typeAnnotation,
+      line: typeToken.line,
+      column: typeToken.column
+    };
+  }
+
   private synchronize(): void {
     this.advance();
     
@@ -894,6 +1184,8 @@ export class Parser {
         case TokenType.СОДИР:
         case TokenType.КӮШИШ:
         case TokenType.ПАРТОФТАН:
+        case TokenType.ИНТЕРФЕЙС:
+        case TokenType.НАВЪ:
           return;
       }
       

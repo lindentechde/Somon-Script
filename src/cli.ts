@@ -21,6 +21,8 @@ program
   .option('--target <target>', 'Compilation target', 'es2020')
   .option('--source-map', 'Generate source maps')
   .option('--minify', 'Minify output')
+  .option('--no-type-check', 'Disable type checking')
+  .option('--strict', 'Enable strict type checking')
   .action((input: string, options: any) => {
     try {
       // Read input file
@@ -35,7 +37,9 @@ program
       const result = compile(source, {
         target: options.target,
         sourceMap: options.sourceMap,
-        minify: options.minify
+        minify: options.minify,
+        typeCheck: !options.noTypeCheck,
+        strict: options.strict
       });
 
       // Handle errors

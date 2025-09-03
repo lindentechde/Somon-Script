@@ -43,7 +43,7 @@ describe('Parser', () => {
     expect(stmt.type).toBe('FunctionDeclaration');
     expect((stmt as any).name.name).toBe('салом');
     expect((stmt as any).params).toHaveLength(1);
-    expect((stmt as any).params[0].name).toBe('ном');
+    expect((stmt as any).params[0].name.name).toBe('ном');
     expect((stmt as any).body.type).toBe('BlockStatement');
   });
 
@@ -113,5 +113,78 @@ describe('Parser', () => {
     const stmt = ast.body[0];
     expect(stmt.type).toBe('ReturnStatement');
     expect((stmt as any).argument.type).toBe('BinaryExpression');
+  });
+
+  describe('Type System Parsing', () => {
+    test('should parse variable with type annotation', () => {
+      const source = 'тағйирёбанда ном: сатр = "Аҳмад";';
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('VariableDeclaration');
+      expect((stmt as any).typeAnnotation).toBeDefined();
+      expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('PrimitiveType');
+      expect((stmt as any).typeAnnotation.typeAnnotation.name).toBe('сатр');
+    });
+
+    test('should parse function with typed parameters', () => {
+      const source = 'функсия ҷамъ(а: рақам, б: рақам): рақам { бозгашт а + б; }';
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('FunctionDeclaration');
+      expect((stmt as any).params).toHaveLength(2);
+      expect((stmt as any).params[0].type).toBe('Parameter');
+      expect((stmt as any).params[0].typeAnnotation).toBeDefined();
+      expect((stmt as any).returnType).toBeDefined();
+    });
+
+    test('should parse interface declaration', () => {
+      const source = `
+        интерфейс Корбар {
+          ном: сатр;
+          синну_сол: рақам;
+          email?: сатр;
+        }
+      `;
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('InterfaceDeclaration');
+      expect((stmt as any).name.name).toBe('Корбар');
+      expect((stmt as any).body.properties).toHaveLength(3);
+      expect((stmt as any).body.properties[2].optional).toBe(true);
+    });
+
+    test('should parse array type annotation', () => {
+      const source = 'тағйирёбанда рақамҳо: рақам[] = [1, 2, 3];';
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('VariableDeclaration');
+      expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('ArrayType');
+      expect((stmt as any).typeAnnotation.typeAnnotation.elementType.type).toBe('PrimitiveType');
+    });
+
+    // Union types are planned for Phase 2
+    // test('should parse union type annotation', () => {
+    //   const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
+    //   const ast = parseSource(source);
+
+    //   const stmt = ast.body[0];
+    //   expect(stmt.type).toBe('VariableDeclaration');
+    //   expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('UnionType');
+    //   expect((stmt as any).typeAnnotation.typeAnnotation.types).toHaveLength(2);
+    // });
+
+    test('should parse type alias', () => {
+      const source = 'навъ КорбарИД = сатр;';
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('TypeAlias');
+      expect((stmt as any).name.name).toBe('КорбарИД');
+      expect((stmt as any).typeAnnotation).toBeDefined();
+    });
   });
 });

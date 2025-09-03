@@ -46,7 +46,7 @@ export enum TokenType {
   КОФТАН = 'КОФТАН',             // find
   
   // String methods
-  САТР = 'САТР',                 // String
+  САТР_ОБЪЕКТ = 'САТР_ОБЪЕКТ',   // String object
   ДАРОЗИИ_САТР = 'ДАРОЗИИ_САТР', // length
   ПАЙВАСТАН = 'ПАЙВАСТАН',       // concat
   ҶОЙИВАЗКУНӢ = 'ҶОЙИВАЗКУНӢ',   // replace
@@ -77,6 +77,23 @@ export enum TokenType {
   ИНТИЗОР = 'ИНТИЗОР',           // await
   ВАЪДА = 'ВАЪДА',               // Promise
   
+  // Type system keywords
+  САТР = 'САТР',                 // string type
+  РАҚАМ = 'РАҚАМ',               // number type
+  МАНТИҚӢ = 'МАНТИҚӢ',           // boolean type
+  ИНТЕРФЕЙС = 'ИНТЕРФЕЙС',       // interface
+  НАВЪ = 'НАВЪ',                 // type
+  ЯКХЕЛА = 'ЯКХЕЛА',             // generic (same/uniform)
+  МЕРОС = 'МЕРОС',               // extends/inherits
+  ТАТБИҚ = 'ТАТБИҚ',             // implements
+  КОНСТРУКТОР = 'КОНСТРУКТОР',   // constructor
+  ХОСУСӢ = 'ХОСУСӢ',             // private
+  МУҲОФИЗАТШУДА = 'МУҲОФИЗАТШУДА', // protected
+  ҶАМЪИЯТӢ = 'ҶАМЪИЯТӢ',         // public
+  СТАТИКӢ = 'СТАТИКӢ',           // static
+  МАВҲУМ = 'МАВҲУМ',             // abstract
+  НОМФАЗО = 'НОМФАЗО',           // namespace
+  
   // Operators
   PLUS = '+',
   MINUS = '-',
@@ -99,6 +116,7 @@ export enum TokenType {
   COMMA = ',',
   DOT = '.',
   COLON = ':',
+  QUESTION = '?',
   
   // Brackets
   LEFT_PAREN = '(',
@@ -141,14 +159,24 @@ export interface VariableDeclaration extends Statement {
   type: 'VariableDeclaration';
   kind: 'ТАҒЙИРЁБАНДА' | 'СОБИТ';
   identifier: Identifier;
+  typeAnnotation?: TypeAnnotation;
   init?: Expression;
 }
 
 export interface FunctionDeclaration extends Statement {
   type: 'FunctionDeclaration';
   name: Identifier;
-  params: Identifier[];
+  params: Parameter[];
+  returnType?: TypeAnnotation;
   body: BlockStatement;
+  async?: boolean;
+}
+
+export interface Parameter extends ASTNode {
+  type: 'Parameter';
+  name: Identifier;
+  typeAnnotation?: TypeAnnotation;
+  optional?: boolean;
 }
 
 export interface BlockStatement extends Statement {
@@ -280,4 +308,69 @@ export interface ThrowStatement extends Statement {
 export interface AwaitExpression extends Expression {
   type: 'AwaitExpression';
   argument: Expression;
+}
+
+// Type system AST nodes
+export interface TypeAnnotation extends ASTNode {
+  type: 'TypeAnnotation';
+  typeAnnotation: TypeNode;
+}
+
+export interface TypeNode extends ASTNode {
+  type: string;
+}
+
+export interface PrimitiveType extends TypeNode {
+  type: 'PrimitiveType';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ';
+}
+
+export interface ArrayType extends TypeNode {
+  type: 'ArrayType';
+  elementType: TypeNode;
+}
+
+export interface UnionType extends TypeNode {
+  type: 'UnionType';
+  types: TypeNode[];
+}
+
+export interface GenericType extends TypeNode {
+  type: 'GenericType';
+  name: Identifier;
+  typeParameters?: TypeNode[];
+}
+
+export interface InterfaceDeclaration extends Statement {
+  type: 'InterfaceDeclaration';
+  name: Identifier;
+  typeParameters?: TypeParameter[];
+  extends?: TypeNode[];
+  body: InterfaceBody;
+}
+
+export interface InterfaceBody extends ASTNode {
+  type: 'InterfaceBody';
+  properties: PropertySignature[];
+}
+
+export interface PropertySignature extends ASTNode {
+  type: 'PropertySignature';
+  key: Identifier;
+  typeAnnotation: TypeAnnotation;
+  optional: boolean;
+}
+
+export interface TypeParameter extends ASTNode {
+  type: 'TypeParameter';
+  name: Identifier;
+  constraint?: TypeNode;
+  default?: TypeNode;
+}
+
+export interface TypeAlias extends Statement {
+  type: 'TypeAlias';
+  name: Identifier;
+  typeParameters?: TypeParameter[];
+  typeAnnotation: TypeAnnotation;
 }

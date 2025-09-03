@@ -1,11 +1,14 @@
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { CodeGenerator } from './codegen';
+import { TypeChecker, TypeCheckError } from './type-checker';
 
 export interface CompileOptions {
   sourceMap?: boolean;
   minify?: boolean;
   target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  typeCheck?: boolean;
+  strict?: boolean;
 }
 
 export interface CompileResult {
@@ -27,6 +30,29 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Parse
     const parser = new Parser(tokens);
     const ast = parser.parse();
+    
+    // Type check (if enabled)
+    if (options.typeCheck !== false) { // Default to true
+      const typeChecker = new TypeChecker();
+      const typeCheckResult = typeChecker.check(ast);
+      
+      // Add type errors and warnings
+      errors.push(...typeCheckResult.errors.map(err => 
+        `Type error at line ${err.line}, column ${err.column}: ${err.message}`
+      ));
+      warnings.push(...typeCheckResult.warnings.map(warn => 
+        `Type warning at line ${warn.line}, column ${warn.column}: ${warn.message}`
+      ));
+      
+      // Stop compilation if there are type errors in strict mode
+      if (options.strict && typeCheckResult.errors.length > 0) {
+        return {
+          code: '',
+          errors,
+          warnings
+        };
+      }
+    }
     
     // Generate code
     const generator = new CodeGenerator();
