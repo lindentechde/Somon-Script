@@ -70,6 +70,8 @@ export class CodeGenerator {
     ['ҳамзамон', 'async'],
     ['интизор', 'await'],
     ['ваъда', 'Promise'],
+    
+    // Note: 'хато' is handled specially in generateIdentifier
   ]);
 
   generate(ast: Program): string {
@@ -104,6 +106,10 @@ export class CodeGenerator {
         return this.generateWhileStatement(node as WhileStatement);
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
+      case 'TryStatement':
+        return this.generateTryStatement(node as any);
+      case 'ThrowStatement':
+        return this.generateThrowStatement(node as any);
       default:
         throw new Error(`Unknown statement type: ${node.type}`);
     }
@@ -118,11 +124,12 @@ export class CodeGenerator {
   }
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
+    const async = (node as any).async ? 'async ' : '';
     const name = this.generateIdentifier(node.name);
     const params = node.params.map(param => this.generateIdentifier(param)).join(', ');
     const body = this.generateBlockStatement(node.body);
     
-    return this.indent(`function ${name}(${params}) ${body}`);
+    return this.indent(`${async}function ${name}(${params}) ${body}`);
   }
 
   private generateBlockStatement(node: BlockStatement): string {
@@ -207,6 +214,10 @@ export class CodeGenerator {
         return this.generateMemberExpression(node as MemberExpression);
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
+      case 'AwaitExpression':
+        return this.generateAwaitExpression(node as any);
+      case 'NewExpression':
+        return this.generateNewExpression(node as any);
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }
@@ -259,6 +270,13 @@ export class CodeGenerator {
 
   private generateIdentifier(node: Identifier): string {
     // Map Tajik built-in identifiers to JavaScript equivalents
+    // Special case: don't map 'хато' when it's used as Error constructor
+    if (node.name === 'хато') {
+      // This is a bit of a hack - we need context to know if it's console.error or Error
+      // For now, we'll assume standalone 'хато' means Error, and 'чоп.хато' means console.error
+      return 'Error';
+    }
+    
     const mapped = this.builtinMappings.get(node.name);
     return mapped || node.name;
   }
@@ -303,7 +321,12 @@ export class CodeGenerator {
 
   private generateMemberExpression(node: MemberExpression): string {
     const object = this.generateExpression(node.object);
-    const property = this.generateExpression(node.property);
+    let property = this.generateExpression(node.property);
+    
+    // Special case: чоп.хато should become console.error
+    if (object === 'console' && property === 'Error') {
+      property = 'error';
+    }
     
     if (node.computed) {
       return `${object}[${property}]`;
@@ -315,6 +338,43 @@ export class CodeGenerator {
   private generateArrayExpression(node: ArrayExpression): string {
     const elements = node.elements.map(element => this.generateExpression(element));
     return `[${elements.join(', ')}]`;
+  }
+
+  private generateTryStatement(node: any): string {
+    let result = this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
+    
+    if (node.handler) {
+      result += ' catch ';
+      if (node.handler.param) {
+        result += `(${this.generateIdentifier(node.handler.param)}) `;
+      } else {
+        result += '(error) ';
+      }
+      result += this.generateBlockStatement(node.handler.body).replace(this.getIndent(), '');
+    }
+    
+    if (node.finalizer) {
+      result += ' finally ';
+      result += this.generateBlockStatement(node.finalizer).replace(this.getIndent(), '');
+    }
+    
+    return result;
+  }
+
+  private generateThrowStatement(node: any): string {
+    const argument = this.generateExpression(node.argument);
+    return this.indent(`throw ${argument};`);
+  }
+
+  private generateAwaitExpression(node: any): string {
+    const argument = this.generateExpression(node.argument);
+    return `await ${argument}`;
+  }
+
+  private generateNewExpression(node: any): string {
+    const callee = this.generateExpression(node.callee);
+    const args = node.arguments ? node.arguments.map((arg: any) => this.generateExpression(arg)).join(', ') : '';
+    return `new ${callee}(${args})`;
   }
 
   private needsParentheses(node: BinaryExpression): boolean {

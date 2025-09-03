@@ -71,8 +71,25 @@ export class Parser {
         return this.variableDeclaration();
       }
       
+      if (this.match(TokenType.ҲАМЗАМОН)) {
+        // Handle async function
+        this.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
+        const func = this.functionDeclaration();
+        // Mark as async (we'll handle this in codegen)
+        (func as any).async = true;
+        return func;
+      }
+      
       if (this.match(TokenType.ФУНКСИЯ)) {
         return this.functionDeclaration();
+      }
+      
+      if (this.match(TokenType.КӮШИШ)) {
+        return this.tryStatement();
+      }
+      
+      if (this.match(TokenType.ПАРТОФТАН)) {
+        return this.throwStatement();
       }
       
       if (this.match(TokenType.АГАР)) {
@@ -429,6 +446,41 @@ export class Parser {
       } as UnaryExpression;
     }
     
+    if (this.match(TokenType.ИНТИЗОР)) {
+      const awaitToken = this.previous();
+      const argument = this.unary();
+      return {
+        type: 'AwaitExpression',
+        argument,
+        line: awaitToken.line,
+        column: awaitToken.column
+      } as any;
+    }
+    
+    if (this.match(TokenType.НАВ)) {
+      const newToken = this.previous();
+      const callee = this.primary();
+      
+      // Check if there are arguments
+      let args: Expression[] = [];
+      if (this.match(TokenType.LEFT_PAREN)) {
+        if (!this.check(TokenType.RIGHT_PAREN)) {
+          do {
+            args.push(this.expression());
+          } while (this.match(TokenType.COMMA));
+        }
+        this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
+      }
+      
+      return {
+        type: 'NewExpression',
+        callee,
+        arguments: args,
+        line: newToken.line,
+        column: newToken.column
+      } as any;
+    }
+    
     return this.call();
   }
 
@@ -666,7 +718,13 @@ export class Parser {
         
         // Handle 'as' alias (we'll use 'чун' for 'as')
         if (this.match(TokenType.ЧУН)) {
-          local = this.consume(TokenType.IDENTIFIER, "Expected local name after 'чун'");
+          if (this.check(TokenType.IDENTIFIER)) {
+            local = this.advance();
+          } else if (this.matchBuiltinIdentifier()) {
+            local = this.previous();
+          } else {
+            throw new Error(`Expected local name after 'чун' at line ${this.peek().line}, column ${this.peek().column}`);
+          }
         }
         
         specifiers.push({
@@ -723,7 +781,8 @@ export class Parser {
       TokenType.ХАРИТА, TokenType.ФИЛТР, TokenType.КОФТАН,
       TokenType.САТР, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
       TokenType.ОБЪЕКТ, TokenType.КАЛИДҲО, TokenType.ҚИМАТҲО,
-      TokenType.МАТЕМАТИКА, TokenType.ҶАМЪ, TokenType.ТАРҲ, TokenType.ЗАРБ, TokenType.ТАҚСИМ
+      TokenType.МАТЕМАТИКА, TokenType.ҶАМЪ, TokenType.ТАРҲ, TokenType.ЗАРБ, TokenType.ТАҚСИМ,
+      // Note: We don't include control flow keywords here as they have special parsing
     ];
     
     for (const type of builtinTypes) {
@@ -755,6 +814,68 @@ export class Parser {
     } as ArrayExpression;
   }
 
+  private tryStatement(): any {
+    const tryToken = this.previous();
+    
+    // Consume the opening brace for try block
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after 'кӯшиш'");
+    const block = this.blockStatement();
+    
+    let handler: any = undefined;
+    if (this.match(TokenType.ГИРИФТАН)) {
+      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'гирифтан'");
+      let param: any = undefined;
+      if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
+        const paramToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
+        param = {
+          type: 'Identifier',
+          name: paramToken.value,
+          line: paramToken.line,
+          column: paramToken.column
+        };
+      }
+      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after catch parameter");
+      this.consume(TokenType.LEFT_BRACE, "Expected '{' after catch clause");
+      const body = this.blockStatement();
+      
+      handler = {
+        type: 'CatchClause',
+        param,
+        body,
+        line: this.previous().line,
+        column: this.previous().column
+      };
+    }
+    
+    let finalizer: any = undefined;
+    if (this.match(TokenType.НИҲОЯТ)) {
+      this.consume(TokenType.LEFT_BRACE, "Expected '{' after 'ниҳоят'");
+      finalizer = this.blockStatement();
+    }
+    
+    return {
+      type: 'TryStatement',
+      block,
+      handler,
+      finalizer,
+      line: tryToken.line,
+      column: tryToken.column
+    };
+  }
+
+  private throwStatement(): any {
+    const throwToken = this.previous();
+    const argument = this.expression();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after throw statement");
+    
+    return {
+      type: 'ThrowStatement',
+      argument,
+      line: throwToken.line,
+      column: throwToken.column
+    };
+  }
+
   private synchronize(): void {
     this.advance();
     
@@ -771,6 +892,8 @@ export class Parser {
         case TokenType.БОЗГАШТ:
         case TokenType.ВОРИД:
         case TokenType.СОДИР:
+        case TokenType.КӮШИШ:
+        case TokenType.ПАРТОФТАН:
           return;
       }
       

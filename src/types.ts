@@ -258,3 +258,26 @@ export interface ExportSpecifier extends ASTNode {
   exported: Identifier;
   local: Identifier;
 }
+
+export interface TryStatement extends Statement {
+  type: 'TryStatement';
+  block: BlockStatement;
+  handler?: CatchClause;
+  finalizer?: BlockStatement;
+}
+
+export interface CatchClause extends ASTNode {
+  type: 'CatchClause';
+  param?: Identifier;
+  body: BlockStatement;
+}
+
+export interface ThrowStatement extends Statement {
+  type: 'ThrowStatement';
+  argument: Expression;
+}
+
+export interface AwaitExpression extends Expression {
+  type: 'AwaitExpression';
+  argument: Expression;
+}
