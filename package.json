@@ -1,0 +1,29 @@
+{
+  "name": "somoni-script",
+  "version": "0.1.0",
+  "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
+  "main": "dist/index.js",
+  "bin": {
+    "somoni": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "start": "node dist/cli.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": ["compiler", "tajik", "cyrillic", "javascript", "programming-language"],
+  "author": "Somoni Script Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "commander": "^11.0.0"
+  }
+}
