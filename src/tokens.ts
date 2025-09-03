@@ -113,8 +113,8 @@ export enum TokenType {
   LESS_EQUAL = '<=',
   GREATER_EQUAL = '>=',
   AND = '&&',
-  OR = '||',
-  PIPE = '|',
+  OR = 'OR',
+  PIPE = 'PIPE',
   AMPERSAND = '&',
   NOT = '!',
   
