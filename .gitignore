@@ -57,6 +57,14 @@ jspm_packages/
 ehthumbs.db
 Thumbs.db
 
-# Test files
-*.som
+# Test files (but not examples)
+/test*.som
+/debug*.som
 *.js.map
+
+# Compiled JavaScript files in examples directory
+examples/*.js
+
+# Temporary compilation artifacts
+*.temp.js
+*.temp.som
