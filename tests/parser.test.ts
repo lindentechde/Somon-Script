@@ -48,7 +48,7 @@ describe('Parser', () => {
   });
 
   test('should parse if statement', () => {
-    const source = 'агар (х > 5) { console.log("калон"); }';
+    const source = 'агар (х > 5) { чоп.сабт("калон"); }';
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
@@ -59,7 +59,7 @@ describe('Parser', () => {
   });
 
   test('should parse if-else statement', () => {
-    const source = 'агар (х > 5) { console.log("калон"); } вагарна { console.log("хурд"); }';
+    const source = 'агар (х > 5) { чоп.сабт("калон"); } вагарна { чоп.сабт("хурд"); }';
     const ast = parseSource(source);
 
     const stmt = ast.body[0];

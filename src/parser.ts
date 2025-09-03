@@ -17,7 +17,13 @@ import {
   UnaryExpression,
   CallExpression,
   AssignmentExpression,
-  MemberExpression
+  MemberExpression,
+  ImportDeclaration,
+  ImportSpecifier,
+  ImportDefaultSpecifier,
+  ExportDeclaration,
+  ExportSpecifier,
+  ArrayExpression
 } from './types';
 
 export class Parser {
@@ -53,6 +59,14 @@ export class Parser {
         return null;
       }
 
+      if (this.match(TokenType.ВОРИД)) {
+        return this.importDeclaration();
+      }
+      
+      if (this.match(TokenType.СОДИР)) {
+        return this.exportDeclaration();
+      }
+      
       if (this.match(TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ)) {
         return this.variableDeclaration();
       }
@@ -88,7 +102,14 @@ export class Parser {
     const kindToken = this.previous();
     const kind = kindToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
     
-    const name = this.consume(TokenType.IDENTIFIER, "Expected variable name");
+    let name: Token;
+    if (this.check(TokenType.IDENTIFIER)) {
+      name = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      name = this.previous();
+    } else {
+      throw new Error(`Expected variable name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
     const identifier: Identifier = {
       type: 'Identifier',
       name: name.value,
@@ -115,7 +136,14 @@ export class Parser {
 
   private functionDeclaration(): FunctionDeclaration {
     const funcToken = this.previous();
-    const name = this.consume(TokenType.IDENTIFIER, "Expected function name");
+    let name: Token;
+    if (this.check(TokenType.IDENTIFIER)) {
+      name = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      name = this.previous();
+    } else {
+      throw new Error(`Expected function name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
     
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
     
@@ -411,7 +439,15 @@ export class Parser {
       if (this.match(TokenType.LEFT_PAREN)) {
         expr = this.finishCall(expr);
       } else if (this.match(TokenType.DOT)) {
-        const name = this.consume(TokenType.IDENTIFIER, "Expected property name after '.'");
+        let name: Token;
+        if (this.check(TokenType.IDENTIFIER)) {
+          name = this.advance();
+        } else if (this.matchBuiltinIdentifier()) {
+          name = this.previous();
+        } else {
+          throw new Error(`Expected property name after '.' at line ${this.peek().line}, column ${this.peek().column}`);
+        }
+        
         expr = {
           type: 'MemberExpression',
           object: expr,
@@ -509,7 +545,7 @@ export class Parser {
       } as Literal;
     }
     
-    if (this.match(TokenType.IDENTIFIER)) {
+    if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
       const token = this.previous();
       return {
         type: 'Identifier',
@@ -523,6 +559,10 @@ export class Parser {
       const expr = this.expression();
       this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
       return expr;
+    }
+    
+    if (this.match(TokenType.LEFT_BRACKET)) {
+      return this.arrayExpression();
     }
     
     const token = this.peek();
@@ -568,6 +608,153 @@ export class Parser {
     throw new Error(`${message}. Got '${token.value}' at line ${token.line}, column ${token.column}`);
   }
 
+  private importDeclaration(): ImportDeclaration {
+    const importToken = this.previous();
+    const specifiers: (ImportSpecifier | ImportDefaultSpecifier)[] = [];
+    
+    // Handle default import or named imports
+    if (this.check(TokenType.IDENTIFIER)) {
+      const local = this.advance();
+      specifiers.push({
+        type: 'ImportDefaultSpecifier',
+        local: {
+          type: 'Identifier',
+          name: local.value,
+          line: local.line,
+          column: local.column
+        } as Identifier,
+        line: local.line,
+        column: local.column
+      } as ImportDefaultSpecifier);
+      
+      if (this.match(TokenType.COMMA)) {
+        // Handle named imports after default
+        this.consume(TokenType.LEFT_BRACE, "Expected '{' after default import");
+        this.parseNamedImports(specifiers);
+        this.consume(TokenType.RIGHT_BRACE, "Expected '}' after named imports");
+      }
+    } else if (this.match(TokenType.LEFT_BRACE)) {
+      // Handle only named imports
+      this.parseNamedImports(specifiers);
+      this.consume(TokenType.RIGHT_BRACE, "Expected '}' after named imports");
+    }
+    
+    this.consume(TokenType.АЗ, "Expected 'аз' after import specifiers");
+    const source = this.consume(TokenType.STRING, "Expected module path");
+    this.consume(TokenType.SEMICOLON, "Expected ';' after import");
+    
+    return {
+      type: 'ImportDeclaration',
+      specifiers: specifiers as ImportSpecifier[],
+      source: {
+        type: 'Literal',
+        value: source.value,
+        raw: `"${source.value}"`,
+        line: source.line,
+        column: source.column
+      } as Literal,
+      line: importToken.line,
+      column: importToken.column
+    };
+  }
+
+  private parseNamedImports(specifiers: (ImportSpecifier | ImportDefaultSpecifier)[]): void {
+    if (!this.check(TokenType.RIGHT_BRACE)) {
+      do {
+        const imported = this.consume(TokenType.IDENTIFIER, "Expected import name");
+        let local = imported;
+        
+        // Handle 'as' alias (we'll use 'чун' for 'as')
+        if (this.match(TokenType.ЧУН)) {
+          local = this.consume(TokenType.IDENTIFIER, "Expected local name after 'чун'");
+        }
+        
+        specifiers.push({
+          type: 'ImportSpecifier',
+          imported: {
+            type: 'Identifier',
+            name: imported.value,
+            line: imported.line,
+            column: imported.column
+          } as Identifier,
+          local: {
+            type: 'Identifier',
+            name: local.value,
+            line: local.line,
+            column: local.column
+          } as Identifier,
+          line: imported.line,
+          column: imported.column
+        } as ImportSpecifier);
+      } while (this.match(TokenType.COMMA));
+    }
+  }
+
+  private exportDeclaration(): ExportDeclaration {
+    const exportToken = this.previous();
+    
+    if (this.match(TokenType.ПЕШФАРЗ)) {
+      // Export default
+      const declaration = this.statement();
+      return {
+        type: 'ExportDeclaration',
+        declaration: declaration!,
+        default: true,
+        line: exportToken.line,
+        column: exportToken.column
+      };
+    } else {
+      // Export named
+      const declaration = this.statement();
+      return {
+        type: 'ExportDeclaration',
+        declaration: declaration!,
+        default: false,
+        line: exportToken.line,
+        column: exportToken.column
+      };
+    }
+  }
+
+  private matchBuiltinIdentifier(): boolean {
+    const builtinTypes = [
+      TokenType.ЧОП, TokenType.САБТ, TokenType.ХАТО, TokenType.ОГОҲӢ, TokenType.МАЪЛУМОТ,
+      TokenType.РӮЙХАТ, TokenType.ИЛОВА, TokenType.БАРОВАРДАН, TokenType.ДАРОЗӢ,
+      TokenType.ХАРИТА, TokenType.ФИЛТР, TokenType.КОФТАН,
+      TokenType.САТР, TokenType.ДАРОЗИИ_САТР, TokenType.ПАЙВАСТАН, TokenType.ҶОЙИВАЗКУНӢ, TokenType.ҶУДОКУНӢ,
+      TokenType.ОБЪЕКТ, TokenType.КАЛИДҲО, TokenType.ҚИМАТҲО,
+      TokenType.МАТЕМАТИКА, TokenType.ҶАМЪ, TokenType.ТАРҲ, TokenType.ЗАРБ, TokenType.ТАҚСИМ
+    ];
+    
+    for (const type of builtinTypes) {
+      if (this.check(type)) {
+        this.advance();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private arrayExpression(): ArrayExpression {
+    const leftBracket = this.previous();
+    const elements: Expression[] = [];
+    
+    if (!this.check(TokenType.RIGHT_BRACKET)) {
+      do {
+        elements.push(this.expression());
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after array elements");
+    
+    return {
+      type: 'ArrayExpression',
+      elements,
+      line: leftBracket.line,
+      column: leftBracket.column
+    } as ArrayExpression;
+  }
+
   private synchronize(): void {
     this.advance();
     
@@ -582,6 +769,8 @@ export class Parser {
         case TokenType.АГАР:
         case TokenType.ТО:
         case TokenType.БОЗГАШТ:
+        case TokenType.ВОРИД:
+        case TokenType.СОДИР:
           return;
       }
       

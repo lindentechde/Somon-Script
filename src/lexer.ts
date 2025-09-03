@@ -8,6 +8,7 @@ export class Lexer {
 
   // Tajik Cyrillic keywords mapping
   private keywords: Map<string, TokenType> = new Map([
+    // Core language keywords
     ['тағйирёбанда', TokenType.ТАҒЙИРЁБАНДА],
     ['собит', TokenType.СОБИТ],
     ['функсия', TokenType.ФУНКСИЯ],
@@ -22,6 +23,61 @@ export class Lexer {
     ['дуруст', TokenType.ДУРУСТ],
     ['нодуруст', TokenType.НОДУРУСТ],
     ['холӣ', TokenType.ХОЛӢ],
+    
+    // Import/Export
+    ['ворид', TokenType.ВОРИД],
+    ['содир', TokenType.СОДИР],
+    ['аз', TokenType.АЗ],
+    ['пешфарз', TokenType.ПЕШФАРЗ],
+    ['чун', TokenType.ЧУН],
+    
+    // Built-in functions
+    ['чоп', TokenType.ЧОП],
+    ['сабт', TokenType.САБТ],
+    ['хато', TokenType.ХАТО],
+    ['огоҳӣ', TokenType.ОГОҲӢ],
+    ['маълумот', TokenType.МАЪЛУМОТ],
+    
+    // Array methods
+    ['рӯйхат', TokenType.РӮЙХАТ],
+    ['илова', TokenType.ИЛОВА],
+    ['баровардан', TokenType.БАРОВАРДАН],
+    ['дарозӣ', TokenType.ДАРОЗӢ],
+    ['харита', TokenType.ХАРИТА],
+    ['филтр', TokenType.ФИЛТР],
+    ['кофтан', TokenType.КОФТАН],
+    
+    // String methods
+    ['сатр', TokenType.САТР],
+    ['дарозии_сатр', TokenType.ДАРОЗИИ_САТР],
+    ['пайвастан', TokenType.ПАЙВАСТАН],
+    ['ҷойивазкунӣ', TokenType.ҶОЙИВАЗКУНӢ],
+    ['ҷудокунӣ', TokenType.ҶУДОКУНӢ],
+    
+    // Object methods
+    ['объект', TokenType.ОБЪЕКТ],
+    ['калидҳо', TokenType.КАЛИДҲО],
+    ['қиматҳо', TokenType.ҚИМАТҲО],
+    
+    // Math
+    ['математика', TokenType.МАТЕМАТИКА],
+    ['ҷамъ', TokenType.ҶАМЪ],
+    ['тарҳ', TokenType.ТАРҲ],
+    ['зарб', TokenType.ЗАРБ],
+    ['тақсим', TokenType.ТАҚСИМ],
+    
+    // Control flow
+    ['шикастан', TokenType.ШИКАСТАН],
+    ['давом', TokenType.ДАВОМ],
+    ['кӯшиш', TokenType.КӮШИШ],
+    ['гирифтан', TokenType.ГИРИФТАН],
+    ['ниҳоят', TokenType.НИҲОЯТ],
+    ['партофтан', TokenType.ПАРТОФТАН],
+    
+    // Async
+    ['ҳамзамон', TokenType.ҲАМЗАМОН],
+    ['интизор', TokenType.ИНТИЗОР],
+    ['ваъда', TokenType.ВАЪДА],
   ]);
 
   constructor(input: string) {

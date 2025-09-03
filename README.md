@@ -27,7 +27,7 @@ npm install
 Write your first Somoni-script program (`src/main.som`):
 ```somoni
 функсия салом() {
-    console.log("Салом, ҷаҳон!");
+    чоп.сабт("Салом, ҷаҳон!");
 }
 
 салом();
@@ -47,6 +47,7 @@ npm run build
 
 ### Keywords (Калимаҳои калидӣ)
 
+#### Core Language Keywords
 | Somoni-script | English | JavaScript |
 |---------------|---------|------------|
 | `тағйирёбанда` | variable | `let` |
@@ -63,6 +64,61 @@ npm run build
 | `дуруст` | true | `true` |
 | `нодуруст` | false | `false` |
 | `холӣ` | null | `null` |
+
+#### Import/Export Keywords
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `ворид` | import | `import` |
+| `содир` | export | `export` |
+| `аз` | from | `from` |
+| `пешфарз` | default | `default` |
+| `чун` | as | `as` |
+
+#### Built-in Functions
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `чоп` | console | `console` |
+| `сабт` | log | `log` |
+| `хато` | error | `error` |
+| `огоҳӣ` | warn | `warn` |
+| `маълумот` | info | `info` |
+
+#### Array Methods
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `рӯйхат` | array | `Array` |
+| `илова` | push | `push` |
+| `баровардан` | pop | `pop` |
+| `дарозӣ` | length | `length` |
+| `харита` | map | `map` |
+| `филтр` | filter | `filter` |
+| `кофтан` | find | `find` |
+
+#### String Methods
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `сатр` | string | `String` |
+| `дарозии_сатр` | string length | `length` |
+| `пайвастан` | concat | `concat` |
+| `ҷойивазкунӣ` | replace | `replace` |
+| `ҷудокунӣ` | split | `split` |
+
+#### Control Flow
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `шикастан` | break | `break` |
+| `давом` | continue | `continue` |
+| `кӯшиш` | try | `try` |
+| `гирифтан` | catch | `catch` |
+| `ниҳоят` | finally | `finally` |
+| `партофтан` | throw | `throw` |
+
+#### Async Programming
+| Somoni-script | English | JavaScript |
+|---------------|---------|------------|
+| `ҳамзамон` | async | `async` |
+| `интизор` | await | `await` |
+| `ваъда` | promise | `Promise` |
 
 ### Variables (Тағйирёбандаҳо)
 
@@ -86,29 +142,31 @@ const сол = 2024;
 ### Functions (Функсияҳо)
 
 ```somoni
-функсия ҷамъ(а, б) {
+функсия ҷамъ_кардан(а, б) {
     бозгашт а + б;
 }
 
-тағйирёбанда натиҷа = ҷамъ(5, 3);
+тағйирёбанда натиҷа = ҷамъ_кардан(5, 3);
+чоп.сабт("Натиҷа:", натиҷа);
 ```
 
 Compiles to:
 ```javascript
-function ҷамъ(а, б) {
+function ҷамъ_кардан(а, б) {
     return а + б;
 }
 
-let натиҷа = ҷамъ(5, 3);
+let натиҷа = ҷамъ_кардан(5, 3);
+console.log("Натиҷа:", натиҷа);
 ```
 
 ### Conditionals (Шартҳо)
 
 ```somoni
 агар (синну_сол >= 18) {
-    console.log("Калонсол");
+    чоп.сабт("Калонсол");
 } вагарна {
-    console.log("Хурдсол");
+    чоп.сабт("Хурдсол");
 }
 ```
 
@@ -126,7 +184,7 @@ if (синну_сол >= 18) {
 ```somoni
 тағйирёбанда и = 0;
 то (и < 10) {
-    console.log(и);
+    чоп.сабт(и);
     и = и + 1;
 }
 ```
@@ -156,6 +214,62 @@ while (и < 10) {
 
 // Null
 тағйирёбанда холӣ_қимат = холӣ;
+```
+
+### Import/Export (Ворид/Содир)
+
+```somoni
+// Import named functions
+ворид { ҷамъ_кардан, тақсим_кардан } аз "./math.som";
+
+// Import with alias
+ворид { ҷамъ_кардан чун ҷамъ } аз "./math.som";
+
+// Import default
+ворид пешфарз_функсия аз "./utils.som";
+
+// Export function
+содир функсия ҳисоб_кардан(а, б) {
+    бозгашт а + б;
+}
+
+// Export default
+содир пешфарз ҳисоб_кардан;
+```
+
+### Built-in Functions (Функсияҳои дарунсохт)
+
+```somoni
+// Console functions
+чоп.сабт("Паём");           // console.log("Паём")
+чоп.хато("Хато рӯй дод");    // console.error("Хато рӯй дод")
+чоп.огоҳӣ("Огоҳӣ");         // console.warn("Огоҳӣ")
+
+// Array methods
+тағйирёбанда рӯйхат = [1, 2, 3];
+рӯйхат.илова(4);            // рӯйхат.push(4)
+тағйирёбанда охирин = рӯйхат.баровардан(); // рӯйхат.pop()
+
+// String methods
+тағйирёбанда матн = "Салом ҷаҳон";
+тағйирёбанда дарозӣ = матн.дарозии_сатр;   // матн.length
+тағйирёбанда калимаҳо = матн.ҷудокунӣ(" "); // матн.split(" ")
+```
+
+### Async Programming (Барномасозии ҳамзамон)
+
+```somoni
+ҳамзамон функсия маълумот_гирифтан() {
+    кӯшиш {
+        тағйирёбанда натиҷа = интизор fetch("/api/data");
+        бозгашт натиҷа;
+    } гирифтан (хато) {
+        чоп.хато("Хато:", хато);
+        партофтан хато;
+    } ниҳоят {
+        чоп.сабт("Амалиёт тамом шуд");
+    }
+}
 ```
 
 ### Operators (Операторҳо)
@@ -207,11 +321,12 @@ somoni init [project-name]
 
 See the `examples/` directory for more code samples:
 
-- `hello.som` - Basic hello world
-- `variables.som` - Variable declarations
-- `conditions.som` - Conditional statements
-- `functions.som` - Function definitions
-- `loops.som` - Loop constructs
+- `hello.som` - Basic hello world with Tajik console functions
+- `variables.som` - Variable declarations using Tajik keywords
+- `conditions.som` - Conditional statements with Tajik built-ins
+- `functions.som` - Function definitions with comprehensive Tajik vocabulary
+- `loops.som` - Loop constructs using maximum Tajik words
+- `advanced.som` - Import/export, async programming, and advanced features
 
 ## File Extension
 

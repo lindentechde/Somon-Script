@@ -143,7 +143,7 @@ program
 
       const mainSom = `// Somoni-script main file
 функсия салом() {
-    console.log("Салом, ҷаҳон!");
+    чоп.сабт("Салом, ҷаҳон!");
 }
 
 салом();

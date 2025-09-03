@@ -26,7 +26,7 @@ describe('Compiler', () => {
   });
 
   test('should compile if statement', () => {
-    const source = 'агар (х > 5) { console.log("калон"); }';
+    const source = 'агар (х > 5) { чоп.сабт("калон"); }';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
@@ -34,7 +34,7 @@ describe('Compiler', () => {
   });
 
   test('should compile if-else statement', () => {
-    const source = 'агар (х > 5) { console.log("калон"); } вагарна { console.log("хурд"); }';
+    const source = 'агар (х > 5) { чоп.сабт("калон"); } вагарна { чоп.сабт("хурд"); }';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
@@ -66,6 +66,14 @@ describe('Compiler', () => {
     expect(result.code.trim()).toBe('let а = null;');
   });
 
+  test('should compile Tajik built-in functions', () => {
+    const source = 'чоп.сабт("Салом"); чоп.хато("Хато");';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code.trim()).toBe('console.log("Салом");\nconsole.error("Хато");');
+  });
+
   test('should handle compilation errors', () => {
     const source = 'тағйирёбанда = "invalid";'; // Missing identifier
     const result = compile(source);
@@ -84,7 +92,7 @@ describe('Compiler', () => {
 }
 
 тағйирёбанда натиҷа = факториал(5);
-console.log(натиҷа);
+чоп.сабт(натиҷа);
     `.trim();
 
     const result = compile(source);

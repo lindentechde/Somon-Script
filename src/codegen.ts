@@ -15,12 +15,62 @@ import {
   UnaryExpression,
   CallExpression,
   AssignmentExpression,
-  MemberExpression
+  MemberExpression,
+  ImportDeclaration,
+  ExportDeclaration,
+  ArrayExpression
 } from './types';
 
 export class CodeGenerator {
   private indentLevel: number = 0;
   private readonly indentSize: number = 2;
+  
+  // Mapping of Tajik built-in functions to JavaScript equivalents
+  private readonly builtinMappings: Map<string, string> = new Map([
+    // Console functions
+    ['чоп', 'console'],
+    ['сабт', 'log'],
+    ['хато', 'error'],
+    ['огоҳӣ', 'warn'],
+    ['маълумот', 'info'],
+    
+    // Array methods
+    ['рӯйхат', 'Array'],
+    ['илова', 'push'],
+    ['баровардан', 'pop'],
+    ['дарозӣ', 'length'],
+    ['харита', 'map'],
+    ['филтр', 'filter'],
+    ['кофтан', 'find'],
+    
+    // String methods
+    ['сатр', 'String'],
+    ['дарозии_сатр', 'length'],
+    ['пайвастан', 'concat'],
+    ['ҷойивазкунӣ', 'replace'],
+    ['ҷудокунӣ', 'split'],
+    
+    // Object methods
+    ['объект', 'Object'],
+    ['калидҳо', 'keys'],
+    ['қиматҳо', 'values'],
+    
+    // Math
+    ['математика', 'Math'],
+    
+    // Control flow
+    ['шикастан', 'break'],
+    ['давом', 'continue'],
+    ['кӯшиш', 'try'],
+    ['гирифтан', 'catch'],
+    ['ниҳоят', 'finally'],
+    ['партофтан', 'throw'],
+    
+    // Async
+    ['ҳамзамон', 'async'],
+    ['интизор', 'await'],
+    ['ваъда', 'Promise'],
+  ]);
 
   generate(ast: Program): string {
     return this.generateProgram(ast);
@@ -36,6 +86,10 @@ export class CodeGenerator {
 
   private generateStatement(node: Statement): string {
     switch (node.type) {
+      case 'ImportDeclaration':
+        return this.generateImportDeclaration(node as ImportDeclaration);
+      case 'ExportDeclaration':
+        return this.generateExportDeclaration(node as ExportDeclaration);
       case 'VariableDeclaration':
         return this.generateVariableDeclaration(node as VariableDeclaration);
       case 'FunctionDeclaration':
@@ -151,13 +205,62 @@ export class CodeGenerator {
         return this.generateAssignmentExpression(node as AssignmentExpression);
       case 'MemberExpression':
         return this.generateMemberExpression(node as MemberExpression);
+      case 'ArrayExpression':
+        return this.generateArrayExpression(node as ArrayExpression);
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }
   }
 
+  private generateImportDeclaration(node: ImportDeclaration): string {
+    let result = 'import ';
+    
+    const specifiers = node.specifiers;
+    const importParts: string[] = [];
+    
+    // Handle default imports
+    const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
+    if (defaultImports.length > 0) {
+      importParts.push((defaultImports[0] as any).local.name);
+    }
+    
+    // Handle named imports
+    const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier');
+    if (namedImports.length > 0) {
+      const namedPart = '{ ' + namedImports.map(spec => {
+        const imported = (spec as any).imported.name;
+        const local = (spec as any).local.name;
+        return imported === local ? imported : `${imported} as ${local}`;
+      }).join(', ') + ' }';
+      importParts.push(namedPart);
+    }
+    
+    result += importParts.join(', ');
+    result += ` from ${this.generateLiteral(node.source)};`;
+    
+    return this.indent(result);
+  }
+
+  private generateExportDeclaration(node: ExportDeclaration): string {
+    let result = 'export ';
+    
+    if (node.default) {
+      result += 'default ';
+    }
+    
+    if (node.declaration) {
+      const declaration = this.generateStatement(node.declaration);
+      // Remove indentation from declaration since we're adding our own
+      result += declaration.replace(this.getIndent(), '');
+    }
+    
+    return this.indent(result);
+  }
+
   private generateIdentifier(node: Identifier): string {
-    return node.name;
+    // Map Tajik built-in identifiers to JavaScript equivalents
+    const mapped = this.builtinMappings.get(node.name);
+    return mapped || node.name;
   }
 
   private generateLiteral(node: Literal): string {
@@ -207,6 +310,11 @@ export class CodeGenerator {
     } else {
       return `${object}.${property}`;
     }
+  }
+
+  private generateArrayExpression(node: ArrayExpression): string {
+    const elements = node.elements.map(element => this.generateExpression(element));
+    return `[${elements.join(', ')}]`;
   }
 
   private needsParentheses(node: BinaryExpression): boolean {
