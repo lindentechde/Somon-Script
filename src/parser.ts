@@ -1103,7 +1103,7 @@ export class Parser {
   private unionType(): TypeNode {
     let type = this.primaryType();
     
-    while (this.match(TokenType.OR)) {
+    while (this.match(TokenType.PIPE)) {
       const types = [type];
       do {
         types.push(this.primaryType());
@@ -1121,6 +1121,25 @@ export class Parser {
   }
 
   private primaryType(): TypeNode {
+    // Parenthesized types
+    if (this.match(TokenType.LEFT_PAREN)) {
+      const type = this.unionType();
+      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after type");
+      
+      // Check for array type after parentheses
+      if (this.match(TokenType.LEFT_BRACKET)) {
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+        return {
+          type: 'ArrayType',
+          elementType: type,
+          line: type.line,
+          column: type.column
+        } as ArrayType;
+      }
+      
+      return type;
+    }
+    
     // Primitive types
     if (this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ, TokenType.ХОЛӢ)) {
       const token = this.previous();
@@ -1185,6 +1204,26 @@ export class Parser {
       }
       
       return genericType;
+    }
+    
+    // Tuple types [type1, type2, ...]
+    if (this.match(TokenType.LEFT_BRACKET)) {
+      const types: TypeNode[] = [];
+      
+      if (!this.check(TokenType.RIGHT_BRACKET)) {
+        do {
+          types.push(this.unionType());
+        } while (this.match(TokenType.COMMA));
+      }
+      
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
+      
+      return {
+        type: 'TupleType',
+        types,
+        line: this.previous().line,
+        column: this.previous().column
+      } as any; // TupleType should be defined in types.ts
     }
     
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);

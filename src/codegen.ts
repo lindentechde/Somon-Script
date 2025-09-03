@@ -384,16 +384,19 @@ export class CodeGenerator {
     let property = this.generateExpression(node.property);
     
     // Apply built-in mappings for object names
+    let objectMapped = false;
     if (node.object.type === 'Identifier') {
       const objectName = (node.object as Identifier).name;
       const mappedObject = this.builtinMappings.get(objectName);
       if (mappedObject) {
         object = mappedObject;
+        objectMapped = true;
       }
     }
     
-    // Apply built-in mappings for property names
-    if (!node.computed && node.property.type === 'Identifier') {
+    // Only apply built-in mappings for property names if the object was also mapped
+    // This prevents user-defined method names from being incorrectly translated
+    if (objectMapped && !node.computed && node.property.type === 'Identifier') {
       const propertyName = (node.property as Identifier).name;
       const mappedProperty = this.builtinMappings.get(propertyName);
       if (mappedProperty) {

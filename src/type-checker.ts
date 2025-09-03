@@ -216,6 +216,20 @@ export class TypeChecker {
         // Unknown type
         return { kind: 'unknown', name: genericType.name.name };
       
+      case 'Identifier':
+        // Handle simple interface/type references
+        const identifierType = typeNode as any; // Should be Identifier
+        const interfaceRef = this.interfaceTable.get(identifierType.name);
+        if (interfaceRef) {
+          return interfaceRef;
+        }
+        const aliasRef = this.typeAliasTable.get(identifierType.name);
+        if (aliasRef) {
+          return aliasRef;
+        }
+        // Unknown type
+        return { kind: 'unknown', name: identifierType.name };
+      
       default:
         return { kind: 'unknown' };
     }
@@ -253,6 +267,29 @@ export class TypeChecker {
       case 'ArrayExpression':
         // For now, assume array of unknown type
         return { kind: 'array', elementType: { kind: 'unknown' } };
+      
+      case 'ObjectExpression':
+        // Infer object type from properties
+        const properties = new Map<string, PropertyType>();
+        const objExpr = expression as any; // ObjectExpression type
+        
+        if (objExpr.properties) {
+          for (const prop of objExpr.properties) {
+            if (prop.key && prop.value) {
+              const keyName = prop.key.name || prop.key.value;
+              const valueType = this.inferExpressionType(prop.value);
+              properties.set(keyName, {
+                type: valueType,
+                optional: false
+              });
+            }
+          }
+        }
+        
+        return {
+          kind: 'object',
+          properties: properties
+        };
       
       // Add more expression types as needed
     }
@@ -296,6 +333,11 @@ export class TypeChecker {
 
     // Interface structural typing
     if (source.kind === 'interface' && target.kind === 'interface') {
+      return this.isStructurallyCompatible(source, target);
+    }
+
+    // Object literal to interface assignment
+    if (source.kind === 'object' && target.kind === 'interface') {
       return this.isStructurallyCompatible(source, target);
     }
 
