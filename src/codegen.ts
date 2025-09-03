@@ -26,6 +26,9 @@ import {
   ThrowStatement,
   AwaitExpression,
   NewExpression,
+  ClassDeclaration,
+  MethodDefinition,
+  PropertyDefinition,
   ASTNode
 } from './types';
 // import { BaseVisitor } from './visitor'; // Simplified for now
@@ -124,7 +127,7 @@ export class CodeGenerator {
       case 'TypeAlias':
         return this.generateTypeAlias(node as TypeAlias);
       case 'ClassDeclaration':
-        return this.generateClassDeclaration(node as any);
+        return this.generateClassDeclaration(node as ClassDeclaration);
       default:
         throw new Error(`Unknown statement type: ${node.type}`);
     }
@@ -415,7 +418,7 @@ export class CodeGenerator {
     return this.indent(`// Type alias: ${name}`);
   }
 
-  private generateClassDeclaration(node: any): string {
+  private generateClassDeclaration(node: ClassDeclaration): string {
     const className = this.generateIdentifier(node.name);
     const extendsClause = node.superClass ? ` extends ${this.generateIdentifier(node.superClass)}` : '';
     
@@ -423,12 +426,12 @@ export class CodeGenerator {
     
     // Generate class members
     if (node.body && node.body.body) {
-      const members = node.body.body.map((member: any) => {
+      const members = node.body.body.map((member) => {
         switch (member.type) {
           case 'MethodDefinition':
-            return this.generateMethodDefinition(member);
+            return this.generateMethodDefinition(member as MethodDefinition);
           case 'PropertyDefinition':
-            return this.generatePropertyDefinition(member);
+            return this.generatePropertyDefinition(member as PropertyDefinition);
           default:
             return '';
         }
@@ -444,13 +447,13 @@ export class CodeGenerator {
     return this.indent(`class ${className}${extendsClause} {${classBody}}`);
   }
 
-  private generateMethodDefinition(node: any): string {
+  private generateMethodDefinition(node: MethodDefinition): string {
     const methodName = node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
     
     // Generate parameters
     const params = node.value.params ? 
-      node.value.params.map((param: any) => this.generateIdentifier(param.name)).join(', ') : '';
+      node.value.params.map((param) => this.generateIdentifier(param.name)).join(', ') : '';
     
     // Generate method body
     const body = this.generateBlockStatement(node.value.body);
@@ -458,7 +461,7 @@ export class CodeGenerator {
     return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
   }
 
-  private generatePropertyDefinition(node: any): string {
+  private generatePropertyDefinition(node: PropertyDefinition): string {
     const propertyName = this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
     const initializer = node.value ? ` = ${this.generateExpression(node.value)}` : '';
