@@ -9,7 +9,17 @@ declare global {
       toGenerateValidJS(): R;
     }
   }
+  
+  var testUtils: {
+    createTempFile: (content: string, extension?: string) => {
+      path: string;
+      cleanup: () => void;
+    };
+  };
 }
+
+// Export to make this file a module
+export {};
 
 // Custom matchers for Somoni-script testing
 expect.extend({
@@ -63,7 +73,7 @@ expect.extend({
 });
 
 // Global test utilities
-global.testUtils = {
+(global as any).testUtils = {
   createTempFile: (content: string, extension = '.som') => {
     const fs = require('fs');
     const path = require('path');
