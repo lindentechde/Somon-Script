@@ -313,7 +313,9 @@ export class CodeGenerator {
   }
 
   private generateIdentifier(node: Identifier): string {
-    // Map Tajik built-in identifiers to JavaScript equivalents
+    // Only map specific built-in identifiers, not general variable names
+    // This prevents variable names like 'рӯйхат' from being mapped to 'Array'
+    
     // Special case: don't map 'хато' when it's used as Error constructor
     if (node.name === 'хато') {
       // This is a bit of a hack - we need context to know if it's console.error or Error
@@ -321,8 +323,9 @@ export class CodeGenerator {
       return 'Error';
     }
     
-    const mapped = this.builtinMappings.get(node.name);
-    return mapped || node.name;
+    // Don't map variable names that could conflict with JS built-ins
+    // Only map in specific contexts (handled in generateMemberExpression)
+    return node.name;
   }
 
   private generateLiteral(node: Literal): string {
@@ -377,8 +380,26 @@ export class CodeGenerator {
   }
 
   private generateMemberExpression(node: MemberExpression): string {
-    const object = this.generateExpression(node.object);
+    let object = this.generateExpression(node.object);
     let property = this.generateExpression(node.property);
+    
+    // Apply built-in mappings for object names
+    if (node.object.type === 'Identifier') {
+      const objectName = (node.object as Identifier).name;
+      const mappedObject = this.builtinMappings.get(objectName);
+      if (mappedObject) {
+        object = mappedObject;
+      }
+    }
+    
+    // Apply built-in mappings for property names
+    if (!node.computed && node.property.type === 'Identifier') {
+      const propertyName = (node.property as Identifier).name;
+      const mappedProperty = this.builtinMappings.get(propertyName);
+      if (mappedProperty) {
+        property = mappedProperty;
+      }
+    }
     
     // Special case: чоп.хато should become console.error
     if (object === 'console' && property === 'Error') {

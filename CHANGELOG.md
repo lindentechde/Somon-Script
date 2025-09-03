@@ -8,10 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Full class inheritance implementation
-- Generic type constraints
-- Conditional type checking
-- Language Server Protocol (LSP)
+- Generic type constraints and advanced generics
+- Language Server Protocol (LSP) support
+- Module bundling and optimization
+- Performance improvements and error recovery
+
+## [0.3.0] - 2025-09-03
+
+### 🚀 PHASE 3 ADVANCED TYPE SYSTEM - Major Feature Release
+
+#### Added
+- ✅ **Comprehensive Phase 3 Examples**: 7 new advanced examples (18-24)
+- ✅ **Union Types Examples**: Complete demonstration of union type usage
+- ✅ **Intersection Types Examples**: Advanced type composition patterns
+- ✅ **Enhanced Class System**: Advanced inheritance and polymorphism examples
+- ✅ **Conditional Types**: Complex conditional type logic demonstrations
+- ✅ **Mapped Types**: Type transformation and manipulation examples
+- ✅ **Tuple Types**: Fixed-length array types with specific element types
+- ✅ **Comprehensive Phase 3 Demo**: All advanced features in one example
+
+#### Fixed
+- ✅ **Function Keyword Recognition**: Fixed lexer to support both "функсия" and "функция" spellings
+- ✅ **Variable Name Preservation**: Fixed code generator to preserve Tajik variable names
+- ✅ **Built-in Mapping Context**: Improved context-aware built-in function mapping
+
+#### Improved
+- ✅ **Documentation**: Updated README with Phase 3 features and examples
+- ✅ **Example Organization**: Categorized examples by complexity and feature set
+- ✅ **Type System Coverage**: Comprehensive coverage of advanced type features
 
 ## [0.2.0] - 2025-09-03
 

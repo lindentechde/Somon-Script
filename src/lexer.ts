@@ -12,6 +12,7 @@ export class Lexer {
     ['тағйирёбанда', TokenType.ТАҒЙИРЁБАНДА],
     ['собит', TokenType.СОБИТ],
     ['функсия', TokenType.ФУНКСИЯ],
+    ['функция', TokenType.ФУНКСИЯ], // Alternative spelling
     ['агар', TokenType.АГАР],
     ['вагарна', TokenType.ВАГАРНА],
     ['барои', TokenType.БАРОИ],

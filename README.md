@@ -4,13 +4,16 @@ A programming language that compiles to JavaScript, written in Tajik Cyrillic. N
 
 ## Features
 
-- **Tajik Cyrillic Syntax**: Write code using familiar Tajik keywords
+- **Tajik Cyrillic Syntax**: Write code using familiar Tajik keywords ✅
 - **Static Type System**: TypeScript-level type safety with Tajik annotations ✅
+- **Union Types**: Support for union types (`сатр | рақам`) ✅
+- **Intersection Types**: Foundation for intersection types (`Корбар & Админ`) ✅
 - **Object-Oriented Programming**: Full class support with constructors and methods ✅
 - **Interface System**: Complete interface support with optional properties ✅
-- **JavaScript Compilation**: Compiles to clean, readable JavaScript
+- **Advanced Type Features**: Conditional types, mapped types, tuple types ✅
+- **JavaScript Compilation**: Compiles to clean, readable JavaScript ✅
 - **Type Checking**: Compile-time validation with detailed error messages ✅
-- **CLI Tools**: Easy compilation and project management
+- **CLI Tools**: Easy compilation and project management ✅
 
 ## Installation
 
@@ -30,7 +33,7 @@ npm install
 Write your first Somoni-script program (`src/main.som`):
 ```somoni
 // With type annotations for better safety
-функсия салом(ном: сатр): сатр {
+функция салом(ном: сатр): сатр {
     тағйирёбанда паём: сатр = "Салом, " + ном + "!";
     чоп.сабт(паём);
     бозгашт паём;
@@ -47,6 +50,73 @@ npm run dev
 Or compile to JavaScript:
 ```bash
 npm run build
+```
+
+## Phase 3 Advanced Features
+
+### Union Types
+```somoni
+// Variables can hold multiple types
+тағйирёбанда маълумот: сатр | рақам = "Салом";
+маълумот = 42; // Also valid
+
+// Functions with union parameters
+функция намоиш(қимат: сатр | рақам | мантиқӣ): сатр {
+    бозгашт "Қимат: " + қимат;
+}
+```
+
+### Intersection Types
+```somoni
+интерфейс Корбар {
+    ном: сатр;
+    синну_сол: рақам;
+}
+
+интерфейс Админ {
+    сатҳи_дастрасӣ: сатр;
+    рамзи_убур: сатр;
+}
+
+// Combine multiple interfaces
+тағйирёбанда супер_корбар: Корбар & Админ = {
+    ном: "Аҳмад",
+    синну_сол: 35,
+    сатҳи_дастрасӣ: "олӣ",
+    рамзи_убур: "рамзи_махфӣ"
+};
+```
+
+### Advanced Classes with Inheritance
+```somoni
+синф Ҳайвон {
+    муҳофизатшуда ном: сатр;
+    
+    конструктор(ном: сатр) {
+        ин.ном = ном;
+    }
+    
+    ҷамъиятӣ овоз_додан(): сатр {
+        бозгашт ин.ном + " овоз медиҳад";
+    }
+}
+
+синф Саг мерос Ҳайвон {
+    конструктор(ном: сатр) {
+        супер(ном);
+    }
+    
+    ҷамъиятӣ овоз_додан(): сатр {
+        бозгашт ин.ном + " вақ-вақ мекунад";
+    }
+}
+```
+
+### Tuple Types
+```somoni
+// Fixed-length arrays with specific types
+тағйирёбанда корбар_маълумот: [сатр, рақам, мантиқӣ] = ["Алӣ", 25, дуруст];
+тағйирёбанда координата: [рақам, рақам] = [10, 20];
 ```
 
 ## Current Status
@@ -435,7 +505,7 @@ somoni init [project-name]
 
 ## Examples
 
-See the `examples/` directory for comprehensive code samples (17 examples total):
+See the `examples/` directory for comprehensive code samples (24 examples total):
 
 ### Basic Language Features
 - `01-hello-world.som` - Basic console output and first program
@@ -447,16 +517,27 @@ See the `examples/` directory for comprehensive code samples (17 examples total)
 - `07-loops.som` - While loops and iterations
 - `08-arrays.som` - Array operations and manipulations
 
-### Advanced Features
+### Object-Oriented Programming
 - `09-interfaces.som` - Interface definitions and type system ✅
-- `10-classes-basic.som` - Basic class usage and OOP ✅ **NEW**
-- `11-classes-advanced.som` - Advanced class methods and logic ✅ **NEW**
-- `12-student-management-system.som` - Complete OOP system example ✅ **NEW**
-- `13-inheritance-demo.som` - Inheritance syntax (future implementation)
+- `10-classes-basic.som` - Basic class usage and OOP ✅
+- `11-classes-advanced.som` - Advanced class methods and logic ✅
+- `12-student-management-system.som` - Complete OOP system example ✅
+- `13-inheritance-demo.som` - Class inheritance and polymorphism ✅
+
+### Advanced Features
 - `14-error-handling.som` - Error handling patterns and validation
 - `15-async-programming.som` - Async/await syntax (future implementation)
 - `16-import-export.som` - Module system syntax (future implementation)
-- `17-comprehensive-demo.som` - All current features combined ✅ **NEW**
+- `17-comprehensive-demo.som` - All current features combined ✅
+
+### Phase 3 Advanced Type System ✨ **NEW**
+- `18-union-types.som` - Union types (`сатр | рақам`) ✅
+- `19-intersection-types.som` - Intersection types (`Корбар & Админ`) ✅
+- `20-advanced-classes.som` - Enhanced class system with inheritance ✅
+- `21-conditional-types.som` - Conditional type logic ✅
+- `22-mapped-types.som` - Mapped type transformations ✅
+- `23-tuple-types.som` - Tuple types with fixed structures ✅
+- `24-comprehensive-phase3.som` - Complete Phase 3 demonstration ✅
 
 ## File Extension
 
