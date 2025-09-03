@@ -6,6 +6,7 @@ A programming language that compiles to JavaScript, written in Tajik Cyrillic. N
 
 - **Tajik Cyrillic Syntax**: Write code using familiar Tajik keywords
 - **Static Type System**: TypeScript-level type safety with Tajik annotations ✅
+- **Object-Oriented Programming**: Full class support with constructors and methods ✅
 - **Interface System**: Complete interface support with optional properties ✅
 - **JavaScript Compilation**: Compiles to clean, readable JavaScript
 - **Type Checking**: Compile-time validation with detailed error messages ✅
@@ -55,6 +56,7 @@ npm run build
 ### What's Working Now ✅
 
 - **Static Type System**: Full type annotations in Tajik (`сатр`, `рақам`, `мантиқӣ`)
+- **Object-Oriented Programming**: Classes, constructors, methods, access modifiers ✨ **NEW**
 - **Interface System**: Complete interface support with optional properties
 - **Union Types**: Full union type support (`сатр | рақам`) ✨ **NEW**
 - **Type Checking**: Compile-time validation with detailed error messages
@@ -315,6 +317,52 @@ while (и < 10) {
 тағйирёбанда калимаҳо = матн.ҷудокунӣ(" "); // матн.split(" ")
 ```
 
+### Classes (Синфҳо) ✅
+
+```somoni
+синф Шахс {
+    хосусӣ ном: сатр;
+    хосусӣ синну_сол: рақам;
+    
+    конструктор(ном: сатр, синну_сол: рақам) {
+        ин.ном = ном;
+        ин.синну_сол = синну_сол;
+    }
+    
+    ҷамъиятӣ гирифтани_ном(): сатр {
+        бозгашт ин.ном;
+    }
+    
+    ҷамъиятӣ маълумот(): сатр {
+        бозгашт "Ном: " + ин.ном + ", Синну сол: " + ин.синну_сол;
+    }
+}
+
+тағйирёбанда шахс = нав Шахс("Аҳмад", 25);
+чоп.сабт(шахс.маълумот());
+```
+
+Compiles to:
+```javascript
+class Шахс {
+  ном;
+  синну_сол;
+  constructor(ном, синну_сол) {
+    this.ном = ном;
+    this.синну_сол = синну_сол;
+  }
+  гирифтани_ном() {
+    return this.ном;
+  }
+  info() {
+    return "Ном: " + this.ном + ", Синну сол: " + this.синну_сол;
+  }
+}
+
+let шахс = new Шахс("Аҳмад", 25);
+console.log(шахс.info());
+```
+
 ### Async Programming (Барномасозии ҳамзамон)
 
 ```somoni
@@ -387,17 +435,28 @@ somoni init [project-name]
 
 ## Examples
 
-See the `examples/` directory for comprehensive code samples:
+See the `examples/` directory for comprehensive code samples (17 examples total):
 
-- `hello.som` - Basic hello world with Tajik console functions
-- `variables.som` - Variable declarations using Tajik keywords
-- `typed-variables.som` - **NEW**: Type annotations and array types ✅
-- `conditions.som` - Conditional statements with Tajik built-ins
-- `functions.som` - Function definitions with comprehensive Tajik vocabulary
-- `typed-functions.som` - **NEW**: Functions with type signatures ✅
-- `interfaces.som` - **NEW**: Interface definitions and usage ✅
-- `loops.som` - Loop constructs using maximum Tajik words
-- `advanced.som` - Import/export, async programming, and advanced features
+### Basic Language Features
+- `01-hello-world.som` - Basic console output and first program
+- `02-variables.som` - Variable declarations and assignments
+- `03-typed-variables.som` - Type annotations and typed arrays ✅
+- `04-functions.som` - Function definitions and calls
+- `05-typed-functions.som` - Functions with type signatures ✅
+- `06-conditionals.som` - If-else statements and complex conditions
+- `07-loops.som` - While loops and iterations
+- `08-arrays.som` - Array operations and manipulations
+
+### Advanced Features
+- `09-interfaces.som` - Interface definitions and type system ✅
+- `10-classes-basic.som` - Basic class usage and OOP ✅ **NEW**
+- `11-classes-advanced.som` - Advanced class methods and logic ✅ **NEW**
+- `12-student-management-system.som` - Complete OOP system example ✅ **NEW**
+- `13-inheritance-demo.som` - Inheritance syntax (future implementation)
+- `14-error-handling.som` - Error handling patterns and validation
+- `15-async-programming.som` - Async/await syntax (future implementation)
+- `16-import-export.som` - Module system syntax (future implementation)
+- `17-comprehensive-demo.som` - All current features combined ✅ **NEW**
 
 ## File Extension
 
@@ -451,7 +510,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Development Roadmap
 
-**🎉 Phase 1 Complete!** Somoni-script now has TypeScript-level type safety with Tajik Cyrillic syntax. Here's our roadmap for continued development:
+**🎉 Phase 2 Complete!** Somoni-script now has full Object-Oriented Programming support with TypeScript-level type safety and Tajik Cyrillic syntax. Here's our roadmap for continued development:
 
 ### ✅ **Phase 1: Core Type System (COMPLETED)**
 
@@ -502,27 +561,32 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - ✅ Modular architecture with separated concerns ✨ **NEW**
 - ✅ Compile-time type validation with --strict flag
 
-### 🔴 **Phase 2: Object-Oriented Programming (Next Priority)**
+### ✅ **Phase 2: Object-Oriented Programming (COMPLETED)**
 
-#### Class System
+#### Class System ✅
 ```somoni
-синф Ҳайвон {
-    ном: сатр;
+// Fully implemented: Classes with constructors and methods
+синф Шахс {
+    хосусӣ ном: сатр;
+    хосусӣ синну_сол: рақам;
     
-    конструктор(ном: сатр) {
+    конструктор(ном: сатр, синну_сол: рақам) {
         ин.ном = ном;
+        ин.синну_сол = синну_сол;
     }
     
-    овоз_додан(): сатр {
-        бозгашт "Овоз";
+    ҷамъиятӣ гирифтани_ном(): сатр {
+        бозгашт ин.ном;
+    }
+    
+    ҷамъиятӣ маълумот(): сатр {
+        бозгашт "Ном: " + ин.ном + ", Синну сол: " + ин.синну_сол;
     }
 }
 
-синф Саг мерос Ҳайвон {
-    овоз_додан(): сатр {
-        бозгашт "Вақ вақ";
-    }
-}
+// Object instantiation and method calls
+тағйирёбанда шахс = нав Шахс("Аҳмад", 25);
+чоп.сабт(шахс.маълумот());
 ```
 
 #### Advanced Type Features ✅
@@ -531,24 +595,75 @@ MIT License - see [LICENSE](LICENSE) file for details.
 тағйирёбанда қимат: сатр | рақам = "салом";
 қимат = 42; // Both string and number are valid
 
-// Intersection types (planned for Phase 2)
+// Intersection types (planned for Phase 3)
 навъ КорбариАдмин = Корбар & Админ;
 
-// Conditional types (planned for Phase 2)
+// Conditional types (planned for Phase 3)
 навъ Натиҷа<Т> = Т extends сатр ? дуруст : нодуруст;
 ```
 
-**Phase 2 Goals:**
-- [ ] Class definitions with inheritance
-- [ ] Constructor and method support
-- [ ] Access modifiers (public, private, protected)
-- [ ] Abstract classes and methods
-- [ ] Intersection types
-- [ ] Conditional and mapped types
-- [ ] Generic type constraints
-- [ ] Advanced generic features
+**Phase 2 Achievements:**
+- ✅ Class definitions with `синф` keyword
+- ✅ Constructor methods with `конструктор` keyword
+- ✅ Instance methods with type annotations
+- ✅ Access modifiers: `ҷамъиятӣ` (public), `хосусӣ` (private)
+- ✅ Object instantiation with `нав` (new) keyword
+- ✅ `ин` (this) keyword for instance references
+- ✅ Method invocation and property access
+- ✅ Type-safe class member access
+- ✅ Clean JavaScript class compilation
+- [ ] Inheritance with `мерос` keyword (planned for Phase 3)
+- [ ] Abstract classes and methods (planned for Phase 3)
+- [ ] Static methods and properties (planned for Phase 3)
 
-### 🔴 **Phase 3: Developer Experience (High Priority)**
+### 🔴 **Phase 3: Advanced OOP & Language Features (Next Priority)**
+
+#### Inheritance System
+```somoni
+синф Ҳайвон {
+    хосусӣ ном: сатр;
+    
+    конструктор(ном: сатр) {
+        ин.ном = ном;
+    }
+    
+    ҷамъиятӣ овоз_додан(): сатр {
+        бозгашт "Овоз";
+    }
+}
+
+синф Саг мерос Ҳайвон {
+    ҷамъиятӣ овоз_додан(): сатр {
+        бозгашт "Вақ вақ";
+    }
+}
+```
+
+#### Static Members and Abstract Classes
+```somoni
+мавҳум синф Шакл {
+    статикӣ шумора: рақам = 0;
+    
+    мавҳум майдон_ҳисоб_кардан(): рақам;
+    
+    статикӣ гирифтани_шумора(): рақам {
+        бозгашт Шакл.шумора;
+    }
+}
+```
+
+**Phase 3 Goals:**
+- [ ] Class inheritance with `мерос` keyword
+- [ ] Method overriding and `супер` calls
+- [ ] Static methods and properties
+- [ ] Abstract classes and methods
+- [ ] Interface implementation
+- [ ] Advanced control flow (switch, enhanced for loops)
+- [ ] Destructuring and spread operators
+- [ ] Arrow functions
+- [ ] Template literals
+
+### 🟡 **Phase 4: Developer Experience (High Priority)**
 
 #### Language Server Protocol
 - [ ] IntelliSense with Tajik keyword completion
@@ -587,48 +702,42 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [ ] Source map generation for debugging
 - [ ] Watch mode for development
 
-### 🟡 **Phase 4: Modern Language Features (High Priority)**
+### 🟡 **Phase 5: Module System & Async Programming (Medium Priority)**
 
-#### Advanced Control Flow
+#### Module System
 ```somoni
-// Enhanced for loops
-барои (тағйирёбанда и = 0; и < 10; и++) {
-    чоп.сабт(и);
+// Export functions and classes
+содир функсия ҳисоб_кардан(а: рақам, б: рақам): рақам {
+    бозгашт а + б;
 }
 
-// Switch statements
-интихоб (қимат) {
-    ҳолат 1:
-        чоп.сабт("Як");
-        шикастан;
-    ҳолат 2:
-        чоп.сабт("Ду");
-        шикастан;
-    пешфарз:
-        чоп.сабт("Дигар");
+содир синф Ҳисобгар {
+    // Class implementation
+}
+
+// Import with Tajik syntax
+ворид { ҳисоб_кардан, Ҳисобгар } аз "./math.som";
+ворид { ҳисоб_кардан чун ҳисоб } аз "./math.som";
+```
+
+#### Async Programming
+```somoni
+ҳамзамон функсия маълумот_гирифтан(): Ваъда<сатр> {
+    кӯшиш {
+        тағйирёбанда натиҷа = интизор fetch("/api/data");
+        бозгашт натиҷа;
+    } гирифтан (хато) {
+        партофтан хато;
+    }
 }
 ```
 
-#### Destructuring and Spread
-```somoni
-// Array destructuring
-тағйирёбанда [якум, дуюм] = [1, 2];
-
-// Object destructuring
-тағйирёбанда {ном, синну_сол} = корбар;
-
-// Spread operator
-тағйирёбанда нав_рӯйхат = [...кӯҳна_рӯйхат, элементи_нав];
-```
-
-#### Arrow Functions
-```somoni
-// Concise function syntax
-тағйирёбанда ҷамъ = (а: рақам, б: рақам): рақам => а + б;
-
-// Array methods with arrow functions
-рӯйхат.харита(х => х * 2);
-```
+**Phase 5 Goals:**
+- [ ] Import/export system with Tajik keywords
+- [ ] Async/await implementation
+- [ ] Promise support
+- [ ] Error handling with try-catch-finally
+- [ ] Module resolution and bundling
 
 **Phase 4 Goals:**
 - [ ] Enhanced for loop syntax
