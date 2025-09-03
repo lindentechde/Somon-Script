@@ -378,6 +378,295 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Inspired by the rich literary tradition of Tajik language
 - Built with modern compiler design principles
 
+## Roadmap to TypeScript-Level Power
+
+Somoni-script currently provides a solid foundation with Tajik Cyrillic syntax and modern JavaScript features. To become as powerful as TypeScript, we have identified key areas for development:
+
+### 🔴 **Phase 1: Core Type System (Critical Priority)**
+
+#### Type Annotations
+```somoni
+// Current: No types
+тағйирёбанда ном = "Аҳмад";
+
+// Target: Type annotations in Tajik
+тағйирёбанда ном: сатр = "Аҳмад";
+тағйирёбанда синну_сол: рақам = 25;
+тағйирёбанда фаъол: мантиқӣ = дуруст;
+```
+
+#### Interface System
+```somoni
+интерфейс Корбар {
+    ном: сатр;
+    синну_сол: рақам;
+    email?: сатр;  // Optional property
+}
+
+функсия салом_гуфтан(корбар: Корбар): сатр {
+    бозгашт "Салом, " + корбар.ном;
+}
+```
+
+#### Generic Types
+```somoni
+функсия якхела<Т>(қимат: Т): Т {
+    бозгашт қимат;
+}
+
+интерфейс Рӯйхат<Т> {
+    элементҳо: Т[];
+    илова(элемент: Т): холӣ;
+}
+```
+
+**Phase 1 Goals:**
+- [ ] Basic type annotations (сатр, рақам, мантиқӣ, холӣ)
+- [ ] Type checker implementation
+- [ ] Interface definitions and validation
+- [ ] Basic generic type support
+- [ ] Function signature type checking
+
+### 🔴 **Phase 2: Object-Oriented Programming (Critical Priority)**
+
+#### Class System
+```somoni
+синф Ҳайвон {
+    ном: сатр;
+    
+    конструктор(ном: сатр) {
+        ин.ном = ном;
+    }
+    
+    овоз_додан(): сатр {
+        бозгашт "Овоз";
+    }
+}
+
+синф Саг мерос Ҳайвон {
+    овоз_додан(): сатр {
+        бозгашт "Вақ вақ";
+    }
+}
+```
+
+#### Advanced Type Features
+```somoni
+// Union types
+тағйирёбанда қимат: сатр | рақам = "салом";
+
+// Intersection types
+навъ КорбариАдмин = Корбар & Админ;
+
+// Conditional types
+навъ Натиҷа<Т> = Т extends сатр ? дуруст : нодуруст;
+```
+
+**Phase 2 Goals:**
+- [ ] Class definitions with inheritance
+- [ ] Constructor and method support
+- [ ] Access modifiers (public, private, protected)
+- [ ] Abstract classes and methods
+- [ ] Union and intersection types
+- [ ] Conditional and mapped types
+
+### 🔴 **Phase 3: Developer Experience (Critical Priority)**
+
+#### Language Server Protocol
+- [ ] IntelliSense with Tajik keyword completion
+- [ ] Real-time type checking and error reporting
+- [ ] Go to definition and find references
+- [ ] Symbol renaming and refactoring
+- [ ] Hover information and documentation
+
+#### IDE Integration
+- [ ] VS Code extension with full language support
+- [ ] Syntax highlighting for .som files
+- [ ] Debugging support with source maps
+- [ ] Code formatting and linting
+- [ ] Snippet support for common patterns
+
+#### Build System Enhancement
+```json
+// somoni.config.json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "strict": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "typeChecking": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+**Phase 3 Goals:**
+- [ ] Language Server Protocol implementation
+- [ ] VS Code extension development
+- [ ] Advanced compiler configuration
+- [ ] Source map generation for debugging
+- [ ] Watch mode for development
+
+### 🟡 **Phase 4: Modern Language Features (High Priority)**
+
+#### Advanced Control Flow
+```somoni
+// Enhanced for loops
+барои (тағйирёбанда и = 0; и < 10; и++) {
+    чоп.сабт(и);
+}
+
+// Switch statements
+интихоб (қимат) {
+    ҳолат 1:
+        чоп.сабт("Як");
+        шикастан;
+    ҳолат 2:
+        чоп.сабт("Ду");
+        шикастан;
+    пешфарз:
+        чоп.сабт("Дигар");
+}
+```
+
+#### Destructuring and Spread
+```somoni
+// Array destructuring
+тағйирёбанда [якум, дуюм] = [1, 2];
+
+// Object destructuring
+тағйирёбанда {ном, синну_сол} = корбар;
+
+// Spread operator
+тағйирёбанда нав_рӯйхат = [...кӯҳна_рӯйхат, элементи_нав];
+```
+
+#### Arrow Functions
+```somoni
+// Concise function syntax
+тағйирёбанда ҷамъ = (а: рақам, б: рақам): рақам => а + б;
+
+// Array methods with arrow functions
+рӯйхат.харита(х => х * 2);
+```
+
+**Phase 4 Goals:**
+- [ ] Enhanced for loop syntax
+- [ ] Switch/case statements
+- [ ] Array and object destructuring
+- [ ] Spread and rest operators
+- [ ] Arrow function expressions
+- [ ] Template literals with interpolation
+
+### 🟡 **Phase 5: Standard Library and Ecosystem (High Priority)**
+
+#### Rich Standard Library
+```somoni
+// Collections
+ворид { Рӯйхат, Харита, Маҷмӯа } аз "std/collections";
+
+// File system
+ворид { Файл, Роҳ } аз "std/fs";
+
+// Networking
+ворид { HTTP, Сервер } аз "std/net";
+
+// Data formats
+ворид { JSON, XML } аз "std/encoding";
+```
+
+#### Testing Framework
+```somoni
+ворид { тест, интизор, тавсиф } аз "somoni-test";
+
+тавсиф("Математикаи асосӣ", () => {
+    тест("ҷамъ кардани рақамҳо", () => {
+        тағйирёбанда натиҷа = ҷамъ(2, 3);
+        интизор(натиҷа).баробар_бошад(5);
+    });
+});
+```
+
+#### Package Management
+```bash
+# Package ecosystem commands
+somoni install рақамҳо-утилс
+somoni publish мани-китобхона
+somoni search веб-фреймворк
+```
+
+**Phase 5 Goals:**
+- [ ] Comprehensive standard library
+- [ ] Built-in testing framework
+- [ ] Package manager implementation
+- [ ] Documentation generation tools
+- [ ] Web framework ecosystem
+- [ ] Database connectivity libraries
+
+### 🟢 **Phase 6: Advanced Compiler Features (Medium Priority)**
+
+#### Module System Enhancement
+```somoni
+// Namespace support
+номфазо Математика {
+    содир функсия ҷамъ(а: рақам, б: рақам): рақам;
+    содир собит ПИ = 3.14159;
+}
+
+// Re-exports
+содир { Корбар, Админ } аз "./types";
+содир * аз "./utilities";
+```
+
+#### Decorators
+```somoni
+@зебкунанда
+синф МинКомпонент {
+    @хосият
+    ном: сатр = "Компонент";
+    
+    @усул
+    рендер(): сатр {
+        бозгашт `<div>${ин.ном}</div>`;
+    }
+}
+```
+
+**Phase 6 Goals:**
+- [ ] Namespace and module declarations
+- [ ] Decorator syntax and implementation
+- [ ] Advanced module resolution
+- [ ] Declaration file generation (.d.som)
+- [ ] Compiler plugins architecture
+
+## Current vs Target Feature Comparison
+
+| Feature | Current Status | Target Status | Phase |
+|---------|---------------|---------------|-------|
+| **Type System** | ❌ None | ✅ Full Static Typing | Phase 1 |
+| **Interfaces** | ❌ None | ✅ Advanced Contracts | Phase 1 |
+| **Classes** | ❌ None | ✅ Full OOP Support | Phase 2 |
+| **Generics** | ❌ None | ✅ Template Types | Phase 1 |
+| **Modules** | ✅ Basic ES6 | ✅ Advanced System | Phase 6 |
+| **Async/Await** | ✅ Complete | ✅ Complete | ✅ Done |
+| **Destructuring** | ❌ None | ✅ Full Support | Phase 4 |
+| **Union Types** | ❌ None | ✅ Advanced Types | Phase 2 |
+| **LSP Support** | ❌ None | ✅ Full IDE Integration | Phase 3 |
+| **Package Ecosystem** | ❌ None | ✅ Rich Libraries | Phase 5 |
+| **Testing** | ❌ None | ✅ Built-in Framework | Phase 5 |
+
+## Contributing to the Roadmap
+
+We welcome contributions to help achieve these goals! Each phase represents significant opportunities for community involvement:
+
+- **Type System**: Compiler engineers and language designers
+- **Developer Tools**: IDE extension and tooling developers  
+- **Standard Library**: Library authors and API designers
+- **Documentation**: Technical writers and educators
+- **Testing**: QA engineers and test framework developers
+
 ---
 
 **Somoni-script** - Забони барномасозии тоҷикӣ барои ояндаи рақамӣ
