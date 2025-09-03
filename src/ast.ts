@@ -17,7 +17,7 @@ export interface Expression extends ASTNode {}
 export interface VariableDeclaration extends Statement {
   type: 'VariableDeclaration';
   kind: 'ТАҒЙИРЁБАНДА' | 'СОБИТ';
-  identifier: Identifier;
+  identifier: Identifier | ArrayPattern | ObjectPattern;
   typeAnnotation?: any; // TypeAnnotation - avoiding circular dependency
   init?: Expression;
 }
@@ -106,6 +106,19 @@ export interface AssignmentExpression extends Expression {
 export interface ArrayExpression extends Expression {
   type: 'ArrayExpression';
   elements: Expression[];
+}
+
+export interface ObjectExpression extends Expression {
+  type: 'ObjectExpression';
+  properties: Property[];
+}
+
+export interface Property extends ASTNode {
+  type: 'Property';
+  key: Identifier | Literal;
+  value: Expression;
+  computed: boolean;
+  shorthand: boolean;
 }
 
 export interface MemberExpression extends Expression {
@@ -222,4 +235,54 @@ export interface Super extends Expression {
 
 export interface ThisExpression extends Expression {
   type: 'ThisExpression';
+}
+
+export interface SwitchStatement extends Statement {
+  type: 'SwitchStatement';
+  discriminant: Expression;
+  cases: SwitchCase[];
+}
+
+export interface SwitchCase extends ASTNode {
+  type: 'SwitchCase';
+  test?: Expression; // null for default case
+  consequent: Statement[];
+}
+
+export interface BreakStatement extends Statement {
+  type: 'BreakStatement';
+  label?: Identifier;
+}
+
+export interface ContinueStatement extends Statement {
+  type: 'ContinueStatement';
+  label?: Identifier;
+}
+
+// Destructuring and Spread Patterns
+export interface ArrayPattern extends ASTNode {
+  type: 'ArrayPattern';
+  elements: (Identifier | ArrayPattern | ObjectPattern | SpreadElement | null)[];
+}
+
+export interface ObjectPattern extends ASTNode {
+  type: 'ObjectPattern';
+  properties: (PropertyPattern | SpreadElement)[];
+}
+
+export interface PropertyPattern extends ASTNode {
+  type: 'PropertyPattern';
+  key: Identifier | Literal;
+  value: Identifier | ArrayPattern | ObjectPattern;
+  computed: boolean;
+}
+
+export interface SpreadElement extends ASTNode {
+  type: 'SpreadElement';
+  argument: Expression;
+}
+
+export interface RestElement extends ASTNode {
+  type: 'RestElement';
+  argument: Identifier;
 }

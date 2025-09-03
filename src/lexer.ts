@@ -69,6 +69,8 @@ export class Lexer {
     // Control flow
     ['шикастан', TokenType.ШИКАСТАН],
     ['давом', TokenType.ДАВОМ],
+    ['интихоб', TokenType.ИНТИХОБ],
+    ['ҳолат', TokenType.ҲОЛАТ],
     ['кӯшиш', TokenType.КӮШИШ],
     ['гирифтан', TokenType.ГИРИФТАН],
     ['ниҳоят', TokenType.НИҲОЯТ],
@@ -152,7 +154,14 @@ export class Lexer {
       case ']': return this.singleCharToken(TokenType.RIGHT_BRACKET);
       case ';': return this.singleCharToken(TokenType.SEMICOLON);
       case ',': return this.singleCharToken(TokenType.COMMA);
-      case '.': return this.singleCharToken(TokenType.DOT);
+      case '.': 
+        if (this.peekNext() === '.' && this.peekNext(1) === '.') {
+          this.advance(); // consume first '.'
+          this.advance(); // consume second '.'
+          this.advance(); // consume third '.'
+          return this.createToken(TokenType.SPREAD, '...');
+        }
+        return this.singleCharToken(TokenType.DOT);
       case ':': return this.singleCharToken(TokenType.COLON);
       case '?': return this.singleCharToken(TokenType.QUESTION);
       case '\n':
@@ -372,6 +381,12 @@ export class Lexer {
 
   private isWhitespace(char: string): boolean {
     return char === ' ' || char === '\t' || char === '\r';
+  }
+
+  private peekNext(offset: number = 0): string {
+    const pos = this.position + 1 + offset;
+    if (pos >= this.input.length) return '\0';
+    return this.input[pos];
   }
 
   private createToken(type: TokenType, value: string, line?: number, column?: number): Token {

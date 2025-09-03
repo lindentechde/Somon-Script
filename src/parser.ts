@@ -41,7 +41,14 @@ import {
   TryStatement,
   CatchClause,
   ThrowStatement,
-  ClassDeclaration
+  ClassDeclaration,
+  ArrayPattern,
+  ObjectPattern,
+  PropertyPattern,
+  SpreadElement,
+  RestElement,
+  ObjectExpression,
+  Property
 } from './types';
 
 export class Parser {
@@ -65,10 +72,8 @@ export class Parser {
       const stmt = this.statement();
       if (stmt) {
         body.push(stmt);
-      } else {
-        // Skip to next statement on error
-        this.advance();
       }
+      // Don't advance here - statement() handles its own token consumption
     }
     
     return {
@@ -100,6 +105,15 @@ export class Parser {
       
       if (this.match(TokenType.НАВЪ)) {
         return this.typeAlias();
+      }
+      
+      if (this.match(TokenType.МАВҲУМ)) {
+        // Handle abstract class
+        this.consume(TokenType.СИНФ, "Expected 'синф' after 'мавҳум'");
+        const classDecl = this.classDeclaration();
+        // Mark as abstract
+        (classDecl as any).abstract = true;
+        return classDecl;
       }
       
       if (this.match(TokenType.СИНФ)) {
@@ -139,6 +153,18 @@ export class Parser {
         return this.whileStatement();
       }
       
+      if (this.match(TokenType.ИНТИХОБ)) {
+        return this.switchStatement();
+      }
+      
+      if (this.match(TokenType.ШИКАСТАН)) {
+        return this.breakStatement();
+      }
+      
+      if (this.match(TokenType.ДАВОМ)) {
+        return this.continueStatement();
+      }
+      
       if (this.match(TokenType.БОЗГАШТ)) {
         return this.returnStatement();
       }
@@ -160,20 +186,8 @@ export class Parser {
     const kindToken = this.previous();
     const kind = kindToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
     
-    let name: Token;
-    if (this.check(TokenType.IDENTIFIER)) {
-      name = this.advance();
-    } else if (this.matchBuiltinIdentifier()) {
-      name = this.previous();
-    } else {
-      throw new Error(`Expected variable name at line ${this.peek().line}, column ${this.peek().column}`);
-    }
-    const identifier: Identifier = {
-      type: 'Identifier',
-      name: name.value,
-      line: name.line,
-      column: name.column
-    };
+    // Parse pattern (identifier, array destructuring, or object destructuring)
+    const identifier = this.parsePattern();
     
     // Parse optional type annotation
     let typeAnnotation: TypeAnnotation | undefined;
@@ -657,6 +671,15 @@ export class Parser {
       };
     }
     
+    if (this.match(TokenType.СУПЕР)) {
+      const token = this.previous();
+      return {
+        type: 'Super',
+        line: token.line,
+        column: token.column
+      };
+    }
+    
     if (this.match(TokenType.НАВ)) {
       const token = this.previous();
       const callee = this.primary();
@@ -699,6 +722,10 @@ export class Parser {
     
     if (this.match(TokenType.LEFT_BRACKET)) {
       return this.arrayExpression();
+    }
+    
+    if (this.match(TokenType.LEFT_BRACE)) {
+      return this.objectExpression();
     }
     
     const token = this.peek();
@@ -893,7 +920,11 @@ export class Parser {
     
     if (!this.check(TokenType.RIGHT_BRACKET)) {
       do {
-        elements.push(this.expression());
+        if (this.check(TokenType.SPREAD)) {
+          elements.push(this.parseSpreadElement());
+        } else {
+          elements.push(this.expression());
+        }
       } while (this.match(TokenType.COMMA));
     }
     
@@ -905,6 +936,62 @@ export class Parser {
       line: leftBracket.line,
       column: leftBracket.column
     } as ArrayExpression;
+  }
+
+  private objectExpression(): ObjectExpression {
+    const leftBrace = this.previous();
+    const properties: Property[] = [];
+    
+    if (!this.check(TokenType.RIGHT_BRACE)) {
+      do {
+        const property = this.parseProperty();
+        properties.push(property);
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after object properties");
+    
+    return {
+      type: 'ObjectExpression',
+      properties,
+      line: leftBrace.line,
+      column: leftBrace.column
+    } as ObjectExpression;
+  }
+
+  private parseProperty(): Property {
+    let key: Identifier | Literal;
+    let computed = false;
+    
+    if (this.check(TokenType.LEFT_BRACKET)) {
+      // Computed property
+      this.advance(); // consume '['
+      key = this.expression() as Literal;
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']'");
+      computed = true;
+    } else {
+      // Regular property
+      const keyToken = this.advance();
+      key = {
+        type: 'Identifier',
+        name: keyToken.value,
+        line: keyToken.line,
+        column: keyToken.column
+      };
+    }
+    
+    this.consume(TokenType.COLON, "Expected ':' after property key");
+    const value = this.expression();
+    
+    return {
+      type: 'Property',
+      key,
+      value,
+      computed,
+      shorthand: false,
+      line: key.line,
+      column: key.column
+    };
   }
 
   private tryStatement(): TryStatement {
@@ -1313,6 +1400,12 @@ export class Parser {
       isStatic = true;
     }
     
+    // Check for abstract
+    let isAbstract = false;
+    if (this.match(TokenType.МАВҲУМ)) {
+      isAbstract = true;
+    }
+    
     // Constructor
     if (this.match(TokenType.КОНСТРУКТОР)) {
       return this.constructorMethod(accessibility, isStatic);
@@ -1330,7 +1423,7 @@ export class Parser {
     
     if (this.check(TokenType.LEFT_PAREN)) {
       // Method
-      return this.classMethod(nameToken, accessibility, isStatic);
+      return this.classMethod(nameToken, accessibility, isStatic, isAbstract);
     } else {
       // Property
       return this.classProperty(nameToken, accessibility, isStatic);
@@ -1380,7 +1473,7 @@ export class Parser {
     };
   }
 
-  private classMethod(nameToken: any, accessibility?: string, isStatic?: boolean): any {
+  private classMethod(nameToken: any, accessibility?: string, isStatic?: boolean, isAbstract?: boolean): any {
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
     
     const params: Parameter[] = [];
@@ -1399,8 +1492,15 @@ export class Parser {
       returnType = this.typeAnnotation();
     }
     
-    this.consume(TokenType.LEFT_BRACE, "Expected '{' after method signature");
-    const body = this.blockStatement();
+    let body = null;
+    if (isAbstract) {
+      // Abstract methods end with semicolon, no body
+      this.consume(TokenType.SEMICOLON, "Expected ';' after abstract method signature");
+    } else {
+      // Regular methods have a body
+      this.consume(TokenType.LEFT_BRACE, "Expected '{' after method signature");
+      body = this.blockStatement();
+    }
     
     return {
       type: 'MethodDefinition',
@@ -1421,6 +1521,7 @@ export class Parser {
       kind: 'method',
       static: isStatic || false,
       accessibility: accessibility,
+      abstract: isAbstract || false,
       line: nameToken.line,
       column: nameToken.column
     };
@@ -1483,6 +1584,235 @@ export class Parser {
     };
   }
 
+  private switchStatement(): any {
+    const switchToken = this.previous();
+    
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'интихоб'");
+    const discriminant = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after switch expression");
+    
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after switch expression");
+    
+    const cases: any[] = [];
+    
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      if (this.match(TokenType.NEWLINE)) {
+        continue;
+      }
+      
+      if (this.match(TokenType.ҲОЛАТ)) {
+        const caseValue = this.expression();
+        this.consume(TokenType.COLON, "Expected ':' after case value");
+        
+        const consequent: any[] = [];
+        while (!this.check(TokenType.ҲОЛАТ) && !this.check(TokenType.ПЕШФАРЗ) && 
+               !this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+          if (this.match(TokenType.NEWLINE)) {
+            continue;
+          }
+          const stmt = this.statement();
+          if (stmt) {
+            consequent.push(stmt);
+          }
+        }
+        
+        cases.push({
+          type: 'SwitchCase',
+          test: caseValue,
+          consequent: consequent,
+          line: this.previous().line,
+          column: this.previous().column
+        });
+      } else if (this.match(TokenType.ПЕШФАРЗ)) {
+        this.consume(TokenType.COLON, "Expected ':' after 'пешфарз'");
+        
+        const consequent: any[] = [];
+        while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+          if (this.match(TokenType.NEWLINE)) {
+            continue;
+          }
+          const stmt = this.statement();
+          if (stmt) {
+            consequent.push(stmt);
+          }
+        }
+        
+        cases.push({
+          type: 'SwitchCase',
+          test: null, // default case
+          consequent: consequent,
+          line: this.previous().line,
+          column: this.previous().column
+        });
+      } else {
+        throw new Error(`Expected 'ҳолат' or 'пешфарз' in switch statement at line ${this.peek().line}`);
+      }
+    }
+    
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after switch cases");
+    
+    return {
+      type: 'SwitchStatement',
+      discriminant: discriminant,
+      cases: cases,
+      line: switchToken.line,
+      column: switchToken.column
+    };
+  }
+  
+  private breakStatement(): any {
+    const breakToken = this.previous();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after 'шикастан'");
+    
+    return {
+      type: 'BreakStatement',
+      line: breakToken.line,
+      column: breakToken.column
+    };
+  }
+  
+  private continueStatement(): any {
+    const continueToken = this.previous();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after 'давом'");
+    
+    return {
+      type: 'ContinueStatement',
+      line: continueToken.line,
+      column: continueToken.column
+    };
+  }
+
+  // Pattern parsing methods
+  private parsePattern(): Identifier | ArrayPattern | ObjectPattern {
+    if (this.check(TokenType.LEFT_BRACKET)) {
+      return this.parseArrayPattern();
+    } else if (this.check(TokenType.LEFT_BRACE)) {
+      return this.parseObjectPattern();
+    } else {
+      // Regular identifier
+      let name: Token;
+      if (this.check(TokenType.IDENTIFIER)) {
+        name = this.advance();
+      } else if (this.matchBuiltinIdentifier()) {
+        name = this.previous();
+      } else {
+        throw new Error(`Expected identifier at line ${this.peek().line}, column ${this.peek().column}`);
+      }
+      
+      return {
+        type: 'Identifier',
+        name: name.value,
+        line: name.line,
+        column: name.column
+      };
+    }
+  }
+  
+  private parseArrayPattern(): ArrayPattern {
+    const leftBracket = this.consume(TokenType.LEFT_BRACKET, "Expected '['");
+    const elements: (Identifier | ArrayPattern | ObjectPattern | SpreadElement | null)[] = [];
+    
+    if (!this.check(TokenType.RIGHT_BRACKET)) {
+      do {
+        if (this.check(TokenType.COMMA)) {
+          // Hole in array pattern
+          elements.push(null);
+        } else if (this.check(TokenType.SPREAD)) {
+          elements.push(this.parseSpreadElement());
+        } else {
+          elements.push(this.parsePattern());
+        }
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']'");
+    
+    return {
+      type: 'ArrayPattern',
+      elements,
+      line: leftBracket.line,
+      column: leftBracket.column
+    };
+  }
+  
+  private parseObjectPattern(): ObjectPattern {
+    const leftBrace = this.consume(TokenType.LEFT_BRACE, "Expected '{'");
+    const properties: (PropertyPattern | SpreadElement)[] = [];
+    
+    if (!this.check(TokenType.RIGHT_BRACE)) {
+      do {
+        if (this.check(TokenType.SPREAD)) {
+          properties.push(this.parseSpreadElement());
+        } else {
+          properties.push(this.parsePropertyPattern());
+        }
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}'");
+    
+    return {
+      type: 'ObjectPattern',
+      properties,
+      line: leftBrace.line,
+      column: leftBrace.column
+    };
+  }
+  
+  private parsePropertyPattern(): PropertyPattern {
+    let key: Identifier | Literal;
+    let computed = false;
+    
+    if (this.check(TokenType.LEFT_BRACKET)) {
+      // Computed property
+      this.advance(); // consume '['
+      key = this.expression() as Literal;
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']'");
+      computed = true;
+    } else {
+      // Regular property
+      const keyToken = this.advance();
+      key = {
+        type: 'Identifier',
+        name: keyToken.value,
+        line: keyToken.line,
+        column: keyToken.column
+      };
+    }
+    
+    let value: Identifier | ArrayPattern | ObjectPattern;
+    if (this.match(TokenType.COLON)) {
+      value = this.parsePattern();
+    } else {
+      // Shorthand property
+      if (key.type !== 'Identifier') {
+        throw new Error("Shorthand property must be an identifier");
+      }
+      value = key as Identifier;
+    }
+    
+    return {
+      type: 'PropertyPattern',
+      key,
+      value,
+      computed,
+      line: key.line,
+      column: key.column
+    };
+  }
+  
+  private parseSpreadElement(): SpreadElement {
+    const spreadToken = this.consume(TokenType.SPREAD, "Expected '...'");
+    const argument = this.expression();
+    
+    return {
+      type: 'SpreadElement',
+      argument,
+      line: spreadToken.line,
+      column: spreadToken.column
+    };
+  }
+
   private synchronize(): void {
     this.advance();
     
@@ -1503,6 +1833,7 @@ export class Parser {
         case TokenType.ПАРТОФТАН:
         case TokenType.ИНТЕРФЕЙС:
         case TokenType.НАВЪ:
+        case TokenType.ИНТИХОБ:
           return;
       }
       

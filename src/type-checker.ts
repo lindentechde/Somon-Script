@@ -152,9 +152,10 @@ export class TypeChecker {
 
     // Store variable type in symbol table
     const finalType = declaredType || inferredType;
-    if (finalType) {
+    if (finalType && varDecl.identifier.type === 'Identifier') {
       this.symbolTable.set(varDecl.identifier.name, finalType);
     }
+    // TODO: Handle destructuring patterns in type checking
   }
 
   private checkFunctionDeclaration(funcDecl: FunctionDeclaration): void {

@@ -67,6 +67,8 @@ export enum TokenType {
   // Control flow additions
   ШИКАСТАН = 'ШИКАСТАН',         // break
   ДАВОМ = 'ДАВОМ',               // continue
+  ИНТИХОБ = 'ИНТИХОБ',           // switch
+  ҲОЛАТ = 'ҲОЛАТ',               // case
   КӮШИШ = 'КӮШИШ',               // try
   ГИРИФТАН = 'ГИРИФТАН',         // catch
   НИҲОЯТ = 'НИҲОЯТ',             // finally
@@ -117,6 +119,7 @@ export enum TokenType {
   PIPE = 'PIPE',
   AMPERSAND = '&',
   NOT = '!',
+  SPREAD = '...',
   
   // Punctuation
   SEMICOLON = ';',

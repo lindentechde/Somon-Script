@@ -45,6 +45,7 @@ export class CodeGenerator {
     ['хато', 'error'],
     ['огоҳӣ', 'warn'],
     ['маълумот', 'info'],
+
     
     // Array methods
     ['рӯйхат', 'Array'],
@@ -128,6 +129,12 @@ export class CodeGenerator {
         return this.generateTypeAlias(node as TypeAlias);
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
+      case 'SwitchStatement':
+        return this.generateSwitchStatement(node as any);
+      case 'BreakStatement':
+        return this.indent('break;');
+      case 'ContinueStatement':
+        return this.indent('continue;');
       default:
         throw new Error(`Unknown statement type: ${node.type}`);
     }
@@ -135,10 +142,10 @@ export class CodeGenerator {
 
   private generateVariableDeclaration(node: VariableDeclaration): string {
     const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
-    const name = this.generateIdentifier(node.identifier);
+    const pattern = this.generatePattern(node.identifier);
     const init = node.init ? ` = ${this.generateExpression(node.init)}` : '';
     
-    return this.indent(`${kind} ${name}${init};`);
+    return this.indent(`${kind} ${pattern}${init};`);
   }
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
@@ -243,12 +250,18 @@ export class CodeGenerator {
         return this.generateMemberExpression(node as MemberExpression);
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
+      case 'ObjectExpression':
+        return this.generateObjectExpression(node as any);
       case 'AwaitExpression':
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
       case 'ThisExpression':
         return 'this';
+      case 'Super':
+        return 'super';
+      case 'SpreadElement':
+        return this.generateSpreadElement(node as any);
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }
@@ -314,7 +327,14 @@ export class CodeGenerator {
 
   private generateLiteral(node: Literal): string {
     if (typeof node.value === 'string') {
-      return `"${node.value.replace(/"/g, '\\"')}"`;
+      // Properly escape string literals
+      const escaped = node.value
+        .replace(/\\/g, '\\\\')  // Escape backslashes first
+        .replace(/"/g, '\\"')    // Escape quotes
+        .replace(/\n/g, '\\n')   // Escape newlines
+        .replace(/\t/g, '\\t')   // Escape tabs
+        .replace(/\r/g, '\\r');  // Escape carriage returns
+      return `"${escaped}"`;
     }
     if (node.value === null) {
       return 'null';
@@ -339,7 +359,13 @@ export class CodeGenerator {
   }
 
   private generateCallExpression(node: CallExpression): string {
-    const callee = this.generateExpression(node.callee);
+    let callee = this.generateExpression(node.callee);
+    
+    // Special handling for нишондиҳӣ function
+    if (callee === 'нишондиҳӣ') {
+      callee = 'console.log';
+    }
+    
     const args = node.arguments.map(arg => this.generateExpression(arg)).join(', ');
     return `${callee}(${args})`;
   }
@@ -369,6 +395,18 @@ export class CodeGenerator {
   private generateArrayExpression(node: ArrayExpression): string {
     const elements = node.elements.map(element => this.generateExpression(element));
     return `[${elements.join(', ')}]`;
+  }
+
+  private generateObjectExpression(node: any): string {
+    const properties = node.properties.map((prop: any) => {
+      const key = prop.computed 
+        ? `[${this.generateExpression(prop.key)}]`
+        : this.generateExpression(prop.key);
+      const value = this.generateExpression(prop.value);
+      return `${key}: ${value}`;
+    }).join(', ');
+    
+    return `{${properties}}`;
   }
 
   private generateTryStatement(node: TryStatement): string {
@@ -423,6 +461,7 @@ export class CodeGenerator {
   private generateClassDeclaration(node: ClassDeclaration): string {
     const className = this.generateIdentifier(node.name);
     const extendsClause = node.superClass ? ` extends ${this.generateIdentifier(node.superClass)}` : '';
+    const abstractModifier = (node as any).abstract ? 'abstract ' : '';
     
     let classBody = '';
     
@@ -446,21 +485,27 @@ export class CodeGenerator {
       }
     }
     
-    return this.indent(`class ${className}${extendsClause} {${classBody}}`);
+    return this.indent(`${abstractModifier}class ${className}${extendsClause} {${classBody}}`);
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
     const methodName = node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
+    const isAbstract = (node as any).abstract ? 'abstract ' : '';
     
     // Generate parameters
     const params = node.value.params ? 
       node.value.params.map((param) => this.generateIdentifier(param.name)).join(', ') : '';
     
-    // Generate method body
-    const body = this.generateBlockStatement(node.value.body);
-    
-    return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
+    // Generate method body or abstract signature
+    if ((node as any).abstract) {
+      // Abstract methods have no body
+      return this.indent(`${isAbstract}${isStatic}${methodName}(${params});`);
+    } else {
+      // Regular methods have a body
+      const body = this.generateBlockStatement(node.value.body);
+      return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
+    }
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
@@ -484,6 +529,87 @@ export class CodeGenerator {
 
     // For now, we'll be conservative and add parentheses for nested binary expressions
     return node.left.type === 'BinaryExpression' || node.right.type === 'BinaryExpression';
+  }
+
+  private generateSwitchStatement(node: any): string {
+    const discriminant = this.generateExpression(node.discriminant);
+    
+    this.indentLevel++;
+    const cases = node.cases.map((switchCase: any) => {
+      if (switchCase.test === null) {
+        // Default case
+        const consequent = switchCase.consequent.map((stmt: any) => this.generateStatement(stmt)).join('\n');
+        return this.indent(`default:\n${consequent}`);
+      } else {
+        // Regular case
+        const test = this.generateExpression(switchCase.test);
+        const consequent = switchCase.consequent.map((stmt: any) => this.generateStatement(stmt)).join('\n');
+        return this.indent(`case ${test}:\n${consequent}`);
+      }
+    }).join('\n');
+    this.indentLevel--;
+    
+    return this.indent(`switch (${discriminant}) {\n${cases}\n${this.getIndent()}}`);
+  }
+
+  // Pattern generation methods
+  private generatePattern(node: any): string {
+    switch (node.type) {
+      case 'Identifier':
+        return this.generateIdentifier(node);
+      case 'ArrayPattern':
+        return this.generateArrayPattern(node);
+      case 'ObjectPattern':
+        return this.generateObjectPattern(node);
+      default:
+        throw new Error(`Unknown pattern type: ${node.type}`);
+    }
+  }
+  
+  private generateArrayPattern(node: any): string {
+    const elements = node.elements.map((element: any) => {
+      if (element === null) {
+        return ''; // Hole in array pattern
+      } else if (element.type === 'SpreadElement') {
+        return this.generateSpreadElement(element);
+      } else {
+        return this.generatePattern(element);
+      }
+    }).join(', ');
+    
+    return `[${elements}]`;
+  }
+  
+  private generateObjectPattern(node: any): string {
+    const properties = node.properties.map((prop: any) => {
+      if (prop.type === 'SpreadElement') {
+        return this.generateSpreadElement(prop);
+      } else {
+        return this.generatePropertyPattern(prop);
+      }
+    }).join(', ');
+    
+    return `{${properties}}`;
+  }
+  
+  private generatePropertyPattern(node: any): string {
+    const key = node.computed 
+      ? `[${this.generateExpression(node.key)}]`
+      : this.generateIdentifier(node.key);
+    
+    if (node.key.type === 'Identifier' && node.value.type === 'Identifier' && 
+        node.key.name === node.value.name) {
+      // Shorthand property
+      return key;
+    } else {
+      const value = this.generatePattern(node.value);
+      return `${key}: ${value}`;
+    }
+  }
+  
+  private generateSpreadElement(node: any): string {
+    const argument = this.generateExpression(node.argument);
+    return `...${argument}`;
   }
 
   private indent(text: string): string {
