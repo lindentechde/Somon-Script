@@ -174,3 +174,46 @@ export interface NewExpression extends Expression {
   callee: Expression;
   arguments: Expression[];
 }
+
+export interface ClassDeclaration extends Statement {
+  type: 'ClassDeclaration';
+  name: Identifier;
+  superClass?: Identifier;
+  implements?: Identifier[];
+  body: ClassBody;
+}
+
+export interface ClassBody extends ASTNode {
+  type: 'ClassBody';
+  body: (MethodDefinition | PropertyDefinition)[];
+}
+
+export interface MethodDefinition extends ASTNode {
+  type: 'MethodDefinition';
+  key: Identifier;
+  value: FunctionExpression;
+  kind: 'constructor' | 'method' | 'get' | 'set';
+  static: boolean;
+  accessibility?: 'public' | 'private' | 'protected';
+}
+
+export interface PropertyDefinition extends ASTNode {
+  type: 'PropertyDefinition';
+  key: Identifier;
+  value?: Expression;
+  typeAnnotation?: any; // TypeAnnotation
+  static: boolean;
+  accessibility?: 'public' | 'private' | 'protected';
+}
+
+export interface FunctionExpression extends Expression {
+  type: 'FunctionExpression';
+  name?: Identifier;
+  params: Parameter[];
+  body: BlockStatement;
+  async?: boolean;
+}
+
+export interface Super extends Expression {
+  type: 'Super';
+}

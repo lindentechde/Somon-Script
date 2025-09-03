@@ -1,17 +1,31 @@
 {
   "name": "somoni-script",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
     "somoni": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "npm run clean && tsc",
+    "build:watch": "tsc --watch",
+    "dev": "npm run build:watch",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "lint": "echo 'Linting not configured yet - TODO: Add ESLint'",
+    "lint:fix": "echo 'Lint fix not configured yet - TODO: Add ESLint'",
+    "type-check": "tsc --noEmit",
     "start": "node dist/cli.js",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist coverage *.tgz",
+    "prepublishOnly": "npm run build && npm run test:ci",
+    "prepack": "npm run build",
+    "benchmark": "node scripts/benchmark.js",
+    "examples": "node scripts/run-examples.js",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major"
   },
   "keywords": ["compiler", "tajik", "cyrillic", "javascript", "programming-language"],
   "author": "Somoni Script Team",

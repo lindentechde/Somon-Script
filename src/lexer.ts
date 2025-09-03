@@ -88,6 +88,7 @@ export class Lexer {
     ['якхела', TokenType.ЯКХЕЛА],
     ['мерос', TokenType.МЕРОС],
     ['татбиқ', TokenType.ТАТБИҚ],
+    ['супер', TokenType.СУПЕР],
     ['конструктор', TokenType.КОНСТРУКТОР],
     ['хосусӣ', TokenType.ХОСУСӢ],
     ['муҳофизатшуда', TokenType.МУҲОФИЗАТШУДА],
@@ -95,6 +96,10 @@ export class Lexer {
     ['статикӣ', TokenType.СТАТИКӢ],
     ['мавҳум', TokenType.МАВҲУМ],
     ['номфазо', TokenType.НОМФАЗО],
+    ['калидҳои', TokenType.КАЛИДҲОИ],
+    ['инфер', TokenType.ИНФЕР],
+    ['readonly', TokenType.READONLY],
+    ['unique', TokenType.UNIQUE],
   ]);
 
   constructor(input: string) {
@@ -194,10 +199,15 @@ export class Lexer {
       return this.singleCharToken(TokenType.GREATER_THAN);
     }
 
-    if (char === '&' && this.peek() === '&') {
-      this.advance();
-      this.advance();
-      return this.createToken(TokenType.AND, '&&', startLine, startColumn);
+    if (char === '&') {
+      if (this.peek() === '&') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.AND, '&&', startLine, startColumn);
+      } else {
+        this.advance();
+        return this.createToken(TokenType.AMPERSAND, '&', startLine, startColumn);
+      }
     }
 
     if (char === '|') {

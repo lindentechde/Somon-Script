@@ -123,6 +123,8 @@ export class CodeGenerator {
         return this.generateInterfaceDeclaration(node as InterfaceDeclaration);
       case 'TypeAlias':
         return this.generateTypeAlias(node as TypeAlias);
+      case 'ClassDeclaration':
+        return this.generateClassDeclaration(node as any);
       default:
         throw new Error(`Unknown statement type: ${node.type}`);
     }
@@ -411,6 +413,57 @@ export class CodeGenerator {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
     return this.indent(`// Type alias: ${name}`);
+  }
+
+  private generateClassDeclaration(node: any): string {
+    const className = this.generateIdentifier(node.name);
+    const extendsClause = node.superClass ? ` extends ${this.generateIdentifier(node.superClass)}` : '';
+    
+    let classBody = '';
+    
+    // Generate class members
+    if (node.body && node.body.body) {
+      const members = node.body.body.map((member: any) => {
+        switch (member.type) {
+          case 'MethodDefinition':
+            return this.generateMethodDefinition(member);
+          case 'PropertyDefinition':
+            return this.generatePropertyDefinition(member);
+          default:
+            return '';
+        }
+      }).filter((member: string) => member.length > 0);
+      
+      if (members.length > 0) {
+        this.indentLevel++;
+        classBody = '\n' + members.join('\n') + '\n' + this.getIndent();
+        this.indentLevel--;
+      }
+    }
+    
+    return this.indent(`class ${className}${extendsClause} {${classBody}}`);
+  }
+
+  private generateMethodDefinition(node: any): string {
+    const methodName = node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
+    const isStatic = node.static ? 'static ' : '';
+    
+    // Generate parameters
+    const params = node.value.params ? 
+      node.value.params.map((param: any) => this.generateIdentifier(param.name)).join(', ') : '';
+    
+    // Generate method body
+    const body = this.generateBlockStatement(node.value.body);
+    
+    return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
+  }
+
+  private generatePropertyDefinition(node: any): string {
+    const propertyName = this.generateIdentifier(node.key);
+    const isStatic = node.static ? 'static ' : '';
+    const initializer = node.value ? ` = ${this.generateExpression(node.value)}` : '';
+    
+    return this.indent(`${isStatic}${propertyName}${initializer};`);
   }
 
   private needsParentheses(node: BinaryExpression): boolean {

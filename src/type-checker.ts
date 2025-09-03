@@ -272,9 +272,30 @@ export class TypeChecker {
         : false;
     }
 
-    // Union type checking (simplified)
+    // Union type checking
     if (target.kind === 'union' && target.types) {
       return target.types.some(t => this.isAssignable(source, t));
+    }
+
+    // Source union type - all members must be assignable to target
+    if (source.kind === 'union' && source.types) {
+      return source.types.every(t => this.isAssignable(t, target));
+    }
+
+    // Intersection type checking
+    if (target.kind === 'intersection' && target.types) {
+      // Source must be assignable to all types in intersection
+      return target.types.every(t => this.isAssignable(source, t));
+    }
+
+    if (source.kind === 'intersection' && source.types) {
+      // At least one type in intersection must be assignable to target
+      return source.types.some(t => this.isAssignable(t, target));
+    }
+
+    // Interface structural typing
+    if (source.kind === 'interface' && target.kind === 'interface') {
+      return this.isStructurallyCompatible(source, target);
     }
 
     return false;
@@ -288,11 +309,40 @@ export class TypeChecker {
         return `${this.typeToString(type.elementType!)}[]`;
       case 'union':
         return type.types!.map(t => this.typeToString(t)).join(' | ');
+      case 'intersection':
+        return type.types!.map(t => this.typeToString(t)).join(' & ');
       case 'interface':
         return type.name || 'interface';
+      case 'tuple':
+        return `[${type.types!.map(t => this.typeToString(t)).join(', ')}]`;
+      case 'literal':
+        return typeof type.name === 'string' ? `"${type.name}"` : String(type.name);
       default:
         return type.name || 'unknown';
     }
+  }
+
+  private isStructurallyCompatible(source: Type, target: Type): boolean {
+    if (!source.properties || !target.properties) {
+      return false;
+    }
+
+    // Check if source has all required properties of target
+    for (const [propName, targetProp] of target.properties) {
+      const sourceProp = source.properties.get(propName);
+      
+      // Required property missing
+      if (!sourceProp && !targetProp.optional) {
+        return false;
+      }
+      
+      // Property exists, check type compatibility
+      if (sourceProp && !this.isAssignable(sourceProp.type, targetProp.type)) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   private mapPrimitiveToTajik(primitiveType: string): string {

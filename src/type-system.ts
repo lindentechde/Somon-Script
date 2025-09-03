@@ -25,6 +25,11 @@ export interface UnionType extends TypeNode {
   types: TypeNode[];
 }
 
+export interface IntersectionType extends TypeNode {
+  type: 'IntersectionType';
+  types: TypeNode[];
+}
+
 export interface GenericType extends TypeNode {
   type: 'GenericType';
   name: Identifier;
@@ -63,4 +68,41 @@ export interface TypeAlias extends Statement {
   name: Identifier;
   typeParameters?: TypeParameter[];
   typeAnnotation: TypeAnnotation;
+}
+
+export interface ConditionalType extends TypeNode {
+  type: 'ConditionalType';
+  checkType: TypeNode;
+  extendsType: TypeNode;
+  trueType: TypeNode;
+  falseType: TypeNode;
+}
+
+export interface MappedType extends TypeNode {
+  type: 'MappedType';
+  typeParameter: TypeParameter;
+  typeAnnotation: TypeAnnotation;
+  optional?: boolean;
+  readonly?: boolean;
+}
+
+export interface IndexedAccessType extends TypeNode {
+  type: 'IndexedAccessType';
+  objectType: TypeNode;
+  indexType: TypeNode;
+}
+
+export interface KeyofType extends TypeNode {
+  type: 'KeyofType';
+  operand: TypeNode;
+}
+
+export interface TupleType extends TypeNode {
+  type: 'TupleType';
+  elementTypes: TypeNode[];
+}
+
+export interface LiteralType extends TypeNode {
+  type: 'LiteralType';
+  value: string | number | boolean;
 }

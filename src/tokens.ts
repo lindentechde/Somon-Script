@@ -86,6 +86,7 @@ export enum TokenType {
   ЯКХЕЛА = 'ЯКХЕЛА',             // generic (same/uniform)
   МЕРОС = 'МЕРОС',               // extends/inherits
   ТАТБИҚ = 'ТАТБИҚ',             // implements
+  СУПЕР = 'СУПЕР',               // super
   КОНСТРУКТОР = 'КОНСТРУКТОР',   // constructor
   ХОСУСӢ = 'ХОСУСӢ',             // private
   МУҲОФИЗАТШУДА = 'МУҲОФИЗАТШУДА', // protected
@@ -93,6 +94,10 @@ export enum TokenType {
   СТАТИКӢ = 'СТАТИКӢ',           // static
   МАВҲУМ = 'МАВҲУМ',             // abstract
   НОМФАЗО = 'НОМФАЗО',           // namespace
+  КАЛИДҲОИ = 'КАЛИДҲОИ',         // keyof
+  ИНФЕР = 'ИНФЕР',               // infer
+  READONLY = 'READONLY',         // readonly (keeping English for now)
+  UNIQUE = 'UNIQUE',             // unique (keeping English for now)
   
   // Operators
   PLUS = '+',
@@ -110,6 +115,7 @@ export enum TokenType {
   AND = '&&',
   OR = '||',
   PIPE = '|',
+  AMPERSAND = '&',
   NOT = '!',
   
   // Punctuation

@@ -40,7 +40,8 @@ import {
   NewExpression,
   TryStatement,
   CatchClause,
-  ThrowStatement
+  ThrowStatement,
+  ClassDeclaration
 } from './types';
 
 export class Parser {
@@ -99,6 +100,10 @@ export class Parser {
       
       if (this.match(TokenType.НАВЪ)) {
         return this.typeAlias();
+      }
+      
+      if (this.match(TokenType.СИНФ)) {
+        return this.classDeclaration();
       }
       
       if (this.match(TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ)) {
@@ -1163,6 +1168,253 @@ export class Parser {
       optional: optional || false,
       line: keyName.line,
       column: keyName.column
+    };
+  }
+
+  private classDeclaration(): any {
+    const classToken = this.previous();
+    
+    // Class name
+    let nameToken: any;
+    if (this.check(TokenType.IDENTIFIER)) {
+      nameToken = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      nameToken = this.previous();
+    } else {
+      throw new Error(`Expected class name at line ${this.peek().line}, column ${this.peek().column}`);
+    }
+    
+    // Optional extends clause
+    let superClassToken: any = undefined;
+    if (this.match(TokenType.МЕРОС)) {
+      if (this.check(TokenType.IDENTIFIER)) {
+        superClassToken = this.advance();
+      } else if (this.matchBuiltinIdentifier()) {
+        superClassToken = this.previous();
+      } else {
+        throw new Error(`Expected superclass name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`);
+      }
+    }
+    
+    // Optional implements clause
+    let implementsTokens: any[] = [];
+    if (this.match(TokenType.ТАТБИҚ)) {
+      do {
+        if (this.check(TokenType.IDENTIFIER)) {
+          implementsTokens.push(this.advance());
+        } else if (this.matchBuiltinIdentifier()) {
+          implementsTokens.push(this.previous());
+        } else {
+          throw new Error(`Expected interface name in implements clause at line ${this.peek().line}, column ${this.peek().column}`);
+        }
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    // Class body
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after class declaration");
+    const body = this.classBody();
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after class body");
+    
+    return {
+      type: 'ClassDeclaration',
+      name: {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column
+      },
+      superClass: superClassToken ? {
+        type: 'Identifier',
+        name: superClassToken.value,
+        line: superClassToken.line,
+        column: superClassToken.column
+      } : undefined,
+      implements: implementsTokens.map(impl => ({
+        type: 'Identifier',
+        name: impl.value,
+        line: impl.line,
+        column: impl.column
+      })),
+      body: body,
+      line: classToken.line,
+      column: classToken.column
+    };
+  }
+
+  private classBody(): any {
+    const members: any[] = [];
+    
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      // Skip newlines
+      if (this.match(TokenType.NEWLINE)) {
+        continue;
+      }
+      
+      // Parse class member
+      const member = this.classMember();
+      if (member) {
+        members.push(member);
+      }
+    }
+    
+    return {
+      type: 'ClassBody',
+      body: members,
+      line: this.peek().line,
+      column: this.peek().column
+    };
+  }
+
+  private classMember(): any {
+    // Check for access modifiers
+    let accessibility: string | undefined = undefined;
+    if (this.match(TokenType.ҶАМЪИЯТӢ, TokenType.ХОСУСӢ, TokenType.МУҲОФИЗАТШУДА)) {
+      const accessToken = this.previous();
+      accessibility = accessToken.type === TokenType.ҶАМЪИЯТӢ ? 'public' :
+                     accessToken.type === TokenType.ХОСУСӢ ? 'private' : 'protected';
+    }
+    
+    // Check for static
+    let isStatic = false;
+    if (this.match(TokenType.СТАТИКӢ)) {
+      isStatic = true;
+    }
+    
+    // Constructor
+    if (this.match(TokenType.КОНСТРУКТОР)) {
+      return this.constructorMethod(accessibility, isStatic);
+    }
+    
+    // Method or property
+    if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
+      const nameToken = this.advance();
+      
+      if (this.check(TokenType.LEFT_PAREN)) {
+        // Method
+        return this.classMethod(nameToken, accessibility, isStatic);
+      } else {
+        // Property
+        return this.classProperty(nameToken, accessibility, isStatic);
+      }
+    }
+    
+    throw new Error(`Expected class member at line ${this.peek().line}, column ${this.peek().column}`);
+  }
+
+  private constructorMethod(accessibility?: string, isStatic?: boolean): any {
+    const constructorToken = this.previous();
+    
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after constructor");
+    
+    const params: Parameter[] = [];
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        const param = this.parseParameter();
+        params.push(param);
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after constructor parameters");
+    
+    const body = this.blockStatement();
+    
+    return {
+      type: 'MethodDefinition',
+      key: {
+        type: 'Identifier',
+        name: 'constructor',
+        line: constructorToken.line,
+        column: constructorToken.column
+      },
+      value: {
+        type: 'FunctionExpression',
+        params: params,
+        body: body,
+        line: constructorToken.line,
+        column: constructorToken.column
+      },
+      kind: 'constructor',
+      static: isStatic || false,
+      accessibility: accessibility,
+      line: constructorToken.line,
+      column: constructorToken.column
+    };
+  }
+
+  private classMethod(nameToken: any, accessibility?: string, isStatic?: boolean): any {
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after method name");
+    
+    const params: Parameter[] = [];
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        const param = this.parseParameter();
+        params.push(param);
+      } while (this.match(TokenType.COMMA));
+    }
+    
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after method parameters");
+    
+    // Optional return type
+    let returnType = undefined;
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
+    }
+    
+    const body = this.blockStatement();
+    
+    return {
+      type: 'MethodDefinition',
+      key: {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column
+      },
+      value: {
+        type: 'FunctionExpression',
+        params: params,
+        body: body,
+        returnType: returnType,
+        line: nameToken.line,
+        column: nameToken.column
+      },
+      kind: 'method',
+      static: isStatic || false,
+      accessibility: accessibility,
+      line: nameToken.line,
+      column: nameToken.column
+    };
+  }
+
+  private classProperty(nameToken: any, accessibility?: string, isStatic?: boolean): any {
+    // Optional type annotation
+    let typeAnnotation = undefined;
+    if (this.match(TokenType.COLON)) {
+      typeAnnotation = this.typeAnnotation();
+    }
+    
+    // Optional initializer
+    let value = undefined;
+    if (this.match(TokenType.ASSIGN)) {
+      value = this.expression();
+    }
+    
+    this.consume(TokenType.SEMICOLON, "Expected ';' after property declaration");
+    
+    return {
+      type: 'PropertyDefinition',
+      key: {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column
+      },
+      value: value,
+      typeAnnotation: typeAnnotation,
+      static: isStatic || false,
+      accessibility: accessibility,
+      line: nameToken.line,
+      column: nameToken.column
     };
   }
 
