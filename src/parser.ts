@@ -648,6 +648,39 @@ export class Parser {
       } as Literal;
     }
     
+    if (this.match(TokenType.ИН)) {
+      const token = this.previous();
+      return {
+        type: 'ThisExpression',
+        line: token.line,
+        column: token.column
+      };
+    }
+    
+    if (this.match(TokenType.НАВ)) {
+      const token = this.previous();
+      const callee = this.primary();
+      
+      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав'");
+      const args: Expression[] = [];
+      
+      if (!this.check(TokenType.RIGHT_PAREN)) {
+        do {
+          args.push(this.expression());
+        } while (this.match(TokenType.COMMA));
+      }
+      
+      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
+      
+      return {
+        type: 'NewExpression',
+        callee: callee,
+        arguments: args,
+        line: token.line,
+        column: token.column
+      } as NewExpression;
+    }
+    
     if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
       const token = this.previous();
       return {
@@ -1002,11 +1035,11 @@ export class Parser {
 
   private primaryType(): TypeNode {
     // Primitive types
-    if (this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ)) {
+    if (this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ, TokenType.ХОЛӢ)) {
       const token = this.previous();
       const primitiveType: PrimitiveType = {
         type: 'PrimitiveType',
-        name: token.value as 'сатр' | 'рақам' | 'мантиқӣ',
+        name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ',
         line: token.line,
         column: token.column
       };
@@ -1286,16 +1319,21 @@ export class Parser {
     }
     
     // Method or property
-    if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
-      const nameToken = this.advance();
-      
-      if (this.check(TokenType.LEFT_PAREN)) {
-        // Method
-        return this.classMethod(nameToken, accessibility, isStatic);
-      } else {
-        // Property
-        return this.classProperty(nameToken, accessibility, isStatic);
-      }
+    let nameToken;
+    if (this.check(TokenType.IDENTIFIER)) {
+      nameToken = this.advance();
+    } else if (this.matchBuiltinIdentifier()) {
+      nameToken = this.previous();
+    } else {
+      throw new Error(`Expected class member at line ${this.peek().line}, column ${this.peek().column}`);
+    }
+    
+    if (this.check(TokenType.LEFT_PAREN)) {
+      // Method
+      return this.classMethod(nameToken, accessibility, isStatic);
+    } else {
+      // Property
+      return this.classProperty(nameToken, accessibility, isStatic);
     }
     
     throw new Error(`Expected class member at line ${this.peek().line}, column ${this.peek().column}`);
@@ -1316,6 +1354,7 @@ export class Parser {
     
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after constructor parameters");
     
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after constructor parameters");
     const body = this.blockStatement();
     
     return {
@@ -1360,6 +1399,7 @@ export class Parser {
       returnType = this.typeAnnotation();
     }
     
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after method signature");
     const body = this.blockStatement();
     
     return {

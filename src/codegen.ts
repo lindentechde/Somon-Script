@@ -247,6 +247,8 @@ export class CodeGenerator {
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
+      case 'ThisExpression':
+        return 'this';
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }

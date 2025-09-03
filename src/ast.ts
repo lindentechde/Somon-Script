@@ -146,6 +146,8 @@ export interface ExportSpecifier extends ASTNode {
   local: Identifier;
 }
 
+// Class-related AST nodes will be defined later to avoid duplication
+
 export interface TryStatement extends Statement {
   type: 'TryStatement';
   block: BlockStatement;
@@ -216,4 +218,8 @@ export interface FunctionExpression extends Expression {
 
 export interface Super extends Expression {
   type: 'Super';
+}
+
+export interface ThisExpression extends Expression {
+  type: 'ThisExpression';
 }
