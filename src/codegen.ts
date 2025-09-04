@@ -274,53 +274,59 @@ export class CodeGenerator {
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
-    let result = 'import ';
-
     const specifiers = node.specifiers;
-    const importParts: string[] = [];
+    const source = this.generateLiteral(node.source);
+    const results: string[] = [];
 
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      importParts.push(defaultImports[0].local.name);
+      const localName = defaultImports[0].local.name;
+      results.push(this.indent(`const ${localName} = require(${source});`));
     }
 
     // Handle named imports
     const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier') as ImportSpecifier[];
     if (namedImports.length > 0) {
-      const namedPart =
-        '{ ' +
-        namedImports
-          .map(spec => {
-            const imported = spec.imported.name;
-            const local = spec.local.name;
-            return imported === local ? imported : `${imported} as ${local}`;
-          })
-          .join(', ') +
-        ' }';
-      importParts.push(namedPart);
+      const destructuring = namedImports
+        .map(spec => {
+          const imported = spec.imported.name;
+          const local = spec.local.name;
+          return imported === local ? imported : `${imported}: ${local}`;
+        })
+        .join(', ');
+      results.push(this.indent(`const { ${destructuring} } = require(${source});`));
     }
 
-    result += importParts.join(', ');
-    result += ` from ${this.generateLiteral(node.source)};`;
-
-    return this.indent(result);
+    return results.join('\n');
   }
 
   private generateExportDeclaration(node: ExportDeclaration): string {
-    let result = 'export ';
-
-    if (node.default) {
-      result += 'default ';
-    }
-
     if (node.declaration) {
       const declaration = this.generateStatement(node.declaration);
-      // Remove indentation from declaration since we're adding our own
-      result += declaration.replace(this.getIndent(), '');
+
+      // Extract the name from the declaration for CommonJS export
+      let exportName = '';
+      if (node.declaration.type === 'FunctionDeclaration') {
+        const funcDecl = node.declaration as any;
+        exportName = funcDecl.name.name;
+      } else if (node.declaration.type === 'VariableDeclaration') {
+        const varDecl = node.declaration as any;
+        exportName = varDecl.identifier.name;
+      } else if (node.declaration.type === 'ClassDeclaration') {
+        const classDecl = node.declaration as any;
+        exportName = classDecl.name.name;
+      }
+
+      // Generate CommonJS export
+      const commonjsExport = node.default
+        ? `module.exports = ${exportName};`
+        : `module.exports.${exportName} = ${exportName};`;
+
+      return declaration + '\n' + this.indent(commonjsExport);
     }
 
-    return this.indent(result);
+    return '';
   }
 
   private generateIdentifier(node: Identifier): string {
