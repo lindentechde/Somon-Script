@@ -14,7 +14,8 @@ import {
   TypeAnnotation,
   Identifier,
   Parameter,
-  Literal
+  Literal,
+  ObjectExpression
 } from './types';
 
 export interface TypeCheckError {
@@ -218,7 +219,7 @@ export class TypeChecker {
       
       case 'Identifier':
         // Handle simple interface/type references
-        const identifierType = typeNode as any; // Should be Identifier
+        const identifierType = typeNode as Identifier;
         const interfaceRef = this.interfaceTable.get(identifierType.name);
         if (interfaceRef) {
           return interfaceRef;
@@ -271,12 +272,14 @@ export class TypeChecker {
       case 'ObjectExpression':
         // Infer object type from properties
         const properties = new Map<string, PropertyType>();
-        const objExpr = expression as any; // ObjectExpression type
+        const objExpr = expression as ObjectExpression;
         
         if (objExpr.properties) {
           for (const prop of objExpr.properties) {
             if (prop.key && prop.value) {
-              const keyName = prop.key.name || prop.key.value;
+              const keyName = prop.key.type === 'Identifier' 
+                ? (prop.key as Identifier).name 
+                : String((prop.key as Literal).value);
               const valueType = this.inferExpressionType(prop.value);
               properties.set(keyName, {
                 type: valueType,

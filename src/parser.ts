@@ -30,6 +30,7 @@ import {
   ArrayType,
   UnionType,
   GenericType,
+  TupleType,
   InterfaceDeclaration,
   InterfaceBody,
   PropertySignature,
@@ -112,7 +113,7 @@ export class Parser {
         this.consume(TokenType.СИНФ, "Expected 'синф' after 'мавҳум'");
         const classDecl = this.classDeclaration();
         // Mark as abstract
-        (classDecl as any).abstract = true;
+        (classDecl as ClassDeclaration & { abstract?: boolean }).abstract = true;
         return classDecl;
       }
       
@@ -1220,10 +1221,10 @@ export class Parser {
       
       return {
         type: 'TupleType',
-        types,
+        elementTypes: types,
         line: this.previous().line,
         column: this.previous().column
-      } as any; // TupleType should be defined in types.ts
+      } as TupleType;
     }
     
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);

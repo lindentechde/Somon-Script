@@ -19,6 +19,7 @@ import {
   ImportDeclaration,
   ExportDeclaration,
   ArrayExpression,
+  ObjectExpression,
   InterfaceDeclaration,
   TypeAlias,
   Parameter,
@@ -29,6 +30,8 @@ import {
   ClassDeclaration,
   MethodDefinition,
   PropertyDefinition,
+  SwitchStatement,
+  SpreadElement,
   ASTNode
 } from './types';
 // import { BaseVisitor } from './visitor'; // Simplified for now
@@ -130,7 +133,7 @@ export class CodeGenerator {
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
       case 'SwitchStatement':
-        return this.generateSwitchStatement(node as any);
+        return this.generateSwitchStatement(node as SwitchStatement);
       case 'BreakStatement':
         return this.indent('break;');
       case 'ContinueStatement':
@@ -251,7 +254,7 @@ export class CodeGenerator {
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
       case 'ObjectExpression':
-        return this.generateObjectExpression(node as any);
+        return this.generateObjectExpression(node as ObjectExpression);
       case 'AwaitExpression':
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
@@ -261,7 +264,7 @@ export class CodeGenerator {
       case 'Super':
         return 'super';
       case 'SpreadElement':
-        return this.generateSpreadElement(node as any);
+        return this.generateSpreadElement(node as SpreadElement);
       default:
         throw new Error(`Unknown expression type: ${node.type}`);
     }
@@ -485,7 +488,7 @@ export class CodeGenerator {
   private generateClassDeclaration(node: ClassDeclaration): string {
     const className = this.generateIdentifier(node.name);
     const extendsClause = node.superClass ? ` extends ${this.generateIdentifier(node.superClass)}` : '';
-    const abstractModifier = (node as any).abstract ? 'abstract ' : '';
+    const abstractModifier = (node as ClassDeclaration & { abstract?: boolean }).abstract ? 'abstract ' : '';
     
     let classBody = '';
     
@@ -515,14 +518,14 @@ export class CodeGenerator {
   private generateMethodDefinition(node: MethodDefinition): string {
     const methodName = node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
-    const isAbstract = (node as any).abstract ? 'abstract ' : '';
+    const isAbstract = (node as MethodDefinition & { abstract?: boolean }).abstract ? 'abstract ' : '';
     
     // Generate parameters
     const params = node.value.params ? 
       node.value.params.map((param) => this.generateIdentifier(param.name)).join(', ') : '';
     
     // Generate method body or abstract signature
-    if ((node as any).abstract) {
+    if ((node as MethodDefinition & { abstract?: boolean }).abstract) {
       // Abstract methods have no body
       return this.indent(`${isAbstract}${isStatic}${methodName}(${params});`);
     } else {
