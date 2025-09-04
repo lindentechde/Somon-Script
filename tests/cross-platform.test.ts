@@ -125,9 +125,7 @@ describe('Cross-Platform Compatibility Tests', () => {
       const initialMemory = process.memoryUsage();
 
       // Compile a moderately complex program
-      const complexCode = Array(100)
-        .fill('тағйирёбанда тест = "value";')
-        .join('\n');
+      const complexCode = Array(100).fill('тағйирёбанда тест = "value";').join('\n');
 
       const result = compile(complexCode);
 
@@ -177,7 +175,12 @@ describe('Cross-Platform Compatibility Tests', () => {
     });
 
     test('should handle special characters in paths', () => {
-      const specialChars = ['space file.som', 'файл.som', 'file-with-dashes.som', 'file_with_underscores.som'];
+      const specialChars = [
+        'space file.som',
+        'файл.som',
+        'file-with-dashes.som',
+        'file_with_underscores.som',
+      ];
 
       specialChars.forEach(filename => {
         expect(() => path.normalize(filename)).not.toThrow();

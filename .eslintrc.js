@@ -5,9 +5,7 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: ['@typescript-eslint'],
-  extends: [
-    'eslint:recommended',
-  ],
+  extends: ['eslint:recommended'],
   root: true,
   env: {
     node: true,
@@ -20,12 +18,12 @@ module.exports = {
     'prefer-const': 'error',
     'no-var': 'error',
     'no-unused-vars': 'error',
-    
+
     // Somoni-script specific rules
     'no-irregular-whitespace': 'off', // Allow Cyrillic characters
-    
+
     // Code quality rules
-    'complexity': ['warn', 15],
+    complexity: ['warn', 15],
     'max-depth': ['warn', 4],
     'max-params': ['warn', 5],
   },

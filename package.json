@@ -39,13 +39,8 @@
     "prepare": "husky install"
   },
   "lint-staged": {
-    "*.ts": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{js,json,md}": [
-      "prettier --write"
-    ]
+    "*.ts": ["eslint --fix", "prettier --write"],
+    "*.{js,json,md}": ["prettier --write"]
   },
   "keywords": [
     "compiler",

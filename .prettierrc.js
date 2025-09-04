@@ -6,20 +6,20 @@ module.exports = {
   printWidth: 100,
   tabWidth: 2,
   useTabs: false,
-  
+
   // TypeScript specific
   parser: 'typescript',
-  
+
   // Bracket spacing
   bracketSpacing: true,
   bracketSameLine: false,
-  
+
   // Arrow functions
   arrowParens: 'avoid',
-  
+
   // End of line
   endOfLine: 'lf',
-  
+
   // Overrides for different file types
   overrides: [
     {

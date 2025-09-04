@@ -50,9 +50,14 @@ describe('CLI Integration Tests', () => {
       const inputFile = path.join(tempDir, 'error.som');
       fs.writeFileSync(inputFile, 'invalid syntax here');
 
-      expect(() => {
+      try {
         execSync(`node "${cliPath}" compile "${inputFile}"`, { stdio: 'pipe' });
-      }).toThrow();
+        // If we reach here, the command succeeded when it should have failed
+        fail('Expected compilation to fail but it succeeded');
+      } catch (error: any) {
+        // Expect the command to exit with non-zero status
+        expect(error.status).not.toBe(0);
+      }
     });
 
     test('should handle missing input file', () => {
@@ -129,7 +134,9 @@ describe('CLI Integration Tests', () => {
       expect(fs.existsSync(path.join(projectPath, 'src'))).toBe(true);
       expect(fs.existsSync(path.join(projectPath, 'src', 'main.som'))).toBe(true);
 
-      const packageJson = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8'));
+      const packageJson = JSON.parse(
+        fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8')
+      );
       expect(packageJson.name).toBe(projectName);
       expect(packageJson.scripts.build).toBeDefined();
       expect(packageJson.scripts.dev).toBeDefined();

@@ -71,7 +71,7 @@ describe('Lexer', () => {
       TokenType.LESS_THAN,
       TokenType.GREATER_THAN,
       TokenType.LESS_EQUAL,
-      TokenType.GREATER_EQUAL
+      TokenType.GREATER_EQUAL,
     ];
 
     expectedTypes.forEach((expectedType, index) => {
@@ -94,7 +94,7 @@ describe('Lexer', () => {
   test('should tokenize pipe operator for union types', () => {
     const source = 'сатр | рақам';
     const tokens = tokenize(source);
-    
+
     expect(tokens).toHaveLength(4); // САТР, PIPE, РАҚАМ, EOF
     expect(tokens[0].type).toBe('САТР');
     expect(tokens[1].type).toBe('PIPE');
@@ -105,7 +105,7 @@ describe('Lexer', () => {
   test('should distinguish pipe from logical OR', () => {
     const source = 'а | б || в';
     const tokens = tokenize(source);
-    
+
     expect(tokens).toHaveLength(6); // а, |, б, ||, в, EOF
     expect(tokens[1].type).toBe('PIPE');
     expect(tokens[1].value).toBe('|');
@@ -116,7 +116,7 @@ describe('Lexer', () => {
   test('should tokenize string methods with new naming', () => {
     const source = 'сатр_методҳо.дарозии_сатр';
     const tokens = tokenize(source);
-    
+
     expect(tokens[0].type).toBe('САТР_МЕТОДҲО');
     expect(tokens[2].type).toBe('ДАРОЗИИ_САТР');
   });

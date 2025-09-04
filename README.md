@@ -1,14 +1,17 @@
 # Somoni-script
 
-A programming language that compiles to JavaScript, written in Tajik Cyrillic. Named after Ismoil Somoni, the founder of the Samanid dynasty.
+A programming language that compiles to JavaScript, written in Tajik Cyrillic.
+Named after Ismoil Somoni, the founder of the Samanid dynasty.
 
 ## Features
 
 - **Tajik Cyrillic Syntax**: Write code using familiar Tajik keywords ✅
 - **Static Type System**: TypeScript-level type safety with Tajik annotations ✅
 - **Union Types**: Support for union types (`сатр | рақам`) ✅
-- **Intersection Types**: Foundation for intersection types (`Корбар & Админ`) ✅
-- **Object-Oriented Programming**: Full class support with constructors and methods ✅
+- **Intersection Types**: Foundation for intersection types (`Корбар & Админ`)
+  ✅
+- **Object-Oriented Programming**: Full class support with constructors and
+  methods ✅
 - **Interface System**: Complete interface support with optional properties ✅
 - **Advanced Type Features**: Conditional types, mapped types, tuple types ✅
 - **JavaScript Compilation**: Compiles to clean, readable JavaScript ✅
@@ -24,6 +27,7 @@ npm install -g somoni-script
 ## Quick Start
 
 Create a new project:
+
 ```bash
 somoni init my-project
 cd my-project
@@ -31,6 +35,7 @@ npm install
 ```
 
 Write your first Somoni-script program (`src/main.som`):
+
 ```somoni
 // With type annotations for better safety
 функция салом(ном: сатр): сатр {
@@ -43,11 +48,13 @@ Write your first Somoni-script program (`src/main.som`):
 ```
 
 Run it:
+
 ```bash
 npm run dev
 ```
 
 Or compile to JavaScript:
+
 ```bash
 npm run build
 ```
@@ -55,6 +62,7 @@ npm run build
 ## Advanced Features
 
 ### Union Types
+
 ```somoni
 // Variables can hold multiple types
 тағйирёбанда маълумот: сатр | рақам = "Салом";
@@ -67,6 +75,7 @@ npm run build
 ```
 
 ### Intersection Types
+
 ```somoni
 интерфейс Корбар {
     ном: сатр;
@@ -88,14 +97,15 @@ npm run build
 ```
 
 ### Advanced Classes with Inheritance
+
 ```somoni
 синф Ҳайвон {
     муҳофизатшуда ном: сатр;
-    
+
     конструктор(ном: сатр) {
         ин.ном = ном;
     }
-    
+
     ҷамъиятӣ овоз_додан(): сатр {
         бозгашт ин.ном + " овоз медиҳад";
     }
@@ -105,7 +115,7 @@ npm run build
     конструктор(ном: сатр) {
         супер(ном);
     }
-    
+
     ҷамъиятӣ овоз_додан(): сатр {
         бозгашт ин.ном + " вақ-вақ мекунад";
     }
@@ -113,6 +123,7 @@ npm run build
 ```
 
 ### Tuple Types
+
 ```somoni
 // Fixed-length arrays with specific types
 тағйирёбанда корбар_маълумот: [сатр, рақам, мантиқӣ] = ["Алӣ", 25, дуруст];
@@ -121,15 +132,20 @@ npm run build
 
 ## Current Status
 
-Somoni-script is **production-ready** with complete implementation of all planned features:
+Somoni-script is **production-ready** with complete implementation of all
+planned features:
 
 - ✅ **Core Language Features**: Variables, functions, control flow, basic types
-- ✅ **Object-Oriented Programming**: Classes, interfaces, inheritance, access modifiers
-- ✅ **Advanced Type System**: Union types, intersection types, tuples, conditional types
+- ✅ **Object-Oriented Programming**: Classes, interfaces, inheritance, access
+  modifiers
+- ✅ **Advanced Type System**: Union types, intersection types, tuples,
+  conditional types
 - ✅ **Modern Features**: Async/await, modules, error handling
-- ✅ **Developer Tools**: CLI with type checking, source maps, project initialization
+- ✅ **Developer Tools**: CLI with type checking, source maps, project
+  initialization
 
-For detailed implementation status and examples, see [PHASE_STATUS.md](PHASE_STATUS.md).
+For detailed implementation status and examples, see
+[PHASE_STATUS.md](PHASE_STATUS.md).
 
 ### Try It Now
 
@@ -165,77 +181,84 @@ somoni compile example.som --strict
 ### Keywords (Калимаҳои калидӣ)
 
 #### Core Language Keywords
-| Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `тағйирёбанда` | variable | `let` |
-| `собит` | constant | `const` |
-| `функсия` | function | `function` |
-| `агар` | if | `if` |
-| `вагарна` | else | `else` |
-| `барои` | for | `for` |
-| `то` | while | `while` |
-| `бозгашт` | return | `return` |
-| `синф` | class | `class` |
-| `нав` | new | `new` |
-| `ин` | this | `this` |
-| `дуруст` | true | `true` |
-| `нодуруст` | false | `false` |
-| `холӣ` | null | `null` |
+
+| Somoni-script  | English  | JavaScript |
+| -------------- | -------- | ---------- |
+| `тағйирёбанда` | variable | `let`      |
+| `собит`        | constant | `const`    |
+| `функсия`      | function | `function` |
+| `агар`         | if       | `if`       |
+| `вагарна`      | else     | `else`     |
+| `барои`        | for      | `for`      |
+| `то`           | while    | `while`    |
+| `бозгашт`      | return   | `return`   |
+| `синф`         | class    | `class`    |
+| `нав`          | new      | `new`      |
+| `ин`           | this     | `this`     |
+| `дуруст`       | true     | `true`     |
+| `нодуруст`     | false    | `false`    |
+| `холӣ`         | null     | `null`     |
 
 #### Import/Export Keywords
+
 | Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `ворид` | import | `import` |
-| `содир` | export | `export` |
-| `аз` | from | `from` |
-| `пешфарз` | default | `default` |
-| `чун` | as | `as` |
+| ------------- | ------- | ---------- |
+| `ворид`       | import  | `import`   |
+| `содир`       | export  | `export`   |
+| `аз`          | from    | `from`     |
+| `пешфарз`     | default | `default`  |
+| `чун`         | as      | `as`       |
 
 #### Built-in Functions
+
 | Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `чоп` | console | `console` |
-| `сабт` | log | `log` |
-| `хато` | error | `error` |
-| `огоҳӣ` | warn | `warn` |
-| `маълумот` | info | `info` |
+| ------------- | ------- | ---------- |
+| `чоп`         | console | `console`  |
+| `сабт`        | log     | `log`      |
+| `хато`        | error   | `error`    |
+| `огоҳӣ`       | warn    | `warn`     |
+| `маълумот`    | info    | `info`     |
 
 #### Array Methods
+
 | Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `рӯйхат` | array | `Array` |
-| `илова` | push | `push` |
-| `баровардан` | pop | `pop` |
-| `дарозӣ` | length | `length` |
-| `харита` | map | `map` |
-| `филтр` | filter | `filter` |
-| `кофтан` | find | `find` |
+| ------------- | ------- | ---------- |
+| `рӯйхат`      | array   | `Array`    |
+| `илова`       | push    | `push`     |
+| `баровардан`  | pop     | `pop`      |
+| `дарозӣ`      | length  | `length`   |
+| `харита`      | map     | `map`      |
+| `филтр`       | filter  | `filter`   |
+| `кофтан`      | find    | `find`     |
 
 #### String Methods
-| Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `сатр` | string | `String` |
-| `дарозии_сатр` | string length | `length` |
-| `пайвастан` | concat | `concat` |
-| `ҷойивазкунӣ` | replace | `replace` |
-| `ҷудокунӣ` | split | `split` |
+
+| Somoni-script  | English       | JavaScript |
+| -------------- | ------------- | ---------- |
+| `сатр`         | string        | `String`   |
+| `дарозии_сатр` | string length | `length`   |
+| `пайвастан`    | concat        | `concat`   |
+| `ҷойивазкунӣ`  | replace       | `replace`  |
+| `ҷудокунӣ`     | split         | `split`    |
 
 #### Control Flow
-| Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `шикастан` | break | `break` |
-| `давом` | continue | `continue` |
-| `кӯшиш` | try | `try` |
-| `гирифтан` | catch | `catch` |
-| `ниҳоят` | finally | `finally` |
-| `партофтан` | throw | `throw` |
+
+| Somoni-script | English  | JavaScript |
+| ------------- | -------- | ---------- |
+| `шикастан`    | break    | `break`    |
+| `давом`       | continue | `continue` |
+| `кӯшиш`       | try      | `try`      |
+| `гирифтан`    | catch    | `catch`    |
+| `ниҳоят`      | finally  | `finally`  |
+| `партофтан`   | throw    | `throw`    |
 
 #### Async Programming
+
 | Somoni-script | English | JavaScript |
-|---------------|---------|------------|
-| `ҳамзамон` | async | `async` |
-| `интизор` | await | `await` |
-| `ваъда` | promise | `Promise` |
+| ------------- | ------- | ---------- |
+| `ҳамзамон`    | async   | `async`    |
+| `интизор`     | await   | `await`    |
+| `ваъда`       | promise | `Promise`  |
 
 ### Variables (Тағйирёбандаҳо)
 
@@ -249,9 +272,10 @@ somoni compile example.som --strict
 ```
 
 Compiles to:
+
 ```javascript
-let ном = "Аҳмад";
-ном = "Фотима";
+let ном = 'Аҳмад';
+ном = 'Фотима';
 
 const сол = 2024;
 ```
@@ -268,13 +292,14 @@ const сол = 2024;
 ```
 
 Compiles to:
+
 ```javascript
 function ҷамъ_кардан(а, б) {
-    return а + б;
+  return а + б;
 }
 
 let натиҷа = ҷамъ_кардан(5, 3);
-console.log("Натиҷа:", натиҷа);
+console.log('Натиҷа:', натиҷа);
 ```
 
 ### Conditionals (Шартҳо)
@@ -288,11 +313,12 @@ console.log("Натиҷа:", натиҷа);
 ```
 
 Compiles to:
+
 ```javascript
 if (синну_сол >= 18) {
-    console.log("Калонсол");
+  console.log('Калонсол');
 } else {
-    console.log("Хурдсол");
+  console.log('Хурдсол');
 }
 ```
 
@@ -307,11 +333,12 @@ if (синну_сол >= 18) {
 ```
 
 Compiles to:
+
 ```javascript
 let и = 0;
 while (и < 10) {
-    console.log(и);
-    и = и + 1;
+  console.log(и);
+  и = и + 1;
 }
 ```
 
@@ -379,16 +406,16 @@ while (и < 10) {
 синф Шахс {
     хосусӣ ном: сатр;
     хосусӣ синну_сол: рақам;
-    
+
     конструктор(ном: сатр, синну_сол: рақам) {
         ин.ном = ном;
         ин.синну_сол = синну_сол;
     }
-    
+
     ҷамъиятӣ гирифтани_ном(): сатр {
         бозгашт ин.ном;
     }
-    
+
     ҷамъиятӣ маълумот(): сатр {
         бозгашт "Ном: " + ин.ном + ", Синну сол: " + ин.синну_сол;
     }
@@ -399,6 +426,7 @@ while (и < 10) {
 ```
 
 Compiles to:
+
 ```javascript
 class Шахс {
   ном;
@@ -411,11 +439,11 @@ class Шахс {
     return this.ном;
   }
   info() {
-    return "Ном: " + this.ном + ", Синну сол: " + this.синну_сол;
+    return 'Ном: ' + this.ном + ', Синну сол: ' + this.синну_сол;
   }
 }
 
-let шахс = new Шахс("Аҳмад", 25);
+let шахс = new Шахс('Аҳмад', 25);
 console.log(шахс.info());
 ```
 
@@ -438,6 +466,7 @@ console.log(шахс.info());
 ### Operators (Операторҳо)
 
 #### Arithmetic (Ҳисобӣ)
+
 - `+` (ҷамъ)
 - `-` (тарҳ)
 - `*` (зарб)
@@ -445,6 +474,7 @@ console.log(шахс.info());
 - `%` (боқимонда)
 
 #### Comparison (Муқоисавӣ)
+
 - `==` (баробар)
 - `!=` (нобаробар)
 - `<` (хурдтар)
@@ -453,6 +483,7 @@ console.log(шахс.info());
 - `>=` (калонтар ё баробар)
 
 #### Logical (Мантиқӣ)
+
 - `&&` (ва)
 - `||` (ё)
 - `!` (на)
@@ -460,11 +491,13 @@ console.log(шахс.info());
 ## CLI Commands
 
 ### Compile
+
 ```bash
 somoni compile input.som -o output.js
 ```
 
 Options:
+
 - `-o, --output <file>`: Output file
 - `--strict`: Enable strict type checking ✅ **NEW**
 - `--target <target>`: Compilation target (es5, es2015, es2020, esnext)
@@ -472,6 +505,7 @@ Options:
 - `--minify`: Minify output
 
 **Type Checking Example:**
+
 ```bash
 # Compile with type checking
 somoni compile typed-example.som --strict
@@ -480,20 +514,24 @@ somoni compile typed-example.som --strict
 ```
 
 ### Run
+
 ```bash
 somoni run input.som
 ```
 
 ### Initialize Project
+
 ```bash
 somoni init [project-name]
 ```
 
 ## Examples
 
-See the `examples/` directory for comprehensive code samples (24 examples total):
+See the `examples/` directory for comprehensive code samples (24 examples
+total):
 
 ### Basic Language Features
+
 - `01-hello-world.som` - Basic console output and first program
 - `02-variables.som` - Variable declarations and assignments
 - `03-typed-variables.som` - Type annotations and typed arrays ✅
@@ -504,6 +542,7 @@ See the `examples/` directory for comprehensive code samples (24 examples total)
 - `08-arrays.som` - Array operations and manipulations
 
 ### Object-Oriented Programming
+
 - `09-interfaces.som` - Interface definitions and type system ✅
 - `10-classes-basic.som` - Basic class usage and OOP ✅
 - `11-classes-advanced.som` - Advanced class methods and logic ✅
@@ -511,12 +550,14 @@ See the `examples/` directory for comprehensive code samples (24 examples total)
 - `13-inheritance-demo.som` - Class inheritance and polymorphism ✅
 
 ### Advanced Features
+
 - `14-error-handling.som` - Error handling patterns and validation
 - `15-async-programming.som` - Async/await syntax (future implementation)
 - `16-import-export.som` - Module system syntax (future implementation)
 - `17-comprehensive-demo.som` - All current features combined ✅
 
 ### Phase 3 Advanced Type System ✨ **NEW**
+
 - `18-union-types.som` - Union types (`сатр | рақам`) ✅
 - `19-intersection-types.som` - Intersection types (`Корбар & Админ`) ✅
 - `20-advanced-classes.som` - Enhanced class system with inheritance ✅
@@ -554,16 +595,19 @@ npm run dev
 
 ## Language Philosophy
 
-Somoni-script aims to make programming accessible to Tajik speakers by providing:
+Somoni-script aims to make programming accessible to Tajik speakers by
+providing:
 
 1. **Familiar Keywords**: Using Tajik Cyrillic terms for programming concepts
 2. **Modern Syntax**: TypeScript-like features and clean syntax
-3. **JavaScript Compatibility**: Seamless integration with existing JavaScript ecosystem
+3. **JavaScript Compatibility**: Seamless integration with existing JavaScript
+   ecosystem
 4. **Educational Value**: Teaching programming concepts in native language
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for
+guidelines.
 
 ## License
 
@@ -578,23 +622,27 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ### 🚀 **Future Enhancements**
 
 #### Performance Optimizations
+
 - JIT compilation for better runtime performance
 - Tree-shaking for smaller bundle sizes
 - Advanced dead code elimination
 
 #### Developer Experience
+
 - Language server protocol implementation
 - VS Code extension with syntax highlighting
 - Real-time error checking and IntelliSense
 - Debugging support with source maps
 
 #### Ecosystem Integration
+
 - NPM package publishing workflow
 - Framework integrations (React, Vue, etc.)
 - Build tool plugins (Webpack, Vite, etc.)
 - Testing framework integration
 
 #### Language Features
+
 - Decorators for metadata programming
 - Generators and iterators
 - Pattern matching

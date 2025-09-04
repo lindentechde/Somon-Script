@@ -15,7 +15,7 @@ describe('Parser', () => {
 
     expect(ast.type).toBe('Program');
     expect(ast.body).toHaveLength(1);
-    
+
     const stmt = ast.body[0];
     expect(stmt.type).toBe('VariableDeclaration');
     expect((stmt as any).kind).toBe('ТАҒЙИРЁБАНДА');
@@ -84,7 +84,7 @@ describe('Parser', () => {
 
     const stmt = ast.body[0];
     expect(stmt.type).toBe('ExpressionStatement');
-    
+
     const expr = (stmt as any).expression;
     expect(expr.type).toBe('BinaryExpression');
     expect(expr.operator).toBe('+');

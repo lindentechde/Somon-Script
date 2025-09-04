@@ -12,7 +12,7 @@
   "defaultCategory": "Other",
   "categoryOrder": [
     "Compiler",
-    "Lexer", 
+    "Lexer",
     "Parser",
     "Type System",
     "Code Generation",

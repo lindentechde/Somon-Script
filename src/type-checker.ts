@@ -8,12 +8,10 @@ import {
   InterfaceDeclaration,
   Literal,
   ObjectExpression,
-
   PrimitiveType,
   Program,
   Statement,
   TypeAlias,
-
   TypeNode,
   UnionType,
   VariableDeclaration,
@@ -89,10 +87,10 @@ export class TypeChecker {
   public check(program: Program): TypeCheckResult {
     this.errors = [];
     this.warnings = [];
-    
+
     // First pass: collect type definitions
     this.collectTypeDefinitions(program);
-    
+
     // Second pass: type check statements
     for (const statement of program.body) {
       this.checkStatement(statement);
@@ -100,7 +98,7 @@ export class TypeChecker {
 
     return {
       errors: this.errors,
-      warnings: this.warnings
+      warnings: this.warnings,
     };
   }
 
@@ -116,19 +114,19 @@ export class TypeChecker {
 
   private collectInterface(interfaceDecl: InterfaceDeclaration): void {
     const properties = new Map<string, PropertyType>();
-    
+
     for (const prop of interfaceDecl.body.properties) {
       const propType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
       properties.set(prop.key.name, {
         type: propType,
-        optional: prop.optional
+        optional: prop.optional,
       });
     }
 
     const interfaceType: Type = {
       kind: 'interface',
       name: interfaceDecl.name.name,
-      properties
+      properties,
     };
 
     this.interfaceTable.set(interfaceDecl.name.name, interfaceType);
@@ -153,7 +151,7 @@ export class TypeChecker {
 
   private checkVariableDeclaration(varDecl: VariableDeclaration): void {
     let declaredType: Type | undefined;
-    
+
     // Get declared type if present
     if (varDecl.typeAnnotation) {
       declaredType = this.resolveTypeNode(varDecl.typeAnnotation.typeAnnotation);
@@ -203,7 +201,7 @@ export class TypeChecker {
     // Store function type
     const functionType: Type = {
       kind: 'function',
-      name: funcDecl.name.name
+      name: funcDecl.name.name,
     };
     this.symbolTable.set(funcDecl.name.name, functionType);
   }
@@ -213,21 +211,21 @@ export class TypeChecker {
       case 'PrimitiveType':
         const primitiveType = typeNode as PrimitiveType;
         return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
-      
+
       case 'ArrayType':
         const arrayType = typeNode as ArrayType;
         return {
           kind: 'array',
-          elementType: this.resolveTypeNode(arrayType.elementType)
+          elementType: this.resolveTypeNode(arrayType.elementType),
         };
-      
+
       case 'UnionType':
         const unionType = typeNode as UnionType;
         return {
           kind: 'union',
-          types: unionType.types.map(t => this.resolveTypeNode(t))
+          types: unionType.types.map(t => this.resolveTypeNode(t)),
         };
-      
+
       case 'GenericType':
         const genericType = typeNode as GenericType;
         // Check if it's a known interface or type alias
@@ -241,7 +239,7 @@ export class TypeChecker {
         }
         // Unknown type
         return { kind: 'unknown', name: genericType.name.name };
-      
+
       case 'Identifier':
         // Handle simple interface/type references
         const identifierType = typeNode as Identifier;
@@ -255,7 +253,7 @@ export class TypeChecker {
         }
         // Unknown type
         return { kind: 'unknown', name: identifierType.name };
-      
+
       default:
         return { kind: 'unknown' };
     }
@@ -263,11 +261,16 @@ export class TypeChecker {
 
   private mapTajikToPrimitive(tajikType: string): string {
     switch (tajikType) {
-      case 'сатр': return 'string';
-      case 'рақам': return 'number';
-      case 'мантиқӣ': return 'boolean';
-      case 'холӣ': return 'null';
-      default: return 'unknown';
+      case 'сатр':
+        return 'string';
+      case 'рақам':
+        return 'number';
+      case 'мантиқӣ':
+        return 'boolean';
+      case 'холӣ':
+        return 'null';
+      default:
+        return 'unknown';
     }
   }
 
@@ -285,43 +288,44 @@ export class TypeChecker {
           return { kind: 'primitive', name: 'null' };
         }
         break;
-      
+
       case 'Identifier':
         const identifier = expression as Identifier;
         return this.symbolTable.get(identifier.name) || { kind: 'unknown' };
-      
+
       case 'ArrayExpression':
         // For now, assume array of unknown type
         return { kind: 'array', elementType: { kind: 'unknown' } };
-      
+
       case 'ObjectExpression':
         // Infer object type from properties
         const properties = new Map<string, PropertyType>();
         const objExpr = expression as ObjectExpression;
-        
+
         if (objExpr.properties) {
           for (const prop of objExpr.properties) {
             if (prop.key && prop.value) {
-              const keyName = prop.key.type === 'Identifier' 
-                ? (prop.key as Identifier).name 
-                : String((prop.key as Literal).value);
+              const keyName =
+                prop.key.type === 'Identifier'
+                  ? (prop.key as Identifier).name
+                  : String((prop.key as Literal).value);
               const valueType = this.inferExpressionType(prop.value);
               properties.set(keyName, {
                 type: valueType,
-                optional: false
+                optional: false,
               });
             }
           }
         }
-        
+
         return {
           kind: 'object',
-          properties: properties
+          properties: properties,
         };
-      
+
       // Add more expression types as needed
     }
-    
+
     return { kind: 'unknown' };
   }
 
@@ -334,7 +338,7 @@ export class TypeChecker {
 
     // Array type checking
     if (source.kind === 'array' && target.kind === 'array') {
-      return source.elementType && target.elementType 
+      return source.elementType && target.elementType
         ? this.isAssignable(source.elementType, target.elementType)
         : false;
     }
@@ -402,28 +406,33 @@ export class TypeChecker {
     // Check if source has all required properties of target
     for (const [propName, targetProp] of target.properties) {
       const sourceProp = source.properties.get(propName);
-      
+
       // Required property missing
       if (!sourceProp && !targetProp.optional) {
         return false;
       }
-      
+
       // Property exists, check type compatibility
       if (sourceProp && !this.isAssignable(sourceProp.type, targetProp.type)) {
         return false;
       }
     }
-    
+
     return true;
   }
 
   private mapPrimitiveToTajik(primitiveType: string): string {
     switch (primitiveType) {
-      case 'string': return 'сатр';
-      case 'number': return 'рақам';
-      case 'boolean': return 'мантиқӣ';
-      case 'null': return 'холӣ';
-      default: return primitiveType;
+      case 'string':
+        return 'сатр';
+      case 'number':
+        return 'рақам';
+      case 'boolean':
+        return 'мантиқӣ';
+      case 'null':
+        return 'холӣ';
+      default:
+        return primitiveType;
     }
   }
 
@@ -432,7 +441,7 @@ export class TypeChecker {
       message,
       line,
       column,
-      severity: 'error'
+      severity: 'error',
     });
   }
 
@@ -441,7 +450,7 @@ export class TypeChecker {
       message,
       line,
       column,
-      severity: 'warning'
+      severity: 'warning',
     });
   }
 }

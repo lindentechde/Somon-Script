@@ -16,14 +16,14 @@ describe('TypeChecker', () => {
     test('should validate correct type assignment', () => {
       const source = 'тағйирёбанда ном: сатр = "Аҳмад";';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should detect type mismatch', () => {
       const source = 'тағйирёбанда ном: сатр = 42;';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].message).toContain('not assignable');
     });
@@ -31,21 +31,21 @@ describe('TypeChecker', () => {
     test('should handle number types', () => {
       const source = 'тағйирёбанда синну_сол: рақам = 25;';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should handle boolean types', () => {
       const source = 'тағйирёбанда фаъол: мантиқӣ = дуруст;';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should infer types without annotations', () => {
       const source = 'тағйирёбанда ном = "Аҳмад";';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
   });
@@ -58,7 +58,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
@@ -69,7 +69,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
   });
@@ -84,7 +84,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
@@ -97,7 +97,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
   });
@@ -106,14 +106,14 @@ describe('TypeChecker', () => {
     test('should handle array type annotations', () => {
       const source = 'тағйирёбанда рақамҳо: рақам[] = [1, 2, 3];';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should handle string array', () => {
       const source = 'тағйирёбанда номҳо: сатр[] = ["Аҳмад", "Фотима"];';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
   });
@@ -122,21 +122,21 @@ describe('TypeChecker', () => {
     test('should handle union types', () => {
       const source = 'тағйирёбанда қимат: сатр | рақам = "салом";';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should validate union type assignment', () => {
       const source = 'тағйирёбанда қимат: сатр | рақам = 42;';
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
     test('should detect invalid union type assignment', () => {
       const source = 'тағйирёбанда қимат: сатр | рақам = дуруст;';
       const result = checkTypes(source);
-      
+
       // Union type validation may not be fully implemented yet
       expect(result.errors.length).toBeGreaterThanOrEqual(0);
     });
@@ -149,7 +149,7 @@ describe('TypeChecker', () => {
         тағйирёбанда ид: КорбарИД = "user123";
       `;
       const result = checkTypes(source);
-      
+
       // Type aliases may not be fully implemented yet
       expect(result.errors.length).toBeLessThanOrEqual(1);
     });
@@ -168,7 +168,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
 
@@ -185,7 +185,7 @@ describe('TypeChecker', () => {
         }
       `;
       const result = checkTypes(source);
-      
+
       expect(result.errors).toHaveLength(0);
     });
   });

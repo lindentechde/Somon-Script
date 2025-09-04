@@ -9,9 +9,12 @@ declare global {
       toGenerateValidJS(): R;
     }
   }
-  
+
   var testUtils: {
-    createTempFile: (content: string, extension?: string) => {
+    createTempFile: (
+      content: string,
+      extension?: string
+    ) => {
       path: string;
       cleanup: () => void;
     };
@@ -25,7 +28,7 @@ export {};
 expect.extend({
   toCompileSuccessfully(received: any) {
     const pass = received.errors.length === 0 && received.code.length > 0;
-    
+
     if (pass) {
       return {
         message: () => `Expected compilation to fail, but it succeeded`,
@@ -33,7 +36,8 @@ expect.extend({
       };
     } else {
       return {
-        message: () => `Expected compilation to succeed, but got errors: ${received.errors.join(', ')}`,
+        message: () =>
+          `Expected compilation to succeed, but got errors: ${received.errors.join(', ')}`,
         pass: false,
       };
     }
@@ -41,7 +45,7 @@ expect.extend({
 
   toHaveTypeError(received: any) {
     const pass = received.errors.some((error: string) => error.includes('Type error'));
-    
+
     if (pass) {
       return {
         message: () => `Expected no type errors, but found: ${received.errors.join(', ')}`,
@@ -69,7 +73,7 @@ expect.extend({
         pass: false,
       };
     }
-  }
+  },
 });
 
 // Global test utilities
@@ -78,10 +82,10 @@ expect.extend({
     const fs = require('fs');
     const path = require('path');
     const os = require('os');
-    
+
     const tempFile = path.join(os.tmpdir(), `test_${Date.now()}${extension}`);
     fs.writeFileSync(tempFile, content, 'utf8');
-    
+
     return {
       path: tempFile,
       cleanup: () => {
@@ -90,9 +94,9 @@ expect.extend({
         } catch (e) {
           // Ignore cleanup errors
         }
-      }
+      },
     };
-  }
+  },
 };
 
 // Console setup for cleaner test output
