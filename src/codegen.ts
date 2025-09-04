@@ -52,6 +52,7 @@ export class CodeGenerator {
     // Array methods
     ['рӯйхат', 'Array'],
     ['илова', 'push'],
+    ['пуш', 'push'],
     ['баровардан', 'pop'],
     ['дарозӣ', 'length'],
     ['харита', 'map'],
@@ -273,58 +274,69 @@ export class CodeGenerator {
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
-    let result = 'import ';
-
     const specifiers = node.specifiers;
-    const importParts: string[] = [];
+    const source = this.generateLiteral(node.source);
+    const results: string[] = [];
 
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      importParts.push(defaultImports[0].local.name);
+      const localName = defaultImports[0].local.name;
+      results.push(this.indent(`const ${localName} = require(${source});`));
     }
 
     // Handle named imports
     const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier') as ImportSpecifier[];
     if (namedImports.length > 0) {
-      const namedPart =
-        '{ ' +
-        namedImports
-          .map(spec => {
-            const imported = spec.imported.name;
-            const local = spec.local.name;
-            return imported === local ? imported : `${imported} as ${local}`;
-          })
-          .join(', ') +
-        ' }';
-      importParts.push(namedPart);
+      const destructuring = namedImports
+        .map(spec => {
+          const imported = spec.imported.name;
+          const local = spec.local.name;
+          return imported === local ? imported : `${imported}: ${local}`;
+        })
+        .join(', ');
+      results.push(this.indent(`const { ${destructuring} } = require(${source});`));
     }
 
-    result += importParts.join(', ');
-    result += ` from ${this.generateLiteral(node.source)};`;
-
-    return this.indent(result);
+    return results.join('\n');
   }
 
   private generateExportDeclaration(node: ExportDeclaration): string {
-    let result = 'export ';
-
-    if (node.default) {
-      result += 'default ';
-    }
-
     if (node.declaration) {
       const declaration = this.generateStatement(node.declaration);
-      // Remove indentation from declaration since we're adding our own
-      result += declaration.replace(this.getIndent(), '');
+
+      // Extract the name from the declaration for CommonJS export
+      let exportName = '';
+      if (node.declaration.type === 'FunctionDeclaration') {
+        const funcDecl = node.declaration as FunctionDeclaration;
+        exportName = funcDecl.name.name;
+      } else if (node.declaration.type === 'VariableDeclaration') {
+        const varDecl = node.declaration as VariableDeclaration;
+        exportName = (varDecl.identifier as Identifier).name;
+      } else if (node.declaration.type === 'ClassDeclaration') {
+        const classDecl = node.declaration as ClassDeclaration;
+        exportName = classDecl.name.name;
+      }
+
+      // Generate CommonJS export
+      const commonjsExport = node.default
+        ? `module.exports = ${exportName};`
+        : `module.exports.${exportName} = ${exportName};`;
+
+      return declaration + '\n' + this.indent(commonjsExport);
     }
 
-    return this.indent(result);
+    return '';
   }
 
   private generateIdentifier(node: Identifier): string {
     // Only map specific built-in identifiers, not general variable names
     // This prevents variable names like 'рӯйхат' from being mapped to 'Array'
+
+    // Map built-in literals
+    if (node.name === 'беқимат') {
+      return 'undefined';
+    }
 
     // Special case: don't map 'хато' when it's used as Error constructor
     if (node.name === 'хато') {
@@ -393,23 +405,41 @@ export class CodeGenerator {
     let object = this.generateExpression(node.object);
     let property = this.generateExpression(node.property);
 
-    // Apply built-in mappings for object names
+    // Apply built-in mappings for object names only for specific built-ins
     let objectMapped = false;
     if (node.object.type === 'Identifier') {
       const objectName = (node.object as Identifier).name;
-      const mappedObject = this.builtinMappings.get(objectName);
-      if (mappedObject) {
-        object = mappedObject;
-        objectMapped = true;
+      // Only map specific built-in objects, not user variables
+      const builtinObjects = ['чоп', 'математика', 'рӯйхат'];
+      if (builtinObjects.includes(objectName)) {
+        const mappedObject = this.builtinMappings.get(objectName);
+        if (mappedObject) {
+          object = mappedObject;
+          objectMapped = true;
+        }
       }
     }
 
-    // Only apply built-in mappings for property names if the object was also mapped
-    // This prevents user-defined method names from being incorrectly translated
-    if (objectMapped && !node.computed && node.property.type === 'Identifier') {
+    // Apply built-in mappings for property names if the object was mapped OR for common array/string methods
+    if (!node.computed && node.property.type === 'Identifier') {
       const propertyName = (node.property as Identifier).name;
       const mappedProperty = this.builtinMappings.get(propertyName);
-      if (mappedProperty) {
+
+      // Always map common array and string methods
+      const commonMethods = [
+        'пуш',
+        'илова',
+        'баровардан',
+        'дарозӣ',
+        'харита',
+        'филтр',
+        'кофтан',
+        'пайвастан',
+        'ҷойивазкунӣ',
+        'ҷудокунӣ',
+      ];
+
+      if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {
         property = mappedProperty;
       }
     }
@@ -488,6 +518,7 @@ export class CodeGenerator {
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
+
     return this.indent(`// Interface: ${name}`);
   }
 

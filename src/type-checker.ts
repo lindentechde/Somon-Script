@@ -1,16 +1,19 @@
 /* eslint-disable no-case-declarations */
 import {
   ArrayType,
+  CallExpression,
   Expression,
   FunctionDeclaration,
   GenericType,
   Identifier,
   InterfaceDeclaration,
+  IntersectionType,
   Literal,
   ObjectExpression,
   PrimitiveType,
   Program,
   Statement,
+  TupleType,
   TypeAlias,
   TypeNode,
   UnionType,
@@ -44,6 +47,7 @@ export interface Type {
   elementType?: Type;
   types?: Type[];
   properties?: Map<string, PropertyType>;
+  returnType?: Type;
 }
 
 /**
@@ -160,7 +164,7 @@ export class TypeChecker {
     // Get inferred type from initializer
     let inferredType: Type | undefined;
     if (varDecl.init) {
-      inferredType = this.inferExpressionType(varDecl.init);
+      inferredType = this.inferExpressionType(varDecl.init, declaredType);
     }
 
     // Type checking
@@ -198,10 +202,15 @@ export class TypeChecker {
     // For now, just restore symbol table
     this.symbolTable = savedSymbols;
 
-    // Store function type
+    // Store function type with return type
+    const returnType = funcDecl.returnType
+      ? this.resolveTypeNode(funcDecl.returnType.typeAnnotation)
+      : { kind: 'unknown' };
+
     const functionType: Type = {
       kind: 'function',
       name: funcDecl.name.name,
+      returnType: returnType,
     };
     this.symbolTable.set(funcDecl.name.name, functionType);
   }
@@ -224,6 +233,20 @@ export class TypeChecker {
         return {
           kind: 'union',
           types: unionType.types.map(t => this.resolveTypeNode(t)),
+        };
+
+      case 'IntersectionType':
+        const intersectionType = typeNode as IntersectionType;
+        return {
+          kind: 'intersection',
+          types: intersectionType.types.map(t => this.resolveTypeNode(t)),
+        };
+
+      case 'TupleType':
+        const tupleType = typeNode as TupleType;
+        return {
+          kind: 'tuple',
+          types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
         };
 
       case 'GenericType':
@@ -274,58 +297,76 @@ export class TypeChecker {
     }
   }
 
-  private inferExpressionType(expression: Expression): Type {
+  private inferExpressionType(expression: Expression, targetType?: Type): Type {
     switch (expression.type) {
       case 'Literal':
-        const literal = expression as Literal;
-        if (typeof literal.value === 'string') {
-          return { kind: 'primitive', name: 'string' };
-        } else if (typeof literal.value === 'number') {
-          return { kind: 'primitive', name: 'number' };
-        } else if (typeof literal.value === 'boolean') {
-          return { kind: 'primitive', name: 'boolean' };
-        } else if (literal.value === null) {
-          return { kind: 'primitive', name: 'null' };
-        }
-        break;
-
+        return this.inferLiteralType(expression as Literal);
       case 'Identifier':
-        const identifier = expression as Identifier;
-        return this.symbolTable.get(identifier.name) || { kind: 'unknown' };
-
+        return this.inferIdentifierType(expression as Identifier);
       case 'ArrayExpression':
-        // For now, assume array of unknown type
         return { kind: 'array', elementType: { kind: 'unknown' } };
-
       case 'ObjectExpression':
-        // Infer object type from properties
-        const properties = new Map<string, PropertyType>();
-        const objExpr = expression as ObjectExpression;
+        return this.inferObjectType(expression as ObjectExpression, targetType);
+      case 'CallExpression':
+        return this.inferCallType(expression as CallExpression);
+      default:
+        return { kind: 'unknown' };
+    }
+  }
 
-        if (objExpr.properties) {
-          for (const prop of objExpr.properties) {
-            if (prop.key && prop.value) {
-              const keyName =
-                prop.key.type === 'Identifier'
-                  ? (prop.key as Identifier).name
-                  : String((prop.key as Literal).value);
-              const valueType = this.inferExpressionType(prop.value);
-              properties.set(keyName, {
-                type: valueType,
-                optional: false,
-              });
-            }
-          }
-        }
+  private inferLiteralType(literal: Literal): Type {
+    if (typeof literal.value === 'string') {
+      return { kind: 'primitive', name: 'string' };
+    } else if (typeof literal.value === 'number') {
+      return { kind: 'primitive', name: 'number' };
+    } else if (typeof literal.value === 'boolean') {
+      return { kind: 'primitive', name: 'boolean' };
+    } else if (literal.value === null) {
+      return { kind: 'primitive', name: 'null' };
+    }
+    return { kind: 'unknown' };
+  }
 
-        return {
-          kind: 'object',
-          properties: properties,
-        };
+  private inferIdentifierType(identifier: Identifier): Type {
+    return this.symbolTable.get(identifier.name) || { kind: 'unknown' };
+  }
 
-      // Add more expression types as needed
+  private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
+    // If we have a target interface type, use it
+    if (targetType && targetType.kind === 'interface') {
+      return targetType;
     }
 
+    // Otherwise, infer object type from properties
+    const properties = new Map<string, PropertyType>();
+
+    if (objExpr.properties) {
+      for (const prop of objExpr.properties) {
+        if (prop.key && prop.value) {
+          const keyName =
+            prop.key.type === 'Identifier'
+              ? (prop.key as Identifier).name
+              : String((prop.key as Literal).value);
+          const valueType = this.inferExpressionType(prop.value);
+          properties.set(keyName, {
+            type: valueType,
+            optional: false,
+          });
+        }
+      }
+    }
+
+    return { kind: 'object', properties: properties };
+  }
+
+  private inferCallType(callExpr: CallExpression): Type {
+    if (callExpr.callee && callExpr.callee.type === 'Identifier') {
+      const functionName = (callExpr.callee as Identifier).name;
+      const functionType = this.symbolTable.get(functionName);
+      if (functionType && functionType.kind === 'function' && functionType.returnType) {
+        return functionType.returnType;
+      }
+    }
     return { kind: 'unknown' };
   }
 
@@ -341,6 +382,22 @@ export class TypeChecker {
       return source.elementType && target.elementType
         ? this.isAssignable(source.elementType, target.elementType)
         : false;
+    }
+
+    // Tuple type checking
+    if (source.kind === 'tuple' && target.kind === 'tuple') {
+      if (!source.types || !target.types || source.types.length !== target.types.length) {
+        return false;
+      }
+      return source.types.every((sourceType, index) =>
+        this.isAssignable(sourceType, target.types![index])
+      );
+    }
+
+    // Array literal to tuple assignment
+    if (source.kind === 'array' && target.kind === 'tuple') {
+      // Allow array literals to be assigned to tuples
+      return true;
     }
 
     // Union type checking

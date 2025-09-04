@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-04T09:05:53.057Z",
+  "timestamp": "2025-09-04T09:57:42.263Z",
   "total": 24,
-  "working": 12,
+  "working": 16,
   "partial": 8,
-  "failing": 4,
-  "workingPercentage": 50,
+  "failing": 0,
+  "workingPercentage": 67,
   "details": {
     "working": [
       {
@@ -28,12 +28,22 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "05-typed-functions.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "06-conditionals.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
       {
         "name": "07-loops.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "08-arrays.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -66,14 +76,19 @@
         "name": "18-union-types.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "19-intersection-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "20-advanced-classes.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       }
     ],
     "partial": [
-      {
-        "name": "08-arrays.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-08-arrays.js\""
-      },
       {
         "name": "09-interfaces.som",
         "status": "partial",
@@ -95,14 +110,19 @@
         "reason": "Marked as future implementation"
       },
       {
-        "name": "19-intersection-types.som",
+        "name": "21-conditional-types.som",
         "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-19-intersection-types.js\""
+        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-21-conditional-types.js\""
       },
       {
-        "name": "20-advanced-classes.som",
+        "name": "22-mapped-types.som",
         "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-20-advanced-classes.js\""
+        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-22-mapped-types.js\""
+      },
+      {
+        "name": "23-tuple-types.som",
+        "status": "partial",
+        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-23-tuple-types.js\""
       },
       {
         "name": "24-comprehensive-phase3.som",
@@ -110,27 +130,6 @@
         "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-24-comprehensive-phase3.js\""
       }
     ],
-    "failing": [
-      {
-        "name": "05-typed-functions.som",
-        "status": "failing",
-        "reason": "Compilation error: Command failed: node dist/cli.js compile \"/workspaces/somoni-script/examples/05-typed-functions.som\" -o /tmp/test-05-typed-functions.js"
-      },
-      {
-        "name": "21-conditional-types.som",
-        "status": "failing",
-        "reason": "Compilation error: Command failed: node dist/cli.js compile \"/workspaces/somoni-script/examples/21-conditional-types.som\" -o /tmp/test-21-conditional-types.js"
-      },
-      {
-        "name": "22-mapped-types.som",
-        "status": "failing",
-        "reason": "Compilation error: Command failed: node dist/cli.js compile \"/workspaces/somoni-script/examples/22-mapped-types.som\" -o /tmp/test-22-mapped-types.js"
-      },
-      {
-        "name": "23-tuple-types.som",
-        "status": "failing",
-        "reason": "Compilation error: Command failed: node dist/cli.js compile \"/workspaces/somoni-script/examples/23-tuple-types.som\" -o /tmp/test-23-tuple-types.js"
-      }
-    ]
+    "failing": []
   }
 }

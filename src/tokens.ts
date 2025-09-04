@@ -22,6 +22,7 @@ export enum TokenType {
   ДУРУСТ = 'ДУРУСТ', // true
   НОДУРУСТ = 'НОДУРУСТ', // false
   ХОЛӢ = 'ХОЛӢ', // null
+  БЕҚИМАТ = 'БЕҚИМАТ', // undefined
 
   // Import/Export keywords
   ВОРИД = 'ВОРИД', // import
