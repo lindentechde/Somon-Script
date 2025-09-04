@@ -17,6 +17,7 @@ import {
   AssignmentExpression,
   MemberExpression,
   ImportDeclaration,
+  ImportSpecifier,
   ExportDeclaration,
   ArrayExpression,
   ObjectExpression,
@@ -283,7 +284,7 @@ export class CodeGenerator {
     }
     
     // Handle named imports
-    const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier');
+    const namedImports = specifiers.filter(s => s.type === 'ImportSpecifier') as ImportSpecifier[];
     if (namedImports.length > 0) {
       const namedPart = '{ ' + namedImports.map(spec => {
         const imported = spec.imported.name;

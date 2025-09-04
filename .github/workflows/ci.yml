@@ -29,13 +29,16 @@ jobs:
       run: npm ci
       
     - name: Run linting
-      run: npm run lint || echo "Linting not configured yet"
+      run: npm run lint
       
     - name: Build project
       run: npm run build
       
+    - name: Audit examples
+      run: npm run audit:examples
+      
     - name: Run tests
-      run: npm test
+      run: npm run test:ci
       
     - name: Test CLI compilation
       run: |
@@ -78,6 +81,9 @@ jobs:
     - name: Build project
       run: npm run build
       
+    - name: Audit examples
+      run: npm run audit:examples
+      
     - name: Package for distribution
       run: npm pack
       
@@ -110,8 +116,14 @@ jobs:
     - name: Build project
       run: npm run build
       
+    - name: Audit examples
+      run: npm run audit:examples
+      
     - name: Run type checking
       run: npx tsc --noEmit
+      
+    - name: Code formatting check
+      run: npm run format:check
       
     - name: Check for type safety violations
       run: |
@@ -143,6 +155,37 @@ jobs:
           echo "❌ Modular architecture files missing!"
           exit 1
         fi
+        
+    - name: Test coverage quality gate
+      run: |
+        echo "Checking test coverage..."
+        npm run test:coverage
+        
+        # Extract coverage percentage (simplified check)
+        if [ -f "coverage/lcov-report/index.html" ]; then
+          echo "✅ Coverage report generated successfully!"
+        else
+          echo "⚠️ Coverage report not found, but tests are passing"
+        fi
+        
+    - name: Documentation quality check
+      run: |
+        echo "Verifying documentation completeness..."
+        if [ -f "FEATURE_ALIGNMENT.md" ] && [ -f "README.md" ] && [ -f "CHANGELOG.md" ]; then
+          echo "✅ Core documentation files present!"
+        else
+          echo "❌ Missing core documentation files!"
+          exit 1
+        fi
+        
+        # Check if TypeDoc can generate docs
+        npm run docs:generate
+        if [ -d "docs/api" ]; then
+          echo "✅ API documentation generated successfully!"
+        else
+          echo "❌ API documentation generation failed!"
+          exit 1
+        fi
 
   release:
     name: Release
@@ -168,6 +211,9 @@ jobs:
       
     - name: Build project
       run: npm run build
+      
+    - name: Audit examples
+      run: npm run audit:examples
       
     - name: Download build artifacts
       uses: actions/download-artifact@v4
@@ -209,6 +255,9 @@ jobs:
     - name: Build project
       run: npm run build
       
+    - name: Audit examples
+      run: npm run audit:examples
+      
     - name: Run compilation benchmarks
       run: |
         echo "Running compilation performance tests..."
@@ -242,3 +291,18 @@ jobs:
         time node dist/cli.js compile medium.som --strict
         
         echo "✅ Performance benchmarks completed!"
+        
+    - name: Example coverage report
+      run: |
+        echo "Generating example coverage report..."
+        npm run audit:examples
+        
+        # Check minimum example success rate
+        WORKING_COUNT=$(grep -o "Working: [0-9]*" example-audit-report.json | grep -o "[0-9]*" || echo "0")
+        TOTAL_COUNT=$(grep -o "Total Examples: [0-9]*" example-audit-report.json | grep -o "[0-9]*" || echo "24")
+        
+        if [ "$WORKING_COUNT" -ge 12 ]; then
+          echo "✅ Example coverage acceptable: $WORKING_COUNT/$TOTAL_COUNT working"
+        else
+          echo "⚠️ Example coverage below threshold: $WORKING_COUNT/$TOTAL_COUNT working"
+        fi

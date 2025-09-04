@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+coverage/
+
+# Generated files
+*.tgz
+package-lock.json
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Examples (preserve original formatting for language demonstration)
+examples/*.som
+
+# Documentation that should preserve formatting
+CHANGELOG.md

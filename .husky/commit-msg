@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Validate commit message format
+# Supports conventional commits: feat, fix, docs, style, refactor, test, chore
+npx --no -- commitlint --edit "$1"

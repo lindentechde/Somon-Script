@@ -1,23 +1,26 @@
 import {
+  ArrayType,
+  Expression,
+  FunctionDeclaration,
+  GenericType,
+  Identifier,
+  InterfaceDeclaration,
+  Literal,
+  ObjectExpression,
+  Parameter,
+  PrimitiveType,
   Program,
   Statement,
-  Expression,
-  VariableDeclaration,
-  FunctionDeclaration,
-  InterfaceDeclaration,
   TypeAlias,
-  TypeNode,
-  PrimitiveType,
-  ArrayType,
-  UnionType,
-  GenericType,
   TypeAnnotation,
-  Identifier,
-  Parameter,
-  Literal,
-  ObjectExpression
+  TypeNode,
+  UnionType,
+  VariableDeclaration,
 } from './types';
 
+/**
+ * Represents a type checking error or warning
+ */
 export interface TypeCheckError {
   message: string;
   line: number;
@@ -25,11 +28,17 @@ export interface TypeCheckError {
   severity: 'error' | 'warning';
 }
 
+/**
+ * Result of type checking operation
+ */
 export interface TypeCheckResult {
   errors: TypeCheckError[];
   warnings: TypeCheckError[];
 }
 
+/**
+ * Represents a type in the Somoni-script type system
+ */
 export interface Type {
   kind: string;
   name?: string;
@@ -38,11 +47,18 @@ export interface Type {
   properties?: Map<string, PropertyType>;
 }
 
+/**
+ * Represents a property type with optional flag
+ */
 export interface PropertyType {
   type: Type;
   optional: boolean;
 }
 
+/**
+ * Type checker for Somoni-script AST
+ * Provides comprehensive type checking with Tajik Cyrillic type annotations
+ */
 export class TypeChecker {
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
@@ -54,6 +70,9 @@ export class TypeChecker {
     this.initializePrimitiveTypes();
   }
 
+  /**
+   * Initialize primitive types in the symbol table
+   */
   private initializePrimitiveTypes(): void {
     this.symbolTable.set('сатр', { kind: 'primitive', name: 'string' });
     this.symbolTable.set('рақам', { kind: 'primitive', name: 'number' });
@@ -61,6 +80,11 @@ export class TypeChecker {
     this.symbolTable.set('холӣ', { kind: 'primitive', name: 'null' });
   }
 
+  /**
+   * Perform type checking on the entire program
+   * @param program - The AST program to type check
+   * @returns Type checking result with errors and warnings
+   */
   public check(program: Program): TypeCheckResult {
     this.errors = [];
     this.warnings = [];

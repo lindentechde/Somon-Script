@@ -1,5 +1,5 @@
-// Import/Export - Module System (Future Implementation)
-// This example shows the planned syntax for module imports and exports
+// Import/Export - Partial Implementation (Phase 5)
+// Syntax parsing implemented, module resolution in development
 
 // Export functions
 содир функсия ҷамъ_кардан(а: рақам, б: рақам): рақам {

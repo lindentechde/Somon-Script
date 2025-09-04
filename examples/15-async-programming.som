@@ -1,5 +1,5 @@
-// Async Programming - Future Implementation
-// This example shows the planned syntax for asynchronous operations
+// Async Programming - Partial Implementation (Phase 5)
+// Syntax parsing implemented, runtime support in development
 
 ҳамзамон функсия маълумот_гирифтан(url: сатр): сатр {
     чоп.сабт("Дархости маълумот аз: " + url);
