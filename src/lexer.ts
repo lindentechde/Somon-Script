@@ -345,7 +345,9 @@ export class Lexer {
 
     // Check for invalid number patterns (multiple decimal points)
     if (!this.isAtEnd() && this.currentChar() === '.' && hasDecimal) {
-      throw new Error(`Invalid number format at line ${startLine}, column ${startColumn}: multiple decimal points`);
+      throw new Error(
+        `Invalid number format at line ${startLine}, column ${startColumn}: multiple decimal points`
+      );
     }
 
     return this.createToken(TokenType.NUMBER, value, startLine, startColumn);
