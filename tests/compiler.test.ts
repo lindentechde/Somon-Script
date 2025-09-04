@@ -122,7 +122,7 @@ describe('Compiler', () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.code).toContain('function асосӣ()');
-    expect(result.code).toContain('module.exports = асосӣ;');
+    expect(result.code).toContain('module.exports.default = асосӣ;');
   });
 
   test('should compile import declarations', () => {

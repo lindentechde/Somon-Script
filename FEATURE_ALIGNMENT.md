@@ -128,7 +128,7 @@ implementation status after Phase 4 completion.
 
 ## Example Status Summary
 
-### Working Examples: 16/24 (67%)
+### Working Examples: 17/24 (71%)
 
 - 01-hello-world.som ✅
 - 02-variables.som ✅
@@ -146,13 +146,13 @@ implementation status after Phase 4 completion.
 - 19-intersection-types.som ✅
 - 20-advanced-classes.som ✅
 - 16-import-export.som ✅
+- 15-async-programming.som ✅
 
-### Partial Examples: 8/24 (33%)
+### Partial Examples: 7/24 (29%)
 
 - 09-interfaces.som ⚠️ (compiles, minor interface parsing issues)
 - 12-student-management-system.som ⚠️ (compiles, inheritance scoping issues)
 - 13-inheritance-demo.som ⚠️ (marked as future implementation)
-- 15-async-programming.som ⚠️ (marked as future implementation)
 
 - 21-conditional-types.som ⚠️ (compiles, variable scoping conflicts)
 - 22-mapped-types.som ⚠️ (compiles, complex function parsing issues)

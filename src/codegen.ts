@@ -78,6 +78,10 @@ export class CodeGenerator {
     ['шикастан', 'break'],
     ['давом', 'continue'],
     ['кӯшиш', 'try'],
+
+    // Async/Promise
+    ['ваъда', 'Promise'],
+    ['Ваъда', 'Promise'],
     ['гирифтан', 'catch'],
     ['ниҳоят', 'finally'],
     ['партофтан', 'throw'],
@@ -275,14 +279,22 @@ export class CodeGenerator {
 
   private generateImportDeclaration(node: ImportDeclaration): string {
     const specifiers = node.specifiers;
-    const source = this.generateLiteral(node.source);
+    let source = this.generateLiteral(node.source);
+
+    // Module resolution: convert .som extensions to .js
+    if (source.includes('.som')) {
+      source = source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    }
+
     const results: string[] = [];
 
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
       const localName = defaultImports[0].local.name;
-      results.push(this.indent(`const ${localName} = require(${source});`));
+      results.push(
+        this.indent(`const ${localName} = require(${source}).default || require(${source});`)
+      );
     }
 
     // Handle named imports
@@ -319,8 +331,9 @@ export class CodeGenerator {
       }
 
       // Generate CommonJS export
+      // For default exports, we need to be careful not to override named exports
       const commonjsExport = node.default
-        ? `module.exports = ${exportName};`
+        ? `module.exports.default = ${exportName};`
         : `module.exports.${exportName} = ${exportName};`;
 
       return declaration + '\n' + this.indent(commonjsExport);
