@@ -24,5 +24,8 @@ npm-debug.log*
 # Examples (preserve original formatting for language demonstration)
 examples/*.som
 
+# Generated reports (may have formatting inconsistencies)
+example-audit-report.json
+
 # Documentation that should preserve formatting
 CHANGELOG.md
