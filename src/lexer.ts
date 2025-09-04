@@ -24,6 +24,7 @@ export class Lexer {
     ['дуруст', TokenType.ДУРУСТ],
     ['нодуруст', TokenType.НОДУРУСТ],
     ['холӣ', TokenType.ХОЛӢ],
+    ['беқимат', TokenType.БЕҚИМАТ],
 
     // Import/Export
     ['ворид', TokenType.ВОРИД],

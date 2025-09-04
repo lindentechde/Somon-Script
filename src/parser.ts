@@ -28,6 +28,7 @@ import {
   PrimitiveType,
   ArrayType,
   UnionType,
+  IntersectionType,
   GenericType,
   TupleType,
   InterfaceDeclaration,
@@ -176,6 +177,7 @@ export class Parser {
       return this.expressionStatement();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+
       this.errors.push(errorMessage);
       this.synchronize();
       return null; // Continue parsing after error
@@ -590,6 +592,19 @@ export class Parser {
           line: expr.line,
           column: expr.column,
         } as MemberExpression;
+      } else if (this.match(TokenType.LEFT_BRACKET)) {
+        // Computed member expression: obj[expr]
+        const property = this.expression();
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property");
+
+        expr = {
+          type: 'MemberExpression',
+          object: expr,
+          property: property,
+          computed: true,
+          line: expr.line,
+          column: expr.column,
+        } as MemberExpression;
       } else {
         break;
       }
@@ -978,11 +993,35 @@ export class Parser {
     const leftBrace = this.previous();
     const properties: Property[] = [];
 
+    // Skip any newlines after opening brace
+    while (this.match(TokenType.NEWLINE)) {
+      // Skip newlines
+    }
+
     if (!this.check(TokenType.RIGHT_BRACE)) {
       do {
+        // Skip any newlines before property
+        while (this.match(TokenType.NEWLINE)) {
+          // Skip newlines
+        }
+
+        if (this.check(TokenType.RIGHT_BRACE)) {
+          break; // End of object
+        }
+
         const property = this.parseProperty();
         properties.push(property);
+
+        // Skip any newlines after property
+        while (this.match(TokenType.NEWLINE)) {
+          // Skip newlines
+        }
       } while (this.match(TokenType.COMMA));
+    }
+
+    // Skip any newlines before closing brace
+    while (this.match(TokenType.NEWLINE)) {
+      // Skip newlines
     }
 
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' after object properties");
@@ -1139,12 +1178,12 @@ export class Parser {
   }
 
   private unionType(): TypeNode {
-    let type = this.primaryType();
+    let type = this.intersectionType();
 
     while (this.match(TokenType.PIPE)) {
       const types = [type];
       do {
-        types.push(this.primaryType());
+        types.push(this.intersectionType());
       } while (this.match(TokenType.PIPE));
 
       type = {
@@ -1153,6 +1192,26 @@ export class Parser {
         line: type.line,
         column: type.column,
       } as UnionType;
+    }
+
+    return type;
+  }
+
+  private intersectionType(): TypeNode {
+    let type = this.primaryType();
+
+    while (this.match(TokenType.AMPERSAND)) {
+      const types = [type];
+      do {
+        types.push(this.primaryType());
+      } while (this.match(TokenType.AMPERSAND));
+
+      type = {
+        type: 'IntersectionType',
+        types,
+        line: type.line,
+        column: type.column,
+      } as IntersectionType;
     }
 
     return type;
@@ -1302,6 +1361,20 @@ export class Parser {
       this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
     }
 
+    // Parse optional extends clause (interface inheritance)
+    // Note: extends clause is parsed but not used in JavaScript generation
+    if (this.match(TokenType.МЕРОС)) {
+      if (this.check(TokenType.IDENTIFIER)) {
+        this.advance(); // consume interface name
+      } else if (this.matchBuiltinIdentifier()) {
+        // already consumed by matchBuiltinIdentifier
+      } else {
+        throw new Error(
+          `Expected interface name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
+        );
+      }
+    }
+
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after interface name");
 
     const properties: PropertySignature[] = [];
@@ -1317,7 +1390,7 @@ export class Parser {
 
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' after interface body");
 
-    return {
+    const result = {
       type: 'InterfaceDeclaration',
       name: {
         type: 'Identifier',
@@ -1334,7 +1407,9 @@ export class Parser {
       },
       line: interfaceToken.line,
       column: interfaceToken.column,
-    };
+    } as InterfaceDeclaration;
+
+    return result;
   }
 
   private propertySignature(): PropertySignature {
@@ -1343,33 +1418,77 @@ export class Parser {
       keyName = this.advance();
     } else if (this.matchBuiltinIdentifier()) {
       keyName = this.previous();
+    } else if (
+      this.check(TokenType.САТР) ||
+      this.check(TokenType.РАҚАМ) ||
+      this.check(TokenType.МАНТИҚӢ) ||
+      this.check(TokenType.ХОЛӢ)
+    ) {
+      // Allow type keywords as property names
+      keyName = this.advance();
     } else {
       throw new Error(
         `Expected property name at line ${this.peek().line}, column ${this.peek().column}`
       );
     }
 
-    // Check for optional property
-    const optional = this.match(TokenType.QUESTION);
+    // Check if this is a method signature (has parentheses)
+    if (this.check(TokenType.LEFT_PAREN)) {
+      // Method signature: methodName(params): returnType;
+      this.advance(); // consume '('
 
-    this.consume(TokenType.COLON, "Expected ':' after property name");
-    const typeAnnotation = this.typeAnnotation();
+      // Skip parameters for now (just consume until ')')
+      let parenCount = 1;
+      while (parenCount > 0 && !this.isAtEnd()) {
+        if (this.check(TokenType.LEFT_PAREN)) {
+          parenCount++;
+        } else if (this.check(TokenType.RIGHT_PAREN)) {
+          parenCount--;
+        }
+        this.advance();
+      }
 
-    this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
+      this.consume(TokenType.COLON, "Expected ':' after method parameters");
+      const typeAnnotation = this.typeAnnotation();
+      this.consume(TokenType.SEMICOLON, "Expected ';' after method signature");
 
-    return {
-      type: 'PropertySignature',
-      key: {
-        type: 'Identifier',
-        name: keyName.value,
+      return {
+        type: 'PropertySignature',
+        key: {
+          type: 'Identifier',
+          name: keyName.value,
+          line: keyName.line,
+          column: keyName.column,
+        },
+        typeAnnotation,
+        optional: false,
         line: keyName.line,
         column: keyName.column,
-      },
-      typeAnnotation,
-      optional: optional || false,
-      line: keyName.line,
-      column: keyName.column,
-    };
+      };
+    } else {
+      // Regular property signature: propName: type;
+      // Check for optional property
+      const optional = this.match(TokenType.QUESTION);
+
+      this.consume(TokenType.COLON, "Expected ':' after property name");
+      const typeAnnotation = this.typeAnnotation();
+
+      this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
+
+      return {
+        type: 'PropertySignature',
+        key: {
+          type: 'Identifier',
+          name: keyName.value,
+          line: keyName.line,
+          column: keyName.column,
+        },
+        typeAnnotation,
+        optional: optional || false,
+        line: keyName.line,
+        column: keyName.column,
+      };
+    }
   }
 
   private classDeclaration(): any {

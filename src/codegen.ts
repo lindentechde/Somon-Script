@@ -52,6 +52,7 @@ export class CodeGenerator {
     // Array methods
     ['рӯйхат', 'Array'],
     ['илова', 'push'],
+    ['пуш', 'push'],
     ['баровардан', 'pop'],
     ['дарозӣ', 'length'],
     ['харита', 'map'],
@@ -326,6 +327,11 @@ export class CodeGenerator {
     // Only map specific built-in identifiers, not general variable names
     // This prevents variable names like 'рӯйхат' from being mapped to 'Array'
 
+    // Map built-in literals
+    if (node.name === 'беқимат') {
+      return 'undefined';
+    }
+
     // Special case: don't map 'хато' when it's used as Error constructor
     if (node.name === 'хато') {
       // This is a bit of a hack - we need context to know if it's console.error or Error
@@ -393,23 +399,41 @@ export class CodeGenerator {
     let object = this.generateExpression(node.object);
     let property = this.generateExpression(node.property);
 
-    // Apply built-in mappings for object names
+    // Apply built-in mappings for object names only for specific built-ins
     let objectMapped = false;
     if (node.object.type === 'Identifier') {
       const objectName = (node.object as Identifier).name;
-      const mappedObject = this.builtinMappings.get(objectName);
-      if (mappedObject) {
-        object = mappedObject;
-        objectMapped = true;
+      // Only map specific built-in objects, not user variables
+      const builtinObjects = ['чоп', 'математика', 'рӯйхат'];
+      if (builtinObjects.includes(objectName)) {
+        const mappedObject = this.builtinMappings.get(objectName);
+        if (mappedObject) {
+          object = mappedObject;
+          objectMapped = true;
+        }
       }
     }
 
-    // Only apply built-in mappings for property names if the object was also mapped
-    // This prevents user-defined method names from being incorrectly translated
-    if (objectMapped && !node.computed && node.property.type === 'Identifier') {
+    // Apply built-in mappings for property names if the object was mapped OR for common array/string methods
+    if (!node.computed && node.property.type === 'Identifier') {
       const propertyName = (node.property as Identifier).name;
       const mappedProperty = this.builtinMappings.get(propertyName);
-      if (mappedProperty) {
+
+      // Always map common array and string methods
+      const commonMethods = [
+        'пуш',
+        'илова',
+        'баровардан',
+        'дарозӣ',
+        'харита',
+        'филтр',
+        'кофтан',
+        'пайвастан',
+        'ҷойивазкунӣ',
+        'ҷудокунӣ',
+      ];
+
+      if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {
         property = mappedProperty;
       }
     }
@@ -488,6 +512,7 @@ export class CodeGenerator {
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
+
     return this.indent(`// Interface: ${name}`);
   }
 
