@@ -24,6 +24,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{js,json,md}\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{js,json,md}\"",
     "docs": "typedoc",
+    "docs:generate": "typedoc",
     "docs:serve": "typedoc --watch --serve",
     "type-check": "tsc --noEmit",
     "start": "node dist/cli.js",

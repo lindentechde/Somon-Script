@@ -8,6 +8,9 @@ yarn-error.log*
 dist/
 *.tsbuildinfo
 
+# Generated documentation
+docs/api/
+
 # Runtime data
 pids
 *.pid
