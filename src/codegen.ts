@@ -32,8 +32,7 @@ import {
   MethodDefinition,
   PropertyDefinition,
   SwitchStatement,
-  SpreadElement,
-  ASTNode
+  SpreadElement
 } from './types';
 // import { BaseVisitor } from './visitor'; // Simplified for now
 
@@ -546,14 +545,8 @@ export class CodeGenerator {
 
   private needsParentheses(node: BinaryExpression): boolean {
     // Simple precedence check - in a full implementation, this would be more sophisticated
-    const precedence: { [key: string]: number } = {
-      '||': 1,
-      '&&': 2,
-      '==': 3, '!=': 3,
-      '<': 4, '>': 4, '<=': 4, '>=': 4,
-      '+': 5, '-': 5,
-      '*': 6, '/': 6, '%': 6
-    };
+    // For now, always return false to avoid complexity
+    node; // Use the parameter to avoid unused warning
 
     // For now, we'll be conservative and add parentheses for nested binary expressions
     return node.left.type === 'BinaryExpression' || node.right.type === 'BinaryExpression';

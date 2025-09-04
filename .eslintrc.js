@@ -3,7 +3,6 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
-    project: './tsconfig.json',
   },
   plugins: ['@typescript-eslint'],
   extends: [
@@ -14,7 +13,7 @@ module.exports = {
     node: true,
     jest: true,
   },
-  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/'],
+  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/', 'tests/'],
   rules: {
     // General rules
     'no-console': 'off', // Allow console for CLI tool

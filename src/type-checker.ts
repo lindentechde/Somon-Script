@@ -7,12 +7,12 @@ import {
   InterfaceDeclaration,
   Literal,
   ObjectExpression,
-  Parameter,
+
   PrimitiveType,
   Program,
   Statement,
   TypeAlias,
-  TypeAnnotation,
+
   TypeNode,
   UnionType,
   VariableDeclaration,
