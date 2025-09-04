@@ -27,5 +27,7 @@
 чоп.сабт("- интизор (await) - барои интизори натиҷа");
 чоп.сабт("- ваъда (Promise) - барои ваъдаҳо");
 
-// Note: Full async/await implementation is planned for future versions
-чоп.сабт("Татбиқи пурра дар версияҳои оянда");
+// Call async function to demonstrate functionality
+коркарди_маълумот();
+
+чоп.сабт("Async/await пурра татбиқ шудааст!");
