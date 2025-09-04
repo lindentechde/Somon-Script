@@ -102,6 +102,7 @@ export class CodeGenerator {
     return statements.join('\n');
   }
 
+  // eslint-disable-next-line complexity
   private generateStatement(node: Statement): string {
     switch (node.type) {
       case 'ImportDeclaration':

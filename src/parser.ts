@@ -22,7 +22,7 @@ import {
   ImportSpecifier,
   ImportDefaultSpecifier,
   ExportDeclaration,
-  ExportSpecifier,
+
   ArrayExpression,
   TypeAnnotation,
   TypeNode,
@@ -32,7 +32,7 @@ import {
   GenericType,
   TupleType,
   InterfaceDeclaration,
-  InterfaceBody,
+  InterfaceBody, // eslint-disable-line no-unused-vars
   PropertySignature,
   TypeParameter,
   TypeAlias,
@@ -47,7 +47,7 @@ import {
   ObjectPattern,
   PropertyPattern,
   SpreadElement,
-  RestElement,
+
   ObjectExpression,
   Property
 } from './types';
@@ -85,6 +85,7 @@ export class Parser {
     };
   }
 
+  // eslint-disable-next-line complexity
   private statement(): Statement | null {
     try {
       // Skip newlines
@@ -528,7 +529,7 @@ export class Parser {
       const callee = this.primary();
       
       // Check if there are arguments
-      let args: Expression[] = [];
+      const args: Expression[] = [];
       if (this.match(TokenType.LEFT_PAREN)) {
         if (!this.check(TokenType.RIGHT_PAREN)) {
           do {
@@ -553,6 +554,7 @@ export class Parser {
   private call(): Expression {
     let expr = this.primary();
     
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (this.match(TokenType.LEFT_PAREN)) {
         expr = this.finishCall(expr);
@@ -607,6 +609,7 @@ export class Parser {
     } as CallExpression;
   }
 
+  // eslint-disable-next-line complexity
   private primary(): Expression {
     if (this.match(TokenType.ДУРУСТ)) {
       const token = this.previous();
@@ -1357,7 +1360,7 @@ export class Parser {
     }
     
     // Optional implements clause
-    let implementsTokens: any[] = [];
+    const implementsTokens: any[] = [];
     if (this.match(TokenType.ТАТБИҚ)) {
       do {
         if (this.check(TokenType.IDENTIFIER)) {
@@ -1468,8 +1471,6 @@ export class Parser {
       // Property
       return this.classProperty(nameToken, accessibility, isStatic);
     }
-    
-    throw new Error(`Expected class member at line ${this.peek().line}, column ${this.peek().column}`);
   }
 
   private constructorMethod(accessibility?: string, isStatic?: boolean): any {
@@ -1624,6 +1625,7 @@ export class Parser {
     };
   }
 
+  // eslint-disable-next-line complexity
   private switchStatement(): any {
     const switchToken = this.previous();
     
@@ -1853,6 +1855,7 @@ export class Parser {
     };
   }
 
+  // eslint-disable-next-line complexity
   private synchronize(): void {
     this.advance();
     

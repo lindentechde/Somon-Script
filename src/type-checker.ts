@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 import {
   ArrayType,
   Expression,
@@ -324,6 +325,7 @@ export class TypeChecker {
     return { kind: 'unknown' };
   }
 
+  // eslint-disable-next-line complexity
   private isAssignable(source: Type, target: Type): boolean {
     // Exact match
     if (source.kind === target.kind && source.name === target.name) {

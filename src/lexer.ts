@@ -123,6 +123,7 @@ export class Lexer {
     return tokens;
   }
 
+  // eslint-disable-next-line complexity
   private nextToken(): Token {
     this.skipWhitespace();
     

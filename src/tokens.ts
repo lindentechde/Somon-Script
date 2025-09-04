@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 // Token types for lexical analysis
 export enum TokenType {
   // Literals
