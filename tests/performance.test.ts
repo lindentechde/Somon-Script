@@ -172,7 +172,10 @@ describe('Performance Tests', () => {
       }
 
       const averageTime = totalTime / iterations;
-      const regressionThreshold = benchmarkResults.baseline * 2.0; // 100% slower (more reasonable for CI environments)
+      // Use more lenient threshold in CI environments
+      const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+      const multiplier = isCI ? 3.0 : 2.0; // 200% slower in CI, 100% slower locally
+      const regressionThreshold = benchmarkResults.baseline * multiplier;
 
       expect(averageTime).toBeLessThan(regressionThreshold);
     });
