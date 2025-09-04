@@ -106,4 +106,73 @@ describe('Compiler', () => {
     expect(result.code).toContain('let натиҷа = факториал(5);');
     // Note: console.log may not be fully implemented for all cases
   });
+
+  test('should compile export declarations', () => {
+    const source = 'содир функсия ҳисоб(а, б) { бозгашт а + б; }';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('function ҳисоб(а, б)');
+    expect(result.code).toContain('module.exports.ҳисоб = ҳисоб;');
+  });
+
+  test('should compile default export', () => {
+    const source = 'содир пешфарз функсия асосӣ() { бозгашт "салом"; }';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('function асосӣ()');
+    expect(result.code).toContain('module.exports = асосӣ;');
+  });
+
+  test('should compile import declarations', () => {
+    const source = 'ворид { ҷамъ } аз "./math.som";';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('const {');
+    expect(result.code).toContain('require(');
+  });
+
+  test('should compile class declarations', () => {
+    const source = 'синф Шахс { конструктор(ном) { ин.ном = ном; } }';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('class Шахс');
+    expect(result.code).toContain('constructor(ном)');
+  });
+
+  test('should compile array expressions', () => {
+    const source = 'тағйирёбанда рақамҳо = [1, 2, 3];';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('let рақамҳо = [1, 2, 3];');
+  });
+
+  test('should compile object expressions', () => {
+    const source = 'тағйирёбанда объект = { ном: "Аҳмад", сол: 25 };';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('let объект = {ном: "Аҳмад", сол: 25};');
+  });
+
+  test('should compile member expressions', () => {
+    const source = 'тағйирёбанда қимат = объект.ном;';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('let қимат = объект.ном;');
+  });
+
+  test('should compile try-catch statements', () => {
+    const source = 'кӯшиш { чоп.сабт("тест"); } гирифтан (хато) { чоп.хато(хато); }';
+    const result = compile(source);
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('try {');
+    expect(result.code).toContain('} catch (');
+  });
 });

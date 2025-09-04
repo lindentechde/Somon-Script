@@ -308,13 +308,13 @@ export class CodeGenerator {
       // Extract the name from the declaration for CommonJS export
       let exportName = '';
       if (node.declaration.type === 'FunctionDeclaration') {
-        const funcDecl = node.declaration as any;
+        const funcDecl = node.declaration as FunctionDeclaration;
         exportName = funcDecl.name.name;
       } else if (node.declaration.type === 'VariableDeclaration') {
-        const varDecl = node.declaration as any;
-        exportName = varDecl.identifier.name;
+        const varDecl = node.declaration as VariableDeclaration;
+        exportName = (varDecl.identifier as Identifier).name;
       } else if (node.declaration.type === 'ClassDeclaration') {
-        const classDecl = node.declaration as any;
+        const classDecl = node.declaration as ClassDeclaration;
         exportName = classDecl.name.name;
       }
 
