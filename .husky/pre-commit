@@ -14,7 +14,14 @@ npm test
 echo "🔄 Auto-incrementing patch version..."
 npm version patch --no-git-tag-version
 
-# Stage the updated package.json and package-lock.json
+# Format the updated package files after version increment
+echo "🎨 Formatting updated package files..."
+npx prettier --write package.json package-lock.json
+
+# Stage the updated and formatted package.json and package-lock.json
 git add package.json package-lock.json 2>/dev/null || git add package.json
 
-echo "✅ Patch version incremented successfully"
+# Run final format check to ensure everything is properly formatted
+npm run format:check
+
+echo "✅ Patch version incremented and formatted successfully"
