@@ -142,8 +142,6 @@ Somoni-script is **98% complete** with 17/24 examples working:
 
 See [PHASE_STATUS.md](PHASE_STATUS.md) for detailed status.
 
-
-
 ## Language Reference
 
 ### Keywords (Калимаҳои калидӣ)
@@ -586,5 +584,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Named after Ismoil Somoni (849-907 CE), founder of the Samanid dynasty
 - Inspired by the rich literary tradition of Tajik language
 - Built with modern compiler design principles
-
-
