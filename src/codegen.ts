@@ -51,6 +51,9 @@ export class CodeGenerator {
     ['огоҳӣ', 'warn'],
     ['маълумот', 'info'],
 
+    // Error handling
+    ['Хато', 'Error'],
+
     // Array methods
     ['рӯйхат', 'Array'],
     ['илова', 'push'],
@@ -60,6 +63,7 @@ export class CodeGenerator {
     ['харита', 'map'],
     ['филтр', 'filter'],
     ['кофтан', 'find'],
+    ['буридан', 'slice'], // Tajik word for slice/cut
 
     // String methods
     ['сатр_методҳо', 'String'],
@@ -411,6 +415,11 @@ export class CodeGenerator {
       return 'Error';
     }
 
+    // Handle Хато (capitalized) as Error constructor
+    if (node.name === 'Хато') {
+      return 'Error';
+    }
+
     // Don't map variable names that could conflict with JS built-ins
     // Only map in specific contexts (handled in generateMemberExpression)
     return node.name;
@@ -512,6 +521,7 @@ export class CodeGenerator {
         'пайвастан',
         'ҷойивазкунӣ',
         'ҷудокунӣ',
+        'буридан', // slice
       ];
 
       if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {

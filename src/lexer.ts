@@ -150,6 +150,10 @@ export class Lexer {
           this.advance(); // consume first '+'
           this.advance(); // consume second '+'
           return this.createToken(TokenType.INCREMENT, '++', this.line, this.column - 2);
+        } else if (this.peek() === '=') {
+          this.advance(); // consume '+'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.PLUS_ASSIGN, '+=', this.line, this.column - 2);
         }
         return this.singleCharToken(TokenType.PLUS);
       case '-':

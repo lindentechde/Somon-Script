@@ -424,7 +424,7 @@ export class Parser {
   private assignment(): Expression {
     const expr = this.or();
 
-    if (this.match(TokenType.ASSIGN)) {
+    if (this.match(TokenType.ASSIGN, TokenType.PLUS_ASSIGN)) {
       const operator = this.previous();
       const value = this.assignment();
 
