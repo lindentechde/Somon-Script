@@ -143,11 +143,21 @@ export class Lexer {
       return this.nextToken();
     }
 
-    // Single character tokens
+    // Single character tokens and multi-character operators
     switch (char) {
       case '+':
+        if (this.peek() === '+') {
+          this.advance(); // consume first '+'
+          this.advance(); // consume second '+'
+          return this.createToken(TokenType.INCREMENT, '++', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.PLUS);
       case '-':
+        if (this.peek() === '-') {
+          this.advance(); // consume first '-'
+          this.advance(); // consume second '-'
+          return this.createToken(TokenType.DECREMENT, '--', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.MINUS);
       case '*':
         return this.singleCharToken(TokenType.MULTIPLY);

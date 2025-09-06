@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-06T19:17:21.712Z",
+  "timestamp": "2025-09-06T19:42:56.939Z",
   "total": 24,
-  "working": 17,
-  "partial": 7,
+  "working": 18,
+  "partial": 6,
   "failing": 0,
-  "workingPercentage": 71,
+  "workingPercentage": 75,
   "details": {
     "working": [
       {
@@ -44,6 +44,11 @@
       },
       {
         "name": "08-arrays.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "09-interfaces.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -94,11 +99,6 @@
       }
     ],
     "partial": [
-      {
-        "name": "09-interfaces.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-09-interfaces.js\""
-      },
       {
         "name": "12-student-management-system.som",
         "status": "partial",

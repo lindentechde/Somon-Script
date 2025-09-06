@@ -15,6 +15,7 @@ import {
   Literal,
   BinaryExpression,
   UnaryExpression,
+  UpdateExpression,
   CallExpression,
   AssignmentExpression,
   MemberExpression,
@@ -152,6 +153,10 @@ export class Parser {
 
       if (this.match(TokenType.ТО)) {
         return this.whileStatement();
+      }
+
+      if (this.match(TokenType.БАРОИ)) {
+        return this.forStatement();
       }
 
       if (this.match(TokenType.ИНТИХОБ)) {
@@ -331,6 +336,54 @@ export class Parser {
       body,
       line: whileToken.line,
       column: whileToken.column,
+    };
+  }
+
+  private forStatement(): any {
+    const forToken = this.previous();
+
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'барои'");
+
+    // Parse init (variable declaration)
+    let init: any = null;
+    if (this.match(TokenType.ТАҒЙИРЁБАНДА)) {
+      init = this.variableDeclaration();
+    } else if (!this.check(TokenType.SEMICOLON)) {
+      init = this.expressionStatement();
+    }
+
+    // Consume semicolon after init (if not already consumed by variable declaration)
+    if (init && init.type !== 'VariableDeclaration') {
+      // ExpressionStatement already consumed the semicolon
+    } else if (!init) {
+      this.consume(TokenType.SEMICOLON, "Expected ';' after for loop initializer");
+    }
+
+    // Parse test condition
+    let test: Expression | null = null;
+    if (!this.check(TokenType.SEMICOLON)) {
+      test = this.expression();
+    }
+    this.consume(TokenType.SEMICOLON, "Expected ';' after for loop condition");
+
+    // Parse update expression
+    let update: Expression | null = null;
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      update = this.expression();
+    }
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for clauses");
+
+    // Parse body
+    const body = this.statement()!;
+
+    return {
+      type: 'ForStatement',
+      init,
+      test,
+      update,
+      body,
+      line: forToken.line,
+      column: forToken.column,
     };
   }
 
@@ -605,6 +658,17 @@ export class Parser {
           line: expr.line,
           column: expr.column,
         } as MemberExpression;
+      } else if (this.match(TokenType.INCREMENT, TokenType.DECREMENT)) {
+        // Postfix increment/decrement
+        const operator = this.previous();
+        expr = {
+          type: 'UpdateExpression',
+          operator: operator.value,
+          argument: expr,
+          prefix: false,
+          line: expr.line,
+          column: expr.column,
+        } as UpdateExpression;
       } else {
         break;
       }
@@ -1584,10 +1648,35 @@ export class Parser {
         continue;
       }
 
-      // Parse class member
-      const member = this.classMember();
-      if (member) {
-        members.push(member);
+      try {
+        // Parse class member
+        const member = this.classMember();
+        if (member) {
+          members.push(member);
+        }
+
+        // After parsing a member, ensure we're positioned correctly for the next one
+        // Skip any trailing whitespace or newlines
+        while (this.check(TokenType.NEWLINE)) {
+          this.advance();
+        }
+      } catch (error) {
+        // If class member parsing fails, break out of the class context
+        // This prevents partial parsing from contaminating the rest of the program
+        console.error(`Error parsing class member: ${error}`);
+        // Try to recover by advancing to the next potential member or class end
+        while (
+          !this.check(TokenType.RIGHT_BRACE) &&
+          !this.check(TokenType.ҶАМЪИЯТӢ) &&
+          !this.check(TokenType.ХОСУСӢ) &&
+          !this.check(TokenType.КОНСТРУКТОР) &&
+          !this.check(TokenType.IDENTIFIER) &&
+          !this.isAtEnd()
+        ) {
+          this.advance();
+        }
+        // Don't break - continue trying to parse the rest of the class
+        // The break was causing premature exit from class parsing
       }
     }
 

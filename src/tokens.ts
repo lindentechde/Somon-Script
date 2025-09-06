@@ -106,6 +106,8 @@ export enum TokenType {
   // Operators
   PLUS = '+',
   MINUS = '-',
+  INCREMENT = '++',
+  DECREMENT = '--',
   MULTIPLY = '*',
   DIVIDE = '/',
   MODULO = '%',

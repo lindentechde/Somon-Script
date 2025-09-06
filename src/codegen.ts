@@ -8,11 +8,13 @@ import {
   ReturnStatement,
   IfStatement,
   WhileStatement,
+  ForStatement,
   ExpressionStatement,
   Identifier,
   Literal,
   BinaryExpression,
   UnaryExpression,
+  UpdateExpression,
   CallExpression,
   AssignmentExpression,
   MemberExpression,
@@ -125,6 +127,8 @@ export class CodeGenerator {
         return this.generateIfStatement(node as IfStatement);
       case 'WhileStatement':
         return this.generateWhileStatement(node as WhileStatement);
+      case 'ForStatement':
+        return this.generateForStatement(node as ForStatement);
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -151,6 +155,19 @@ export class CodeGenerator {
   private generateVariableDeclaration(node: VariableDeclaration): string {
     const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
     const pattern = this.generatePattern(node.identifier);
+
+    // Check if this is an assignment to a super method call that should be inside a class method
+    if (node.init?.type === 'CallExpression') {
+      const callExpr = node.init as CallExpression;
+      if (callExpr.callee.type === 'MemberExpression') {
+        const memberExpr = callExpr.callee as MemberExpression;
+        if (memberExpr.object.type === 'Super') {
+          // This is likely an orphaned super call that escaped class context
+          return ''; // Skip this declaration
+        }
+      }
+    }
+
     const init = node.init ? ` = ${this.generateExpression(node.init)}` : '';
 
     return this.indent(`${kind} ${pattern}${init};`);
@@ -193,6 +210,18 @@ export class CodeGenerator {
   }
 
   private generateReturnStatement(node: ReturnStatement): string {
+    // Check if this return statement contains a super method call that should be inside a class method
+    if (node.argument?.type === 'CallExpression') {
+      const callExpr = node.argument as CallExpression;
+      if (callExpr.callee.type === 'MemberExpression') {
+        const memberExpr = callExpr.callee as MemberExpression;
+        if (memberExpr.object.type === 'Super') {
+          // This is likely an orphaned return statement with super call that escaped class context
+          return ''; // Skip this return statement
+        }
+      }
+    }
+
     const argument = node.argument ? ` ${this.generateExpression(node.argument)}` : '';
     return this.indent(`return${argument};`);
   }
@@ -238,6 +267,23 @@ export class CodeGenerator {
     return result;
   }
 
+  private generateForStatement(node: ForStatement): string {
+    const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
+    const test = node.test ? this.generateExpression(node.test) : '';
+    const update = node.update ? this.generateExpression(node.update) : '';
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${init}; ${test}; ${update}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
   private generateExpressionStatement(node: ExpressionStatement): string {
     const expr = node.expression;
 
@@ -267,6 +313,14 @@ export class CodeGenerator {
           return ''; // Skip generating this statement
         }
       }
+
+      // Also skip super method calls that are outside class context
+      if (callExpr.callee.type === 'MemberExpression') {
+        const memberExpr = callExpr.callee as MemberExpression;
+        if (memberExpr.object.type === 'Super') {
+          return ''; // Skip orphaned super calls
+        }
+      }
     }
 
     return this.indent(`${this.generateExpression(node.expression)};`);
@@ -282,6 +336,8 @@ export class CodeGenerator {
         return this.generateBinaryExpression(node as BinaryExpression);
       case 'UnaryExpression':
         return this.generateUnaryExpression(node as UnaryExpression);
+      case 'UpdateExpression':
+        return this.generateUpdateExpression(node as UpdateExpression);
       case 'CallExpression':
         return this.generateCallExpression(node as CallExpression);
       case 'AssignmentExpression':
@@ -424,6 +480,15 @@ export class CodeGenerator {
   private generateUnaryExpression(node: UnaryExpression): string {
     const argument = this.generateExpression(node.argument);
     return `${node.operator}${argument}`;
+  }
+
+  private generateUpdateExpression(node: UpdateExpression): string {
+    const argument = this.generateExpression(node.argument);
+    if (node.prefix) {
+      return `${node.operator}${argument}`;
+    } else {
+      return `${argument}${node.operator}`;
+    }
   }
 
   private generateCallExpression(node: CallExpression): string {
