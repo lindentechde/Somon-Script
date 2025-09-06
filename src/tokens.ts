@@ -112,6 +112,7 @@ export enum TokenType {
   DIVIDE = '/',
   MODULO = '%',
   ASSIGN = '=',
+  ARROW = '=>',
   EQUAL = '==',
   NOT_EQUAL = '!=',
   LESS_THAN = '<',

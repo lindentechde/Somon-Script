@@ -206,6 +206,10 @@ export class Lexer {
         this.advance();
         this.advance();
         return this.createToken(TokenType.EQUAL, '==', startLine, startColumn);
+      } else if (this.peek() === '>') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.ARROW, '=>', startLine, startColumn);
       }
       return this.singleCharToken(TokenType.ASSIGN);
     }
