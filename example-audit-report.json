@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-06T20:40:22.118Z",
-  "total": 30,
-  "working": 25,
-  "partial": 5,
+  "timestamp": "2025-09-06T21:25:49.012Z",
+  "total": 31,
+  "working": 27,
+  "partial": 4,
   "failing": 0,
-  "workingPercentage": 83,
+  "workingPercentage": 87,
   "details": {
     "working": [
       {
@@ -68,6 +68,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "13-inheritance-demo.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "14-error-handling.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -108,6 +113,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "simple-class-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "simple-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -134,11 +144,6 @@
       }
     ],
     "partial": [
-      {
-        "name": "13-inheritance-demo.som",
-        "status": "partial",
-        "reason": "Marked as future implementation"
-      },
       {
         "name": "21-conditional-types.som",
         "status": "partial",
