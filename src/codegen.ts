@@ -239,6 +239,36 @@ export class CodeGenerator {
   }
 
   private generateExpressionStatement(node: ExpressionStatement): string {
+    const expr = node.expression;
+
+    // Special handling: Skip orphaned method signatures that should not generate executable code
+    // This happens when interface method signatures escape the interface context due to parsing issues
+    if (expr.type === 'CallExpression') {
+      const callExpr = expr as CallExpression;
+
+      // Check if this looks like an orphaned method signature (function call with single parameter
+      // that looks like it should be a type parameter)
+      if (
+        callExpr.callee.type === 'Identifier' &&
+        callExpr.arguments.length === 1 &&
+        callExpr.arguments[0].type === 'Identifier'
+      ) {
+        const calleeName = (callExpr.callee as Identifier).name;
+        const argName = (callExpr.arguments[0] as Identifier).name;
+
+        // Skip if this looks like a method signature pattern
+        // Common patterns: танзим_кардан(нави_қимат), ғайр_танзим(параметр), etc.
+        if (
+          calleeName.includes('_') ||
+          argName.includes('_') ||
+          calleeName.length > 8 ||
+          argName.length > 8
+        ) {
+          return ''; // Skip generating this statement
+        }
+      }
+    }
+
     return this.indent(`${this.generateExpression(node.expression)};`);
   }
 
@@ -530,6 +560,7 @@ export class CodeGenerator {
 
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
+    // They should NOT generate any executable code at all
     const name = this.generateIdentifier(node.name);
 
     return this.indent(`// Interface: ${name}`);

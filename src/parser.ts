@@ -1379,13 +1379,19 @@ export class Parser {
 
     const properties: PropertySignature[] = [];
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-      // Skip newlines
+      // Skip newlines and whitespace
       if (this.match(TokenType.NEWLINE)) {
         continue;
       }
 
       const property = this.propertySignature();
       properties.push(property);
+
+      // After parsing a property, ensure we're positioned correctly for the next one
+      // Skip any trailing whitespace or newlines
+      while (this.check(TokenType.NEWLINE)) {
+        this.advance();
+      }
     }
 
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' after interface body");
