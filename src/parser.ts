@@ -424,7 +424,22 @@ export class Parser {
   private assignment(): Expression {
     const expr = this.or();
 
-    if (this.match(TokenType.ASSIGN, TokenType.PLUS_ASSIGN)) {
+    if (
+      this.match(
+        TokenType.ASSIGN,
+        TokenType.PLUS_ASSIGN,
+        TokenType.MINUS_ASSIGN,
+        TokenType.MULTIPLY_ASSIGN,
+        TokenType.DIVIDE_ASSIGN,
+        TokenType.MODULO_ASSIGN,
+        TokenType.BITWISE_AND_ASSIGN,
+        TokenType.BITWISE_OR_ASSIGN,
+        TokenType.BITWISE_XOR_ASSIGN,
+        TokenType.LEFT_SHIFT_ASSIGN,
+        TokenType.RIGHT_SHIFT_ASSIGN,
+        TokenType.UNSIGNED_RIGHT_SHIFT_ASSIGN
+      )
+    ) {
       const operator = this.previous();
       const value = this.assignment();
 
@@ -461,9 +476,66 @@ export class Parser {
   }
 
   private and(): Expression {
-    let expr = this.equality();
+    let expr = this.bitwiseOr();
 
     while (this.match(TokenType.AND)) {
+      const operator = this.previous();
+      const right = this.bitwiseOr();
+      expr = {
+        type: 'BinaryExpression',
+        left: expr,
+        operator: operator.value,
+        right,
+        line: expr.line,
+        column: expr.column,
+      } as BinaryExpression;
+    }
+
+    return expr;
+  }
+
+  private bitwiseOr(): Expression {
+    let expr = this.bitwiseXor();
+
+    while (this.match(TokenType.BITWISE_OR)) {
+      const operator = this.previous();
+      const right = this.bitwiseXor();
+      expr = {
+        type: 'BinaryExpression',
+        left: expr,
+        operator: operator.value,
+        right,
+        line: expr.line,
+        column: expr.column,
+      } as BinaryExpression;
+    }
+
+    return expr;
+  }
+
+  private bitwiseXor(): Expression {
+    let expr = this.bitwiseAnd();
+
+    while (this.match(TokenType.BITWISE_XOR)) {
+      const operator = this.previous();
+      const right = this.bitwiseAnd();
+      expr = {
+        type: 'BinaryExpression',
+        left: expr,
+        operator: operator.value,
+        right,
+        line: expr.line,
+        column: expr.column,
+      } as BinaryExpression;
+    }
+
+    return expr;
+  }
+
+  private bitwiseAnd(): Expression {
+    let expr = this.equality();
+
+    while (this.match(TokenType.BITWISE_AND)) {
       const operator = this.previous();
       const right = this.equality();
       expr = {
@@ -499,7 +571,7 @@ export class Parser {
   }
 
   private comparison(): Expression {
-    let expr = this.term();
+    let expr = this.shift();
 
     while (
       this.match(
@@ -508,6 +580,27 @@ export class Parser {
         TokenType.LESS_THAN,
         TokenType.LESS_EQUAL
       )
+    ) {
+      const operator = this.previous();
+      const right = this.shift();
+      expr = {
+        type: 'BinaryExpression',
+        left: expr,
+        operator: operator.value,
+        right,
+        line: expr.line,
+        column: expr.column,
+      } as BinaryExpression;
+    }
+
+    return expr;
+  }
+
+  private shift(): Expression {
+    let expr = this.term();
+
+    while (
+      this.match(TokenType.LEFT_SHIFT, TokenType.RIGHT_SHIFT, TokenType.UNSIGNED_RIGHT_SHIFT)
     ) {
       const operator = this.previous();
       const right = this.term();
@@ -563,7 +656,7 @@ export class Parser {
   }
 
   private unary(): Expression {
-    if (this.match(TokenType.NOT, TokenType.MINUS)) {
+    if (this.match(TokenType.NOT, TokenType.MINUS, TokenType.BITWISE_NOT)) {
       const operator = this.previous();
       const right = this.unary();
       return {
@@ -1244,11 +1337,11 @@ export class Parser {
   private unionType(): TypeNode {
     let type = this.intersectionType();
 
-    while (this.match(TokenType.PIPE)) {
+    while (this.match(TokenType.BITWISE_OR)) {
       const types = [type];
       do {
         types.push(this.intersectionType());
-      } while (this.match(TokenType.PIPE));
+      } while (this.match(TokenType.BITWISE_OR));
 
       type = {
         type: 'UnionType',
@@ -1264,11 +1357,11 @@ export class Parser {
   private intersectionType(): TypeNode {
     let type = this.primaryType();
 
-    while (this.match(TokenType.AMPERSAND)) {
+    while (this.match(TokenType.BITWISE_AND)) {
       const types = [type];
       do {
         types.push(this.primaryType());
-      } while (this.match(TokenType.AMPERSAND));
+      } while (this.match(TokenType.BITWISE_AND));
 
       type = {
         type: 'IntersectionType',
