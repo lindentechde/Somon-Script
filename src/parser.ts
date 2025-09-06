@@ -1945,7 +1945,8 @@ export class Parser {
       value = this.expression();
     }
 
-    this.consume(TokenType.SEMICOLON, "Expected ';' after property declaration");
+    // Optional semicolon after property declaration
+    this.match(TokenType.SEMICOLON);
 
     return {
       type: 'PropertyDefinition',

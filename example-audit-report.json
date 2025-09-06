@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-06T20:04:37.804Z",
-  "total": 24,
-  "working": 19,
+  "timestamp": "2025-09-06T20:40:22.118Z",
+  "total": 30,
+  "working": 25,
   "partial": 5,
   "failing": 0,
-  "workingPercentage": 79,
+  "workingPercentage": 83,
   "details": {
     "working": [
       {
@@ -99,6 +99,36 @@
       },
       {
         "name": "20-advanced-classes.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "comprehensive-operator-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "simple-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-advanced-operators.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-bitwise.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-new-operators.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-operators.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       }

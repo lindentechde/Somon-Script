@@ -1,0 +1,8 @@
+// Simplified inheritance test
+синф А {
+    х;
+    
+    конструктор(а) {
+        ин.х = а;
+    }
+}

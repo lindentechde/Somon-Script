@@ -2,6 +2,7 @@
 import {
   ArrayType,
   CallExpression,
+  ClassDeclaration,
   Expression,
   FunctionDeclaration,
   GenericType,
@@ -9,6 +10,7 @@ import {
   InterfaceDeclaration,
   IntersectionType,
   Literal,
+  NewExpression,
   ObjectExpression,
   PrimitiveType,
   Program,
@@ -112,6 +114,8 @@ export class TypeChecker {
         this.collectInterface(statement as InterfaceDeclaration);
       } else if (statement.type === 'TypeAlias') {
         this.collectTypeAlias(statement as TypeAlias);
+      } else if (statement.type === 'ClassDeclaration') {
+        this.collectClass(statement as ClassDeclaration);
       }
     }
   }
@@ -141,6 +145,15 @@ export class TypeChecker {
     this.typeAliasTable.set(typeAlias.name.name, aliasType);
   }
 
+  private collectClass(classDecl: ClassDeclaration): void {
+    // Register the class type in the symbol table during collection phase
+    const classType: Type = {
+      kind: 'class',
+      name: classDecl.name.name,
+    };
+    this.symbolTable.set(classDecl.name.name, classType);
+  }
+
   private checkStatement(statement: Statement): void {
     switch (statement.type) {
       case 'VariableDeclaration':
@@ -148,6 +161,9 @@ export class TypeChecker {
         break;
       case 'FunctionDeclaration':
         this.checkFunctionDeclaration(statement as FunctionDeclaration);
+        break;
+      case 'ClassDeclaration':
+        this.checkClassDeclaration(statement as ClassDeclaration);
         break;
       // Add more statement types as needed
     }
@@ -215,6 +231,15 @@ export class TypeChecker {
     this.symbolTable.set(funcDecl.name.name, functionType);
   }
 
+  private checkClassDeclaration(classDecl: ClassDeclaration): void {
+    // Register the class type in the symbol table
+    const classType: Type = {
+      kind: 'class',
+      name: classDecl.name.name,
+    };
+    this.symbolTable.set(classDecl.name.name, classType);
+  }
+
   private resolveTypeNode(typeNode: TypeNode): Type {
     switch (typeNode.type) {
       case 'PrimitiveType':
@@ -260,6 +285,11 @@ export class TypeChecker {
         if (aliasType) {
           return aliasType;
         }
+        // Check if it's a class type
+        const classType = this.symbolTable.get(genericType.name.name);
+        if (classType && classType.kind === 'class') {
+          return classType;
+        }
         // Unknown type
         return { kind: 'unknown', name: genericType.name.name };
 
@@ -273,6 +303,11 @@ export class TypeChecker {
         const aliasRef = this.typeAliasTable.get(identifierType.name);
         if (aliasRef) {
           return aliasRef;
+        }
+        // Check if it's a class type
+        const classRef = this.symbolTable.get(identifierType.name);
+        if (classRef && classRef.kind === 'class') {
+          return classRef;
         }
         // Unknown type
         return { kind: 'unknown', name: identifierType.name };
@@ -309,6 +344,8 @@ export class TypeChecker {
         return this.inferObjectType(expression as ObjectExpression, targetType);
       case 'CallExpression':
         return this.inferCallType(expression as CallExpression);
+      case 'NewExpression':
+        return this.inferNewExpressionType(expression as NewExpression);
       default:
         return { kind: 'unknown' };
     }
@@ -365,6 +402,18 @@ export class TypeChecker {
       const functionType = this.symbolTable.get(functionName);
       if (functionType && functionType.kind === 'function' && functionType.returnType) {
         return functionType.returnType;
+      }
+    }
+    return { kind: 'unknown' };
+  }
+
+  private inferNewExpressionType(newExpr: NewExpression): Type {
+    if (newExpr.callee && newExpr.callee.type === 'Identifier') {
+      const className = (newExpr.callee as Identifier).name;
+      const classType = this.symbolTable.get(className);
+      if (classType && classType.kind === 'class') {
+        // Return an instance type of the class
+        return { kind: 'class', name: className };
       }
     }
     return { kind: 'unknown' };
@@ -431,6 +480,11 @@ export class TypeChecker {
       return this.isStructurallyCompatible(source, target);
     }
 
+    // Class type checking
+    if (source.kind === 'class' && target.kind === 'class') {
+      return source.name === target.name;
+    }
+
     return false;
   }
 
@@ -450,6 +504,8 @@ export class TypeChecker {
         return `[${type.types!.map(t => this.typeToString(t)).join(', ')}]`;
       case 'literal':
         return typeof type.name === 'string' ? `"${type.name}"` : String(type.name);
+      case 'class':
+        return type.name || 'class';
       default:
         return type.name || 'unknown';
     }
