@@ -155,19 +155,6 @@ export class CodeGenerator {
   private generateVariableDeclaration(node: VariableDeclaration): string {
     const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
     const pattern = this.generatePattern(node.identifier);
-
-    // Check if this is an assignment to a super method call that should be inside a class method
-    if (node.init?.type === 'CallExpression') {
-      const callExpr = node.init as CallExpression;
-      if (callExpr.callee.type === 'MemberExpression') {
-        const memberExpr = callExpr.callee as MemberExpression;
-        if (memberExpr.object.type === 'Super') {
-          // This is likely an orphaned super call that escaped class context
-          return ''; // Skip this declaration
-        }
-      }
-    }
-
     const init = node.init ? ` = ${this.generateExpression(node.init)}` : '';
 
     return this.indent(`${kind} ${pattern}${init};`);
@@ -210,18 +197,6 @@ export class CodeGenerator {
   }
 
   private generateReturnStatement(node: ReturnStatement): string {
-    // Check if this return statement contains a super method call that should be inside a class method
-    if (node.argument?.type === 'CallExpression') {
-      const callExpr = node.argument as CallExpression;
-      if (callExpr.callee.type === 'MemberExpression') {
-        const memberExpr = callExpr.callee as MemberExpression;
-        if (memberExpr.object.type === 'Super') {
-          // This is likely an orphaned return statement with super call that escaped class context
-          return ''; // Skip this return statement
-        }
-      }
-    }
-
     const argument = node.argument ? ` ${this.generateExpression(node.argument)}` : '';
     return this.indent(`return${argument};`);
   }
@@ -311,14 +286,6 @@ export class CodeGenerator {
           argName.length > 8
         ) {
           return ''; // Skip generating this statement
-        }
-      }
-
-      // Also skip super method calls that are outside class context
-      if (callExpr.callee.type === 'MemberExpression') {
-        const memberExpr = callExpr.callee as MemberExpression;
-        if (memberExpr.object.type === 'Super') {
-          return ''; // Skip orphaned super calls
         }
       }
     }

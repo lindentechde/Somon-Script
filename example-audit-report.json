@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-06T19:42:56.939Z",
+  "timestamp": "2025-09-06T19:56:11.918Z",
   "total": 24,
-  "working": 18,
-  "partial": 6,
+  "working": 19,
+  "partial": 5,
   "failing": 0,
-  "workingPercentage": 75,
+  "workingPercentage": 79,
   "details": {
     "working": [
       {
@@ -63,6 +63,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "12-student-management-system.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "14-error-handling.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -99,11 +104,6 @@
       }
     ],
     "partial": [
-      {
-        "name": "12-student-management-system.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-12-student-management-system.js\""
-      },
       {
         "name": "13-inheritance-demo.som",
         "status": "partial",
