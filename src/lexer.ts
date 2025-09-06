@@ -103,6 +103,7 @@ export class Lexer {
     ['калидҳои', TokenType.КАЛИДҲОИ],
     ['инфер', TokenType.ИНФЕР],
     ['readonly', TokenType.READONLY],
+    ['танҳохонӣ', TokenType.ТАНҲОХОНӢ],
     ['unique', TokenType.UNIQUE],
   ]);
 

@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-06T21:25:49.012Z",
+  "timestamp": "2025-09-06T22:02:16.264Z",
   "total": 31,
-  "working": 27,
-  "partial": 4,
+  "working": 29,
+  "partial": 2,
   "failing": 0,
-  "workingPercentage": 87,
+  "workingPercentage": 94,
   "details": {
     "working": [
       {
@@ -108,6 +108,16 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "21-conditional-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "22-mapped-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -144,16 +154,6 @@
       }
     ],
     "partial": [
-      {
-        "name": "21-conditional-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-21-conditional-types.js\""
-      },
-      {
-        "name": "22-mapped-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-22-mapped-types.js\""
-      },
       {
         "name": "23-tuple-types.som",
         "status": "partial",

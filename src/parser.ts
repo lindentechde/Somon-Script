@@ -899,6 +899,25 @@ export class Parser {
       } as Identifier;
     }
 
+    // Allow certain keywords to be used as identifiers in expression contexts
+    if (
+      this.match(
+        TokenType.НАВЪ,
+        TokenType.МАЪЛУМОТ,
+        TokenType.РӮЙХАТ,
+        TokenType.ОБЪЕКТ,
+        TokenType.БЕҚИМАТ
+      )
+    ) {
+      const token = this.previous();
+      return {
+        type: 'Identifier',
+        name: token.value,
+        line: token.line,
+        column: token.column,
+      } as Identifier;
+    }
+
     if (this.match(TokenType.LEFT_PAREN)) {
       const expr = this.expression();
       this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
@@ -1126,14 +1145,34 @@ export class Parser {
     const leftBracket = this.previous();
     const elements: Expression[] = [];
 
+    // Skip any leading newlines
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
+    }
+
     if (!this.check(TokenType.RIGHT_BRACKET)) {
       do {
+        // Skip newlines before each element
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
+
         if (this.check(TokenType.SPREAD)) {
           elements.push(this.parseSpreadElement());
         } else {
           elements.push(this.expression());
         }
+
+        // Skip newlines after each element
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
       } while (this.match(TokenType.COMMA));
+    }
+
+    // Skip any trailing newlines
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
     }
 
     this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after array elements");
@@ -1294,10 +1333,27 @@ export class Parser {
       paramName = this.advance();
     } else if (this.matchBuiltinIdentifier()) {
       paramName = this.previous();
+    } else if (
+      this.match(
+        TokenType.НАВЪ,
+        TokenType.МАЪЛУМОТ,
+        TokenType.РӮЙХАТ,
+        TokenType.ОБЪЕКТ,
+        TokenType.БЕҚИМАТ
+      )
+    ) {
+      // Allow common Tajik words as parameter names
+      paramName = this.previous();
     } else {
       throw new Error(
         `Expected parameter name at line ${this.peek().line}, column ${this.peek().column}`
       );
+    }
+
+    // Parse optional indicator
+    let optional = false;
+    if (this.match(TokenType.QUESTION)) {
+      optional = true;
     }
 
     // Parse optional type annotation
@@ -1315,6 +1371,7 @@ export class Parser {
         column: paramName.column,
       },
       typeAnnotation,
+      optional,
       line: paramName.line,
       column: paramName.column,
     };
@@ -1576,6 +1633,12 @@ export class Parser {
   }
 
   private propertySignature(): PropertySignature {
+    // Parse optional readonly modifier
+    let readonly = false;
+    if (this.match(TokenType.ТАНҲОХОНӢ, TokenType.READONLY)) {
+      readonly = true;
+    }
+
     let keyName: Token;
     if (this.check(TokenType.IDENTIFIER)) {
       keyName = this.advance();
@@ -1625,6 +1688,7 @@ export class Parser {
         },
         typeAnnotation,
         optional: false,
+        readonly,
         line: keyName.line,
         column: keyName.column,
       };
@@ -1648,6 +1712,7 @@ export class Parser {
         },
         typeAnnotation,
         optional: optional || false,
+        readonly,
         line: keyName.line,
         column: keyName.column,
       };
@@ -2249,6 +2314,7 @@ export class Parser {
         case TokenType.ПАРТОФТАН:
         case TokenType.ИНТЕРФЕЙС:
         case TokenType.НАВЪ:
+        case TokenType.БЕҚИМАТ:
         case TokenType.ИНТИХОБ:
           return;
       }
