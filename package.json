@@ -1,6 +1,6 @@
 {
   "name": "somoni-script",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -37,11 +37,19 @@
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major",
+    "version:auto": "node scripts/increment-version.js",
+    "version:auto:minor": "node scripts/increment-version.js minor",
+    "version:auto:major": "node scripts/increment-version.js major",
     "prepare": "husky install"
   },
   "lint-staged": {
-    "*.ts": ["eslint --fix", "prettier --write"],
-    "*.{js,json,md}": ["prettier --write"]
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{js,json,md}": [
+      "prettier --write"
+    ]
   },
   "keywords": [
     "compiler",

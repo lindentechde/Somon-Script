@@ -9,3 +9,12 @@ npm run type-check
 
 # Run tests to ensure nothing is broken
 npm test
+
+# Automatically increment patch version before commit
+echo "🔄 Auto-incrementing patch version..."
+npm version patch --no-git-tag-version
+
+# Stage the updated package.json and package-lock.json
+git add package.json package-lock.json 2>/dev/null || git add package.json
+
+echo "✅ Patch version incremented successfully"
