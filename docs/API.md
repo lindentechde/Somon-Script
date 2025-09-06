@@ -5,6 +5,7 @@
 ### Commands
 
 #### `compile`
+
 Compile Somoni-script files to JavaScript.
 
 ```bash
@@ -12,14 +13,19 @@ somoni compile <input.som> [options]
 ```
 
 **Options:**
-- `-o, --output <file>` - Output file (default: same name with .js extension)
-- `--target <target>` - Compilation target (es5, es2015, es2020, esnext)
-- `--source-map` - Generate source maps
-- `--minify` - Minify output
-- `--no-type-check` - Disable type checking
-- `--strict` - Enable strict type checking
+
+- `-o, --output <file>` - Output file (default: same name with .js extension) ✅
+- `--target <target>` - Compilation target (es5, es2015, es2020, esnext) ⚠️
+- `--source-map` - Generate source maps ⚠️
+- `--minify` - Minify output ⚠️
+- `--no-type-check` - Disable type checking ✅
+- `--strict` - Enable strict type checking ✅
+
+**Legend**: ✅ = Fully implemented | ⚠️ = Parsed but may need additional
+implementation
 
 **Examples:**
+
 ```bash
 # Basic compilation
 somoni compile hello.som
@@ -35,6 +41,7 @@ somoni compile app.som --minify --target es2020
 ```
 
 #### `run`
+
 Compile and run Somoni-script files directly.
 
 ```bash
@@ -42,6 +49,7 @@ somoni run <input.som>
 ```
 
 #### `init`
+
 Initialize a new Somoni-script project.
 
 ```bash
@@ -59,10 +67,12 @@ const result = compile(source, options);
 ```
 
 **Parameters:**
+
 - `source: string` - Somoni-script source code
 - `options: CompileOptions` - Compilation options
 
 **Returns:** `CompileResult`
+
 - `code: string` - Generated JavaScript code
 - `errors: string[]` - Compilation errors
 - `warnings: string[]` - Compilation warnings
@@ -100,25 +110,48 @@ const code = generator.generate(ast);
 ### Primitive Types
 
 - `сатр` - String type
-- `рақам` - Number type  
+- `рақам` - Number type
 - `мантиқӣ` - Boolean type
 - `холӣ` - Null type
 
 ### Complex Types
 
 #### Arrays
+
 ```somoni
 тағйирёбанда рақамҳо: рақам[] = [1, 2, 3];
 тағйирёбанда номҳо: сатр[] = ["Аҳмад", "Фотима"];
 ```
 
-#### Union Types
+#### Union Types ✅
+
 ```somoni
 тағйирёбанда қимат: сатр | рақам = "салом";
 қимат = 42; // Valid
 ```
 
-#### Interfaces
+#### Intersection Types ⚠️
+
+```somoni
+интерфейс Корбар {
+  ном: сатр;
+  синну_сол: рақам;
+}
+
+интерфейс Админ {
+  сатҳи_дастрасӣ: сатр;
+}
+
+// Compiles successfully, runtime generation improving
+тағйирёбанда супер_корбар: Корбар & Админ = {
+  ном: "Аҳмад",
+  синну_сол: 25,
+  сатҳи_дастрасӣ: "олӣ"
+};
+```
+
+#### Interfaces ⚠️
+
 ```somoni
 интерфейс Корбар {
   ном: сатр;
@@ -127,7 +160,11 @@ const code = generator.generate(ast);
 }
 ```
 
+**Note**: Interface method signatures compile but may have runtime generation
+issues.
+
 #### Type Aliases
+
 ```somoni
 навъ КорбарИД = сатр;
 навъ Синну_сол = рақам;
@@ -151,12 +188,14 @@ const code = generator.generate(ast);
 ## Language Features
 
 ### Variables
+
 ```somoni
 тағйирёбанда х = 10;        // Mutable variable
 собит ПИ = 3.14159;         // Constant
 ```
 
 ### Control Flow
+
 ```somoni
 агар (шарт) {
   // if block
@@ -174,6 +213,7 @@ const code = generator.generate(ast);
 ```
 
 ### Built-in Functions
+
 ```somoni
 чоп.сабт("Hello");          // console.log
 чоп.хато("Error");          // console.error
@@ -181,6 +221,7 @@ const code = generator.generate(ast);
 ```
 
 ### Array Methods
+
 ```somoni
 рӯйхат.илова(элемент);      // push
 рӯйхат.баровардан();        // pop
@@ -190,6 +231,7 @@ const code = generator.generate(ast);
 ```
 
 ### String Methods
+
 ```somoni
 сатр.дарозии_сатр;          // length
 сатр.пайвастан(дигар);      // concat
@@ -197,19 +239,31 @@ const code = generator.generate(ast);
 сатр.ҷудокунӣ(ҷудокунанда); // split
 ```
 
-## Error Handling
+### Error Handling
 
-### Compilation Errors
+### Compilation Errors ✅
+
 - **Type Errors**: Type mismatches in strict mode
 - **Syntax Errors**: Invalid Somoni-script syntax
 - **Reference Errors**: Undefined variables or functions
 
-### Runtime Considerations
-Generated JavaScript maintains Tajik identifiers, so runtime errors will show original Tajik names for better debugging experience.
+### Runtime Considerations ⚠️
+
+Generated JavaScript maintains Tajik identifiers, so runtime errors will show
+original Tajik names for better debugging experience.
+
+**Current Status**: 17/24 examples run without runtime errors. Remaining 7
+examples compile successfully but have runtime generation issues with:
+
+- Interface method signatures
+- Complex inheritance scenarios
+- Advanced type system features
+- Nested tuple types
 
 ## Architecture
 
 ### Modular Design
+
 - `tokens.ts` - Token definitions and lexical analysis
 - `ast.ts` - Abstract Syntax Tree node definitions
 - `type-system.ts` - Type system specific interfaces
@@ -218,12 +272,18 @@ Generated JavaScript maintains Tajik identifiers, so runtime errors will show or
 - `type-checker.ts` - Static type analysis
 - `codegen.ts` - JavaScript code generation
 
-### Quality Metrics
-- **Type Safety**: 100% (zero 'as any' assertions)
-- **Union Type Support**: Complete
+### Quality Metrics ✅
+
+- **Type Safety**: 100% (zero 'as any' assertions in TypeScript codebase)
+- **Union Type Support**: Complete with full runtime support
 - **Error Recovery**: Advanced parser resilience
-- **Architecture Grade**: A (95/100)
+- **Test Coverage**: 67.02% across comprehensive test suite
+- **Code Quality**: Zero linting errors with ESLint + Prettier
+- **Architecture Grade**: A (well-structured, modular TypeScript design)
+- **Compilation Success**: 100% (all 24 examples compile)
+- **Runtime Success**: 71% (17/24 examples run without errors)
 
 ## Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for development guidelines and contribution instructions.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for development guidelines and
+contribution instructions.

@@ -6,17 +6,19 @@ Named after Ismoil Somoni, the founder of the Samanid dynasty.
 ## Features
 
 - **Tajik Cyrillic Syntax**: Write code using familiar Tajik keywords ✅
-- **Static Type System**: TypeScript-level type safety with Tajik annotations ✅
-- **Union Types**: Support for union types (`сатр | рақам`) ✅
-- **Intersection Types**: Foundation for intersection types (`Корбар & Админ`)
+- **Static Type System**: TypeScript-level type checking with Tajik annotations
   ✅
+- **Union Types**: Full support for union types (`сатр | рақам`) ✅
+- **Intersection Types**: Basic intersection types (`Корбар & Админ`) ⚠️
 - **Object-Oriented Programming**: Full class support with constructors and
   methods ✅
-- **Interface System**: Complete interface support with optional properties ✅
-- **Advanced Type Features**: Conditional types, mapped types, tuple types ✅
+- **Interface System**: Interface parsing and basic type checking ⚠️
+- **Advanced Type Features**: Conditional types, mapped types, tuple types ⚠️
 - **JavaScript Compilation**: Compiles to clean, readable JavaScript ✅
 - **Type Checking**: Compile-time validation with detailed error messages ✅
 - **CLI Tools**: Easy compilation and project management ✅
+
+**Legend**: ✅ = Runtime ready | ⚠️ = Compiles but runtime improvements needed
 
 ## Installation
 
@@ -132,13 +134,20 @@ npm run build
 
 ## Current Status
 
-Somoni-script is **98% complete** with 17/24 examples working:
+Somoni-script has **71% runtime success** with 17/24 examples working
+flawlessly:
 
-- ✅ **Core Language**: Variables, functions, control flow, basic types (100%)
-- ✅ **Object-Oriented**: Classes, interfaces, inheritance (89%)
-- ⚠️ **Advanced Types**: Union types working, complex types partial (43%)
+- ✅ **Core Language**: Variables, functions, control flow, basic types (100%
+  working)
+- ✅ **Object-Oriented**: Classes, basic inheritance, methods (89% working)
+- ⚠️ **Advanced Types**: Union types ✅, complex types compiling but runtime
+  issues (43% working)
 - ✅ **Modern Features**: Async/await, modules, error handling
 - ✅ **Quality**: 67% test coverage, zero linting errors, full CI/CD
+- ✅ **Compilation**: All 24 examples compile successfully (100%)
+
+**What "Working" Means**: Examples that both compile cleanly and run without
+runtime errors.
 
 See [PHASE_STATUS.md](PHASE_STATUS.md) for detailed status.
 
@@ -454,7 +463,7 @@ console.log(шахс.info());
 - `||` (ё)
 - `!` (на)
 
-## CLI Commands
+### CLI Commands
 
 ### Compile
 
@@ -465,19 +474,22 @@ somoni compile input.som -o output.js
 Options:
 
 - `-o, --output <file>`: Output file
-- `--strict`: Enable strict type checking ✅ **NEW**
-- `--target <target>`: Compilation target (es5, es2015, es2020, esnext)
-- `--source-map`: Generate source maps
-- `--minify`: Minify output
+- `--strict`: Enable strict type checking ✅
+- `--target <target>`: Compilation target (es5, es2015, es2020, esnext) ⚠️
+- `--source-map`: Generate source maps ⚠️
+- `--minify`: Minify output ⚠️
 
 **Type Checking Example:**
 
 ```bash
-# Compile with type checking
+# Compile with type checking (fully working)
 somoni compile typed-example.som --strict
 
-# This will catch type errors at compile time!
+# This catches type errors at compile time!
 ```
+
+**Note**: Basic compilation is fully functional. Advanced options like source
+maps and minification are parsed but may need additional implementation.
 
 ### Run
 
@@ -496,45 +508,89 @@ somoni init [project-name]
 See the `examples/` directory for comprehensive code samples (24 examples
 total):
 
-### Basic Language Features
+### ✅ Fully Working Examples (17/24)
 
-- `01-hello-world.som` - Basic console output and first program
-- `02-variables.som` - Variable declarations and assignments
+#### Basic Language Features
+
+- `01-hello-world.som` - Basic console output and first program ✅
+- `02-variables.som` - Variable declarations and assignments ✅
 - `03-typed-variables.som` - Type annotations and typed arrays ✅
-- `04-functions.som` - Function definitions and calls
+- `04-functions.som` - Function definitions and calls ✅
 - `05-typed-functions.som` - Functions with type signatures ✅
-- `06-conditionals.som` - If-else statements and complex conditions
-- `07-loops.som` - While loops and iterations
-- `08-arrays.som` - Array operations and manipulations
+- `06-conditionals.som` - If-else statements and complex conditions ✅
+- `07-loops.som` - While loops and iterations ✅
+- `08-arrays.som` - Array operations and manipulations ✅
 
-### Object-Oriented Programming
+#### Object-Oriented Programming
 
-- `09-interfaces.som` - Interface definitions and type system ✅
 - `10-classes-basic.som` - Basic class usage and OOP ✅
 - `11-classes-advanced.som` - Advanced class methods and logic ✅
-- `12-student-management-system.som` - Complete OOP system example ✅
-- `13-inheritance-demo.som` - Class inheritance and polymorphism ✅
+- `14-error-handling.som` - Error handling patterns and validation ✅
 
-### Advanced Features
+#### Modern Features
 
-- `14-error-handling.som` - Error handling patterns and validation
-- `15-async-programming.som` - Async/await syntax (future implementation)
-- `16-import-export.som` - Module system syntax (future implementation)
+- `15-async-programming.som` - Async/await syntax ✅
+- `16-import-export.som` - Module system ✅
 - `17-comprehensive-demo.som` - All current features combined ✅
 
-### Phase 3 Advanced Type System ✨ **NEW**
+#### Advanced Type System (Working)
 
 - `18-union-types.som` - Union types (`сатр | рақам`) ✅
 - `19-intersection-types.som` - Intersection types (`Корбар & Админ`) ✅
 - `20-advanced-classes.som` - Enhanced class system with inheritance ✅
-- `21-conditional-types.som` - Conditional type logic ✅
-- `22-mapped-types.som` - Mapped type transformations ✅
-- `23-tuple-types.som` - Tuple types with fixed structures ✅
-- `24-comprehensive-phase3.som` - Complete Phase 3 demonstration ✅
+
+### ⚠️ Compiling but Runtime Issues (7/24)
+
+#### Interface & Complex OOP
+
+- `09-interfaces.som` - Interface method signatures (runtime generation issues)
+- `12-student-management-system.som` - Complex inheritance (scoping issues)
+- `13-inheritance-demo.som` - Advanced inheritance (marked as future
+  implementation)
+
+#### Advanced Type System (In Development)
+
+- `21-conditional-types.som` - Conditional type logic (variable scoping
+  conflicts)
+- `22-mapped-types.som` - Mapped type transformations (complex parsing issues)
+- `23-tuple-types.som` - Tuple types with fixed structures (nested tuple issues)
+- `24-comprehensive-phase3.som` - Complete Phase 3 demo (constructor parameter
+  issues)
+
+**Note**: All examples compile successfully. The "runtime issues" are typically
+related to JavaScript generation for advanced type features, not core language
+problems.
 
 ## File Extension
 
 Somoni-script files use the `.som` extension.
+
+## Development Roadmap
+
+### ✅ Completed
+
+- Core language features (variables, functions, control flow)
+- Basic object-oriented programming
+- Union types and basic intersection types
+- Module system and async/await
+- CLI tools and type checking
+
+### 🚧 In Progress
+
+- Interface method signature runtime generation
+- Complex inheritance scenarios
+- Advanced type system runtime support
+- Tuple types and conditional types
+
+### 📋 Planned
+
+- Source map generation
+- Code minification
+- Language server protocol (LSP)
+- VS Code extension
+- Performance optimizations
+
+**Goal**: Achieve 100% runtime success rate while expanding advanced features.
 
 ## Development
 
