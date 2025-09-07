@@ -1,4 +1,4 @@
-# Somoni-script Versioning Strategy
+# SomonScript Versioning Strategy
 
 ## Current Version: 0.2.14 - Production Ready
 
@@ -11,7 +11,7 @@
 
 ### Semantic Versioning
 
-Somoni-script follows [Semantic Versioning](https://semver.org/) (SemVer):
+SomonScript follows [Semantic Versioning](https://semver.org/) (SemVer):
 
 - **MAJOR** version for incompatible API changes
 - **MINOR** version for backward-compatible functionality additions

@@ -25,8 +25,8 @@ export interface CompileResult {
 }
 
 /**
- * Compile Somoni-script source code to JavaScript
- * @param source - The Somoni-script source code
+ * Compile SomonScript source code to JavaScript
+ * @param source - The SomonScript source code
  * @param options - Compilation options
  * @returns Compilation result with generated code, errors, and warnings
  */

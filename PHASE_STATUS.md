@@ -1,4 +1,4 @@
-# Somoni-script Implementation Status
+# SomonScript Implementation Status
 
 ## Current Status: 97% Runtime Success (31/32 Examples Working) - PRODUCTION READY! 🎉
 
@@ -145,7 +145,7 @@ only partial example is a development test file created during debugging.
 - **Source Maps**: Ready for debugging support
 - **Performance**: Fast compilation with efficient parsing
 
-### What Makes Somoni-script Production Ready
+### What Makes SomonScript Production Ready
 
 1. **Complete Type System**: Full TypeScript-level features with native Tajik
    syntax
@@ -185,7 +185,7 @@ priorities shift to:
 
 ## Conclusion
 
-**Somoni-script has achieved production readiness** with:
+**SomonScript has achieved production readiness** with:
 
 - ✅ **Complete core language implementation** (Phase 1)
 - ✅ **Full object-oriented programming support** (Phase 2)

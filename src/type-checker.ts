@@ -41,7 +41,7 @@ export interface TypeCheckResult {
 }
 
 /**
- * Represents a type in the Somoni-script type system
+ * Represents a type in the SomonScript type system
  */
 export interface Type {
   kind: string;
@@ -61,7 +61,7 @@ export interface PropertyType {
 }
 
 /**
- * Type checker for Somoni-script AST
+ * Type checker for SomonScript AST
  * Provides comprehensive type checking with Tajik Cyrillic type annotations
  */
 export class TypeChecker {

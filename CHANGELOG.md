@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Somoni-script will be documented in this file.
+All notable changes to SomonScript will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -132,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 📋 **Array Types**: Typed arrays with element validation (`рақам[]`, `сатр[]`)
 - 🔧 **Function Types**: Parameter and return type checking
 - 📝 **Type Aliases**: Custom type definitions with `навъ` keyword
-- ⚙️ **CLI Compilation**: `somoni compile file.som --strict` for type checking
+- ⚙️ **CLI Compilation**: `somon compile file.som --strict` for type checking
 
 #### Language Features
 - Variables and constants (`тағйирёбанда`, `собит`)

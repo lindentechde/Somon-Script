@@ -18,7 +18,7 @@ describe('CLI Integration Tests', () => {
   });
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somoni-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-test-'));
   });
 
   afterEach(() => {
@@ -128,7 +128,7 @@ describe('CLI Integration Tests', () => {
         encoding: 'utf-8',
       });
 
-      expect(result).toContain('Created Somoni-script project');
+      expect(result).toContain('Created SomonScript project');
       expect(fs.existsSync(projectPath)).toBe(true);
       expect(fs.existsSync(path.join(projectPath, 'package.json'))).toBe(true);
       expect(fs.existsSync(path.join(projectPath, 'src'))).toBe(true);
@@ -161,8 +161,8 @@ describe('CLI Integration Tests', () => {
         encoding: 'utf-8',
       });
 
-      expect(result).toContain('somoni-project');
-      expect(fs.existsSync(path.join(tempDir, 'somoni-project'))).toBe(true);
+      expect(result).toContain('somon-project');
+      expect(fs.existsSync(path.join(tempDir, 'somon-project'))).toBe(true);
     });
   });
 
@@ -174,7 +174,7 @@ describe('CLI Integration Tests', () => {
 
     test('should display help', () => {
       const result = execSync(`node "${cliPath}" --help`, { encoding: 'utf-8' });
-      expect(result).toContain('Somoni-script compiler');
+      expect(result).toContain('SomonScript compiler');
       expect(result).toContain('compile');
       expect(result).toContain('run');
       expect(result).toContain('init');

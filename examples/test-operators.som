@@ -1,4 +1,4 @@
-// Test all TypeScript operators in Somoni-script
+// Test all TypeScript operators in SomonScript
 
 функсия санҷиши_операторҳо(): холӣ {
     чоп.сабт("=== Санҷиши ҳамаи операторҳо ===\n");

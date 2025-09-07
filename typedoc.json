@@ -2,7 +2,7 @@
   "entryPoints": ["src/index.ts"],
   "out": "docs/api",
   "theme": "default",
-  "name": "Somoni-script API Documentation",
+  "name": "SomonScript API Documentation",
   "readme": "README.md",
   "includeVersion": true,
   "excludePrivate": false,

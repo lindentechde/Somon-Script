@@ -99,7 +99,7 @@ jobs:
     - name: Generate changelog
       id: changelog
       run: |
-        echo "## 🎉 Somoni-script Release" > RELEASE_NOTES.md
+        echo "## 🎉 SomonScript Release" > RELEASE_NOTES.md
         echo "" >> RELEASE_NOTES.md
         echo "### ✨ What's New" >> RELEASE_NOTES.md
         echo "" >> RELEASE_NOTES.md
@@ -127,13 +127,13 @@ jobs:
         echo "" >> RELEASE_NOTES.md
         echo "### 📦 Installation" >> RELEASE_NOTES.md
         echo '```bash' >> RELEASE_NOTES.md
-        echo 'npm install -g somoni-script' >> RELEASE_NOTES.md
+        echo 'npm install -g somon-script' >> RELEASE_NOTES.md
         echo '```' >> RELEASE_NOTES.md
         echo "" >> RELEASE_NOTES.md
         echo "### 🚀 Quick Start" >> RELEASE_NOTES.md
         echo '```bash' >> RELEASE_NOTES.md
         echo 'echo "тағйирёбанда ном: сатр = \"Аҳмад\";" > hello.som' >> RELEASE_NOTES.md
-        echo 'somoni compile hello.som --strict' >> RELEASE_NOTES.md
+        echo 'somon compile hello.som --strict' >> RELEASE_NOTES.md
         echo '```' >> RELEASE_NOTES.md
         
     - name: Create Release
@@ -141,7 +141,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.ref_name }}
-        name: "Somoni-script ${{ github.ref_name }}"
+        name: "SomonScript ${{ github.ref_name }}"
         body_path: RELEASE_NOTES.md
         files: |
           *.tgz
@@ -181,7 +181,7 @@ jobs:
     - name: Notify success
       run: |
         echo "🎉 Successfully published to NPM!"
-        echo "📦 Package: somoni-script@$(node -p 'require("./package.json").version')"
+        echo "📦 Package: somon-script@$(node -p 'require("./package.json").version')"
 
   publish-github-packages:
     name: Publish to GitHub Packages
@@ -210,7 +210,7 @@ jobs:
         # Update package.json for GitHub Packages
         node -e "
           const pkg = require('./package.json');
-          pkg.name = '@${{ github.repository_owner }}/somoni-script';
+          pkg.name = '@${{ github.repository_owner }}/somon-script';
           pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
           require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
@@ -289,5 +289,5 @@ jobs:
         echo "🔗 Union Types: Working"
         echo "📁 Modular Design: Complete"
         echo ""
-        echo "Somoni-script continues to set the standard for"
+        echo "SomonScript continues to set the standard for"
         echo "internationalized programming languages! 🚀"

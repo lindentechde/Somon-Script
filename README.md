@@ -1,4 +1,4 @@
-# Somoni-script
+# SomonScript
 
 A programming language that compiles to JavaScript, written in Tajik Cyrillic.
 Named after Ismoil Somoni, the founder of the Samanid dynasty.
@@ -31,7 +31,7 @@ Named after Ismoil Somoni, the founder of the Samanid dynasty.
 ## Installation
 
 ```bash
-npm install -g somoni-script
+npm install -g somon-script
 ```
 
 ## Quick Start
@@ -39,14 +39,14 @@ npm install -g somoni-script
 Create a new project:
 
 ```bash
-somoni init my-project
+somon init my-project
 cd my-project
 npm install
 ```
 
-Write your first Somoni-script program (`src/main.som`):
+Write your first SomonScript program (`src/main.som`):
 
-```somoni
+```somon
 // With type annotations for better safety
 функция салом(ном: сатр): сатр {
     тағйирёбанда паём: сатр = "Салом, " + ном + "!";
@@ -73,7 +73,7 @@ npm run build
 
 ### Union Types
 
-```somoni
+```somon
 // Variables can hold multiple types
 тағйирёбанда маълумот: сатр | рақам = "Салом";
 маълумот = 42; // Also valid
@@ -86,7 +86,7 @@ npm run build
 
 ### Intersection Types
 
-```somoni
+```somon
 интерфейс Корбар {
     ном: сатр;
     синну_сол: рақам;
@@ -108,7 +108,7 @@ npm run build
 
 ### Advanced Classes with Inheritance
 
-```somoni
+```somon
 синф Ҳайвон {
     муҳофизатшуда ном: сатр;
 
@@ -134,7 +134,7 @@ npm run build
 
 ### Tuple Types
 
-```somoni
+```somon
 // Fixed-length arrays with specific types
 тағйирёбанда корбар_маълумот: [сатр, рақам, мантиқӣ] = ["Алӣ", 25, дуруст];
 тағйирёбанда координата: [рақам, рақам] = [10, 20];
@@ -142,8 +142,7 @@ npm run build
 
 ## Current Status
 
-Somoni-script has **71% runtime success** with 17/24 examples working
-flawlessly:
+SomonScript has **71% runtime success** with 17/24 examples working flawlessly:
 
 - ✅ **Core Language**: Variables, functions, control flow, basic types (100%
   working)
@@ -165,7 +164,7 @@ See [PHASE_STATUS.md](PHASE_STATUS.md) for detailed status.
 
 #### Core Language Keywords
 
-| Somoni-script  | English  | JavaScript |
+| SomonScript    | English  | JavaScript |
 | -------------- | -------- | ---------- |
 | `тағйирёбанда` | variable | `let`      |
 | `собит`        | constant | `const`    |
@@ -184,39 +183,39 @@ See [PHASE_STATUS.md](PHASE_STATUS.md) for detailed status.
 
 #### Import/Export Keywords
 
-| Somoni-script | English | JavaScript |
-| ------------- | ------- | ---------- |
-| `ворид`       | import  | `import`   |
-| `содир`       | export  | `export`   |
-| `аз`          | from    | `from`     |
-| `пешфарз`     | default | `default`  |
-| `чун`         | as      | `as`       |
+| SomonScript | English | JavaScript |
+| ----------- | ------- | ---------- |
+| `ворид`     | import  | `import`   |
+| `содир`     | export  | `export`   |
+| `аз`        | from    | `from`     |
+| `пешфарз`   | default | `default`  |
+| `чун`       | as      | `as`       |
 
 #### Built-in Functions
 
-| Somoni-script | English | JavaScript |
-| ------------- | ------- | ---------- |
-| `чоп`         | console | `console`  |
-| `сабт`        | log     | `log`      |
-| `хато`        | error   | `error`    |
-| `огоҳӣ`       | warn    | `warn`     |
-| `маълумот`    | info    | `info`     |
+| SomonScript | English | JavaScript |
+| ----------- | ------- | ---------- |
+| `чоп`       | console | `console`  |
+| `сабт`      | log     | `log`      |
+| `хато`      | error   | `error`    |
+| `огоҳӣ`     | warn    | `warn`     |
+| `маълумот`  | info    | `info`     |
 
 #### Array Methods
 
-| Somoni-script | English | JavaScript |
-| ------------- | ------- | ---------- |
-| `рӯйхат`      | array   | `Array`    |
-| `илова`       | push    | `push`     |
-| `баровардан`  | pop     | `pop`      |
-| `дарозӣ`      | length  | `length`   |
-| `харита`      | map     | `map`      |
-| `филтр`       | filter  | `filter`   |
-| `кофтан`      | find    | `find`     |
+| SomonScript  | English | JavaScript |
+| ------------ | ------- | ---------- |
+| `рӯйхат`     | array   | `Array`    |
+| `илова`      | push    | `push`     |
+| `баровардан` | pop     | `pop`      |
+| `дарозӣ`     | length  | `length`   |
+| `харита`     | map     | `map`      |
+| `филтр`      | filter  | `filter`   |
+| `кофтан`     | find    | `find`     |
 
 #### String Methods
 
-| Somoni-script  | English       | JavaScript |
+| SomonScript    | English       | JavaScript |
 | -------------- | ------------- | ---------- |
 | `сатр`         | string        | `String`   |
 | `дарозии_сатр` | string length | `length`   |
@@ -226,26 +225,26 @@ See [PHASE_STATUS.md](PHASE_STATUS.md) for detailed status.
 
 #### Control Flow
 
-| Somoni-script | English  | JavaScript |
-| ------------- | -------- | ---------- |
-| `шикастан`    | break    | `break`    |
-| `давом`       | continue | `continue` |
-| `кӯшиш`       | try      | `try`      |
-| `гирифтан`    | catch    | `catch`    |
-| `ниҳоят`      | finally  | `finally`  |
-| `партофтан`   | throw    | `throw`    |
+| SomonScript | English  | JavaScript |
+| ----------- | -------- | ---------- |
+| `шикастан`  | break    | `break`    |
+| `давом`     | continue | `continue` |
+| `кӯшиш`     | try      | `try`      |
+| `гирифтан`  | catch    | `catch`    |
+| `ниҳоят`    | finally  | `finally`  |
+| `партофтан` | throw    | `throw`    |
 
 #### Async Programming
 
-| Somoni-script | English | JavaScript |
-| ------------- | ------- | ---------- |
-| `ҳамзамон`    | async   | `async`    |
-| `интизор`     | await   | `await`    |
-| `ваъда`       | promise | `Promise`  |
+| SomonScript | English | JavaScript |
+| ----------- | ------- | ---------- |
+| `ҳамзамон`  | async   | `async`    |
+| `интизор`   | await   | `await`    |
+| `ваъда`     | promise | `Promise`  |
 
 ### Variables (Тағйирёбандаҳо)
 
-```somoni
+```somon
 // Mutable variable
 тағйирёбанда ном = "Аҳмад";
 ном = "Фотима";
@@ -265,7 +264,7 @@ const сол = 2024;
 
 ### Functions (Функсияҳо)
 
-```somoni
+```somon
 функсия ҷамъ_кардан(а, б) {
     бозгашт а + б;
 }
@@ -287,7 +286,7 @@ console.log('Натиҷа:', натиҷа);
 
 ### Conditionals (Шартҳо)
 
-```somoni
+```somon
 агар (синну_сол >= 18) {
     чоп.сабт("Калонсол");
 } вагарна {
@@ -307,7 +306,7 @@ if (синну_сол >= 18) {
 
 ### Loops (Давраҳо)
 
-```somoni
+```somon
 тағйирёбанда и = 0;
 то (и < 10) {
     чоп.сабт(и);
@@ -327,7 +326,7 @@ while (и < 10) {
 
 ### Data Types (Навъҳои додаҳо)
 
-```somoni
+```somon
 // Numbers
 тағйирёбанда рақам = 42;
 тағйирёбанда касрӣ = 3.14;
@@ -345,7 +344,7 @@ while (и < 10) {
 
 ### Import/Export (Ворид/Содир)
 
-```somoni
+```somon
 // Import named functions
 ворид { ҷамъ_кардан, тақсим_кардан } аз "./math.som";
 
@@ -366,7 +365,7 @@ while (и < 10) {
 
 ### Built-in Functions (Функсияҳои дарунсохт)
 
-```somoni
+```somon
 // Console functions
 чоп.сабт("Паём");           // console.log("Паём")
 чоп.хато("Хато рӯй дод");    // console.error("Хато рӯй дод")
@@ -385,7 +384,7 @@ while (и < 10) {
 
 ### Classes (Синфҳо) ✅
 
-```somoni
+```somon
 синф Шахс {
     хосусӣ ном: сатр;
     хосусӣ синну_сол: рақам;
@@ -432,7 +431,7 @@ console.log(шахс.info());
 
 ### Async Programming (Барномасозии ҳамзамон)
 
-```somoni
+```somon
 ҳамзамон функсия маълумот_гирифтан() {
     кӯшиш {
         тағйирёбанда натиҷа = интизор fetch("/api/data");
@@ -476,7 +475,7 @@ console.log(шахс.info());
 ### Compile
 
 ```bash
-somoni compile input.som -o output.js
+somon compile input.som -o output.js
 ```
 
 Options:
@@ -491,7 +490,7 @@ Options:
 
 ```bash
 # Compile with type checking (fully working)
-somoni compile typed-example.som --strict
+somon compile typed-example.som --strict
 
 # This catches type errors at compile time!
 ```
@@ -502,13 +501,13 @@ maps and minification are parsed but may need additional implementation.
 ### Run
 
 ```bash
-somoni run input.som
+somon run input.som
 ```
 
 ### Initialize Project
 
 ```bash
-somoni init [project-name]
+somon init [project-name]
 ```
 
 ## Examples
@@ -571,7 +570,7 @@ problems.
 
 ## File Extension
 
-Somoni-script files use the `.som` extension.
+SomonScript files use the `.som` extension.
 
 ## Development Roadmap
 
@@ -605,8 +604,8 @@ Somoni-script files use the `.som` extension.
 ### Building from Source
 
 ```bash
-git clone https://github.com/your-org/somoni-script
-cd somoni-script
+git clone https://github.com/your-org/somon-script
+cd somon-script
 npm install
 npm run build
 ```
@@ -625,8 +624,7 @@ npm run dev
 
 ## Language Philosophy
 
-Somoni-script aims to make programming accessible to Tajik speakers by
-providing:
+SomonScript aims to make programming accessible to Tajik speakers by providing:
 
 1. **Familiar Keywords**: Using Tajik Cyrillic terms for programming concepts
 2. **Modern Syntax**: TypeScript-like features and clean syntax

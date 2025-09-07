@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines how Somoni-script's implemented features align with the
+This document outlines how SomonScript's implemented features align with the
 project's core objectives and specifications. It serves as a mapping between the
 language's design goals and actual implementation status.
 
@@ -181,7 +181,7 @@ planned.
 
 ### Overall Alignment Score: 96%
 
-Somoni-script demonstrates exceptional alignment with its core objectives:
+SomonScript demonstrates exceptional alignment with its core objectives:
 
 - ✅ **Accessibility**: Native Tajik syntax removes language barriers
 - ✅ **Compatibility**: Seamless JavaScript compilation and ecosystem

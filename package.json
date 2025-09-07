@@ -1,10 +1,10 @@
 {
-  "name": "somoni-script",
-  "version": "0.2.21",
+  "name": "somon-script",
+  "version": "0.2.22",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
-    "somoni": "dist/cli.js"
+    "somon": "dist/cli.js"
   },
   "scripts": {
     "build": "npm run clean && tsc",
@@ -53,7 +53,7 @@
     "javascript",
     "programming-language"
   ],
-  "author": "Somoni Script Team",
+  "author": "LindenTech IT Consulting",
   "license": "MIT",
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",

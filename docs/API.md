@@ -1,4 +1,4 @@
-# Somoni-script API Documentation
+# SomonScript API Documentation
 
 **Version**: 0.2.14 - Production Ready (97% Runtime Success Rate)
 
@@ -8,10 +8,10 @@
 
 #### `compile`
 
-Compile Somoni-script files to JavaScript.
+Compile SomonScript files to JavaScript.
 
 ```bash
-somoni compile <input.som> [options]
+somon compile <input.som> [options]
 ```
 
 **Options:**
@@ -30,32 +30,32 @@ Phase 4-5
 
 ```bash
 # Basic compilation
-somoni compile hello.som
+somon compile hello.som
 
 # Strict type checking
-somoni compile app.som --strict
+somon compile app.som --strict
 
 # Custom output
-somoni compile src/main.som -o dist/app.js
+somon compile src/main.som -o dist/app.js
 
 # Production build
-somoni compile app.som --minify --target es2020
+somon compile app.som --minify --target es2020
 ```
 
 #### `run`
 
-Compile and run Somoni-script files directly.
+Compile and run SomonScript files directly.
 
 ```bash
-somoni run <input.som>
+somon run <input.som>
 ```
 
 #### `init`
 
-Initialize a new Somoni-script project.
+Initialize a new SomonScript project.
 
 ```bash
-somoni init [project-name]
+somon init [project-name]
 ```
 
 ## Programmatic API
@@ -63,14 +63,14 @@ somoni init [project-name]
 ### Compiler
 
 ```typescript
-import { compile } from 'somoni-script';
+import { compile } from 'somon-script';
 
 const result = compile(source, options);
 ```
 
 **Parameters:**
 
-- `source: string` - Somoni-script source code
+- `source: string` - SomonScript source code
 - `options: CompileOptions` - Compilation options
 
 **Returns:** `CompileResult`
@@ -83,7 +83,7 @@ const result = compile(source, options);
 ### Lexer
 
 ```typescript
-import { Lexer } from 'somoni-script';
+import { Lexer } from 'somon-script';
 
 const lexer = new Lexer(source);
 const tokens = lexer.tokenize();
@@ -92,7 +92,7 @@ const tokens = lexer.tokenize();
 ### Parser
 
 ```typescript
-import { Parser } from 'somoni-script';
+import { Parser } from 'somon-script';
 
 const parser = new Parser(tokens);
 const ast = parser.parse();
@@ -101,7 +101,7 @@ const ast = parser.parse();
 ### Code Generator
 
 ```typescript
-import { CodeGenerator } from 'somoni-script';
+import { CodeGenerator } from 'somon-script';
 
 const generator = new CodeGenerator();
 const code = generator.generate(ast);
@@ -120,21 +120,21 @@ const code = generator.generate(ast);
 
 #### Arrays
 
-```somoni
+```somon
 тағйирёбанда рақамҳо: рақам[] = [1, 2, 3];
 тағйирёбанда номҳо: сатр[] = ["Аҳмад", "Фотима"];
 ```
 
 #### Union Types ✅
 
-```somoni
+```somon
 тағйирёбанда қимат: сатр | рақам = "салом";
 қимат = 42; // Valid
 ```
 
 #### Intersection Types ⚠️
 
-```somoni
+```somon
 интерфейс Корбар {
   ном: сатр;
   синну_сол: рақам;
@@ -154,7 +154,7 @@ const code = generator.generate(ast);
 
 #### Interfaces ⚠️
 
-```somoni
+```somon
 интерфейс Корбар {
   ном: сатр;
   синну_сол: рақам;
@@ -167,14 +167,14 @@ issues.
 
 #### Type Aliases
 
-```somoni
+```somon
 навъ КорбарИД = сатр;
 навъ Синну_сол = рақам;
 ```
 
 ### Functions with Types
 
-```somoni
+```somon
 функсия ҷамъ(а: рақам, б: рақам): рақам {
   бозгашт а + б;
 }
@@ -191,14 +191,14 @@ issues.
 
 ### Variables
 
-```somoni
+```somon
 тағйирёбанда х = 10;        // Mutable variable
 собит ПИ = 3.14159;         // Constant
 ```
 
 ### Control Flow
 
-```somoni
+```somon
 агар (шарт) {
   // if block
 } вагарна {
@@ -216,7 +216,7 @@ issues.
 
 ### Built-in Functions
 
-```somoni
+```somon
 чоп.сабт("Hello");          // console.log
 чоп.хато("Error");          // console.error
 чоп.огоҳӣ("Warning");       // console.warn
@@ -224,7 +224,7 @@ issues.
 
 ### Array Methods
 
-```somoni
+```somon
 рӯйхат.илова(элемент);      // push
 рӯйхат.баровардан();        // pop
 рӯйхат.дарозӣ;              // length
@@ -234,7 +234,7 @@ issues.
 
 ### String Methods
 
-```somoni
+```somon
 сатр.дарозии_сатр;          // length
 сатр.пайвастан(дигар);      // concat
 сатр.ҷойивазкунӣ(аз, ба);   // replace
@@ -246,7 +246,7 @@ issues.
 ### Compilation Errors ✅
 
 - **Type Errors**: Type mismatches in strict mode
-- **Syntax Errors**: Invalid Somoni-script syntax
+- **Syntax Errors**: Invalid SomonScript syntax
 - **Reference Errors**: Undefined variables or functions
 
 ### Runtime Considerations ⚠️

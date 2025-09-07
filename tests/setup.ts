@@ -1,4 +1,4 @@
-// Jest setup file for Somoni-script tests
+// Jest setup file for SomonScript tests
 
 // Extend Jest matchers if needed
 declare global {
@@ -24,7 +24,7 @@ declare global {
 // Export to make this file a module
 export {};
 
-// Custom matchers for Somoni-script testing
+// Custom matchers for SomonScript testing
 expect.extend({
   toCompileSuccessfully(received: any) {
     const pass = received.errors.length === 0 && received.code.length > 0;
