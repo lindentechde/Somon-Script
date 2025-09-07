@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-07T07:57:01.449Z",
+  "timestamp": "2025-09-07T09:04:55.244Z",
   "total": 32,
-  "working": 31,
-  "partial": 1,
+  "working": 32,
+  "partial": 0,
   "failing": 0,
-  "workingPercentage": 97,
+  "workingPercentage": 100,
   "details": {
     "working": [
       {
@@ -161,15 +161,14 @@
         "name": "test-operators.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
-      }
-    ],
-    "partial": [
+      },
       {
         "name": "test-tuple-array.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-test-tuple-array.js\""
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       }
     ],
+    "partial": [],
     "failing": []
   }
 }
