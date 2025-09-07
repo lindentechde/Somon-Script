@@ -13,7 +13,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 21.x]
+        node-version: [18.x, 20.x, 21.x, 22.x, 23.x, 24.x]
     
     steps:
     - name: Checkout code
@@ -90,7 +90,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: somoni-script-package
+        name: somon-script-package
         path: |
           dist/
           *.tgz
@@ -218,7 +218,7 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: somoni-script-package
+        name: somon-script-package
         
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1

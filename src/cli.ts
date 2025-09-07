@@ -18,14 +18,14 @@ interface CompileOptions {
 }
 
 program
-  .name('somoni')
-  .description('Somoni-script compiler - Compile Tajik Cyrillic code to JavaScript')
+  .name('somon')
+  .description('SomonScript compiler - Compile Tajik Cyrillic code to JavaScript')
   .version('0.2.0');
 
 program
   .command('compile')
   .alias('c')
-  .description('Compile Somoni-script files to JavaScript')
+  .description('Compile SomonScript files to JavaScript')
   .argument('<input>', 'Input .som file')
   .option('-o, --output <file>', 'Output file (default: same name with .js extension)')
   .option('--target <target>', 'Compilation target', 'es2020')
@@ -87,7 +87,7 @@ program
 program
   .command('run')
   .alias('r')
-  .description('Compile and run Somoni-script file')
+  .description('Compile and run SomonScript file')
   .argument('<input>', 'Input .som file')
   .action((input: string): void => {
     try {
@@ -116,8 +116,8 @@ program
 
 program
   .command('init')
-  .description('Initialize a new Somoni-script project')
-  .argument('[name]', 'Project name', 'somoni-project')
+  .description('Initialize a new SomonScript project')
+  .argument('[name]', 'Project name', 'somon-project')
   .action((name: string): void => {
     try {
       const projectDir = path.resolve(name);
@@ -134,14 +134,14 @@ program
       const packageJson = {
         name,
         version: '1.0.0',
-        description: 'A Somoni-script project',
+        description: 'A SomonScript project',
         main: 'dist/main.js',
         scripts: {
-          build: 'somoni compile src/main.som -o dist/main.js',
-          dev: 'somoni run src/main.som',
+          build: 'somon compile src/main.som -o dist/main.js',
+          dev: 'somon run src/main.som',
         },
         devDependencies: {
-          'somoni-script': '^0.2.0',
+          'somon-script': '^0.2.0',
         },
       };
 
@@ -151,7 +151,7 @@ program
       fs.mkdirSync(path.join(projectDir, 'src'));
       fs.mkdirSync(path.join(projectDir, 'dist'));
 
-      const mainSom = `// Somoni-script main file
+      const mainSom = `// SomonScript main file
 функсия салом(): void {
     чоп.сабт("Салом, ҷаҳон!");
 }
@@ -161,7 +161,7 @@ program
 
       fs.writeFileSync(path.join(projectDir, 'src', 'main.som'), mainSom);
 
-      console.log(`✅ Created Somoni-script project '${name}'`);
+      console.log(`✅ Created SomonScript project '${name}'`);
       console.log(`\nNext steps:`);
       console.log(`  cd ${name}`);
       console.log(`  npm install`);

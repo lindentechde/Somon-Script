@@ -95,11 +95,11 @@ describe('Lexer', () => {
     const source = 'сатр | рақам';
     const tokens = tokenize(source);
 
-    expect(tokens).toHaveLength(4); // САТР, PIPE, РАҚАМ, EOF
-    expect(tokens[0].type).toBe('САТР');
-    expect(tokens[1].type).toBe('PIPE');
+    expect(tokens).toHaveLength(4); // САТР, BITWISE_OR, РАҚАМ, EOF
+    expect(tokens[0].type).toBe(TokenType.САТР);
+    expect(tokens[1].type).toBe(TokenType.BITWISE_OR);
     expect(tokens[1].value).toBe('|');
-    expect(tokens[2].type).toBe('РАҚАМ');
+    expect(tokens[2].type).toBe(TokenType.РАҚАМ);
   });
 
   test('should distinguish pipe from logical OR', () => {
@@ -107,9 +107,9 @@ describe('Lexer', () => {
     const tokens = tokenize(source);
 
     expect(tokens).toHaveLength(6); // а, |, б, ||, в, EOF
-    expect(tokens[1].type).toBe('PIPE');
+    expect(tokens[1].type).toBe(TokenType.BITWISE_OR);
     expect(tokens[1].value).toBe('|');
-    expect(tokens[3].type).toBe('OR');
+    expect(tokens[3].type).toBe(TokenType.OR);
     expect(tokens[3].value).toBe('||');
   });
 

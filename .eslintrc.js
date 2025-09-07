@@ -19,7 +19,7 @@ module.exports = {
     'no-var': 'error',
     'no-unused-vars': 'error',
 
-    // Somoni-script specific rules
+    // SomonScript specific rules
     'no-irregular-whitespace': 'off', // Allow Cyrillic characters
 
     // Code quality rules

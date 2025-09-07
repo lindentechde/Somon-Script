@@ -8,11 +8,13 @@ import {
   ReturnStatement,
   IfStatement,
   WhileStatement,
+  ForStatement,
   ExpressionStatement,
   Identifier,
   Literal,
   BinaryExpression,
   UnaryExpression,
+  UpdateExpression,
   CallExpression,
   AssignmentExpression,
   MemberExpression,
@@ -49,6 +51,9 @@ export class CodeGenerator {
     ['огоҳӣ', 'warn'],
     ['маълумот', 'info'],
 
+    // Error handling
+    ['Хато', 'Error'],
+
     // Array methods
     ['рӯйхат', 'Array'],
     ['илова', 'push'],
@@ -58,6 +63,7 @@ export class CodeGenerator {
     ['харита', 'map'],
     ['филтр', 'filter'],
     ['кофтан', 'find'],
+    ['буридан', 'slice'], // Tajik word for slice/cut
 
     // String methods
     ['сатр_методҳо', 'String'],
@@ -125,6 +131,8 @@ export class CodeGenerator {
         return this.generateIfStatement(node as IfStatement);
       case 'WhileStatement':
         return this.generateWhileStatement(node as WhileStatement);
+      case 'ForStatement':
+        return this.generateForStatement(node as ForStatement);
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -238,43 +246,155 @@ export class CodeGenerator {
     return result;
   }
 
+  private generateForStatement(node: ForStatement): string {
+    const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
+    const test = node.test ? this.generateExpression(node.test) : '';
+    const update = node.update ? this.generateExpression(node.update) : '';
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${init}; ${test}; ${update}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
   private generateExpressionStatement(node: ExpressionStatement): string {
+    const expr = node.expression;
+
+    // Special handling: Skip orphaned method signatures that should not generate executable code
+    // This happens when interface method signatures escape the interface context due to parsing issues
+    if (expr.type === 'CallExpression') {
+      const callExpr = expr as CallExpression;
+
+      // Check if this looks like an orphaned method signature (function call with single parameter
+      // that looks like it should be a type parameter)
+      if (
+        callExpr.callee.type === 'Identifier' &&
+        callExpr.arguments.length === 1 &&
+        callExpr.arguments[0].type === 'Identifier'
+      ) {
+        const calleeName = (callExpr.callee as Identifier).name;
+        const argName = (callExpr.arguments[0] as Identifier).name;
+
+        // Skip if this looks like a method signature pattern
+        // Common patterns: танзим_кардан(нави_қимат), ғайр_танзим(параметр), etc.
+        if (
+          calleeName.includes('_') ||
+          argName.includes('_') ||
+          calleeName.length > 8 ||
+          argName.length > 8
+        ) {
+          return ''; // Skip generating this statement
+        }
+      }
+    }
+
     return this.indent(`${this.generateExpression(node.expression)};`);
   }
 
+  // eslint-disable-next-line complexity
   private generateExpression(node: Expression): string {
+    // Use a more direct delegation approach
+    const simpleExpressions = ['Identifier', 'Literal', 'ThisExpression', 'Super'];
+    if (simpleExpressions.includes(node.type)) {
+      return this.generateSimpleExpression(node);
+    }
+
+    const operatorExpressions = ['BinaryExpression', 'UnaryExpression', 'UpdateExpression'];
+    if (operatorExpressions.includes(node.type)) {
+      return this.generateOperatorExpression(node);
+    }
+
+    const callExpressions = ['CallExpression', 'AssignmentExpression', 'MemberExpression'];
+    if (callExpressions.includes(node.type)) {
+      return this.generateCallAssignmentExpression(node);
+    }
+
+    const structuralExpressions = ['ArrayExpression', 'ObjectExpression', 'SpreadElement'];
+    if (structuralExpressions.includes(node.type)) {
+      return this.generateStructuralExpression(node);
+    }
+
+    const specialExpressions = ['AwaitExpression', 'NewExpression'];
+    if (specialExpressions.includes(node.type)) {
+      return this.generateSpecialExpression(node);
+    }
+
+    return this.handleUnknownExpression(node);
+  }
+
+  private generateSimpleExpression(node: Expression): string {
     switch (node.type) {
       case 'Identifier':
         return this.generateIdentifier(node as Identifier);
       case 'Literal':
         return this.generateLiteral(node as Literal);
+      case 'ThisExpression':
+        return 'this';
+      case 'Super':
+        return 'super';
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateOperatorExpression(node: Expression): string {
+    switch (node.type) {
       case 'BinaryExpression':
         return this.generateBinaryExpression(node as BinaryExpression);
       case 'UnaryExpression':
         return this.generateUnaryExpression(node as UnaryExpression);
+      case 'UpdateExpression':
+        return this.generateUpdateExpression(node as UpdateExpression);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateCallAssignmentExpression(node: Expression): string {
+    switch (node.type) {
       case 'CallExpression':
         return this.generateCallExpression(node as CallExpression);
       case 'AssignmentExpression':
         return this.generateAssignmentExpression(node as AssignmentExpression);
       case 'MemberExpression':
         return this.generateMemberExpression(node as MemberExpression);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateStructuralExpression(node: Expression): string {
+    switch (node.type) {
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
       case 'ObjectExpression':
         return this.generateObjectExpression(node as ObjectExpression);
+      case 'SpreadElement':
+        return this.generateSpreadElement(node as SpreadElement);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateSpecialExpression(node: Expression): string {
+    switch (node.type) {
       case 'AwaitExpression':
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
-      case 'ThisExpression':
-        return 'this';
-      case 'Super':
-        return 'super';
-      case 'SpreadElement':
-        return this.generateSpreadElement(node as SpreadElement);
       default:
-        throw new Error(`Unknown expression type: ${node.type}`);
+        return this.handleUnknownExpression(node);
     }
+  }
+
+  private handleUnknownExpression(node: Expression): string {
+    throw new Error(`Unknown expression type: ${node.type}`);
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
@@ -358,6 +478,11 @@ export class CodeGenerator {
       return 'Error';
     }
 
+    // Handle Хато (capitalized) as Error constructor
+    if (node.name === 'Хато') {
+      return 'Error';
+    }
+
     // Don't map variable names that could conflict with JS built-ins
     // Only map in specific contexts (handled in generateMemberExpression)
     return node.name;
@@ -394,6 +519,15 @@ export class CodeGenerator {
   private generateUnaryExpression(node: UnaryExpression): string {
     const argument = this.generateExpression(node.argument);
     return `${node.operator}${argument}`;
+  }
+
+  private generateUpdateExpression(node: UpdateExpression): string {
+    const argument = this.generateExpression(node.argument);
+    if (node.prefix) {
+      return `${node.operator}${argument}`;
+    } else {
+      return `${argument}${node.operator}`;
+    }
   }
 
   private generateCallExpression(node: CallExpression): string {
@@ -450,6 +584,7 @@ export class CodeGenerator {
         'пайвастан',
         'ҷойивазкунӣ',
         'ҷудокунӣ',
+        'буридан', // slice
       ];
 
       if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {
@@ -530,6 +665,7 @@ export class CodeGenerator {
 
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
+    // They should NOT generate any executable code at all
     const name = this.generateIdentifier(node.name);
 
     return this.indent(`// Interface: ${name}`);
