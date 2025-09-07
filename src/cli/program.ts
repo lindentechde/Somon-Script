@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { compile } from '../compiler';
+import pkg from '../../package.json';
 
 export interface CompileOptions {
   output?: string;
@@ -19,7 +20,7 @@ export function createProgram(): Command {
   program
     .name('somon')
     .description('SomonScript compiler - Compile Tajik Cyrillic code to JavaScript')
-    .version('0.2.0');
+    .version(pkg.version);
 
   program
     .command('compile')
@@ -37,7 +38,8 @@ export function createProgram(): Command {
         // Read input file
         if (!fs.existsSync(input)) {
           console.error(`Error: File '${input}' not found`);
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
 
         const source = fs.readFileSync(input, 'utf-8');
@@ -55,7 +57,8 @@ export function createProgram(): Command {
         if (result.errors.length > 0) {
           console.error('Compilation errors:');
           result.errors.forEach(error => console.error(`  ${error}`));
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
 
         // Handle warnings
@@ -79,7 +82,8 @@ export function createProgram(): Command {
         }
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
     });
 
@@ -92,7 +96,8 @@ export function createProgram(): Command {
       try {
         if (!fs.existsSync(input)) {
           console.error(`Error: File '${input}' not found`);
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
 
         const source = fs.readFileSync(input, 'utf-8');
@@ -101,7 +106,8 @@ export function createProgram(): Command {
         if (result.errors.length > 0) {
           console.error('Compilation errors:');
           result.errors.forEach(error => console.error(`  ${error}`));
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
 
         // Execute the compiled JavaScript
@@ -109,7 +115,8 @@ export function createProgram(): Command {
         eval(result.code);
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
     });
 
@@ -123,7 +130,8 @@ export function createProgram(): Command {
 
         if (fs.existsSync(projectDir)) {
           console.error(`Error: Directory '${name}' already exists`);
-          process.exit(1);
+          process.exitCode = 1;
+          return;
         }
 
         // Create project directory
