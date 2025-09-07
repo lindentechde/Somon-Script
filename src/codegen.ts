@@ -297,6 +297,7 @@ export class CodeGenerator {
     return this.indent(`${this.generateExpression(node.expression)};`);
   }
 
+  // eslint-disable-next-line complexity
   private generateExpression(node: Expression): string {
     // Use a more direct delegation approach
     const simpleExpressions = ['Identifier', 'Literal', 'ThisExpression', 'Super'];

@@ -1,6 +1,6 @@
 {
   "name": "somoni-script",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
