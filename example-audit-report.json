@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-07T07:44:38.655Z",
+  "timestamp": "2025-09-07T07:48:37.365Z",
   "total": 32,
-  "working": 30,
-  "partial": 2,
+  "working": 31,
+  "partial": 1,
   "failing": 0,
-  "workingPercentage": 94,
+  "workingPercentage": 97,
   "details": {
     "working": [
       {
@@ -123,6 +123,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "24-comprehensive-phase3.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -159,11 +164,6 @@
       }
     ],
     "partial": [
-      {
-        "name": "24-comprehensive-phase3.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-24-comprehensive-phase3.js\""
-      },
       {
         "name": "test-tuple-array.som",
         "status": "partial",

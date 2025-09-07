@@ -235,12 +235,36 @@ export class Parser {
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
 
+    // Skip any newlines after opening parenthesis
+    while (this.match(TokenType.NEWLINE)) {
+      // Skip newlines
+    }
+
     const params: Parameter[] = [];
     if (!this.check(TokenType.RIGHT_PAREN)) {
       do {
         const param = this.parseParameter();
         params.push(param);
-      } while (this.match(TokenType.COMMA));
+
+        // Skip any newlines after parameter before checking for comma
+        while (this.match(TokenType.NEWLINE)) {
+          // Skip newlines
+        }
+      } while (
+        this.match(TokenType.COMMA) &&
+        (() => {
+          // Skip any newlines after comma
+          while (this.match(TokenType.NEWLINE)) {
+            // Skip newlines
+          }
+          return true;
+        })()
+      );
+    }
+
+    // Skip any newlines before closing parenthesis
+    while (this.match(TokenType.NEWLINE)) {
+      // Skip newlines
     }
 
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
