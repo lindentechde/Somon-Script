@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-09-06T22:02:16.264Z",
-  "total": 31,
-  "working": 29,
+  "timestamp": "2025-09-07T07:44:38.655Z",
+  "total": 32,
+  "working": 30,
   "partial": 2,
   "failing": 0,
   "workingPercentage": 94,
@@ -118,6 +118,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "23-tuple-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -155,14 +160,14 @@
     ],
     "partial": [
       {
-        "name": "23-tuple-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-23-tuple-types.js\""
-      },
-      {
         "name": "24-comprehensive-phase3.som",
         "status": "partial",
         "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-24-comprehensive-phase3.js\""
+      },
+      {
+        "name": "test-tuple-array.som",
+        "status": "partial",
+        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-test-tuple-array.js\""
       }
     ],
     "failing": []

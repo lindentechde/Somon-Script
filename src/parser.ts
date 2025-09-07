@@ -1129,6 +1129,7 @@ export class Parser {
       TokenType.ТАРҲ,
       TokenType.ЗАРБ,
       TokenType.ТАҚСИМ,
+      TokenType.ҲОЛАТ, // Allow 'case' keyword as identifier (for property names)
       // Note: We don't include control flow keywords here as they have special parsing
     ];
 
@@ -1529,12 +1530,25 @@ export class Parser {
 
       this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
 
-      return {
+      const tupleType: TupleType = {
         type: 'TupleType',
         elementTypes: types,
         line: this.previous().line,
         column: this.previous().column,
-      } as TupleType;
+      };
+
+      // Check for array type after tuple (e.g., [string, number][])
+      if (this.match(TokenType.LEFT_BRACKET)) {
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+        return {
+          type: 'ArrayType',
+          elementType: tupleType,
+          line: tupleType.line,
+          column: tupleType.column,
+        } as ArrayType;
+      }
+
+      return tupleType;
     }
 
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);
