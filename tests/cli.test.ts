@@ -3,9 +3,23 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
+// Direct imports for unit testing
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+const originalProcessExit = process.exit;
+const originalFsExistsSync = fs.existsSync;
+const originalFsReadFileSync = fs.readFileSync;
+const originalFsWriteFileSync = fs.writeFileSync;
+const originalFsMkdirSync = fs.mkdirSync;
+
 describe('CLI Integration Tests', () => {
   let tempDir: string;
   let cliPath: string;
+  let consoleLogSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
+  let processExitSpy: jest.SpyInstance;
 
   beforeAll(() => {
     // Build the project first
