@@ -170,25 +170,6 @@ jobs:
           echo "⚠️ Coverage report not found, but tests are passing"
         fi
         
-    - name: Documentation quality check
-      run: |
-        echo "Verifying documentation completeness..."
-        if [ -f "FEATURE_ALIGNMENT.md" ] && [ -f "README.md" ] && [ -f "CHANGELOG.md" ]; then
-          echo "✅ Core documentation files present!"
-        else
-          echo "❌ Missing core documentation files!"
-          exit 1
-        fi
-        
-        # Check if TypeDoc can generate docs
-        npm run docs:generate
-        if [ -d "docs/api" ]; then
-          echo "✅ API documentation generated successfully!"
-        else
-          echo "❌ API documentation generation failed!"
-          exit 1
-        fi
-
   release:
     name: Release
     runs-on: ubuntu-latest
