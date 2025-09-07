@@ -161,9 +161,11 @@ jobs:
         echo "Checking test coverage..."
         npm run test:coverage
         
-        # Extract coverage percentage (simplified check)
-        if [ -f "coverage/lcov-report/index.html" ]; then
-          echo "✅ Coverage report generated successfully!"
+        # Check coverage HTML (Jest writes coverage/index.html by default)
+        if [ -f "coverage/index.html" ]; then
+          echo "✅ Coverage report generated successfully! (coverage/index.html)"
+        elif [ -f "coverage/lcov-report/index.html" ]; then
+          echo "✅ Coverage report generated successfully! (coverage/lcov-report/index.html)"
         else
           echo "⚠️ Coverage report not found, but tests are passing"
         fi
