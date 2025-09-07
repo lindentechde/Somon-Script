@@ -5,6 +5,14 @@ All notable changes to SomonScript will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Planned
+- Language Server Protocol (LSP) implementation
+- IDE integrations and developer tooling  
+- Build system integrations (Webpack, Vite, etc.)
+- Performance optimization and advanced features
+
 ## [0.2.14] - 2025-09-07 🎉 PRODUCTION READY
 
 ### 🏆 PHASE 3 ADVANCED TYPE SYSTEM - COMPLETE! (97% Runtime Success)
@@ -15,18 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ALL CORE FEATURES**: Phases 1, 2, and 3 are 100% complete
 
 #### Fixed - Phase 3 Final Issues
-- ✅ **Complex Tuple Array Types** (23-tuple-types.som)
-  - Fixed parsing of `[сатр, рақам][]` type annotations
-  - Enhanced tuple type parsing to handle array brackets after tuples
-  - Variable identifier no longer lost during complex type parsing
-
-- ✅ **Class Access Modifier Keywords** (24-comprehensive-phase3.som)
-  - Fixed `хосусӣ ҳолат` parsing where `ҳолат` is a reserved keyword
+- **Complex Tuple Array Types**: Fixed parsing of `[сатр, рақам][]` type annotations
+  - Added comprehensive tuple type parsing with array bracket support
+  - Complex multiline function signatures now parse correctly
+- **Class Access Modifier Keywords**: Fixed parsing of `хосусӣ ҳолат` (private properties)
   - Added `TokenType.ҲОЛАТ` to `matchBuiltinIdentifier()` list
-  - Class properties with reserved keywords now work correctly
-
-- ✅ **Multiline Function Declarations** (24-comprehensive-phase3.som)
-  - Fixed functions with multiline parameter lists losing declaration context
+  - Class properties with reserved keywords now work
+- **Multiline Function Declarations**: Fixed functions with multiline parameter lists
   - Added comprehensive newline handling in function parameter parsing
   - Complex multiline function signatures now parse correctly
 
@@ -43,14 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Compilation Success**: 100% (32/32 examples compile)
 - **Test Coverage**: 64.33% statements, 76.76% functions
 - **Code Quality**: Zero linting errors, well-structured architecture
-
-## [Unreleased]
-
-### Next Phase: Ecosystem Development
-- Language Server Protocol (LSP) implementation
-- IDE integrations and developer tooling
-- Build system integrations (Webpack, Vite, etc.)
-- Performance optimization and advanced features
 
 ## [0.3.0] - 2025-09-03
 
@@ -75,11 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ **Phase 1**: 100% Complete - All core features working perfectly
 - ✅ **Phase 2**: 89% Complete - Most OOP features working, some inheritance issues
 - ⚠️ **Phase 3**: 43% Complete - Union types working, complex types need fixes
-
-#### Known Issues
-- Method name mapping inconsistencies in class generation
-- Complex type annotation parsing needs improvement
-- Interface type checking requires refinement
 
 ## [0.2.0] - 2025-09-03
 
@@ -116,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 🧠 **Memory Usage**: Reduced memory footprint through better data structures
 - 📈 **Scalability**: Enhanced support for larger codebases
 
-### Technical Metrics
+#### Technical Metrics
 - **Type Safety**: 100% (0 'as any' assertions)
 - **Union Types**: ✅ Fully Working
 - **Error Recovery**: ✅ Advanced
@@ -126,6 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-01-XX
 
 ### Added
+
+#### Core Type System
 - 🎯 **Core Type System**: Basic type annotations in Tajik (`сатр`, `рақам`, `мантиқӣ`)
 - 🏗️ **Interface System**: Complete interface support with optional properties
 - 🔍 **Type Checking**: Compile-time validation with detailed error messages
@@ -157,7 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clean JavaScript output
 - Comprehensive examples
 
-### Technical Foundation
+#### Technical Foundation
 - **Architecture Grade**: B+ (85/100)
 - **Language Support**: Complete Tajik Cyrillic integration
 - **Type System**: TypeScript-inspired with Tajik syntax
@@ -187,3 +179,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 📝 Documentation
 - 🧪 Testing
 - 🚀 Deployment and CI/CD
+
+## Historical Archive
+
+For detailed historical information and development notes, see:
+- [Complete Version History](docs/explanation/version-history.md)
+- [Development Phases](docs/explanation/development-phases.md)
+- [Quality Metrics Evolution](docs/explanation/quality-standards.md)
