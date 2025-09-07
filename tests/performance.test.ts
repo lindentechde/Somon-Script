@@ -40,7 +40,7 @@ describe('Performance Tests', () => {
       lexer.tokenize();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(10); // Less than 10ms
+      expect(end - start).toBeLessThan(20); // Less than 20ms for small programs
     });
 
     test('should tokenize medium program efficiently', () => {

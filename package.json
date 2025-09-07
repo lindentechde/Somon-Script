@@ -1,6 +1,6 @@
 {
   "name": "somon-script",
-  "version": "0.2.25",
+  "version": "0.2.44",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -10,9 +10,9 @@
     "build": "npm run clean && tsc",
     "build:watch": "tsc --watch",
     "dev": "npm run build:watch",
-    "test": "jest",
+    "test": "./jest-wrapper.sh",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "./jest-wrapper.sh --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
     "test:unit": "jest --testPathPattern='(lexer|parser|compiler|type-checker)\\.test\\.ts'",
     "test:integration": "jest --testPathPattern='(integration|cli)\\.test\\.ts'",
@@ -68,7 +68,7 @@
     "jest": "^29.0.0",
     "lint-staged": "^13.0.0",
     "prettier": "^3.0.0",
-    "ts-jest": "^29.0.0",
+    "ts-jest": "^29.4.1",
     "typedoc": "^0.25.0",
     "typescript": "^5.0.0"
   },
