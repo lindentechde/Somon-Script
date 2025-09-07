@@ -300,38 +300,97 @@ export class CodeGenerator {
   private generateExpression(node: Expression): string {
     switch (node.type) {
       case 'Identifier':
+      case 'Literal':
+      case 'ThisExpression':
+      case 'Super':
+        return this.generateSimpleExpression(node);
+      case 'BinaryExpression':
+      case 'UnaryExpression':
+      case 'UpdateExpression':
+        return this.generateOperatorExpression(node);
+      case 'CallExpression':
+      case 'AssignmentExpression':
+      case 'MemberExpression':
+        return this.generateCallAssignmentExpression(node);
+      case 'ArrayExpression':
+      case 'ObjectExpression':
+      case 'SpreadElement':
+        return this.generateStructuralExpression(node);
+      case 'AwaitExpression':
+      case 'NewExpression':
+        return this.generateSpecialExpression(node);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateSimpleExpression(node: Expression): string {
+    switch (node.type) {
+      case 'Identifier':
         return this.generateIdentifier(node as Identifier);
       case 'Literal':
         return this.generateLiteral(node as Literal);
+      case 'ThisExpression':
+        return 'this';
+      case 'Super':
+        return 'super';
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateOperatorExpression(node: Expression): string {
+    switch (node.type) {
       case 'BinaryExpression':
         return this.generateBinaryExpression(node as BinaryExpression);
       case 'UnaryExpression':
         return this.generateUnaryExpression(node as UnaryExpression);
       case 'UpdateExpression':
         return this.generateUpdateExpression(node as UpdateExpression);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateCallAssignmentExpression(node: Expression): string {
+    switch (node.type) {
       case 'CallExpression':
         return this.generateCallExpression(node as CallExpression);
       case 'AssignmentExpression':
         return this.generateAssignmentExpression(node as AssignmentExpression);
       case 'MemberExpression':
         return this.generateMemberExpression(node as MemberExpression);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateStructuralExpression(node: Expression): string {
+    switch (node.type) {
       case 'ArrayExpression':
         return this.generateArrayExpression(node as ArrayExpression);
       case 'ObjectExpression':
         return this.generateObjectExpression(node as ObjectExpression);
+      case 'SpreadElement':
+        return this.generateSpreadElement(node as SpreadElement);
+      default:
+        return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateSpecialExpression(node: Expression): string {
+    switch (node.type) {
       case 'AwaitExpression':
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
-      case 'ThisExpression':
-        return 'this';
-      case 'Super':
-        return 'super';
-      case 'SpreadElement':
-        return this.generateSpreadElement(node as SpreadElement);
       default:
-        throw new Error(`Unknown expression type: ${node.type}`);
+        return this.handleUnknownExpression(node);
     }
+  }
+
+  private handleUnknownExpression(node: Expression): string {
+    throw new Error(`Unknown expression type: ${node.type}`);
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {

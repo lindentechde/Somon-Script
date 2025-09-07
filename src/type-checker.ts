@@ -243,78 +243,84 @@ export class TypeChecker {
   private resolveTypeNode(typeNode: TypeNode): Type {
     switch (typeNode.type) {
       case 'PrimitiveType':
-        const primitiveType = typeNode as PrimitiveType;
-        return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
-
+        return this.resolvePrimitiveType(typeNode as PrimitiveType);
       case 'ArrayType':
-        const arrayType = typeNode as ArrayType;
-        return {
-          kind: 'array',
-          elementType: this.resolveTypeNode(arrayType.elementType),
-        };
-
+        return this.resolveArrayType(typeNode as ArrayType);
       case 'UnionType':
-        const unionType = typeNode as UnionType;
-        return {
-          kind: 'union',
-          types: unionType.types.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveUnionType(typeNode as UnionType);
       case 'IntersectionType':
-        const intersectionType = typeNode as IntersectionType;
-        return {
-          kind: 'intersection',
-          types: intersectionType.types.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveIntersectionType(typeNode as IntersectionType);
       case 'TupleType':
-        const tupleType = typeNode as TupleType;
-        return {
-          kind: 'tuple',
-          types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveTupleType(typeNode as TupleType);
       case 'GenericType':
-        const genericType = typeNode as GenericType;
-        // Check if it's a known interface or type alias
-        const interfaceType = this.interfaceTable.get(genericType.name.name);
-        if (interfaceType) {
-          return interfaceType;
-        }
-        const aliasType = this.typeAliasTable.get(genericType.name.name);
-        if (aliasType) {
-          return aliasType;
-        }
-        // Check if it's a class type
-        const classType = this.symbolTable.get(genericType.name.name);
-        if (classType && classType.kind === 'class') {
-          return classType;
-        }
-        // Unknown type
-        return { kind: 'unknown', name: genericType.name.name };
-
+        return this.resolveGenericType(typeNode as GenericType);
       case 'Identifier':
-        // Handle simple interface/type references
-        const identifierType = typeNode as Identifier;
-        const interfaceRef = this.interfaceTable.get(identifierType.name);
-        if (interfaceRef) {
-          return interfaceRef;
-        }
-        const aliasRef = this.typeAliasTable.get(identifierType.name);
-        if (aliasRef) {
-          return aliasRef;
-        }
-        // Check if it's a class type
-        const classRef = this.symbolTable.get(identifierType.name);
-        if (classRef && classRef.kind === 'class') {
-          return classRef;
-        }
-        // Unknown type
-        return { kind: 'unknown', name: identifierType.name };
-
+        return this.resolveIdentifierType(typeNode as Identifier);
       default:
         return { kind: 'unknown' };
     }
+  }
+
+  private resolvePrimitiveType(primitiveType: PrimitiveType): Type {
+    return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
+  }
+
+  private resolveArrayType(arrayType: ArrayType): Type {
+    return {
+      kind: 'array',
+      elementType: this.resolveTypeNode(arrayType.elementType),
+    };
+  }
+
+  private resolveUnionType(unionType: UnionType): Type {
+    return {
+      kind: 'union',
+      types: unionType.types.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveIntersectionType(intersectionType: IntersectionType): Type {
+    return {
+      kind: 'intersection',
+      types: intersectionType.types.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveTupleType(tupleType: TupleType): Type {
+    return {
+      kind: 'tuple',
+      types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveGenericType(genericType: GenericType): Type {
+    return this.resolveNamedType(genericType.name.name);
+  }
+
+  private resolveIdentifierType(identifierType: Identifier): Type {
+    return this.resolveNamedType(identifierType.name);
+  }
+
+  private resolveNamedType(typeName: string): Type {
+    // Check if it's a known interface or type alias
+    const interfaceType = this.interfaceTable.get(typeName);
+    if (interfaceType) {
+      return interfaceType;
+    }
+
+    const aliasType = this.typeAliasTable.get(typeName);
+    if (aliasType) {
+      return aliasType;
+    }
+
+    // Check if it's a class type
+    const classType = this.symbolTable.get(typeName);
+    if (classType && classType.kind === 'class') {
+      return classType;
+    }
+
+    // Unknown type
+    return { kind: 'unknown', name: typeName };
   }
 
   private mapTajikToPrimitive(tajikType: string): string {
