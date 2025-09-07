@@ -5,7 +5,7 @@ const path = require('path');
 const { performance } = require('perf_hooks');
 const { compile } = require('../dist/compiler');
 
-console.log('🚀 Somoni-script Performance Benchmarks\n');
+console.log('🚀 SomonScript Performance Benchmarks\n');
 
 // Test files of different complexities
 const testFiles = {
@@ -85,26 +85,26 @@ const testFiles = {
     ҷамъ += корбар.синну_сол;
   }
   бозгашт ҷамъ / корбарҳо.дарозӣ;
-}`
+}`,
 };
 
 function benchmark(name, source, iterations = 10) {
   console.log(`📊 Benchmarking ${name}:`);
   console.log(`   Source size: ${source.length} characters`);
-  
+
   const times = [];
   let totalErrors = 0;
-  
+
   for (let i = 0; i < iterations; i++) {
     const start = performance.now();
-    
+
     try {
       const result = compile(source, { strict: true });
       const end = performance.now();
-      
+
       times.push(end - start);
       totalErrors += result.errors.length;
-      
+
       if (result.errors.length > 0) {
         console.log(`   ⚠️  Iteration ${i + 1}: ${result.errors.length} errors`);
       }
@@ -113,19 +113,21 @@ function benchmark(name, source, iterations = 10) {
       totalErrors++;
     }
   }
-  
+
   if (times.length > 0) {
     const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
     const minTime = Math.min(...times);
     const maxTime = Math.max(...times);
-    
+
     console.log(`   ⏱️  Average: ${avgTime.toFixed(2)}ms`);
     console.log(`   ⚡ Fastest: ${minTime.toFixed(2)}ms`);
     console.log(`   🐌 Slowest: ${maxTime.toFixed(2)}ms`);
-    console.log(`   📈 Throughput: ${(source.length / avgTime * 1000).toFixed(0)} chars/sec`);
+    console.log(`   📈 Throughput: ${((source.length / avgTime) * 1000).toFixed(0)} chars/sec`);
   }
-  
-  console.log(`   ✅ Success rate: ${((iterations - totalErrors) / iterations * 100).toFixed(1)}%`);
+
+  console.log(
+    `   ✅ Success rate: ${(((iterations - totalErrors) / iterations) * 100).toFixed(1)}%`
+  );
   console.log('');
 }
 

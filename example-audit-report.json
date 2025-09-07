@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-04T12:02:25.210Z",
-  "total": 24,
-  "working": 17,
-  "partial": 7,
+  "timestamp": "2025-09-07T09:27:43.154Z",
+  "total": 32,
+  "working": 32,
+  "partial": 0,
   "failing": 0,
-  "workingPercentage": 71,
+  "workingPercentage": 100,
   "details": {
     "working": [
       {
@@ -48,12 +48,27 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "09-interfaces.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "10-classes-basic.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
       {
         "name": "11-classes-advanced.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "12-student-management-system.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "13-inheritance-demo.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -91,45 +106,69 @@
         "name": "20-advanced-classes.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
-      }
-    ],
-    "partial": [
-      {
-        "name": "09-interfaces.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-09-interfaces.js\""
-      },
-      {
-        "name": "12-student-management-system.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-12-student-management-system.js\""
-      },
-      {
-        "name": "13-inheritance-demo.som",
-        "status": "partial",
-        "reason": "Marked as future implementation"
       },
       {
         "name": "21-conditional-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-21-conditional-types.js\""
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       },
       {
         "name": "22-mapped-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-22-mapped-types.js\""
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       },
       {
         "name": "23-tuple-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-23-tuple-types.js\""
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       },
       {
         "name": "24-comprehensive-phase3.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-24-comprehensive-phase3.js\""
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "comprehensive-operator-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "simple-class-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "simple-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-advanced-operators.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-bitwise.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-new-operators.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-operators.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "test-tuple-array.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
       }
     ],
+    "partial": [],
     "failing": []
   }
 }

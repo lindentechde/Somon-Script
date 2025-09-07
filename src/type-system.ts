@@ -54,6 +54,7 @@ export interface PropertySignature extends ASTNode {
   key: Identifier;
   typeAnnotation: TypeAnnotation;
   optional: boolean;
+  readonly?: boolean;
 }
 
 export interface TypeParameter extends ASTNode {

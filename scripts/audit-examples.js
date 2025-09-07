@@ -4,36 +4,39 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('🔍 Auditing Somoni-script Examples\n');
+console.log('🔍 Auditing SomonScript Examples\n');
 
 const examplesDir = path.join(__dirname, '..', 'examples');
-const examples = fs.readdirSync(examplesDir).filter(file => file.endsWith('.som')).sort();
+const examples = fs
+  .readdirSync(examplesDir)
+  .filter(file => file.endsWith('.som'))
+  .sort();
 
 const results = {
   working: [],
   partial: [],
   failing: [],
-  total: examples.length
+  total: examples.length,
 };
 
 examples.forEach((example, index) => {
   const examplePath = path.join(examplesDir, example);
   const exampleName = example.replace('.som', '');
-  
+
   console.log(`[${index + 1}/${examples.length}] Testing ${example}...`);
-  
+
   try {
     // Try to compile the example
     const compileCommand = `node dist/cli.js compile "${examplePath}" -o /tmp/test-${exampleName}.js`;
     execSync(compileCommand, { stdio: 'pipe' });
-    
+
     // Check if it's a future implementation example
     const content = fs.readFileSync(examplePath, 'utf-8');
     if (content.includes('Future Implementation') || content.includes('planned for future')) {
       results.partial.push({
         name: example,
         status: 'partial',
-        reason: 'Marked as future implementation'
+        reason: 'Marked as future implementation',
       });
       console.log(`  ⚠️  Partial - Future implementation`);
     } else {
@@ -44,14 +47,14 @@ examples.forEach((example, index) => {
         results.working.push({
           name: example,
           status: 'working',
-          reason: 'Compiles and runs successfully'
+          reason: 'Compiles and runs successfully',
         });
         console.log(`  ✅ Working`);
       } catch (runError) {
         results.partial.push({
           name: example,
           status: 'partial',
-          reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0]
+          reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0],
         });
         console.log(`  ⚠️  Partial - Runtime error`);
       }
@@ -60,7 +63,7 @@ examples.forEach((example, index) => {
     results.failing.push({
       name: example,
       status: 'failing',
-      reason: 'Compilation error: ' + compileError.message.split('\n')[0]
+      reason: 'Compilation error: ' + compileError.message.split('\n')[0],
     });
     console.log(`  ❌ Failing - Compilation error`);
   }
@@ -68,9 +71,15 @@ examples.forEach((example, index) => {
 
 console.log('\n📊 Example Audit Results:');
 console.log(`Total Examples: ${results.total}`);
-console.log(`✅ Working: ${results.working.length} (${Math.round(results.working.length / results.total * 100)}%)`);
-console.log(`⚠️  Partial: ${results.partial.length} (${Math.round(results.partial.length / results.total * 100)}%)`);
-console.log(`❌ Failing: ${results.failing.length} (${Math.round(results.failing.length / results.total * 100)}%)`);
+console.log(
+  `✅ Working: ${results.working.length} (${Math.round((results.working.length / results.total) * 100)}%)`
+);
+console.log(
+  `⚠️  Partial: ${results.partial.length} (${Math.round((results.partial.length / results.total) * 100)}%)`
+);
+console.log(
+  `❌ Failing: ${results.failing.length} (${Math.round((results.failing.length / results.total) * 100)}%)`
+);
 
 if (results.working.length > 0) {
   console.log('\n✅ Working Examples:');
@@ -94,12 +103,12 @@ const statusReport = {
   working: results.working.length,
   partial: results.partial.length,
   failing: results.failing.length,
-  workingPercentage: Math.round(results.working.length / results.total * 100),
+  workingPercentage: Math.round((results.working.length / results.total) * 100),
   details: {
     working: results.working,
     partial: results.partial,
-    failing: results.failing
-  }
+    failing: results.failing,
+  },
 };
 
 fs.writeFileSync(

@@ -2,6 +2,7 @@
 import {
   ArrayType,
   CallExpression,
+  ClassDeclaration,
   Expression,
   FunctionDeclaration,
   GenericType,
@@ -9,6 +10,7 @@ import {
   InterfaceDeclaration,
   IntersectionType,
   Literal,
+  NewExpression,
   ObjectExpression,
   PrimitiveType,
   Program,
@@ -39,7 +41,7 @@ export interface TypeCheckResult {
 }
 
 /**
- * Represents a type in the Somoni-script type system
+ * Represents a type in the SomonScript type system
  */
 export interface Type {
   kind: string;
@@ -59,7 +61,7 @@ export interface PropertyType {
 }
 
 /**
- * Type checker for Somoni-script AST
+ * Type checker for SomonScript AST
  * Provides comprehensive type checking with Tajik Cyrillic type annotations
  */
 export class TypeChecker {
@@ -112,6 +114,8 @@ export class TypeChecker {
         this.collectInterface(statement as InterfaceDeclaration);
       } else if (statement.type === 'TypeAlias') {
         this.collectTypeAlias(statement as TypeAlias);
+      } else if (statement.type === 'ClassDeclaration') {
+        this.collectClass(statement as ClassDeclaration);
       }
     }
   }
@@ -141,6 +145,15 @@ export class TypeChecker {
     this.typeAliasTable.set(typeAlias.name.name, aliasType);
   }
 
+  private collectClass(classDecl: ClassDeclaration): void {
+    // Register the class type in the symbol table during collection phase
+    const classType: Type = {
+      kind: 'class',
+      name: classDecl.name.name,
+    };
+    this.symbolTable.set(classDecl.name.name, classType);
+  }
+
   private checkStatement(statement: Statement): void {
     switch (statement.type) {
       case 'VariableDeclaration':
@@ -148,6 +161,9 @@ export class TypeChecker {
         break;
       case 'FunctionDeclaration':
         this.checkFunctionDeclaration(statement as FunctionDeclaration);
+        break;
+      case 'ClassDeclaration':
+        this.checkClassDeclaration(statement as ClassDeclaration);
         break;
       // Add more statement types as needed
     }
@@ -215,71 +231,96 @@ export class TypeChecker {
     this.symbolTable.set(funcDecl.name.name, functionType);
   }
 
+  private checkClassDeclaration(classDecl: ClassDeclaration): void {
+    // Register the class type in the symbol table
+    const classType: Type = {
+      kind: 'class',
+      name: classDecl.name.name,
+    };
+    this.symbolTable.set(classDecl.name.name, classType);
+  }
+
   private resolveTypeNode(typeNode: TypeNode): Type {
     switch (typeNode.type) {
       case 'PrimitiveType':
-        const primitiveType = typeNode as PrimitiveType;
-        return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
-
+        return this.resolvePrimitiveType(typeNode as PrimitiveType);
       case 'ArrayType':
-        const arrayType = typeNode as ArrayType;
-        return {
-          kind: 'array',
-          elementType: this.resolveTypeNode(arrayType.elementType),
-        };
-
+        return this.resolveArrayType(typeNode as ArrayType);
       case 'UnionType':
-        const unionType = typeNode as UnionType;
-        return {
-          kind: 'union',
-          types: unionType.types.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveUnionType(typeNode as UnionType);
       case 'IntersectionType':
-        const intersectionType = typeNode as IntersectionType;
-        return {
-          kind: 'intersection',
-          types: intersectionType.types.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveIntersectionType(typeNode as IntersectionType);
       case 'TupleType':
-        const tupleType = typeNode as TupleType;
-        return {
-          kind: 'tuple',
-          types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
-        };
-
+        return this.resolveTupleType(typeNode as TupleType);
       case 'GenericType':
-        const genericType = typeNode as GenericType;
-        // Check if it's a known interface or type alias
-        const interfaceType = this.interfaceTable.get(genericType.name.name);
-        if (interfaceType) {
-          return interfaceType;
-        }
-        const aliasType = this.typeAliasTable.get(genericType.name.name);
-        if (aliasType) {
-          return aliasType;
-        }
-        // Unknown type
-        return { kind: 'unknown', name: genericType.name.name };
-
+        return this.resolveGenericType(typeNode as GenericType);
       case 'Identifier':
-        // Handle simple interface/type references
-        const identifierType = typeNode as Identifier;
-        const interfaceRef = this.interfaceTable.get(identifierType.name);
-        if (interfaceRef) {
-          return interfaceRef;
-        }
-        const aliasRef = this.typeAliasTable.get(identifierType.name);
-        if (aliasRef) {
-          return aliasRef;
-        }
-        // Unknown type
-        return { kind: 'unknown', name: identifierType.name };
-
+        return this.resolveIdentifierType(typeNode as Identifier);
       default:
         return { kind: 'unknown' };
     }
+  }
+
+  private resolvePrimitiveType(primitiveType: PrimitiveType): Type {
+    return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
+  }
+
+  private resolveArrayType(arrayType: ArrayType): Type {
+    return {
+      kind: 'array',
+      elementType: this.resolveTypeNode(arrayType.elementType),
+    };
+  }
+
+  private resolveUnionType(unionType: UnionType): Type {
+    return {
+      kind: 'union',
+      types: unionType.types.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveIntersectionType(intersectionType: IntersectionType): Type {
+    return {
+      kind: 'intersection',
+      types: intersectionType.types.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveTupleType(tupleType: TupleType): Type {
+    return {
+      kind: 'tuple',
+      types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
+    };
+  }
+
+  private resolveGenericType(genericType: GenericType): Type {
+    return this.resolveNamedType(genericType.name.name);
+  }
+
+  private resolveIdentifierType(identifierType: Identifier): Type {
+    return this.resolveNamedType(identifierType.name);
+  }
+
+  private resolveNamedType(typeName: string): Type {
+    // Check if it's a known interface or type alias
+    const interfaceType = this.interfaceTable.get(typeName);
+    if (interfaceType) {
+      return interfaceType;
+    }
+
+    const aliasType = this.typeAliasTable.get(typeName);
+    if (aliasType) {
+      return aliasType;
+    }
+
+    // Check if it's a class type
+    const classType = this.symbolTable.get(typeName);
+    if (classType && classType.kind === 'class') {
+      return classType;
+    }
+
+    // Unknown type
+    return { kind: 'unknown', name: typeName };
   }
 
   private mapTajikToPrimitive(tajikType: string): string {
@@ -309,6 +350,8 @@ export class TypeChecker {
         return this.inferObjectType(expression as ObjectExpression, targetType);
       case 'CallExpression':
         return this.inferCallType(expression as CallExpression);
+      case 'NewExpression':
+        return this.inferNewExpressionType(expression as NewExpression);
       default:
         return { kind: 'unknown' };
     }
@@ -365,6 +408,18 @@ export class TypeChecker {
       const functionType = this.symbolTable.get(functionName);
       if (functionType && functionType.kind === 'function' && functionType.returnType) {
         return functionType.returnType;
+      }
+    }
+    return { kind: 'unknown' };
+  }
+
+  private inferNewExpressionType(newExpr: NewExpression): Type {
+    if (newExpr.callee && newExpr.callee.type === 'Identifier') {
+      const className = (newExpr.callee as Identifier).name;
+      const classType = this.symbolTable.get(className);
+      if (classType && classType.kind === 'class') {
+        // Return an instance type of the class
+        return { kind: 'class', name: className };
       }
     }
     return { kind: 'unknown' };
@@ -431,6 +486,11 @@ export class TypeChecker {
       return this.isStructurallyCompatible(source, target);
     }
 
+    // Class type checking
+    if (source.kind === 'class' && target.kind === 'class') {
+      return source.name === target.name;
+    }
+
     return false;
   }
 
@@ -450,6 +510,8 @@ export class TypeChecker {
         return `[${type.types!.map(t => this.typeToString(t)).join(', ')}]`;
       case 'literal':
         return typeof type.name === 'string' ? `"${type.name}"` : String(type.name);
+      case 'class':
+        return type.name || 'class';
       default:
         return type.name || 'unknown';
     }

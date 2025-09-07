@@ -103,6 +103,7 @@ export class Lexer {
     ['калидҳои', TokenType.КАЛИДҲОИ],
     ['инфер', TokenType.ИНФЕР],
     ['readonly', TokenType.READONLY],
+    ['танҳохонӣ', TokenType.ТАНҲОХОНӢ],
     ['unique', TokenType.UNIQUE],
   ]);
 
@@ -143,17 +144,60 @@ export class Lexer {
       return this.nextToken();
     }
 
-    // Single character tokens
+    // Single character tokens and multi-character operators
     switch (char) {
       case '+':
+        if (this.peek() === '+') {
+          this.advance(); // consume first '+'
+          this.advance(); // consume second '+'
+          return this.createToken(TokenType.INCREMENT, '++', this.line, this.column - 2);
+        } else if (this.peek() === '=') {
+          this.advance(); // consume '+'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.PLUS_ASSIGN, '+=', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.PLUS);
       case '-':
+        if (this.peek() === '-') {
+          this.advance(); // consume first '-'
+          this.advance(); // consume second '-'
+          return this.createToken(TokenType.DECREMENT, '--', this.line, this.column - 2);
+        } else if (this.peek() === '=') {
+          this.advance(); // consume '-'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.MINUS_ASSIGN, '-=', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.MINUS);
       case '*':
+        if (this.peek() === '*') {
+          this.advance(); // consume first '*'
+          if (this.peek() === '=') {
+            this.advance(); // consume second '*'
+            this.advance(); // consume '='
+            return this.createToken(TokenType.EXPONENT_ASSIGN, '**=', this.line, this.column - 3);
+          } else {
+            this.advance(); // consume second '*'
+            return this.createToken(TokenType.EXPONENT, '**', this.line, this.column - 2);
+          }
+        } else if (this.peek() === '=') {
+          this.advance(); // consume '*'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.MULTIPLY_ASSIGN, '*=', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.MULTIPLY);
       case '/':
+        if (this.peek() === '=') {
+          this.advance(); // consume '/'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.DIVIDE_ASSIGN, '/=', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.DIVIDE);
       case '%':
+        if (this.peek() === '=') {
+          this.advance(); // consume '%'
+          this.advance(); // consume '='
+          return this.createToken(TokenType.MODULO_ASSIGN, '%=', this.line, this.column - 2);
+        }
         return this.singleCharToken(TokenType.MODULO);
       case '(':
         return this.singleCharToken(TokenType.LEFT_PAREN);
@@ -194,8 +238,18 @@ export class Lexer {
     if (char === '=') {
       if (this.peek() === '=') {
         this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.STRICT_EQUAL, '===', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.EQUAL, '==', startLine, startColumn);
+        }
+      } else if (this.peek() === '>') {
         this.advance();
-        return this.createToken(TokenType.EQUAL, '==', startLine, startColumn);
+        this.advance();
+        return this.createToken(TokenType.ARROW, '=>', startLine, startColumn);
       }
       return this.singleCharToken(TokenType.ASSIGN);
     }
@@ -203,14 +257,30 @@ export class Lexer {
     if (char === '!') {
       if (this.peek() === '=') {
         this.advance();
-        this.advance();
-        return this.createToken(TokenType.NOT_EQUAL, '!=', startLine, startColumn);
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.STRICT_NOT_EQUAL, '!==', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.NOT_EQUAL, '!=', startLine, startColumn);
+        }
       }
       return this.singleCharToken(TokenType.NOT);
     }
 
     if (char === '<') {
-      if (this.peek() === '=') {
+      if (this.peek() === '<') {
+        this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.LEFT_SHIFT_ASSIGN, '<<=', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.LEFT_SHIFT, '<<', startLine, startColumn);
+        }
+      } else if (this.peek() === '=') {
         this.advance();
         this.advance();
         return this.createToken(TokenType.LESS_EQUAL, '<=', startLine, startColumn);
@@ -219,7 +289,32 @@ export class Lexer {
     }
 
     if (char === '>') {
-      if (this.peek() === '=') {
+      if (this.peek() === '>') {
+        this.advance();
+        if (this.peek() === '>') {
+          this.advance();
+          if (this.peek() === '=') {
+            this.advance();
+            this.advance();
+            return this.createToken(
+              TokenType.UNSIGNED_RIGHT_SHIFT_ASSIGN,
+              '>>>=',
+              startLine,
+              startColumn
+            );
+          } else {
+            this.advance();
+            return this.createToken(TokenType.UNSIGNED_RIGHT_SHIFT, '>>>', startLine, startColumn);
+          }
+        } else if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.RIGHT_SHIFT_ASSIGN, '>>=', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.RIGHT_SHIFT, '>>', startLine, startColumn);
+        }
+      } else if (this.peek() === '=') {
         this.advance();
         this.advance();
         return this.createToken(TokenType.GREATER_EQUAL, '>=', startLine, startColumn);
@@ -230,22 +325,79 @@ export class Lexer {
     if (char === '&') {
       if (this.peek() === '&') {
         this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.AND_ASSIGN, '&&=', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.AND, '&&', startLine, startColumn);
+        }
+      } else if (this.peek() === '=') {
         this.advance();
-        return this.createToken(TokenType.AND, '&&', startLine, startColumn);
+        this.advance();
+        return this.createToken(TokenType.BITWISE_AND_ASSIGN, '&=', startLine, startColumn);
       } else {
         this.advance();
-        return this.createToken(TokenType.AMPERSAND, '&', startLine, startColumn);
+        return this.createToken(TokenType.BITWISE_AND, '&', startLine, startColumn);
       }
     }
 
     if (char === '|') {
       if (this.peek() === '|') {
         this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.OR_ASSIGN, '||=', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.OR, '||', startLine, startColumn);
+        }
+      } else if (this.peek() === '=') {
         this.advance();
-        return this.createToken(TokenType.OR, '||', startLine, startColumn);
+        this.advance();
+        return this.createToken(TokenType.BITWISE_OR_ASSIGN, '|=', startLine, startColumn);
       } else {
         this.advance();
-        return this.createToken(TokenType.PIPE, '|', startLine, startColumn);
+        return this.createToken(TokenType.BITWISE_OR, '|', startLine, startColumn);
+      }
+    }
+
+    if (char === '^') {
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.BITWISE_XOR_ASSIGN, '^=', startLine, startColumn);
+      } else {
+        this.advance();
+        return this.createToken(TokenType.BITWISE_XOR, '^', startLine, startColumn);
+      }
+    }
+
+    if (char === '~') {
+      this.advance();
+      return this.createToken(TokenType.BITWISE_NOT, '~', startLine, startColumn);
+    }
+
+    if (char === '?') {
+      if (this.peek() === '?') {
+        this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(TokenType.NULLISH_ASSIGN, '??=', startLine, startColumn);
+        } else {
+          this.advance();
+          return this.createToken(TokenType.NULLISH_COALESCING, '??', startLine, startColumn);
+        }
+      } else if (this.peek() === '.') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.OPTIONAL_CHAINING, '?.', startLine, startColumn);
+      } else {
+        this.advance();
+        return this.createToken(TokenType.QUESTION, '?', startLine, startColumn);
       }
     }
 

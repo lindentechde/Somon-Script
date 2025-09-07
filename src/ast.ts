@@ -61,6 +61,14 @@ export interface WhileStatement extends Statement {
   body: Statement;
 }
 
+export interface ForStatement extends Statement {
+  type: 'ForStatement';
+  init: VariableDeclaration | ExpressionStatement | null;
+  test: Expression | null;
+  update: Expression | null;
+  body: Statement;
+}
+
 export interface ExpressionStatement extends Statement {
   type: 'ExpressionStatement';
   expression: Expression;
@@ -88,6 +96,13 @@ export interface UnaryExpression extends Expression {
   type: 'UnaryExpression';
   operator: string;
   argument: Expression;
+}
+
+export interface UpdateExpression extends Expression {
+  type: 'UpdateExpression';
+  operator: string;
+  argument: Expression;
+  prefix: boolean;
 }
 
 export interface CallExpression extends Expression {
