@@ -298,30 +298,33 @@ export class CodeGenerator {
   }
 
   private generateExpression(node: Expression): string {
-    switch (node.type) {
-      case 'Identifier':
-      case 'Literal':
-      case 'ThisExpression':
-      case 'Super':
-        return this.generateSimpleExpression(node);
-      case 'BinaryExpression':
-      case 'UnaryExpression':
-      case 'UpdateExpression':
-        return this.generateOperatorExpression(node);
-      case 'CallExpression':
-      case 'AssignmentExpression':
-      case 'MemberExpression':
-        return this.generateCallAssignmentExpression(node);
-      case 'ArrayExpression':
-      case 'ObjectExpression':
-      case 'SpreadElement':
-        return this.generateStructuralExpression(node);
-      case 'AwaitExpression':
-      case 'NewExpression':
-        return this.generateSpecialExpression(node);
-      default:
-        return this.handleUnknownExpression(node);
+    // Use a more direct delegation approach
+    const simpleExpressions = ['Identifier', 'Literal', 'ThisExpression', 'Super'];
+    if (simpleExpressions.includes(node.type)) {
+      return this.generateSimpleExpression(node);
     }
+
+    const operatorExpressions = ['BinaryExpression', 'UnaryExpression', 'UpdateExpression'];
+    if (operatorExpressions.includes(node.type)) {
+      return this.generateOperatorExpression(node);
+    }
+
+    const callExpressions = ['CallExpression', 'AssignmentExpression', 'MemberExpression'];
+    if (callExpressions.includes(node.type)) {
+      return this.generateCallAssignmentExpression(node);
+    }
+
+    const structuralExpressions = ['ArrayExpression', 'ObjectExpression', 'SpreadElement'];
+    if (structuralExpressions.includes(node.type)) {
+      return this.generateStructuralExpression(node);
+    }
+
+    const specialExpressions = ['AwaitExpression', 'NewExpression'];
+    if (specialExpressions.includes(node.type)) {
+      return this.generateSpecialExpression(node);
+    }
+
+    return this.handleUnknownExpression(node);
   }
 
   private generateSimpleExpression(node: Expression): string {
