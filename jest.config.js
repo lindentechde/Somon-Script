@@ -1,4 +1,6 @@
-module.exports = {
+const nodeVersion = parseInt(process.version.slice(1).split('.')[0]);
+
+const baseConfig = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
@@ -25,3 +27,27 @@ module.exports = {
     '!src/types.ts', // Re-export file
   ],
 };
+
+// Node.js 23+ compatibility settings
+if (nodeVersion >= 23) {
+  baseConfig.extensionsToTreatAsEsm = [];
+  baseConfig.globals = {
+    'ts-jest': {
+      useESM: false,
+      isolatedModules: true,
+    },
+  };
+  baseConfig.transform = {
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        isolatedModules: true,
+        useESM: false,
+      },
+    ],
+  };
+  baseConfig.moduleFileExtensions = ['ts', 'js'];
+  baseConfig.transformIgnorePatterns = ['node_modules/(?!(.*\\.mjs$))'];
+}
+
+module.exports = baseConfig;
