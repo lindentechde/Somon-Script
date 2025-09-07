@@ -14,13 +14,16 @@ describe('CLI Integration - Real Coverage', () => {
   let cliPath: string;
 
   beforeAll(() => {
+    // Determine repository root dynamically (works in CI, devcontainer, and local environments)
+    const repoRoot = path.resolve(__dirname, '..');
+
     // Build the project first
     try {
-      execSync('npm run build', { stdio: 'pipe', cwd: '/workspaces/somoni-script' });
+      execSync('npm run build', { stdio: 'pipe', cwd: repoRoot });
     } catch (error) {
       console.warn('Build failed, tests may not work correctly');
     }
-    cliPath = path.join('/workspaces/somoni-script', 'dist', 'cli.js');
+    cliPath = path.join(repoRoot, 'dist', 'cli.js');
   });
 
   beforeEach(() => {
