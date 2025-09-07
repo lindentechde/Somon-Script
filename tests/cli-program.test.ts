@@ -13,6 +13,7 @@ import { createProgram } from '../src/cli/program';
 describe('CLI Program (in-process)', () => {
   let tempDir: string;
   let originalCwd: string;
+  let originalExitCode: number | undefined;
   let consoleLogSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
@@ -20,6 +21,7 @@ describe('CLI Program (in-process)', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-cli-program-'));
     originalCwd = process.cwd();
+    originalExitCode = process.exitCode;
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -31,6 +33,8 @@ describe('CLI Program (in-process)', () => {
 
     // Restore cwd
     process.chdir(originalCwd);
+    // Reset any exit code left by CLI handlers during tests
+    process.exitCode = originalExitCode ?? 0;
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();

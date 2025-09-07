@@ -109,3 +109,10 @@ console.error = (...args) => {
   }
   originalConsoleError.apply(console, args);
 };
+
+// Ensure any CLI-set exit codes don't leak across tests and fail the Jest process
+afterEach(() => {
+  if (process.exitCode && process.exitCode !== 0) {
+    process.exitCode = 0;
+  }
+});
