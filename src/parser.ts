@@ -43,7 +43,6 @@ import {
   TryStatement,
   CatchClause,
   ThrowStatement,
-  ClassDeclaration,
   ArrayPattern,
   ObjectPattern,
   PropertyPattern,
@@ -51,14 +50,23 @@ import {
   ObjectExpression,
   Property,
 } from './types';
+import { ImportHandler } from './handlers/import-handler';
+import { DeclarationHandler } from './handlers/declaration-handler';
+import { LoopHandler } from './handlers/loop-handler';
 
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
   private errors: string[] = [];
+  private importHandler: ImportHandler;
+  private declarationHandler: DeclarationHandler;
+  private loopHandler: LoopHandler;
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
+    this.importHandler = new ImportHandler(this);
+    this.declarationHandler = new DeclarationHandler(this);
+    this.loopHandler = new LoopHandler(this);
   }
 
   getErrors(): string[] {
@@ -93,50 +101,19 @@ export class Parser {
         return null;
       }
 
-      if (this.match(TokenType.ВОРИД)) {
-        return this.importDeclaration();
+      const importStmt = this.importHandler.parse();
+      if (importStmt) {
+        return importStmt;
       }
 
-      if (this.match(TokenType.СОДИР)) {
-        return this.exportDeclaration();
+      const declStmt = this.declarationHandler.parse();
+      if (declStmt) {
+        return declStmt;
       }
 
-      if (this.match(TokenType.ИНТЕРФЕЙС)) {
-        return this.interfaceDeclaration();
-      }
-
-      if (this.match(TokenType.НАВЪ)) {
-        return this.typeAlias();
-      }
-
-      if (this.match(TokenType.МАВҲУМ)) {
-        // Handle abstract class
-        this.consume(TokenType.СИНФ, "Expected 'синф' after 'мавҳум'");
-        const classDecl = this.classDeclaration();
-        // Mark as abstract
-        (classDecl as ClassDeclaration & { abstract?: boolean }).abstract = true;
-        return classDecl;
-      }
-
-      if (this.match(TokenType.СИНФ)) {
-        return this.classDeclaration();
-      }
-
-      if (this.match(TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ)) {
-        return this.variableDeclaration();
-      }
-
-      if (this.match(TokenType.ҲАМЗАМОН)) {
-        // Handle async function
-        this.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
-        const func = this.functionDeclaration();
-        // Mark as async (we'll handle this in codegen)
-        (func as FunctionDeclaration & { async?: boolean }).async = true;
-        return func;
-      }
-
-      if (this.match(TokenType.ФУНКСИЯ)) {
-        return this.functionDeclaration();
+      const loopStmt = this.loopHandler.parse();
+      if (loopStmt) {
+        return loopStmt;
       }
 
       if (this.match(TokenType.КӮШИШ)) {
@@ -149,14 +126,6 @@ export class Parser {
 
       if (this.match(TokenType.АГАР)) {
         return this.ifStatement();
-      }
-
-      if (this.match(TokenType.ТО)) {
-        return this.whileStatement();
-      }
-
-      if (this.match(TokenType.БАРОИ)) {
-        return this.forStatement();
       }
 
       if (this.match(TokenType.ИНТИХОБ)) {
@@ -189,7 +158,7 @@ export class Parser {
     }
   }
 
-  private variableDeclaration(): VariableDeclaration {
+  public variableDeclaration(): VariableDeclaration {
     const kindToken = this.previous();
     const kind = kindToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
@@ -220,7 +189,7 @@ export class Parser {
     };
   }
 
-  private functionDeclaration(): FunctionDeclaration {
+  public functionDeclaration(): FunctionDeclaration {
     const funcToken = this.previous();
     let name: Token;
     if (this.check(TokenType.IDENTIFIER)) {
@@ -345,7 +314,7 @@ export class Parser {
     };
   }
 
-  private whileStatement(): WhileStatement {
+  public whileStatement(): WhileStatement {
     const whileToken = this.previous();
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'то'");
@@ -363,7 +332,7 @@ export class Parser {
     };
   }
 
-  private forStatement(): any {
+  public forStatement(): any {
     const forToken = this.previous();
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'барои'");
@@ -962,7 +931,7 @@ export class Parser {
     );
   }
 
-  private match(...types: TokenType[]): boolean {
+  public match(...types: TokenType[]): boolean {
     for (const type of types) {
       if (this.check(type)) {
         this.advance();
@@ -994,7 +963,7 @@ export class Parser {
     return this.tokens[this.current - 1];
   }
 
-  private consume(type: TokenType, message: string): Token {
+  public consume(type: TokenType, message: string): Token {
     if (this.check(type)) return this.advance();
 
     const token = this.peek();
@@ -1010,7 +979,7 @@ export class Parser {
     };
   }
 
-  private importDeclaration(): ImportDeclaration {
+  public importDeclaration(): ImportDeclaration {
     const importToken = this.previous();
     const specifiers: (ImportSpecifier | ImportDefaultSpecifier)[] = [];
 
@@ -1100,7 +1069,7 @@ export class Parser {
     }
   }
 
-  private exportDeclaration(): ExportDeclaration {
+  public exportDeclaration(): ExportDeclaration {
     const exportToken = this.previous();
 
     if (this.match(TokenType.ПЕШФАРЗ)) {
@@ -1578,7 +1547,7 @@ export class Parser {
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);
   }
 
-  private interfaceDeclaration(): InterfaceDeclaration {
+  public interfaceDeclaration(): InterfaceDeclaration {
     const interfaceToken = this.previous();
 
     let name: Token;
@@ -1757,7 +1726,7 @@ export class Parser {
     }
   }
 
-  private classDeclaration(): any {
+  public classDeclaration(): any {
     const classToken = this.previous();
 
     // Class name
@@ -2068,7 +2037,7 @@ export class Parser {
     };
   }
 
-  private typeAlias(): TypeAlias {
+  public typeAlias(): TypeAlias {
     const typeToken = this.previous();
 
     const name = this.consume(TokenType.IDENTIFIER, 'Expected type alias name');
