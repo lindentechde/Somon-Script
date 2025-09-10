@@ -101,17 +101,17 @@ export class Parser {
         return null;
       }
 
-      const importStmt = this.importHandler.parse();
+      const importStmt = this.importHandler.parseStatement();
       if (importStmt) {
         return importStmt;
       }
 
-      const declStmt = this.declarationHandler.parse();
+      const declStmt = this.declarationHandler.parseStatement();
       if (declStmt) {
         return declStmt;
       }
 
-      const loopStmt = this.loopHandler.parse();
+      const loopStmt = this.loopHandler.parseStatement();
       if (loopStmt) {
         return loopStmt;
       }

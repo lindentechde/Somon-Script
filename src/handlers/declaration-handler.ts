@@ -2,13 +2,13 @@ import type { Parser } from '../parser';
 import { TokenType, Statement, ClassDeclaration, FunctionDeclaration } from '../types';
 
 export class DeclarationHandler {
-  private parser: Parser;
+  private readonly parser: Parser;
 
   constructor(parser: Parser) {
     this.parser = parser;
   }
 
-  parse(): Statement | null {
+  parseStatement(): Statement | null {
     if (this.parser.match(TokenType.ИНТЕРФЕЙС)) {
       return this.parser.interfaceDeclaration();
     }

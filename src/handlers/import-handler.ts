@@ -2,13 +2,13 @@ import type { Parser } from '../parser';
 import { TokenType, Statement } from '../types';
 
 export class ImportHandler {
-  private parser: Parser;
+  private readonly parser: Parser;
 
   constructor(parser: Parser) {
     this.parser = parser;
   }
 
-  parse(): Statement | null {
+  parseStatement(): Statement | null {
     if (this.parser.match(TokenType.ВОРИД)) {
       return this.parser.importDeclaration();
     }
