@@ -2037,7 +2037,7 @@ export class Parser {
 
   private classProperty(nameToken: any, accessibility?: string, isStatic?: boolean): any {
     // Optional type annotation
-    let typeAnnotation = undefined;
+    let typeAnnotation: TypeAnnotation | undefined;
     if (this.match(TokenType.COLON)) {
       typeAnnotation = this.typeAnnotation();
     }

@@ -1,6 +1,6 @@
 {
   "name": "somon-script",
-  "version": "0.2.44",
+  "version": "0.2.45",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
