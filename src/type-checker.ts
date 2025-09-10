@@ -20,6 +20,7 @@ import {
   TypeNode,
   UnionType,
   VariableDeclaration,
+  TypeAnnotation,
 } from './types';
 
 /**
@@ -174,7 +175,8 @@ export class TypeChecker {
 
     // Get declared type if present
     if (varDecl.typeAnnotation) {
-      declaredType = this.resolveTypeNode(varDecl.typeAnnotation.typeAnnotation);
+      const annotation: TypeAnnotation = varDecl.typeAnnotation;
+      declaredType = this.resolveTypeNode(annotation.typeAnnotation);
     }
 
     // Get inferred type from initializer
@@ -209,7 +211,8 @@ export class TypeChecker {
     // Add parameters to symbol table
     for (const param of funcDecl.params) {
       if (param.typeAnnotation) {
-        const paramType = this.resolveTypeNode(param.typeAnnotation.typeAnnotation);
+        const annotation: TypeAnnotation = param.typeAnnotation;
+        const paramType = this.resolveTypeNode(annotation.typeAnnotation);
         this.symbolTable.set(param.name.name, paramType);
       }
     }
@@ -219,8 +222,9 @@ export class TypeChecker {
     this.symbolTable = savedSymbols;
 
     // Store function type with return type
-    const returnType = funcDecl.returnType
-      ? this.resolveTypeNode(funcDecl.returnType.typeAnnotation)
+    const returnTypeAnnotation: TypeAnnotation | undefined = funcDecl.returnType;
+    const returnType = returnTypeAnnotation
+      ? this.resolveTypeNode(returnTypeAnnotation.typeAnnotation)
       : { kind: 'unknown' };
 
     const functionType: Type = {

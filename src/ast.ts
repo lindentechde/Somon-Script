@@ -1,4 +1,5 @@
 // AST Node types
+import type { TypeAnnotation } from './type-system';
 export interface ASTNode {
   type: string;
   line: number;
@@ -18,7 +19,7 @@ export interface VariableDeclaration extends Statement {
   type: 'VariableDeclaration';
   kind: 'ТАҒЙИРЁБАНДА' | 'СОБИТ';
   identifier: Identifier | ArrayPattern | ObjectPattern;
-  typeAnnotation?: any; // TypeAnnotation - avoiding circular dependency
+  typeAnnotation?: TypeAnnotation;
   init?: Expression;
 }
 
@@ -26,7 +27,7 @@ export interface FunctionDeclaration extends Statement {
   type: 'FunctionDeclaration';
   name: Identifier;
   params: Parameter[];
-  returnType?: any; // TypeAnnotation - avoiding circular dependency
+  returnType?: TypeAnnotation;
   body: BlockStatement;
   async?: boolean;
 }
@@ -34,7 +35,7 @@ export interface FunctionDeclaration extends Statement {
 export interface Parameter extends ASTNode {
   type: 'Parameter';
   name: Identifier;
-  typeAnnotation?: any; // TypeAnnotation - avoiding circular dependency
+  typeAnnotation?: TypeAnnotation;
   optional?: boolean;
 }
 
@@ -231,7 +232,7 @@ export interface PropertyDefinition extends ASTNode {
   type: 'PropertyDefinition';
   key: Identifier;
   value?: Expression;
-  typeAnnotation?: any; // TypeAnnotation
+  typeAnnotation?: TypeAnnotation;
   static: boolean;
   accessibility?: 'public' | 'private' | 'protected';
 }
