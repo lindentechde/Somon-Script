@@ -1,3 +1,8 @@
+import { transformSync } from '@babel/core';
+import minifyPreset from 'babel-preset-minify';
+import { RawSourceMap, SourceMapGenerator } from 'source-map';
+import ts from 'typescript';
+
 import { CodeGenerator } from './codegen';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
@@ -73,10 +78,68 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
 
     // Generate code
     const generator = new CodeGenerator();
-    const code = generator.generate(ast);
+    let code = generator.generate(ast);
+
+    // Transpile to target using TypeScript when necessary
+    const targetMap: Record<NonNullable<CompileOptions['target']>, ts.ScriptTarget> = {
+      es5: ts.ScriptTarget.ES5,
+      es2015: ts.ScriptTarget.ES2015,
+      es2020: ts.ScriptTarget.ES2020,
+      esnext: ts.ScriptTarget.ESNext,
+    };
+
+    const target = options.target ?? 'es2020';
+    let map: RawSourceMap | undefined;
+
+    if (target !== 'es2020') {
+      const transpile = ts.transpileModule(code, {
+        compilerOptions: {
+          target: targetMap[target],
+          module: ts.ModuleKind.ESNext,
+          sourceMap: options.sourceMap,
+        },
+      });
+
+      code = transpile.outputText;
+      map =
+        options.sourceMap && transpile.sourceMapText
+          ? (JSON.parse(transpile.sourceMapText) as RawSourceMap)
+          : undefined;
+    } else if (options.sourceMap) {
+      // Generate identity source map when no transpilation is needed
+      const generator = new SourceMapGenerator({ file: 'compiled.js' });
+      const lines = code.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        generator.addMapping({
+          generated: { line: i + 1, column: 0 },
+          original: { line: i + 1, column: 0 },
+          source: 'source.som',
+        });
+      }
+      map = JSON.parse(generator.toString()) as RawSourceMap;
+    }
+
+    // Minify with Babel if requested
+    if (options.minify) {
+      const babel = transformSync(code, {
+        sourceMaps: options.sourceMap,
+        inputSourceMap: map,
+        presets: [minifyPreset],
+        comments: false,
+        compact: true,
+      });
+
+      if (babel?.code) {
+        code = babel.code;
+      }
+      if (options.sourceMap && babel?.map) {
+        map = babel.map as RawSourceMap;
+      }
+    }
 
     return {
       code,
+      sourceMap: options.sourceMap && map ? JSON.stringify(map) : undefined,
       errors,
       warnings,
     };

@@ -175,4 +175,21 @@ describe('Compiler', () => {
     expect(result.code).toContain('try {');
     expect(result.code).toContain('} catch (');
   });
+
+  test('should minify code and generate source map', () => {
+    const source = 'тағйирёбанда а = 5;';
+    const result = compile(source, { minify: true, sourceMap: true });
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code.trim()).toBe('let а=5;');
+    expect(result.sourceMap).toBeDefined();
+  });
+
+  test('should transpile to ES5', () => {
+    const source = 'собит а = 1;';
+    const result = compile(source, { target: 'es5' });
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('var а = 1;');
+  });
 });
