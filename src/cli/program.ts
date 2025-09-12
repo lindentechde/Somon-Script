@@ -92,7 +92,12 @@ export function createProgram(): Command {
     .alias('r')
     .description('Compile and run SomonScript file')
     .argument('<input>', 'Input .som file')
-    .action((input: string): void => {
+    .option('--target <target>', 'Compilation target', 'es2020')
+    .option('--source-map', 'Generate source maps')
+    .option('--minify', 'Minify output')
+    .option('--no-type-check', 'Disable type checking')
+    .option('--strict', 'Enable strict type checking')
+    .action((input: string, options: CompileOptions): void => {
       try {
         if (!fs.existsSync(input)) {
           console.error(`Error: File '${input}' not found`);
@@ -101,7 +106,13 @@ export function createProgram(): Command {
         }
 
         const source = fs.readFileSync(input, 'utf-8');
-        const result = compile(source);
+        const result = compile(source, {
+          target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
+          sourceMap: options.sourceMap,
+          minify: options.minify,
+          typeCheck: !options.noTypeCheck,
+          strict: options.strict,
+        });
 
         if (result.errors.length > 0) {
           console.error('Compilation errors:');

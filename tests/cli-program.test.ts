@@ -93,17 +93,22 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(path.join(projectPath, 'src', 'main.som'))).toBe(true);
   });
 
-  test('compile: should accept options like --strict and --source-map', () => {
+  test('compile: should accept options like --strict, --source-map, --minify and --target', () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'opts.som');
     const outputFile = path.join(tempDir, 'opts.js');
-    fs.writeFileSync(inputFile, 'тағйирёбанда а = 5;');
+    fs.writeFileSync(inputFile, 'собит а = 5;');
 
-    program.parse(['compile', inputFile, '--strict', '--source-map'], { from: 'user' });
+    program.parse(
+      ['compile', inputFile, '--strict', '--source-map', '--minify', '--target', 'es5'],
+      { from: 'user' }
+    );
 
     expect(fs.existsSync(outputFile)).toBe(true);
-    // source map is optional depending on pipeline; assert we logged Compiled at least
+    const output = fs.readFileSync(outputFile, 'utf-8');
+    expect(output.includes('const')).toBe(false); // transpiled to var
     expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Compiled'))).toBe(true);
+    expect(fs.existsSync(`${outputFile}.map`)).toBe(true);
   });
 });
