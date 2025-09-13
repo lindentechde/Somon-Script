@@ -3,6 +3,8 @@ import {
   ArrayType,
   CallExpression,
   ClassDeclaration,
+  ArrayPattern,
+  ObjectPattern,
   Expression,
   FunctionDeclaration,
   GenericType,
@@ -198,10 +200,50 @@ export class TypeChecker {
 
     // Store variable type in symbol table
     const finalType = declaredType || inferredType;
-    if (finalType && varDecl.identifier.type === 'Identifier') {
-      this.symbolTable.set(varDecl.identifier.name, finalType);
+    if (finalType) {
+      if (varDecl.identifier.type === 'Identifier') {
+        this.symbolTable.set(varDecl.identifier.name, finalType);
+      } else {
+        this.bindPatternTypes(varDecl.identifier, finalType);
+      }
     }
-    // TODO: Handle destructuring patterns in type checking
+  }
+
+  private bindPatternTypes(pattern: Identifier | ArrayPattern | ObjectPattern, type: Type): void {
+    switch (pattern.type) {
+      case 'Identifier':
+        this.symbolTable.set(pattern.name, type);
+        break;
+      case 'ArrayPattern':
+        if (type.elementType) {
+          pattern.elements.forEach(element => {
+            if (element) {
+              this.bindPatternTypes(
+                element as Identifier | ArrayPattern | ObjectPattern,
+                type.elementType!
+              );
+            }
+          });
+        }
+        break;
+      case 'ObjectPattern':
+        if (type.properties) {
+          for (const prop of pattern.properties) {
+            if (prop.type === 'PropertyPattern') {
+              const keyName =
+                prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+              const propType = type.properties.get(keyName);
+              if (propType) {
+                this.bindPatternTypes(
+                  prop.value as Identifier | ArrayPattern | ObjectPattern,
+                  propType.type
+                );
+              }
+            }
+          }
+        }
+        break;
+    }
   }
 
   private checkFunctionDeclaration(funcDecl: FunctionDeclaration): void {

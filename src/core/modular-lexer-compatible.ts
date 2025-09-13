@@ -9,6 +9,7 @@
 /* eslint-disable no-unused-vars */
 
 import { TokenType, Token } from '../types';
+import { KEYWORDS } from '../keyword-map';
 
 // ===== INTERFACES =====
 
@@ -79,46 +80,7 @@ export abstract class BaseTokenRecognizer implements ITokenRecognizer {
 // ===== RECOGNIZERS =====
 
 export class KeywordRecognizer extends BaseTokenRecognizer {
-  private readonly keywords = new Map<string, TokenType>([
-    // Core language keywords
-    ['тағйирёбанда', TokenType.ТАҒЙИРЁБАНДА],
-    ['собит', TokenType.СОБИТ],
-    ['функсия', TokenType.ФУНКСИЯ],
-    ['функция', TokenType.ФУНКСИЯ], // Alternative spelling
-    ['агар', TokenType.АГАР],
-    ['вагарна', TokenType.ВАГАРНА],
-    ['барои', TokenType.БАРОИ],
-    ['то', TokenType.ТО],
-    ['бозгашт', TokenType.БОЗГАШТ],
-    ['синф', TokenType.СИНФ],
-    ['интерфейс', TokenType.ИНТЕРФЕЙС],
-    ['навъ', TokenType.НАВЪ],
-    ['мерос', TokenType.МЕРОС],
-    ['татбиқ', TokenType.ТАТБИҚ],
-    // Type system
-    ['сатр', TokenType.САТР],
-    ['рақам', TokenType.РАҚАМ],
-    ['мантиқӣ', TokenType.МАНТИҚӢ],
-    // Boolean values
-    ['дуруст', TokenType.ДУРУСТ],
-    ['нодуруст', TokenType.НОДУРУСТ],
-    // Null/undefined
-    ['холӣ', TokenType.ХОЛӢ],
-    ['беқимат', TokenType.БЕҚИМАТ],
-    // Control flow
-    ['шикастан', TokenType.ШИКАСТАН],
-    ['давом', TokenType.ДАВОМ],
-    ['интихоб', TokenType.ИНТИХОБ],
-    ['ҳолат', TokenType.ҲОЛАТ],
-    ['кӯшиш', TokenType.КӮШИШ],
-    ['гирифтан', TokenType.ГИРИФТАН],
-    ['ниҳоят', TokenType.НИҲОЯТ],
-    ['партофтан', TokenType.ПАРТОФТАН],
-    // Async
-    ['ҳамзамон', TokenType.ҲАМЗАМОН],
-    ['интизор', TokenType.ИНТИЗОР],
-    ['ваъда', TokenType.ВАЪДА],
-  ]);
+  private readonly keywords = KEYWORDS;
 
   constructor() {
     super(10); // High priority

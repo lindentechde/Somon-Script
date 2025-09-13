@@ -35,6 +35,11 @@ import {
   PropertyDefinition,
   SwitchStatement,
   SpreadElement,
+  Property,
+  SwitchCase,
+  ArrayPattern,
+  ObjectPattern,
+  PropertyPattern,
 } from './types';
 // import { BaseVisitor } from './visitor'; // Simplified for now
 
@@ -609,9 +614,9 @@ export class CodeGenerator {
     return `[${elements.join(', ')}]`;
   }
 
-  private generateObjectExpression(node: any): string {
+  private generateObjectExpression(node: ObjectExpression): string {
     const properties = node.properties
-      .map((prop: any) => {
+      .map((prop: Property) => {
         const key = prop.computed
           ? `[${this.generateExpression(prop.key)}]`
           : this.generateExpression(prop.key);
@@ -754,23 +759,21 @@ export class CodeGenerator {
     return node.left.type === 'BinaryExpression' || node.right.type === 'BinaryExpression';
   }
 
-  private generateSwitchStatement(node: any): string {
+  private generateSwitchStatement(node: SwitchStatement): string {
     const discriminant = this.generateExpression(node.discriminant);
 
     this.indentLevel++;
     const cases = node.cases
-      .map((switchCase: any) => {
-        if (switchCase.test === null) {
-          // Default case
+      .map((switchCase: SwitchCase) => {
+        if (!switchCase.test) {
           const consequent = switchCase.consequent
-            .map((stmt: any) => this.generateStatement(stmt))
+            .map(stmt => this.generateStatement(stmt))
             .join('\n');
           return this.indent(`default:\n${consequent}`);
         } else {
-          // Regular case
           const test = this.generateExpression(switchCase.test);
           const consequent = switchCase.consequent
-            .map((stmt: any) => this.generateStatement(stmt))
+            .map(stmt => this.generateStatement(stmt))
             .join('\n');
           return this.indent(`case ${test}:\n${consequent}`);
         }
@@ -782,7 +785,7 @@ export class CodeGenerator {
   }
 
   // Pattern generation methods
-  private generatePattern(node: any): string {
+  private generatePattern(node: Identifier | ArrayPattern | ObjectPattern): string {
     switch (node.type) {
       case 'Identifier':
         return this.generateIdentifier(node);
@@ -791,15 +794,15 @@ export class CodeGenerator {
       case 'ObjectPattern':
         return this.generateObjectPattern(node);
       default:
-        throw new Error(`Unknown pattern type: ${node.type}`);
+        throw new Error('Unknown pattern type');
     }
   }
 
-  private generateArrayPattern(node: any): string {
+  private generateArrayPattern(node: ArrayPattern): string {
     const elements = node.elements
-      .map((element: any) => {
+      .map(element => {
         if (element === null) {
-          return ''; // Hole in array pattern
+          return '';
         } else if (element.type === 'SpreadElement') {
           return this.generateSpreadElement(element);
         } else {
@@ -811,13 +814,13 @@ export class CodeGenerator {
     return `[${elements}]`;
   }
 
-  private generateObjectPattern(node: any): string {
+  private generateObjectPattern(node: ObjectPattern): string {
     const properties = node.properties
-      .map((prop: any) => {
+      .map(prop => {
         if (prop.type === 'SpreadElement') {
           return this.generateSpreadElement(prop);
         } else {
-          return this.generatePropertyPattern(prop);
+          return this.generatePropertyPattern(prop as PropertyPattern);
         }
       })
       .join(', ');
@@ -825,17 +828,16 @@ export class CodeGenerator {
     return `{${properties}}`;
   }
 
-  private generatePropertyPattern(node: any): string {
+  private generatePropertyPattern(node: PropertyPattern): string {
     const key = node.computed
-      ? `[${this.generateExpression(node.key)}]`
-      : this.generateIdentifier(node.key);
+      ? `[${this.generateExpression(node.key as Expression)}]`
+      : this.generateIdentifier(node.key as Identifier);
 
     if (
       node.key.type === 'Identifier' &&
       node.value.type === 'Identifier' &&
       node.key.name === node.value.name
     ) {
-      // Shorthand property
       return key;
     } else {
       const value = this.generatePattern(node.value);
@@ -843,7 +845,7 @@ export class CodeGenerator {
     }
   }
 
-  private generateSpreadElement(node: any): string {
+  private generateSpreadElement(node: SpreadElement): string {
     const argument = this.generateExpression(node.argument);
     return `...${argument}`;
   }
