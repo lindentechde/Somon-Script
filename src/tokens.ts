@@ -100,8 +100,7 @@ export enum TokenType {
   НОМФАЗО = 'НОМФАЗО', // namespace
   КАЛИДҲОИ = 'КАЛИДҲОИ', // keyof
   ИНФЕР = 'ИНФЕР', // infer
-  READONLY = 'READONLY', // readonly (keeping English for now)
-  ТАНҲОХОНӢ = 'ТАНҲОХОНӢ', // readonly (Tajik)
+  ТАНҲОХОНӢ = 'ТАНҲОХОНӢ', // readonly
   UNIQUE = 'UNIQUE', // unique (keeping English for now)
 
   // Operators
