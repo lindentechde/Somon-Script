@@ -96,5 +96,5 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['калидҳои', TokenType.КАЛИДҲОИ],
   ['инфер', TokenType.ИНФЕР],
   ['танҳохонӣ', TokenType.ТАНҲОХОНӢ],
-  ['unique', TokenType.UNIQUE],
+  ['беназир', TokenType.БЕНАЗИР],
 ]);

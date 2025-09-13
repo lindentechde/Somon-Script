@@ -101,7 +101,7 @@ export enum TokenType {
   КАЛИДҲОИ = 'КАЛИДҲОИ', // keyof
   ИНФЕР = 'ИНФЕР', // infer
   ТАНҲОХОНӢ = 'ТАНҲОХОНӢ', // readonly
-  UNIQUE = 'UNIQUE', // unique (keeping English for now)
+  БЕНАЗИР = 'БЕНАЗИР', // unique
 
   // Operators
   PLUS = '+',
