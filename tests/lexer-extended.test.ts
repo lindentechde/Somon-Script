@@ -500,15 +500,14 @@ describe('Lexer Extended Coverage Tests', () => {
 
   describe('Advanced type system tokens', () => {
     test('should tokenize advanced type keywords', () => {
-      const source = 'readonly танҳохонӣ unique калидҳои инфер номфазо';
+      const source = 'танҳохонӣ unique калидҳои инфер номфазо';
       const tokens = tokenize(source);
 
-      expect(tokens[0].type).toBe(TokenType.READONLY);
-      expect(tokens[1].type).toBe(TokenType.ТАНҲОХОНӢ);
-      expect(tokens[2].type).toBe(TokenType.UNIQUE);
-      expect(tokens[3].type).toBe(TokenType.КАЛИДҲОИ);
-      expect(tokens[4].type).toBe(TokenType.ИНФЕР);
-      expect(tokens[5].type).toBe(TokenType.НОМФАЗО);
+      expect(tokens[0].type).toBe(TokenType.ТАНҲОХОНӢ);
+      expect(tokens[1].type).toBe(TokenType.UNIQUE);
+      expect(tokens[2].type).toBe(TokenType.КАЛИДҲОИ);
+      expect(tokens[3].type).toBe(TokenType.ИНФЕР);
+      expect(tokens[4].type).toBe(TokenType.НОМФАЗО);
     });
 
     test('should tokenize class-related keywords', () => {

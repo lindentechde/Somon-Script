@@ -1642,7 +1642,7 @@ export class Parser {
   private propertySignature(): PropertySignature {
     // Parse optional readonly modifier
     let readonly = false;
-    if (this.match(TokenType.ТАНҲОХОНӢ, TokenType.READONLY)) {
+    if (this.match(TokenType.ТАНҲОХОНӢ)) {
       readonly = true;
     }
 

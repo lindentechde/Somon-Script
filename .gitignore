@@ -63,6 +63,7 @@ Thumbs.db
 # Test files (but not examples)
 /test*.som
 /debug*.som
+*debug*.js
 *.js.map
 
 # Compiled JavaScript files in examples directory
