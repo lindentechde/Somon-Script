@@ -10,6 +10,11 @@ npm run type-check
 # Run tests to ensure nothing is broken
 npm test
 
+# Build CLI if needed for example audit
+if [ ! -d dist ]; then
+  npm run build >/dev/null
+fi
+
 # Audit example programs
 npm run audit:examples
 
