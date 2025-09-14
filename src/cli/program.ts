@@ -8,9 +8,11 @@ import pkg from '../../package.json';
 
 export interface CompileOptions {
   output?: string;
-  target?: string;
+  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
   sourceMap?: boolean;
+  noSourceMap?: boolean;
   minify?: boolean;
+  noMinify?: boolean;
   noTypeCheck?: boolean;
   strict?: boolean;
   outDir?: string;
@@ -21,9 +23,20 @@ export interface CompileOptions {
 function mergeOptions(input: string, options: CompileOptions): CompileOptions {
   const config = loadConfig(path.dirname(path.resolve(input)));
   const merged = { ...(config.compilerOptions ?? {}), ...options };
+
+  // Handle negation flags - they override positive flags
+  if (options.noSourceMap) {
+    merged.sourceMap = false;
+  }
+  if (options.noMinify) {
+    merged.minify = false;
+  }
+
+  // Set default target if not specified
   if (!merged.target) {
     merged.target = 'es2020';
   }
+
   return merged;
 }
 
@@ -82,7 +95,9 @@ export function createProgram(): Command {
     .option('--out-dir <dir>', 'Output directory')
     .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
+    .option('--no-source-map', 'Disable source maps')
     .option('--minify', 'Minify output')
+    .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .option('-w, --watch', 'Recompile on file changes')
@@ -117,7 +132,7 @@ export function createProgram(): Command {
 
         if (merged.watch || merged.compileOnSave) {
           console.log(`Watching '${input}' for changes...`);
-          fs.watch(input, { persistent: false }, () => {
+          fs.watch(input, { persistent: true }, () => {
             console.log(`Recompiling '${input}'...`);
             compileOnce();
           });
@@ -136,7 +151,9 @@ export function createProgram(): Command {
     .argument('<input>', 'Input .som file')
     .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
+    .option('--no-source-map', 'Disable source maps')
     .option('--minify', 'Minify output')
+    .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions): void => {
@@ -204,6 +221,7 @@ export function createProgram(): Command {
             noTypeCheck: false,
             strict: false,
             outDir: 'dist',
+            watch: false,
             compileOnSave: false,
           },
         };

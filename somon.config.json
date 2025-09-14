@@ -6,6 +6,7 @@
     "noTypeCheck": false,
     "strict": false,
     "outDir": "dist",
+    "watch": false,
     "compileOnSave": false
   }
 }
