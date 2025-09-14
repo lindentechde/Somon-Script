@@ -10,6 +10,8 @@ jest.mock('../src/compiler', () => ({
 jest.mock('fs');
 const mockFs = fs as jest.Mocked<typeof fs>;
 
+import { compileFile } from '../src/cli/program';
+
 describe('CLI Unit Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -17,6 +19,7 @@ describe('CLI Unit Tests', () => {
     mockFs.existsSync.mockReset();
     mockFs.readFileSync.mockReset();
     mockFs.writeFileSync.mockReset();
+    process.exitCode = 0;
   });
 
   describe('CLI module coverage', () => {
@@ -65,6 +68,28 @@ describe('CLI Unit Tests', () => {
       const result = mockCompile('invalid code');
       expect(result.success).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    test('compileFile helper should process files', () => {
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue('source');
+      mockCompile.mockReturnValue({
+        code: 'compiled',
+        errors: [],
+        warnings: [],
+        sourceMap: undefined,
+      });
+      const result = compileFile('file.som', {});
+      expect(result.code).toBe('compiled');
+      expect(mockFs.readFileSync).toHaveBeenCalled();
+      expect(mockCompile).toHaveBeenCalled();
+    });
+
+    test('compileFile helper should handle missing files', () => {
+      mockFs.existsSync.mockReturnValue(false);
+      const result = compileFile('missing.som', {});
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(process.exitCode).toBe(1);
     });
 
     test('should handle file operations', () => {
