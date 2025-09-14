@@ -38,6 +38,7 @@ import {
   TypeParameter,
   TypeAlias,
   Parameter,
+  UniqueType,
   AwaitExpression,
   NewExpression,
   TryStatement,
@@ -1443,6 +1444,30 @@ export class Parser {
       }
 
       return type;
+    }
+
+    // Unique types
+    if (this.match(TokenType.БЕНАЗИР)) {
+      const uniqueToken = this.previous();
+      const baseType = this.primaryType();
+      const uniqueType: UniqueType = {
+        type: 'UniqueType',
+        baseType,
+        line: uniqueToken.line,
+        column: uniqueToken.column,
+      };
+
+      if (this.match(TokenType.LEFT_BRACKET)) {
+        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+        return {
+          type: 'ArrayType',
+          elementType: uniqueType,
+          line: uniqueType.line,
+          column: uniqueType.column,
+        } as ArrayType;
+      }
+
+      return uniqueType;
     }
 
     // Primitive types

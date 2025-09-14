@@ -184,5 +184,16 @@ describe('Parser', () => {
       expect((stmt as any).name.name).toBe('КорбарИД');
       expect((stmt as any).typeAnnotation).toBeDefined();
     });
+
+    test('should parse unique type alias', () => {
+      const source = 'навъ Уник = беназир сатр;';
+      const ast = parseSource(source);
+
+      const stmt = ast.body[0];
+      expect(stmt.type).toBe('TypeAlias');
+      const typeNode = (stmt as any).typeAnnotation.typeAnnotation;
+      expect(typeNode.type).toBe('UniqueType');
+      expect(typeNode.baseType.type).toBe('PrimitiveType');
+    });
   });
 });
