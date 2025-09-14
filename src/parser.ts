@@ -1427,148 +1427,133 @@ export class Parser {
   }
 
   private primaryType(): TypeNode {
-    // Parenthesized types
-    if (this.match(TokenType.LEFT_PAREN)) {
-      const type = this.unionType();
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after type");
+    return (
+      this.parseParenthesizedOrArrayType() ??
+      this.parseUniqueType() ??
+      this.parsePrimitiveType() ??
+      this.parseGenericOrIdentifierType() ??
+      this.parseTupleType() ??
+      this.errorExpectedType()
+    );
+  }
 
-      // Check for array type after parentheses
-      if (this.match(TokenType.LEFT_BRACKET)) {
-        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
-        return {
-          type: 'ArrayType',
-          elementType: type,
-          line: type.line,
-          column: type.column,
-        } as ArrayType;
-      }
+  private parseParenthesizedOrArrayType(): TypeNode | undefined {
+    if (!this.match(TokenType.LEFT_PAREN)) return undefined;
+    const type = this.unionType();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after type");
+    if (!this.match(TokenType.LEFT_BRACKET)) return type;
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+    return {
+      type: 'ArrayType',
+      elementType: type,
+      line: type.line,
+      column: type.column,
+    } as ArrayType;
+  }
 
-      return type;
+  private parseUniqueType(): TypeNode | undefined {
+    if (!this.match(TokenType.БЕНАЗИР)) return undefined;
+    const uniqueToken = this.previous();
+    const baseType = this.primaryType();
+    const uniqueType: UniqueType = {
+      type: 'UniqueType',
+      baseType,
+      line: uniqueToken.line,
+      column: uniqueToken.column,
+    };
+    if (!this.match(TokenType.LEFT_BRACKET)) return uniqueType;
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+    return {
+      type: 'ArrayType',
+      elementType: uniqueType,
+      line: uniqueType.line,
+      column: uniqueType.column,
+    } as ArrayType;
+  }
+
+  private parsePrimitiveType(): TypeNode | undefined {
+    if (!this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ, TokenType.ХОЛӢ)) {
+      return undefined;
     }
+    const token = this.previous();
+    const primitiveType: PrimitiveType = {
+      type: 'PrimitiveType',
+      name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ',
+      line: token.line,
+      column: token.column,
+    };
+    if (!this.match(TokenType.LEFT_BRACKET)) return primitiveType;
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+    return {
+      type: 'ArrayType',
+      elementType: primitiveType,
+      line: primitiveType.line,
+      column: primitiveType.column,
+    } as ArrayType;
+  }
 
-    // Unique types
-    if (this.match(TokenType.БЕНАЗИР)) {
-      const uniqueToken = this.previous();
-      const baseType = this.primaryType();
-      const uniqueType: UniqueType = {
-        type: 'UniqueType',
-        baseType,
-        line: uniqueToken.line,
-        column: uniqueToken.column,
-      };
-
-      if (this.match(TokenType.LEFT_BRACKET)) {
-        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
-        return {
-          type: 'ArrayType',
-          elementType: uniqueType,
-          line: uniqueType.line,
-          column: uniqueType.column,
-        } as ArrayType;
-      }
-
-      return uniqueType;
+  private parseGenericOrIdentifierType(): TypeNode | undefined {
+    if (!this.check(TokenType.IDENTIFIER) && !this.matchBuiltinIdentifier()) {
+      return undefined;
     }
-
-    // Primitive types
-    if (this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ, TokenType.ХОЛӢ)) {
-      const token = this.previous();
-      const primitiveType: PrimitiveType = {
-        type: 'PrimitiveType',
-        name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ',
-        line: token.line,
-        column: token.column,
-      };
-
-      // Check for array type
-      if (this.match(TokenType.LEFT_BRACKET)) {
-        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
-        return {
-          type: 'ArrayType',
-          elementType: primitiveType,
-          line: primitiveType.line,
-          column: primitiveType.column,
-        } as ArrayType;
-      }
-
-      return primitiveType;
+    const nameToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
+    const name: Identifier = {
+      type: 'Identifier',
+      name: nameToken.value,
+      line: nameToken.line,
+      column: nameToken.column,
+    };
+    let typeParameters: TypeNode[] | undefined;
+    if (this.match(TokenType.LESS_THAN)) {
+      typeParameters = [];
+      do {
+        typeParameters.push(this.parseType());
+      } while (this.match(TokenType.COMMA));
+      this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
     }
+    const genericType: GenericType = {
+      type: 'GenericType',
+      name,
+      typeParameters,
+      line: name.line,
+      column: name.column,
+    };
+    if (!this.match(TokenType.LEFT_BRACKET)) return genericType;
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+    return {
+      type: 'ArrayType',
+      elementType: genericType,
+      line: genericType.line,
+      column: genericType.column,
+    } as ArrayType;
+  }
 
-    // Generic or identifier types
-    if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
-      const nameToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
-      const name: Identifier = {
-        type: 'Identifier',
-        name: nameToken.value,
-        line: nameToken.line,
-        column: nameToken.column,
-      };
-
-      // Check for generic type parameters
-      let typeParameters: TypeNode[] | undefined;
-      if (this.match(TokenType.LESS_THAN)) {
-        typeParameters = [];
-        do {
-          typeParameters.push(this.parseType());
-        } while (this.match(TokenType.COMMA));
-        this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
-      }
-
-      const genericType: GenericType = {
-        type: 'GenericType',
-        name,
-        typeParameters,
-        line: name.line,
-        column: name.column,
-      };
-
-      // Check for array type
-      if (this.match(TokenType.LEFT_BRACKET)) {
-        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
-        return {
-          type: 'ArrayType',
-          elementType: genericType,
-          line: genericType.line,
-          column: genericType.column,
-        } as ArrayType;
-      }
-
-      return genericType;
+  private parseTupleType(): TypeNode | undefined {
+    if (!this.match(TokenType.LEFT_BRACKET)) return undefined;
+    const types: TypeNode[] = [];
+    if (!this.check(TokenType.RIGHT_BRACKET)) {
+      do {
+        types.push(this.unionType());
+      } while (this.match(TokenType.COMMA));
     }
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
+    const tupleType: TupleType = {
+      type: 'TupleType',
+      elementTypes: types,
+      line: this.previous().line,
+      column: this.previous().column,
+    };
+    if (!this.match(TokenType.LEFT_BRACKET)) return tupleType;
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
+    return {
+      type: 'ArrayType',
+      elementType: tupleType,
+      line: tupleType.line,
+      column: tupleType.column,
+    } as ArrayType;
+  }
 
-    // Tuple types [type1, type2, ...]
-    if (this.match(TokenType.LEFT_BRACKET)) {
-      const types: TypeNode[] = [];
-
-      if (!this.check(TokenType.RIGHT_BRACKET)) {
-        do {
-          types.push(this.unionType());
-        } while (this.match(TokenType.COMMA));
-      }
-
-      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
-
-      const tupleType: TupleType = {
-        type: 'TupleType',
-        elementTypes: types,
-        line: this.previous().line,
-        column: this.previous().column,
-      };
-
-      // Check for array type after tuple (e.g., [string, number][])
-      if (this.match(TokenType.LEFT_BRACKET)) {
-        this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after '['");
-        return {
-          type: 'ArrayType',
-          elementType: tupleType,
-          line: tupleType.line,
-          column: tupleType.column,
-        } as ArrayType;
-      }
-
-      return tupleType;
-    }
-
+  private errorExpectedType(): never {
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);
   }
 

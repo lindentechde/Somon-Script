@@ -231,39 +231,35 @@ export class TypeChecker {
   }
 
   private bindPatternTypes(pattern: Identifier | ArrayPattern | ObjectPattern, type: Type): void {
-    switch (pattern.type) {
-      case 'Identifier':
-        this.symbolTable.set(pattern.name, type);
-        break;
-      case 'ArrayPattern':
-        if (type.elementType) {
-          pattern.elements.forEach(element => {
-            if (element) {
-              this.bindPatternTypes(
-                element as Identifier | ArrayPattern | ObjectPattern,
-                type.elementType!
-              );
-            }
-          });
+    if (pattern.type === 'Identifier') {
+      this.symbolTable.set(pattern.name, type);
+      return;
+    }
+
+    if (pattern.type === 'ArrayPattern' && type.elementType) {
+      pattern.elements.forEach(element => {
+        if (element) {
+          this.bindPatternTypes(
+            element as Identifier | ArrayPattern | ObjectPattern,
+            type.elementType!
+          );
         }
-        break;
-      case 'ObjectPattern':
-        if (type.properties) {
-          for (const prop of pattern.properties) {
-            if (prop.type === 'PropertyPattern') {
-              const keyName =
-                prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
-              const propType = type.properties.get(keyName);
-              if (propType) {
-                this.bindPatternTypes(
-                  prop.value as Identifier | ArrayPattern | ObjectPattern,
-                  propType.type
-                );
-              }
-            }
-          }
+      });
+      return;
+    }
+
+    if (pattern.type === 'ObjectPattern' && type.properties) {
+      for (const prop of pattern.properties) {
+        if (prop.type !== 'PropertyPattern') continue;
+        const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+        const propType = type.properties.get(keyName);
+        if (propType) {
+          this.bindPatternTypes(
+            prop.value as Identifier | ArrayPattern | ObjectPattern,
+            propType.type
+          );
         }
-        break;
+      }
     }
   }
 
