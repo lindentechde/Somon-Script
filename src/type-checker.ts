@@ -33,8 +33,19 @@ export interface TypeCheckError {
   message: string;
   line: number;
   column: number;
+  code: string;
+  snippet: string;
   severity: 'error' | 'warning';
 }
+
+/**
+ * Stable error codes for type checking diagnostics
+ */
+export const TypeCheckErrorCode = {
+  TypeMismatch: 'TYPE_NOT_ASSIGNABLE',
+} as const;
+// eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
+export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
 
 /**
  * Result of type checking operation
@@ -76,7 +87,10 @@ export class TypeChecker {
   private interfaceTable: Map<string, Type> = new Map();
   private typeAliasTable: Map<string, Type> = new Map();
 
-  constructor() {
+  private sourceLines: string[] = [];
+
+  constructor(source?: string) {
+    this.sourceLines = source ? source.split(/\r?\n/) : [];
     this.initializePrimitiveTypes();
   }
 
@@ -88,6 +102,10 @@ export class TypeChecker {
     this.symbolTable.set('рақам', { kind: 'primitive', name: 'number' });
     this.symbolTable.set('мантиқӣ', { kind: 'primitive', name: 'boolean' });
     this.symbolTable.set('холӣ', { kind: 'primitive', name: 'null' });
+  }
+
+  private getSnippet(line: number): string {
+    return this.sourceLines[line - 1] ?? '';
   }
 
   /**
@@ -193,6 +211,7 @@ export class TypeChecker {
     if (declaredType && inferredType) {
       if (!this.isAssignable(inferredType, declaredType)) {
         this.addError(
+          TypeCheckErrorCode.TypeMismatch,
           `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}'`,
           varDecl.line,
           varDecl.column
@@ -619,20 +638,29 @@ export class TypeChecker {
     }
   }
 
-  private addError(message: string, line: number, column: number): void {
+  private addError(code: TypeCheckErrorCode, message: string, line: number, column: number): void {
     this.errors.push({
+      code,
       message,
       line,
       column,
+      snippet: this.getSnippet(line),
       severity: 'error',
     });
   }
 
-  private addWarning(message: string, line: number, column: number): void {
+  private addWarning(
+    code: TypeCheckErrorCode,
+    message: string,
+    line: number,
+    column: number
+  ): void {
     this.warnings.push({
+      code,
       message,
       line,
       column,
+      snippet: this.getSnippet(line),
       severity: 'warning',
     });
   }

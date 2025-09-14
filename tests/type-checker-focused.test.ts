@@ -66,9 +66,13 @@ describe('TypeChecker - Core Coverage Tests', () => {
         expect(error).toHaveProperty('line');
         expect(error).toHaveProperty('column');
         expect(error).toHaveProperty('severity');
+        expect(error).toHaveProperty('code');
+        expect(error).toHaveProperty('snippet');
         expect(typeof error.message).toBe('string');
         expect(typeof error.line).toBe('number');
         expect(typeof error.column).toBe('number');
+        expect(typeof error.code).toBe('string');
+        expect(typeof error.snippet).toBe('string');
         expect(['error', 'warning']).toContain(error.severity);
       });
     });
@@ -80,6 +84,8 @@ describe('TypeChecker - Core Coverage Tests', () => {
         message: 'Test error message',
         line: 1,
         column: 1,
+        code: 'TEST',
+        snippet: 'source line',
         severity: 'error',
       };
 
@@ -87,12 +93,16 @@ describe('TypeChecker - Core Coverage Tests', () => {
         message: 'Test error message',
         line: 1,
         column: 1,
+        code: 'TEST',
+        snippet: 'source line',
         severity: 'error',
       });
 
       expect(typeof error.message).toBe('string');
       expect(typeof error.line).toBe('number');
       expect(typeof error.column).toBe('number');
+      expect(typeof error.code).toBe('string');
+      expect(typeof error.snippet).toBe('string');
       expect(error.severity).toBe('error');
     });
 
@@ -101,6 +111,8 @@ describe('TypeChecker - Core Coverage Tests', () => {
         message: 'Test warning message',
         line: 5,
         column: 10,
+        code: 'WARN',
+        snippet: 'warn line',
         severity: 'warning',
       };
 
@@ -108,6 +120,8 @@ describe('TypeChecker - Core Coverage Tests', () => {
         message: 'Test warning message',
         line: 5,
         column: 10,
+        code: 'WARN',
+        snippet: 'warn line',
         severity: 'warning',
       });
 
@@ -271,6 +285,8 @@ describe('TypeChecker - Core Coverage Tests', () => {
         expect(error).toHaveProperty('line');
         expect(error).toHaveProperty('column');
         expect(error).toHaveProperty('severity');
+        expect(error).toHaveProperty('code');
+        expect(error).toHaveProperty('snippet');
       });
 
       result.warnings.forEach(warning => {
@@ -278,6 +294,8 @@ describe('TypeChecker - Core Coverage Tests', () => {
         expect(warning).toHaveProperty('line');
         expect(warning).toHaveProperty('column');
         expect(warning).toHaveProperty('severity');
+        expect(warning).toHaveProperty('code');
+        expect(warning).toHaveProperty('snippet');
         expect(warning.severity).toBe('warning');
       });
     });

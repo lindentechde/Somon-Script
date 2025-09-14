@@ -3,7 +3,7 @@
  * Based on Jest best practices and Context7 testing strategies
  */
 
-import { TypeChecker } from '../src/type-checker';
+import { TypeChecker, TypeCheckErrorCode } from '../src/type-checker';
 import {
   Program,
   Statement,
@@ -14,6 +14,7 @@ import {
   Literal,
   BlockStatement,
 } from '../src/ast';
+import { TypeAnnotation, PrimitiveType } from '../src/types';
 
 describe('TypeChecker - Comprehensive Test Suite', () => {
   let checker: TypeChecker;
@@ -204,6 +205,54 @@ describe('TypeChecker - Comprehensive Test Suite', () => {
 
       const result = checker.check(program);
       expect(result).toBeDefined();
+    });
+
+    test('should include error code and snippet in diagnostics', () => {
+      const source = 'тағйирёбанда х: сатр = 5;';
+      const program: Program = {
+        type: 'Program',
+        body: [
+          {
+            type: 'VariableDeclaration',
+            kind: 'ТАҒЙИРЁБАНДА',
+            identifier: {
+              type: 'Identifier',
+              name: 'х',
+              line: 1,
+              column: 1,
+            } as Identifier,
+            typeAnnotation: {
+              type: 'TypeAnnotation',
+              typeAnnotation: {
+                type: 'PrimitiveType',
+                name: 'сатр',
+                line: 1,
+                column: 15,
+              } as PrimitiveType,
+              line: 1,
+              column: 12,
+            } as TypeAnnotation,
+            init: {
+              type: 'Literal',
+              value: 5,
+              raw: '5',
+              line: 1,
+              column: 20,
+            } as Expression,
+            line: 1,
+            column: 1,
+          } as VariableDeclaration,
+        ],
+        line: 1,
+        column: 1,
+      };
+
+      const checkerWithSource = new TypeChecker(source);
+      const result = checkerWithSource.check(program);
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe(TypeCheckErrorCode.TypeMismatch);
+      expect(result.errors[0].snippet).toBe(source);
     });
   });
 });
