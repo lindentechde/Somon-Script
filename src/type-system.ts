@@ -98,6 +98,11 @@ export interface KeyofType extends TypeNode {
   operand: TypeNode;
 }
 
+export interface UniqueType extends TypeNode {
+  type: 'UniqueType';
+  baseType: TypeNode;
+}
+
 export interface TupleType extends TypeNode {
   type: 'TupleType';
   elementTypes: TypeNode[];
