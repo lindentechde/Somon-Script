@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { compile } from '../compiler';
+import { compile, CompileResult } from '../compiler';
 import pkg from '../../package.json';
 
 export interface CompileOptions {
@@ -12,6 +12,44 @@ export interface CompileOptions {
   minify?: boolean;
   noTypeCheck?: boolean;
   strict?: boolean;
+}
+
+export function compileFile(input: string, options: CompileOptions): CompileResult {
+  try {
+    if (!fs.existsSync(input)) {
+      const message = `Error: File '${input}' not found`;
+      console.error(message);
+      process.exitCode = 1;
+      return { code: '', errors: [message], warnings: [] };
+    }
+
+    const source = fs.readFileSync(input, 'utf-8');
+    const result = compile(source, {
+      target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
+      sourceMap: options.sourceMap,
+      minify: options.minify,
+      typeCheck: !options.noTypeCheck,
+      strict: options.strict,
+    });
+
+    if (result.errors.length > 0) {
+      console.error('Compilation errors:');
+      result.errors.forEach(error => console.error(`  ${error}`));
+      process.exitCode = 1;
+    }
+
+    if (result.warnings.length > 0) {
+      console.warn('Warnings:');
+      result.warnings.forEach(warning => console.warn(`  ${warning}`));
+    }
+
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error:', message);
+    process.exitCode = 1;
+    return { code: '', errors: [message], warnings: [] };
+  }
 }
 
 export function createProgram(): Command {
@@ -35,46 +73,13 @@ export function createProgram(): Command {
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions): void => {
       try {
-        // Read input file
-        if (!fs.existsSync(input)) {
-          console.error(`Error: File '${input}' not found`);
-          process.exitCode = 1;
-          return;
-        }
+        const result = compileFile(input, options);
+        if (result.errors.length > 0) return;
 
-        const source = fs.readFileSync(input, 'utf-8');
-
-        // Compile
-        const result = compile(source, {
-          target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
-          sourceMap: options.sourceMap,
-          minify: options.minify,
-          typeCheck: !options.noTypeCheck,
-          strict: options.strict,
-        });
-
-        // Handle errors
-        if (result.errors.length > 0) {
-          console.error('Compilation errors:');
-          result.errors.forEach(error => console.error(`  ${error}`));
-          process.exitCode = 1;
-          return;
-        }
-
-        // Handle warnings
-        if (result.warnings.length > 0) {
-          console.warn('Warnings:');
-          result.warnings.forEach(warning => console.warn(`  ${warning}`));
-        }
-
-        // Determine output file
         const outputFile = options.output || input.replace(/\.som$/, '.js');
-
-        // Write output
         fs.writeFileSync(outputFile, result.code);
         console.log(`Compiled '${input}' to '${outputFile}'`);
 
-        // Write source map if requested
         if (options.sourceMap && result.sourceMap) {
           const sourceMapFile = `${outputFile}.map`;
           fs.writeFileSync(sourceMapFile, result.sourceMap);
@@ -99,29 +104,9 @@ export function createProgram(): Command {
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions): void => {
       try {
-        if (!fs.existsSync(input)) {
-          console.error(`Error: File '${input}' not found`);
-          process.exitCode = 1;
-          return;
-        }
+        const result = compileFile(input, options);
+        if (result.errors.length > 0) return;
 
-        const source = fs.readFileSync(input, 'utf-8');
-        const result = compile(source, {
-          target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
-          sourceMap: options.sourceMap,
-          minify: options.minify,
-          typeCheck: !options.noTypeCheck,
-          strict: options.strict,
-        });
-
-        if (result.errors.length > 0) {
-          console.error('Compilation errors:');
-          result.errors.forEach(error => console.error(`  ${error}`));
-          process.exitCode = 1;
-          return;
-        }
-
-        // Execute the compiled JavaScript
         // eslint-disable-next-line no-eval
         eval(result.code);
       } catch (error) {

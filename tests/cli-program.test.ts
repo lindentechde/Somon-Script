@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createProgram } from '../src/cli/program';
+import { createProgram, compileFile } from '../src/cli/program';
 
 /**
  * In-process CLI tests
@@ -38,6 +38,21 @@ describe('CLI Program (in-process)', () => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
+  });
+
+  test('compileFile: should compile file and return result', () => {
+    const inputFile = path.join(tempDir, 'file.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+    const result = compileFile(inputFile, {});
+    expect(result.errors).toHaveLength(0);
+    expect(result.code).toContain('console.log');
+  });
+
+  test('compileFile: should handle missing file', () => {
+    const missing = path.join(tempDir, 'missing.som');
+    const result = compileFile(missing, {});
+    expect(process.exitCode).toBe(1);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   test('compile: should compile simple file successfully', () => {
