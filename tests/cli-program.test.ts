@@ -17,6 +17,7 @@ describe('CLI Program (in-process)', () => {
   let consoleLogSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
+  let skipCleanup = false;
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-cli-program-'));
@@ -25,11 +26,14 @@ describe('CLI Program (in-process)', () => {
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    skipCleanup = false;
   });
 
   afterEach(() => {
     // Cleanup temp dir
-    if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
+    if (!skipCleanup && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
 
     // Restore cwd
     process.chdir(originalCwd);
@@ -106,6 +110,7 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(projectPath)).toBe(true);
     expect(fs.existsSync(path.join(projectPath, 'package.json'))).toBe(true);
     expect(fs.existsSync(path.join(projectPath, 'src', 'main.som'))).toBe(true);
+    expect(fs.existsSync(path.join(projectPath, 'somon.config.json'))).toBe(true);
   });
 
   test('compile: should accept options like --strict, --source-map, --minify and --target', () => {
@@ -125,5 +130,54 @@ describe('CLI Program (in-process)', () => {
     expect(output.includes('const')).toBe(false); // transpiled to var
     expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Compiled'))).toBe(true);
     expect(fs.existsSync(`${outputFile}.map`)).toBe(true);
+  });
+
+  test('compile: should read options from somon.config.json', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'config.som');
+    fs.writeFileSync(inputFile, 'собит а = 5;');
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { target: 'es5', sourceMap: true } }, null, 2)
+    );
+
+    program.parse(['compile', inputFile], { from: 'user' });
+
+    const outputFile = path.join(tempDir, 'config.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+    const output = fs.readFileSync(outputFile, 'utf-8');
+    expect(output.includes('var')).toBe(true);
+    expect(fs.existsSync(`${outputFile}.map`)).toBe(true);
+  });
+
+  test('compile: should honor outDir from config', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'dirtest.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("dir");');
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { outDir: 'lib' } }, null, 2)
+    );
+
+    program.parse(['compile', inputFile], { from: 'user' });
+
+    const outputFile = path.join(tempDir, 'lib', 'dirtest.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+  });
+
+  test('compile: should watch when compileOnSave is enabled in config', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'watch.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("watch");');
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { compileOnSave: true } }, null, 2)
+    );
+    program.parse(['compile', inputFile], { from: 'user' });
+    expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Watching'))).toBe(true);
+    skipCleanup = true;
   });
 });
