@@ -38,7 +38,6 @@ const baseConfig = {
     '^.+\\.ts$': [
       'ts-jest',
       {
-        isolatedModules: true,
         useESM: false,
       },
     ],
