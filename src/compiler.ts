@@ -51,18 +51,20 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     // Type check (if enabled)
     if (options.typeCheck !== false) {
       // Default to true
-      const typeChecker = new TypeChecker();
+      const typeChecker = new TypeChecker(source);
       const typeCheckResult = typeChecker.check(ast);
 
       // Add type errors and warnings
       errors.push(
         ...typeCheckResult.errors.map(
-          err => `Type error at line ${err.line}, column ${err.column}: ${err.message}`
+          err =>
+            `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`
         )
       );
       warnings.push(
         ...typeCheckResult.warnings.map(
-          warn => `Type warning at line ${warn.line}, column ${warn.column}: ${warn.message}`
+          warn =>
+            `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`
         )
       );
 
