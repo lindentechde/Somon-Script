@@ -297,6 +297,7 @@ npm run test:coverage
 npm run test:unit
 npm run test:integration
 npm run test:performance
+npm run audit:examples
 ```
 
 ---
@@ -347,7 +348,8 @@ Professional development opportunities for technical teams:
 4. **Integration**: Build tooling and IDE support
 5. **Performance**: Optimize compilation and runtime efficiency
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for technical contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for technical contribution guidelines and
+[AGENTS.md](AGENTS.md) for code style, commit message, and testing rules.
 
 ---
 
