@@ -392,7 +392,10 @@ automated GitHub Actions pipeline. To release a new version:
 Breaking changes and migration notes are documented in release notes and the
 `examples/` directory to ease adoption in production environments.
 
-## 🚀 Getting Started
+## 📚 Migration Guide
+
+See [docs/migration-guide.md](docs/migration-guide.md) for steps to upgrade
+between releases.
 
 ## 🚀 Getting Started
 

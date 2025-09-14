@@ -94,68 +94,39 @@ export class Parser {
     };
   }
 
-  // eslint-disable-next-line complexity
   private statement(): Statement | null {
     try {
-      // Skip newlines
       if (this.match(TokenType.NEWLINE)) {
         return null;
       }
 
-      const importStmt = this.importHandler.parseStatement();
-      if (importStmt) {
-        return importStmt;
-      }
+      const parsers: Array<() => Statement | null> = [
+        () => this.importHandler.parseStatement(),
+        () => this.declarationHandler.parseStatement(),
+        () => this.loopHandler.parseStatement(),
+        () => (this.match(TokenType.КӮШИШ) ? this.tryStatement() : null),
+        () => (this.match(TokenType.ПАРТОФТАН) ? this.throwStatement() : null),
+        () => (this.match(TokenType.АГАР) ? this.ifStatement() : null),
+        () => (this.match(TokenType.ИНТИХОБ) ? this.switchStatement() : null),
+        () => (this.match(TokenType.ШИКАСТАН) ? this.breakStatement() : null),
+        () => (this.match(TokenType.ДАВОМ) ? this.continueStatement() : null),
+        () => (this.match(TokenType.БОЗГАШТ) ? this.returnStatement() : null),
+        () => (this.match(TokenType.LEFT_BRACE) ? this.blockStatement() : null),
+      ];
 
-      const declStmt = this.declarationHandler.parseStatement();
-      if (declStmt) {
-        return declStmt;
-      }
-
-      const loopStmt = this.loopHandler.parseStatement();
-      if (loopStmt) {
-        return loopStmt;
-      }
-
-      if (this.match(TokenType.КӮШИШ)) {
-        return this.tryStatement();
-      }
-
-      if (this.match(TokenType.ПАРТОФТАН)) {
-        return this.throwStatement();
-      }
-
-      if (this.match(TokenType.АГАР)) {
-        return this.ifStatement();
-      }
-
-      if (this.match(TokenType.ИНТИХОБ)) {
-        return this.switchStatement();
-      }
-
-      if (this.match(TokenType.ШИКАСТАН)) {
-        return this.breakStatement();
-      }
-
-      if (this.match(TokenType.ДАВОМ)) {
-        return this.continueStatement();
-      }
-
-      if (this.match(TokenType.БОЗГАШТ)) {
-        return this.returnStatement();
-      }
-
-      if (this.match(TokenType.LEFT_BRACE)) {
-        return this.blockStatement();
+      for (const parse of parsers) {
+        const result = parse();
+        if (result) {
+          return result;
+        }
       }
 
       return this.expressionStatement();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-
       this.errors.push(errorMessage);
       this.synchronize();
-      return null; // Continue parsing after error
+      return null;
     }
   }
 
