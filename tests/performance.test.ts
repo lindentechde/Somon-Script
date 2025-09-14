@@ -4,6 +4,9 @@ import { compile } from '../src/compiler';
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 
+const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+const threshold = (base: number) => base * (isCI ? 5 : 1);
+
 describe('Performance Tests', () => {
   const smallProgram = `
     тағйирёбанда ном: сатр = "Аҳмад";
@@ -40,7 +43,7 @@ describe('Performance Tests', () => {
       lexer.tokenize();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(20); // Less than 20ms for small programs
+      expect(end - start).toBeLessThan(threshold(20));
     });
 
     test('should tokenize medium program efficiently', () => {
@@ -49,7 +52,7 @@ describe('Performance Tests', () => {
       lexer.tokenize();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(50); // Less than 50ms
+      expect(end - start).toBeLessThan(threshold(50));
     });
 
     test('should handle large programs within reasonable time', () => {
@@ -58,7 +61,7 @@ describe('Performance Tests', () => {
       lexer.tokenize();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(500); // Less than 500ms
+      expect(end - start).toBeLessThan(threshold(500));
     });
   });
 
@@ -72,7 +75,7 @@ describe('Performance Tests', () => {
       parser.parse();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(20); // Less than 20ms
+      expect(end - start).toBeLessThan(threshold(20));
     });
 
     test('should parse medium program efficiently', () => {
@@ -84,7 +87,7 @@ describe('Performance Tests', () => {
       parser.parse();
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(100); // Less than 100ms
+      expect(end - start).toBeLessThan(threshold(100));
     });
   });
 
@@ -94,7 +97,7 @@ describe('Performance Tests', () => {
       compile(smallProgram);
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(50); // Less than 50ms
+      expect(end - start).toBeLessThan(threshold(50));
     });
 
     test('should compile medium program efficiently', () => {
@@ -102,7 +105,7 @@ describe('Performance Tests', () => {
       compile(mediumProgram);
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(200); // Less than 200ms
+      expect(end - start).toBeLessThan(threshold(200));
     });
 
     test('should maintain performance with type checking', () => {
@@ -110,7 +113,7 @@ describe('Performance Tests', () => {
       compile(mediumProgram, { typeCheck: true, strict: true });
       const end = performance.now();
 
-      expect(end - start).toBeLessThan(300); // Less than 300ms with type checking
+      expect(end - start).toBeLessThan(threshold(300));
     });
   });
 

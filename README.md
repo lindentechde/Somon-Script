@@ -2,7 +2,7 @@
 
 **Production-Grade Programming Language with Tajik Syntax**
 
-[![Version](https://img.shields.io/badge/version-0.2.41-blue.svg)](https://github.com/Slashmsu/somoni-script)
+[![Version](https://img.shields.io/badge/version-0.2.57-blue.svg)](https://github.com/Slashmsu/somoni-script)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#)
 [![Examples Success](https://img.shields.io/badge/examples-100%25-brightgreen.svg)](#)
@@ -379,6 +379,23 @@ Built on proven software engineering principles and modern compiler technology:
 - Comprehensive testing framework
 
 ---
+
+## 📦 Production & Distribution
+
+SomonScript follows semantic versioning and publishes packages through an
+automated GitHub Actions pipeline. To release a new version:
+
+1. Run `npm run version:patch` (or `version:minor`/`version:major`).
+2. Push the commit and associated tag (`vX.Y.Z`).
+3. The CI pipeline builds, tests, and publishes the package to npm.
+
+Breaking changes and migration notes are documented in release notes and the
+`examples/` directory to ease adoption in production environments.
+
+## 📚 Migration Guide
+
+See [docs/migration-guide.md](docs/migration-guide.md) for steps to upgrade
+between releases.
 
 ## 🚀 Getting Started
 

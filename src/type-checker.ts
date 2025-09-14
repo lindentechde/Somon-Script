@@ -231,39 +231,35 @@ export class TypeChecker {
   }
 
   private bindPatternTypes(pattern: Identifier | ArrayPattern | ObjectPattern, type: Type): void {
-    switch (pattern.type) {
-      case 'Identifier':
-        this.symbolTable.set(pattern.name, type);
-        break;
-      case 'ArrayPattern':
-        if (type.elementType) {
-          pattern.elements.forEach(element => {
-            if (element) {
-              this.bindPatternTypes(
-                element as Identifier | ArrayPattern | ObjectPattern,
-                type.elementType!
-              );
-            }
-          });
+    if (pattern.type === 'Identifier') {
+      this.symbolTable.set(pattern.name, type);
+      return;
+    }
+
+    if (pattern.type === 'ArrayPattern' && type.elementType) {
+      pattern.elements.forEach(element => {
+        if (element) {
+          this.bindPatternTypes(
+            element as Identifier | ArrayPattern | ObjectPattern,
+            type.elementType!
+          );
         }
-        break;
-      case 'ObjectPattern':
-        if (type.properties) {
-          for (const prop of pattern.properties) {
-            if (prop.type === 'PropertyPattern') {
-              const keyName =
-                prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
-              const propType = type.properties.get(keyName);
-              if (propType) {
-                this.bindPatternTypes(
-                  prop.value as Identifier | ArrayPattern | ObjectPattern,
-                  propType.type
-                );
-              }
-            }
-          }
+      });
+      return;
+    }
+
+    if (pattern.type === 'ObjectPattern' && type.properties) {
+      for (const prop of pattern.properties) {
+        if (prop.type !== 'PropertyPattern') continue;
+        const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+        const propType = type.properties.get(keyName);
+        if (propType) {
+          this.bindPatternTypes(
+            prop.value as Identifier | ArrayPattern | ObjectPattern,
+            propType.type
+          );
         }
-        break;
+      }
     }
   }
 
@@ -498,80 +494,116 @@ export class TypeChecker {
     return { kind: 'unknown' };
   }
 
-  // eslint-disable-next-line complexity
   private isAssignable(source: Type, target: Type): boolean {
-    // Exact match
-    if (source.kind === target.kind && source.name === target.name) {
+    if (this.isExactMatch(source, target)) {
       return true;
     }
 
-    // Array type checking
-    if (source.kind === 'array' && target.kind === 'array') {
-      return source.elementType && target.elementType
-        ? this.isAssignable(source.elementType, target.elementType)
-        : false;
-    }
-
-    // Tuple type checking
-    if (source.kind === 'tuple' && target.kind === 'tuple') {
-      if (!source.types || !target.types || source.types.length !== target.types.length) {
-        return false;
-      }
-      return source.types.every((sourceType, index) =>
-        this.isAssignable(sourceType, target.types![index])
-      );
-    }
-
-    // Array literal to tuple assignment
-    if (source.kind === 'array' && target.kind === 'tuple') {
-      // Allow array literals to be assigned to tuples
+    if (this.isArrayAssignable(source, target)) {
       return true;
     }
 
-    // Union type checking
+    if (this.isTupleAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isArrayToTupleAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isUnionAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isIntersectionAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isInterfaceAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isClassAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isUniqueAssignable(source, target)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private isExactMatch(source: Type, target: Type): boolean {
+    return source.kind === target.kind && source.name === target.name;
+  }
+
+  private isArrayAssignable(source: Type, target: Type): boolean {
+    if (source.kind !== 'array' || target.kind !== 'array') {
+      return false;
+    }
+    return source.elementType && target.elementType
+      ? this.isAssignable(source.elementType, target.elementType)
+      : false;
+  }
+
+  private isTupleAssignable(source: Type, target: Type): boolean {
+    if (source.kind !== 'tuple' || target.kind !== 'tuple') {
+      return false;
+    }
+    if (!source.types || !target.types || source.types.length !== target.types.length) {
+      return false;
+    }
+    return source.types.every((sourceType, index) =>
+      this.isAssignable(sourceType, target.types![index])
+    );
+  }
+
+  private isArrayToTupleAssignable(source: Type, target: Type): boolean {
+    return source.kind === 'array' && target.kind === 'tuple';
+  }
+
+  private isUnionAssignable(source: Type, target: Type): boolean {
     if (target.kind === 'union' && target.types) {
       return target.types.some(t => this.isAssignable(source, t));
     }
-
-    // Source union type - all members must be assignable to target
     if (source.kind === 'union' && source.types) {
       return source.types.every(t => this.isAssignable(t, target));
     }
+    return false;
+  }
 
-    // Intersection type checking
+  private isIntersectionAssignable(source: Type, target: Type): boolean {
     if (target.kind === 'intersection' && target.types) {
-      // Source must be assignable to all types in intersection
       return target.types.every(t => this.isAssignable(source, t));
     }
-
     if (source.kind === 'intersection' && source.types) {
-      // At least one type in intersection must be assignable to target
       return source.types.some(t => this.isAssignable(t, target));
     }
+    return false;
+  }
 
-    // Interface structural typing
-    if (source.kind === 'interface' && target.kind === 'interface') {
+  private isInterfaceAssignable(source: Type, target: Type): boolean {
+    if (target.kind !== 'interface') {
+      return false;
+    }
+    if (source.kind === 'interface' || source.kind === 'object') {
       return this.isStructurallyCompatible(source, target);
     }
+    return false;
+  }
 
-    // Object literal to interface assignment
-    if (source.kind === 'object' && target.kind === 'interface') {
-      return this.isStructurallyCompatible(source, target);
-    }
+  private isClassAssignable(source: Type, target: Type): boolean {
+    return source.kind === 'class' && target.kind === 'class' && source.name === target.name;
+  }
 
-    // Class type checking
-    if (source.kind === 'class' && target.kind === 'class') {
-      return source.name === target.name;
-    }
-
+  private isUniqueAssignable(source: Type, target: Type): boolean {
     if (source.kind === 'unique' && target.kind === 'unique') {
       return this.isAssignable(source.baseType!, target.baseType!);
     }
-
     if (source.kind === 'unique' || target.kind === 'unique') {
       return false;
     }
-
     return false;
   }
 
