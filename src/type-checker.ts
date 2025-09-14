@@ -3,6 +3,8 @@ import {
   ArrayType,
   CallExpression,
   ClassDeclaration,
+  ArrayPattern,
+  ObjectPattern,
   Expression,
   FunctionDeclaration,
   GenericType,
@@ -21,6 +23,7 @@ import {
   UnionType,
   VariableDeclaration,
   TypeAnnotation,
+  UniqueType,
 } from './types';
 
 /**
@@ -51,6 +54,7 @@ export interface Type {
   types?: Type[];
   properties?: Map<string, PropertyType>;
   returnType?: Type;
+  baseType?: Type;
 }
 
 /**
@@ -198,10 +202,50 @@ export class TypeChecker {
 
     // Store variable type in symbol table
     const finalType = declaredType || inferredType;
-    if (finalType && varDecl.identifier.type === 'Identifier') {
-      this.symbolTable.set(varDecl.identifier.name, finalType);
+    if (finalType) {
+      if (varDecl.identifier.type === 'Identifier') {
+        this.symbolTable.set(varDecl.identifier.name, finalType);
+      } else {
+        this.bindPatternTypes(varDecl.identifier, finalType);
+      }
     }
-    // TODO: Handle destructuring patterns in type checking
+  }
+
+  private bindPatternTypes(pattern: Identifier | ArrayPattern | ObjectPattern, type: Type): void {
+    switch (pattern.type) {
+      case 'Identifier':
+        this.symbolTable.set(pattern.name, type);
+        break;
+      case 'ArrayPattern':
+        if (type.elementType) {
+          pattern.elements.forEach(element => {
+            if (element) {
+              this.bindPatternTypes(
+                element as Identifier | ArrayPattern | ObjectPattern,
+                type.elementType!
+              );
+            }
+          });
+        }
+        break;
+      case 'ObjectPattern':
+        if (type.properties) {
+          for (const prop of pattern.properties) {
+            if (prop.type === 'PropertyPattern') {
+              const keyName =
+                prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+              const propType = type.properties.get(keyName);
+              if (propType) {
+                this.bindPatternTypes(
+                  prop.value as Identifier | ArrayPattern | ObjectPattern,
+                  propType.type
+                );
+              }
+            }
+          }
+        }
+        break;
+    }
   }
 
   private checkFunctionDeclaration(funcDecl: FunctionDeclaration): void {
@@ -258,6 +302,8 @@ export class TypeChecker {
         return this.resolveTupleType(typeNode as TupleType);
       case 'GenericType':
         return this.resolveGenericType(typeNode as GenericType);
+      case 'UniqueType':
+        return this.resolveUniqueType(typeNode as UniqueType);
       case 'Identifier':
         return this.resolveIdentifierType(typeNode as Identifier);
       default:
@@ -299,6 +345,10 @@ export class TypeChecker {
 
   private resolveGenericType(genericType: GenericType): Type {
     return this.resolveNamedType(genericType.name.name);
+  }
+
+  private resolveUniqueType(uniqueType: UniqueType): Type {
+    return { kind: 'unique', baseType: this.resolveTypeNode(uniqueType.baseType) };
   }
 
   private resolveIdentifierType(identifierType: Identifier): Type {
@@ -495,6 +545,14 @@ export class TypeChecker {
       return source.name === target.name;
     }
 
+    if (source.kind === 'unique' && target.kind === 'unique') {
+      return this.isAssignable(source.baseType!, target.baseType!);
+    }
+
+    if (source.kind === 'unique' || target.kind === 'unique') {
+      return false;
+    }
+
     return false;
   }
 
@@ -516,6 +574,8 @@ export class TypeChecker {
         return typeof type.name === 'string' ? `"${type.name}"` : String(type.name);
       case 'class':
         return type.name || 'class';
+      case 'unique':
+        return `беназир ${this.typeToString(type.baseType!)}`;
       default:
         return type.name || 'unknown';
     }

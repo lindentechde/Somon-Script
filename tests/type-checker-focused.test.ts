@@ -4,6 +4,8 @@
  */
 
 import { TypeChecker, TypeCheckError, TypeCheckResult } from '../src/type-checker';
+import { Lexer } from '../src/lexer';
+import { Parser } from '../src/parser';
 
 describe('TypeChecker - Core Coverage Tests', () => {
   let checker: TypeChecker;
@@ -11,6 +13,13 @@ describe('TypeChecker - Core Coverage Tests', () => {
   beforeEach(() => {
     checker = new TypeChecker();
   });
+
+  function parseSource(source: string) {
+    const lexer = new Lexer(source);
+    const tokens = lexer.tokenize();
+    const parser = new Parser(tokens);
+    return parser.parse();
+  }
 
   describe('Basic Functionality', () => {
     test('should instantiate TypeChecker', () => {
@@ -476,6 +485,20 @@ describe('TypeChecker - Core Coverage Tests', () => {
         expect(typeof annotation).toBe('string');
         expect(annotation.length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  describe('Unique Type handling', () => {
+    test('should parse variable with unique type annotation', () => {
+      const program = parseSource('тағйирёбанда х: беназир сатр;');
+      const result = checker.check(program);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('should report error for mismatched unique type', () => {
+      const program = parseSource('тағйирёбанда х: беназир сатр = 123;');
+      const result = checker.check(program);
+      expect(result.errors.length).toBeGreaterThan(0);
     });
   });
 });

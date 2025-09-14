@@ -1,6 +1,6 @@
 {
   "name": "somon-script",
-  "version": "0.2.48",
+  "version": "0.2.52",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -76,7 +76,6 @@
     "@babel/core": "^7.28.4",
     "babel-preset-minify": "^0.5.2",
     "commander": "^11.0.0",
-    "source-map": "^0.7.6",
-    "typescript": "^5.0.0"
+    "source-map": "^0.7.6"
   }
 }
