@@ -222,31 +222,57 @@ export class ModuleSystem {
 
       // Replace require statements with correct module IDs
       let processedCode = code;
-      for (const [originalId] of moduleIdMapping) {
-        // Replace require("./module") with require("module.som")
-        const originalRelative = path.relative(path.dirname(moduleId), originalId);
-        if (originalRelative && !originalRelative.startsWith('..')) {
-          const requirePattern = new RegExp(`require\\(["']\\.\\/[^"']*["']\\)`, 'g');
-          processedCode = processedCode.replace(requirePattern, match => {
-            // Extract the specifier from the require statement
-            const specifierMatch = match.match(/require\(["']([^"']*)["']\)/);
-            if (specifierMatch) {
-              const specifier = specifierMatch[1];
-              // Try to resolve this specifier to find the correct module ID
-              try {
-                const resolved = this.resolver.resolve(specifier, moduleId);
-                const targetMappedId = moduleIdMapping.get(resolved.resolvedPath);
-                if (targetMappedId) {
-                  return `require("${targetMappedId}")`;
+
+      // Use a comprehensive regex to find all require statements
+      processedCode = processedCode.replace(/require\(["']([^"']+)["']\)/g, (match, specifier) => {
+        // Handle relative imports
+        if (specifier.startsWith('./') || specifier.startsWith('../')) {
+          const currentDir = path.dirname(moduleId);
+
+          // Try different resolution strategies
+          let targetModuleId: string | undefined;
+
+          // Strategy 1: Try with .som extension (for .js -> .som conversion)
+          try {
+            let somSpecifier = specifier;
+            if (somSpecifier.endsWith('.js')) {
+              somSpecifier = somSpecifier.replace(/\.js$/, '.som');
+            } else if (!somSpecifier.endsWith('.som')) {
+              somSpecifier = somSpecifier + '.som';
+            }
+            const resolvedPath = path.resolve(currentDir, somSpecifier);
+            targetModuleId = moduleIdMapping.get(resolvedPath);
+          } catch {
+            // Continue to next strategy
+          }
+
+          // Strategy 2: Search through all loaded modules for a match
+          if (!targetModuleId) {
+            const specifierWithoutExt = specifier.replace(/\.(js|som)$/, '');
+            for (const [loadedModuleId, bundleId] of moduleIdMapping) {
+              const loadedWithoutExt = path.basename(loadedModuleId, '.som');
+              const specifierBasename = path.basename(specifierWithoutExt);
+
+              // Check if this could be the target module
+              if (loadedWithoutExt === specifierBasename) {
+                const expectedPath = path.resolve(currentDir, specifierWithoutExt + '.som');
+
+                if (loadedModuleId === expectedPath) {
+                  targetModuleId = bundleId;
+                  break;
                 }
-              } catch {
-                // If resolution fails, keep original
               }
             }
-            return match;
-          });
+          }
+
+          if (targetModuleId) {
+            return `require("${targetModuleId}")`;
+          }
         }
-      }
+
+        // For non-relative imports, keep as-is (external modules)
+        return match;
+      });
 
       moduleMap.push(
         `  '${relativePath}': function(module, exports, require) {\n${processedCode}\n  }`
@@ -273,8 +299,16 @@ ${moduleMap.join(',\n')}
     return module.exports;
   }
   
-  // Start with entry point
-  require('${path.relative(process.cwd(), result.entryPoint)}');
+  // Start with entry point and expose its exports
+  var entryModule = require('${path.relative(process.cwd(), result.entryPoint)}');
+  
+  // Expose entry point exports as bundle exports (for Node.js)
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = entryModule;
+  }
+  
+  // Return entry point exports (for other environments)
+  return entryModule;
 })();
 `;
 
