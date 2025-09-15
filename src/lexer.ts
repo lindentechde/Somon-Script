@@ -308,6 +308,11 @@ export class Lexer {
       return this.readString(char, startLine, startColumn);
     }
 
+    // Template literals
+    if (char === '`') {
+      return this.readTemplateLiteral(startLine, startColumn);
+    }
+
     // Number literals
     if (this.isDigit(char)) {
       return this.readNumber(startLine, startColumn);
@@ -364,8 +369,15 @@ export class Lexer {
           this.advance();
         }
       } else {
-        value += this.currentChar();
-        this.advance();
+        if (this.currentChar() === '\n') {
+          value += this.currentChar();
+          this.advance();
+          this.line++;
+          this.column = 1;
+        } else {
+          value += this.currentChar();
+          this.advance();
+        }
       }
     }
 
@@ -375,6 +387,85 @@ export class Lexer {
 
     this.advance(); // Skip closing quote
     return this.createToken(TokenType.STRING, value, startLine, startColumn);
+  }
+
+  private readTemplateLiteral(startLine: number, startColumn: number): Token {
+    let value = '';
+    this.advance(); // Skip opening backtick
+
+    while (!this.isAtEnd() && this.currentChar() !== '`') {
+      if (this.currentChar() === '\\') {
+        value += this.handleEscapeSequence();
+      } else if (this.currentChar() === '$' && this.peek() === '{') {
+        value += this.handleInterpolation();
+      } else {
+        value += this.handleRegularCharacter();
+      }
+    }
+
+    if (this.isAtEnd()) {
+      throw new Error(`Unterminated template literal at line ${startLine}, column ${startColumn}`);
+    }
+
+    this.advance(); // Skip closing backtick
+    return this.createToken(TokenType.TEMPLATE_LITERAL, value, startLine, startColumn);
+  }
+
+  private handleEscapeSequence(): string {
+    this.advance(); // Skip backslash
+    if (this.isAtEnd()) return '\\';
+
+    const escaped = this.currentChar();
+    this.advance();
+
+    switch (escaped) {
+      case 'n':
+        return '\n';
+      case 't':
+        return '\t';
+      case 'r':
+        return '\r';
+      case '\\':
+        return '\\';
+      case '`':
+        return '`';
+      case '$':
+        return '$';
+      default:
+        return escaped;
+    }
+  }
+
+  private handleInterpolation(): string {
+    let result = '${';
+    this.advance(); // Skip $
+    this.advance(); // Skip {
+
+    let braceCount = 1;
+    while (!this.isAtEnd() && braceCount > 0) {
+      if (this.currentChar() === '{') {
+        braceCount++;
+      } else if (this.currentChar() === '}') {
+        braceCount--;
+      }
+      result += this.currentChar();
+      this.advance();
+    }
+
+    return result;
+  }
+
+  private handleRegularCharacter(): string {
+    const char = this.currentChar();
+    if (char === '\n') {
+      this.advance();
+      this.line++;
+      this.column = 1;
+      return char;
+    } else {
+      this.advance();
+      return char;
+    }
   }
 
   private readNumber(startLine: number, startColumn: number): Token {

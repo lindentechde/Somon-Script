@@ -118,6 +118,16 @@ somon run hello.som
 ### **Modern JavaScript Features** ✅ 100% Complete
 
 ```som
+// Template literals with interpolation
+тағйирёбанда ном = "Аҳмад";
+тағйирёбанда синну = 25;
+тағйирёбанда паём = `Салом, ${ном}! Шумо ${синну} сола доред.`;
+
+// Multiline template literals
+тағйирёбанда матн = `Сатри якум
+Сатри дуюм
+Сатри сеюм`;
+
 // Async/await for modern web development
 ҳамзамон функсия маълумот_гирифтан(url: сатр): Promise<сатр> {
     тағйирёбанда ҷавоб = интизор fetch(url);

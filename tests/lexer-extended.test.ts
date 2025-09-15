@@ -559,10 +559,13 @@ describe('Lexer Extended Coverage Tests', () => {
     });
 
     test('should handle template literal-like constructs', () => {
-      // Template literals are not supported, so expect an error
+      // Template literals are now supported
       const source = '`template ${variable} literal`';
+      const tokens = tokenize(source);
 
-      expect(() => tokenize(source)).toThrow('Unexpected character');
+      expect(tokens).toHaveLength(2); // TEMPLATE_LITERAL + EOF
+      expect(tokens[0].type).toBe(TokenType.TEMPLATE_LITERAL);
+      expect(tokens[0].value).toBe('template ${variable} literal');
     });
 
     test('should handle regex-like constructs', () => {

@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-09-14T01:12:10.374Z",
-  "total": 32,
-  "working": 32,
+  "timestamp": "2025-09-15T07:32:39.438Z",
+  "total": 33,
+  "working": 33,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -139,6 +139,11 @@
       },
       {
         "name": "simple-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "template-literals.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },

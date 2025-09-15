@@ -50,6 +50,8 @@ import {
   SpreadElement,
   ObjectExpression,
   Property,
+  TemplateLiteral,
+  TemplateElement,
 } from './types';
 import { ImportHandler } from './handlers/import-handler';
 import { DeclarationHandler } from './handlers/declaration-handler';
@@ -812,6 +814,10 @@ export class Parser {
       } as Literal;
     }
 
+    if (this.match(TokenType.TEMPLATE_LITERAL)) {
+      return this.parseTemplateLiteral();
+    }
+
     if (this.match(TokenType.ИН)) {
       const token = this.previous();
       return {
@@ -901,6 +907,158 @@ export class Parser {
     throw new Error(
       `Unexpected token '${token.value}' at line ${token.line}, column ${token.column}`
     );
+  }
+
+  private parseTemplateLiteral(): TemplateLiteral {
+    const token = this.previous();
+    const templateValue = token.value;
+
+    // Parse the template literal content
+    const quasis: TemplateElement[] = [];
+    const expressions: Expression[] = [];
+
+    // For now, we'll implement a simple version that handles basic interpolation
+    // This can be enhanced later for more complex cases
+    const parts = this.parseTemplateString(templateValue);
+
+    // Process parts and separate text from expressions
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+
+      if (part.type === 'text') {
+        quasis.push({
+          type: 'TemplateElement',
+          value: {
+            raw: part.value,
+            cooked: part.value,
+          },
+          tail: false, // Will be updated later
+          line: token.line,
+          column: token.column,
+        });
+      } else if (part.type === 'expression') {
+        // Parse the expression inside ${}
+        const exprParser = new Parser([]);
+        const exprTokens = this.tokenizeExpression(part.value);
+        exprParser.tokens = exprTokens;
+        exprParser.current = 0;
+
+        try {
+          const expr = exprParser.expression();
+          expressions.push(expr);
+        } catch (error) {
+          // If parsing fails, treat as identifier
+          expressions.push({
+            type: 'Identifier',
+            name: part.value.trim(),
+            line: token.line,
+            column: token.column,
+          } as Identifier);
+        }
+      }
+    }
+
+    // Ensure we have the right number of quasis (should be expressions.length + 1)
+    if (quasis.length === expressions.length) {
+      quasis.push({
+        type: 'TemplateElement',
+        value: {
+          raw: '',
+          cooked: '',
+        },
+        tail: true,
+        line: token.line,
+        column: token.column,
+      });
+    }
+
+    // Mark the last quasi as tail
+    if (quasis.length > 0) {
+      quasis[quasis.length - 1].tail = true;
+    }
+
+    return {
+      type: 'TemplateLiteral',
+      quasis,
+      expressions,
+      line: token.line,
+      column: token.column,
+    };
+  }
+
+  private parseTemplateString(
+    template: string
+  ): Array<{ type: 'text' | 'expression'; value: string }> {
+    const parts: Array<{ type: 'text' | 'expression'; value: string }> = [];
+    let current = '';
+    let i = 0;
+
+    while (i < template.length) {
+      if (template[i] === '$' && template[i + 1] === '{') {
+        // Save current text part (even if empty at the start)
+        if (current || parts.length === 0) {
+          parts.push({ type: 'text', value: current });
+          current = '';
+        }
+
+        // Find the matching closing brace
+        i += 2; // Skip ${
+        let braceCount = 1;
+        let expr = '';
+
+        while (i < template.length && braceCount > 0) {
+          if (template[i] === '{') {
+            braceCount++;
+          } else if (template[i] === '}') {
+            braceCount--;
+          }
+
+          if (braceCount > 0) {
+            expr += template[i];
+          }
+          i++;
+        }
+
+        parts.push({ type: 'expression', value: expr });
+      } else {
+        current += template[i];
+        i++;
+      }
+    }
+
+    // Add remaining text (even if empty)
+    if (current || parts.length === 0) {
+      parts.push({ type: 'text', value: current });
+    }
+
+    return parts;
+  }
+
+  private tokenizeExpression(expr: string): Token[] {
+    // Simple tokenization for expressions inside template literals
+    // This is a simplified version - in a full implementation, you'd use the main lexer
+    const tokens: Token[] = [];
+    const trimmed = expr.trim();
+
+    if (trimmed) {
+      // For now, treat the whole expression as an identifier
+      // This can be enhanced to properly tokenize complex expressions
+      tokens.push({
+        type: TokenType.IDENTIFIER,
+        value: trimmed,
+        line: 1,
+        column: 1,
+      });
+    }
+
+    tokens.push({
+      type: TokenType.EOF,
+      value: '',
+      line: 1,
+      column: 1,
+    });
+
+    return tokens;
   }
 
   public match(...types: TokenType[]): boolean {
