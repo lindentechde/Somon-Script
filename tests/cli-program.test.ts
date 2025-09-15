@@ -177,14 +177,14 @@ describe('CLI Program (in-process)', () => {
       path.join(tempDir, 'somon.config.json'),
       JSON.stringify({ compilerOptions: { compileOnSave: false, target: 'es5' } }, null, 2)
     );
-    
+
     program.parse(['compile', inputFile], { from: 'user' });
-    
+
     // Verify compilation happened with config options
     expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Compiled'))).toBe(true);
     const outputFile = path.join(tempDir, 'config-test.js');
     expect(fs.existsSync(outputFile)).toBe(true);
-    
+
     // Verify ES5 target was used (should use 'var' instead of 'const')
     const output = fs.readFileSync(outputFile, 'utf-8');
     expect(output.includes('console.log')).toBe(true);
