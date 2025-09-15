@@ -248,5 +248,80 @@ describe('Template Literals', () => {
       // Should generate valid JavaScript
       expect(() => new Function('a', 'b', 'c', jsCode.replace(';', ''))).not.toThrow();
     });
+
+    test('should properly tokenize built-in functions in interpolations', () => {
+      const code = '`Time: ${чоп.сабт("test")}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      const generator = new CodeGenerator();
+      const jsCode = generator.generate(ast);
+
+      // Should translate чоп.сабт to console.log inside interpolation
+      expect(jsCode).toContain('console.log("test")');
+    });
+
+    test('should properly tokenize expressions instead of single identifiers', () => {
+      const code = '`Sum: ${a + b}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // The expression should be properly parsed as a binary expression, not a single identifier
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('BinaryExpression');
+      expect(expression.operator).toBe('+');
+      expect(expression.left.name).toBe('a');
+      expect(expression.right.name).toBe('b');
+    });
+
+    test('should properly tokenize method calls in interpolations', () => {
+      const code = '`Length: ${arr.length}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // The expression should be properly parsed as member access
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('MemberExpression');
+      expect(expression.object.name).toBe('arr');
+      expect(expression.property.name).toBe('length');
+    });
+
+    test('should properly tokenize function calls in interpolations', () => {
+      const code = '`Result: ${func(arg1, arg2)}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // The expression should be properly parsed as a function call
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('CallExpression');
+      expect(expression.callee.name).toBe('func');
+      expect(expression.arguments).toHaveLength(2);
+    });
+
+    test('should handle nested expressions in interpolations', () => {
+      const code = '`Complex: ${obj.method(arr[0] + 1)}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // Should parse the complex nested expression correctly
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('CallExpression');
+      expect(expression.callee.type).toBe('MemberExpression');
+      expect(expression.arguments).toHaveLength(1);
+      expect(expression.arguments[0].type).toBe('BinaryExpression');
+    });
   });
 });

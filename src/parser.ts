@@ -53,6 +53,7 @@ import {
   TemplateLiteral,
   TemplateElement,
 } from './types';
+import { Lexer } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
 import { DeclarationHandler } from './handlers/declaration-handler';
 import { LoopHandler } from './handlers/loop-handler';
@@ -1035,30 +1036,23 @@ export class Parser {
   }
 
   private tokenizeExpression(expr: string): Token[] {
-    // Simple tokenization for expressions inside template literals
-    // This is a simplified version - in a full implementation, you'd use the main lexer
-    const tokens: Token[] = [];
     const trimmed = expr.trim();
 
-    if (trimmed) {
-      // For now, treat the whole expression as an identifier
-      // This can be enhanced to properly tokenize complex expressions
-      tokens.push({
-        type: TokenType.IDENTIFIER,
-        value: trimmed,
-        line: 1,
-        column: 1,
-      });
+    if (!trimmed) {
+      return [
+        {
+          type: TokenType.EOF,
+          value: '',
+          line: 1,
+          column: 1,
+        },
+      ];
     }
 
-    tokens.push({
-      type: TokenType.EOF,
-      value: '',
-      line: 1,
-      column: 1,
-    });
-
-    return tokens;
+    // Use the main lexer to properly tokenize the interpolation content
+    // This ensures all language features (keywords, built-ins, etc.) work properly
+    const lexer = new Lexer(trimmed);
+    return lexer.tokenize();
   }
 
   public match(...types: TokenType[]): boolean {
