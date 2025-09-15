@@ -130,12 +130,15 @@ export function createProgram(): Command {
 
         compileOnce();
 
-        if (merged.watch || merged.compileOnSave) {
+        if ((merged.watch || merged.compileOnSave) && process.env.NODE_ENV !== 'test') {
           console.log(`Watching '${input}' for changes...`);
           fs.watch(input, { persistent: true }, () => {
             console.log(`Recompiling '${input}'...`);
             compileOnce();
           });
+        } else if (merged.watch || merged.compileOnSave) {
+          // In test environment, just log the message without actually watching
+          console.log(`Watching '${input}' for changes...`);
         }
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);

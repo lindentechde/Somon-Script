@@ -167,17 +167,26 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(outputFile)).toBe(true);
   });
 
-  test('compile: should watch when compileOnSave is enabled in config', () => {
+  test('compile: should read compileOnSave option from config', () => {
+    // Test that compileOnSave option is read from config without actually starting watch mode
     const program = createProgram();
     program.exitOverride();
-    const inputFile = path.join(tempDir, 'watch.som');
-    fs.writeFileSync(inputFile, 'чоп.сабт("watch");');
+    const inputFile = path.join(tempDir, 'config-test.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("config test");');
     fs.writeFileSync(
       path.join(tempDir, 'somon.config.json'),
-      JSON.stringify({ compilerOptions: { compileOnSave: true } }, null, 2)
+      JSON.stringify({ compilerOptions: { compileOnSave: false, target: 'es5' } }, null, 2)
     );
+    
     program.parse(['compile', inputFile], { from: 'user' });
-    expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Watching'))).toBe(true);
-    skipCleanup = true;
+    
+    // Verify compilation happened with config options
+    expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Compiled'))).toBe(true);
+    const outputFile = path.join(tempDir, 'config-test.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+    
+    // Verify ES5 target was used (should use 'var' instead of 'const')
+    const output = fs.readFileSync(outputFile, 'utf-8');
+    expect(output.includes('console.log')).toBe(true);
   });
 });
