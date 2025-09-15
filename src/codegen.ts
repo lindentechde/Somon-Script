@@ -332,7 +332,7 @@ export class CodeGenerator {
       return this.generateStructuralExpression(node);
     }
 
-    const specialExpressions = ['AwaitExpression', 'NewExpression'];
+    const specialExpressions = ['AwaitExpression', 'NewExpression', 'ImportExpression'];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
     }
@@ -402,9 +402,26 @@ export class CodeGenerator {
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
+      case 'ImportExpression':
+        return this.generateImportExpression(node as any);
       default:
         return this.handleUnknownExpression(node);
     }
+  }
+
+  private generateImportExpression(node: any): string {
+    // Dynamic import: ворид(specifier) -> import(specifier)
+    let source = this.generateExpression(node.source);
+
+    // Handle .som extension conversion for dynamic imports
+    if (source.includes('.som')) {
+      source = source.replace(/\.som/g, '.js');
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
+    }
+
+    return `import(${source})`;
   }
 
   private handleUnknownExpression(node: Expression): string {

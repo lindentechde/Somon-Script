@@ -317,3 +317,16 @@ export interface RestElement extends ASTNode {
   type: 'RestElement';
   argument: Identifier;
 }
+
+// Dynamic Import Support
+export interface ImportExpression extends Expression {
+  type: 'ImportExpression';
+  source: Expression;
+}
+
+// Meta Property for import.meta
+export interface MetaProperty extends Expression {
+  type: 'MetaProperty';
+  meta: Identifier;
+  property: Identifier;
+}

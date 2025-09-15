@@ -861,6 +861,21 @@ export class Parser {
       } as NewExpression;
     }
 
+    // Dynamic import: ворид(specifier)
+    if (this.check(TokenType.ВОРИД) && this.peekNext()?.type === TokenType.LEFT_PAREN) {
+      const importToken = this.advance();
+      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'ворид'");
+      const source = this.expression();
+      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after import specifier");
+
+      return {
+        type: 'ImportExpression',
+        source,
+        line: importToken.line,
+        column: importToken.column,
+      } as any; // ImportExpression from ast.ts
+    }
+
     if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
       const token = this.previous();
       return {
@@ -1095,6 +1110,11 @@ export class Parser {
     return this.tokens[this.current];
   }
 
+  private peekNext(): Token | undefined {
+    if (this.current + 1 >= this.tokens.length) return undefined;
+    return this.tokens[this.current + 1];
+  }
+
   private previous(): Token {
     return this.tokens[this.current - 1];
   }
@@ -1168,7 +1188,16 @@ export class Parser {
   private parseNamedImports(specifiers: (ImportSpecifier | ImportDefaultSpecifier)[]): void {
     if (!this.check(TokenType.RIGHT_BRACE)) {
       do {
-        const imported = this.consume(TokenType.IDENTIFIER, 'Expected import name');
+        let imported: Token;
+        if (this.check(TokenType.IDENTIFIER)) {
+          imported = this.advance();
+        } else if (this.matchBuiltinIdentifier()) {
+          imported = this.previous();
+        } else {
+          throw new Error(
+            `Expected import name at line ${this.peek().line}, column ${this.peek().column}`
+          );
+        }
         let local = imported;
 
         // Handle 'as' alias (we'll use 'чун' for 'as')

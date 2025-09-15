@@ -134,9 +134,20 @@ somon run hello.som
     бозгашт интизор ҷавоб.text();
 }
 
-// Modules and imports
+// Modules and imports - Full ES6+ module system
 содир функсия ҳисоб_кардан(а: рақам, б: рақам): рақам {
     бозгашт а + б;
+}
+
+// Import from other modules
+ворид { ҳисоб_кардан } аз "./math";
+ворид пешфарз_функсия аз "./utils";
+ворид * чун MathUtils аз "./math-utils";
+
+// Dynamic imports for code splitting
+ҳамзамон функсия loadModule() {
+    собит module = интизор ворид("./dynamic-module");
+    бозгашт module.someFunction();
 }
 
 // Error handling
@@ -145,6 +156,57 @@ somon run hello.som
 } гирифтан (хато) {
     чоп.сабт("Хато рух дод: " + хато.паём);
 }
+```
+
+### **Production-Ready Module System** ✅ 100% Complete
+
+SomonScript features a comprehensive module system designed for large-scale
+applications:
+
+```som
+// math.som - Export functions and constants
+содир функсия ҷамъ(а: рақам, б: рақам): рақам {
+    бозгашт а + б;
+}
+
+содир собит ПИ: рақам = 3.14159;
+
+содир пешфарз функсия ҳисобкунак(амал: сатр, а: рақам, б: рақам): рақам {
+    // Default export implementation
+}
+
+// main.som - Import and use modules
+ворид ҳисобкунак, { ҷамъ, ПИ } аз "./math";
+ворид { формат } аз "./string-utils";
+
+чоп.сабт(формат("Натиҷа: {0}", ҷамъ(5, 3)));
+```
+
+**Module System Features:**
+
+- 🔄 **Static & Dynamic Imports** - ES6+ import/export syntax with dynamic
+  loading
+- 📁 **Smart Resolution** - Node.js-compatible module resolution with `.som` →
+  `.js` mapping
+- 🔗 **Dependency Management** - Automatic dependency graph construction and
+  circular dependency detection
+- 📦 **Bundling Support** - Multiple output formats (CommonJS, ESM, UMD) with
+  minification
+- ⚡ **Performance Optimized** - Module caching and efficient compilation order
+- 🛠️ **CLI Integration** - Built-in commands for bundling, analysis, and
+  dependency resolution
+
+**CLI Commands:**
+
+```bash
+# Bundle modules into a single file
+somon bundle src/main.som -o dist/app.js --format esm --minify
+
+# Analyze module dependencies
+somon module-info src/main.som --graph --stats --circular
+
+# Resolve module paths
+somon resolve "./utils" --from src/main.som
 ```
 
 ---

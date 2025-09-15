@@ -256,5 +256,141 @@ export function createProgram(): Command {
       }
     });
 
+  // Bundle command
+  program
+    .command('bundle')
+    .alias('b')
+    .description('Bundle SomonScript modules into a single file')
+    .argument('<input>', 'Entry point file')
+    .option('-o, --output <file>', 'Output file path')
+    .option('-f, --format <format>', 'Bundle format (commonjs, esm, umd)', 'commonjs')
+    .option('--minify', 'Minify the output')
+    .option('--source-map', 'Generate source maps')
+    .option('--externals <modules>', 'External modules (comma-separated)')
+    .action(async (input: string, options: any) => {
+      try {
+        const { ModuleSystem } = await import('../module-system');
+
+        const moduleSystem = new ModuleSystem({
+          resolution: {
+            baseUrl: path.dirname(path.resolve(input)),
+          },
+        });
+
+        const bundleOptions = {
+          entryPoint: path.resolve(input),
+          outputPath: options.output,
+          format: options.format,
+          minify: options.minify,
+          sourceMaps: options.sourceMap,
+          externals: options.externals ? options.externals.split(',') : [],
+        };
+
+        console.log(`📦 Bundling ${input}...`);
+        const bundle = await moduleSystem.bundle(bundleOptions);
+
+        const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
+        fs.writeFileSync(outputPath, bundle);
+
+        console.log(`✅ Bundle created: ${outputPath}`);
+
+        const stats = moduleSystem.getStatistics();
+        console.log(`📊 Bundled ${stats.totalModules} modules`);
+      } catch (error) {
+        console.error('Bundle error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // Module info command
+  program
+    .command('module-info')
+    .alias('info')
+    .description('Show module dependency information')
+    .argument('<input>', 'Entry point file')
+    .option('--graph', 'Show dependency graph')
+    .option('--stats', 'Show module statistics')
+    .option('--circular', 'Check for circular dependencies')
+    .action(async (input: string, options: any) => {
+      try {
+        const { ModuleSystem } = await import('../module-system');
+
+        const moduleSystem = new ModuleSystem({
+          resolution: {
+            baseUrl: path.dirname(path.resolve(input)),
+          },
+        });
+
+        console.log(`🔍 Analyzing ${input}...`);
+        await moduleSystem.loadModule(path.resolve(input), process.cwd());
+
+        if (options.stats) {
+          const stats = moduleSystem.getStatistics();
+          console.log('\n📊 Module Statistics:');
+          console.log(`  Total modules: ${stats.totalModules}`);
+          console.log(`  Total dependencies: ${stats.totalDependencies}`);
+          console.log(`  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`);
+          console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
+          console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+        }
+
+        if (options.graph) {
+          const graph = moduleSystem.getDependencyGraph();
+          console.log('\n🕸️  Dependency Graph:');
+          for (const [moduleId, deps] of graph) {
+            const relativePath = path.relative(process.cwd(), moduleId);
+            console.log(`  ${relativePath}:`);
+            for (const dep of deps) {
+              console.log(`    └── ${dep}`);
+            }
+          }
+        }
+
+        if (options.circular) {
+          const validation = moduleSystem.validate();
+          if (validation.isValid) {
+            console.log('\n✅ No circular dependencies found');
+          } else {
+            console.log('\n❌ Issues found:');
+            for (const error of validation.errors) {
+              console.log(`  • ${error}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Analysis error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // Resolve command
+  program
+    .command('resolve')
+    .description('Resolve a module specifier to its file path')
+    .argument('<specifier>', 'Module specifier to resolve')
+    .option('-f, --from <file>', 'Resolve from this file', process.cwd())
+    .action(async (specifier: string, options: any) => {
+      try {
+        const { ModuleResolver } = await import('../module-system');
+
+        const resolver = new ModuleResolver({
+          baseUrl: path.dirname(path.resolve(options.from)),
+        });
+
+        const resolved = resolver.resolve(specifier, options.from);
+
+        console.log(`🎯 Resolved '${specifier}':`);
+        console.log(`  Path: ${resolved.resolvedPath}`);
+        console.log(`  Extension: ${resolved.extension}`);
+        console.log(`  External: ${resolved.isExternalLibrary ? 'Yes' : 'No'}`);
+        if (resolved.packageName) {
+          console.log(`  Package: ${resolved.packageName}`);
+        }
+      } catch (error) {
+        console.error('Resolve error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
   return program;
 }

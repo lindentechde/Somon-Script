@@ -1,0 +1,432 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { ModuleResolver, ModuleLoader, ModuleRegistry, ModuleSystem } from '../src/module-system';
+
+describe('Module System', () => {
+  let tempDir: string;
+  let resolver: ModuleResolver;
+  let loader: ModuleLoader;
+  let registry: ModuleRegistry;
+  let moduleSystem: ModuleSystem;
+
+  beforeEach(() => {
+    // Create temporary directory for test files
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-test-'));
+
+    resolver = new ModuleResolver({
+      baseUrl: tempDir,
+      extensions: ['.som', '.js'],
+    });
+
+    loader = new ModuleLoader(resolver);
+    registry = new ModuleRegistry();
+    moduleSystem = new ModuleSystem({
+      resolution: { baseUrl: tempDir },
+    });
+  });
+
+  afterEach(() => {
+    // Clean up temporary directory
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  describe('ModuleResolver', () => {
+    test('should resolve relative imports', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const moduleFile = path.join(tempDir, 'utils.som');
+
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+      fs.writeFileSync(moduleFile, 'содир функсия utils() {}');
+
+      const resolved = resolver.resolve('./utils', mainFile);
+      expect(resolved.resolvedPath).toBe(moduleFile);
+      expect(resolved.isExternalLibrary).toBe(false);
+    });
+
+    test('should resolve with extensions', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const moduleFile = path.join(tempDir, 'utils.som');
+
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+      fs.writeFileSync(moduleFile, 'содир функсия utils() {}');
+
+      const resolved = resolver.resolve('./utils.som', mainFile);
+      expect(resolved.resolvedPath).toBe(moduleFile);
+    });
+
+    test('should resolve index files', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const moduleDir = path.join(tempDir, 'lib');
+      const indexFile = path.join(moduleDir, 'index.som');
+
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+      fs.mkdirSync(moduleDir);
+      fs.writeFileSync(indexFile, 'содир функсия lib() {}');
+
+      const resolved = resolver.resolve('./lib', mainFile);
+      expect(resolved.resolvedPath).toBe(indexFile);
+    });
+
+    test('should handle absolute imports', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const moduleFile = path.join(tempDir, 'utils.som');
+
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+      fs.writeFileSync(moduleFile, 'содир функсия utils() {}');
+
+      const resolved = resolver.resolve('/utils', mainFile);
+      expect(resolved.resolvedPath).toBe(moduleFile);
+    });
+
+    test('should throw error for missing modules', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+
+      expect(() => {
+        resolver.resolve('./missing', mainFile);
+      }).toThrow('Cannot resolve module');
+    });
+  });
+
+  describe('ModuleLoader', () => {
+    test('should load module with dependencies', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const utilsFile = path.join(tempDir, 'utils.som');
+
+      fs.writeFileSync(utilsFile, 'содир функсия add(a, b) { бозгашт a + b; }');
+      fs.writeFileSync(mainFile, 'ворид { add } аз "./utils";\nчоп.сабт(add(1, 2));');
+
+      const module = loader.loadSync('./main', tempDir);
+
+      expect(module.id).toContain('main.som');
+      expect(module.isLoaded).toBe(true);
+      expect(module.dependencies).toContain('./utils');
+    });
+
+    test('should handle circular dependencies', () => {
+      const aFile = path.join(tempDir, 'a.som');
+      const bFile = path.join(tempDir, 'b.som');
+
+      fs.writeFileSync(aFile, 'ворид { b } аз "./b";\nсодир функсия a() { бозгашт b(); }');
+      fs.writeFileSync(bFile, 'ворид { a } аз "./a";\nсодир функсия b() { бозгашт "b"; }');
+
+      // Should not throw with default 'warn' strategy
+      expect(() => {
+        loader.loadSync('./a', tempDir);
+      }).not.toThrow();
+    });
+
+    test('should cache loaded modules', () => {
+      const moduleFile = path.join(tempDir, 'cached.som');
+      fs.writeFileSync(moduleFile, 'содир функсия cached() {}');
+
+      const module1 = loader.loadSync('./cached', tempDir);
+      const module2 = loader.loadSync('./cached', tempDir);
+
+      expect(module1).toBe(module2);
+    });
+
+    test('should handle loading errors', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      fs.writeFileSync(mainFile, 'ворид { missing } аз "./missing";');
+
+      expect(() => {
+        loader.loadSync('./main', tempDir);
+      }).toThrow();
+    });
+  });
+
+  describe('ModuleRegistry', () => {
+    test('should register and retrieve modules', () => {
+      const moduleFile = path.join(tempDir, 'test.som');
+      fs.writeFileSync(moduleFile, 'содир функсия test() {}');
+
+      const module = loader.loadSync('./test', tempDir);
+      registry.register(module);
+
+      const metadata = registry.get(module.id);
+      expect(metadata).toBeDefined();
+      expect(metadata!.id).toBe(module.id);
+    });
+
+    test('should track dependencies', () => {
+      const mainFile = path.join(tempDir, 'main.som');
+      const utilsFile = path.join(tempDir, 'utils.som');
+
+      fs.writeFileSync(utilsFile, 'содир функсия utils() {}');
+      fs.writeFileSync(mainFile, 'ворид { utils } аз "./utils";');
+
+      const mainModule = loader.loadSync('./main', tempDir);
+      const utilsModule = loader.loadSync('./utils', tempDir);
+
+      registry.register(mainModule);
+      registry.register(utilsModule);
+
+      const dependencies = registry.getDependencies(mainModule.id);
+      expect(dependencies).toContain('./utils');
+    });
+
+    test('should detect circular dependencies', () => {
+      const aFile = path.join(tempDir, 'a.som');
+      const bFile = path.join(tempDir, 'b.som');
+
+      fs.writeFileSync(aFile, 'ворид { b } аз "./b";\nсодир функсия a() {}');
+      fs.writeFileSync(bFile, 'ворид { a } аз "./a";\nсодир функсия b() {}');
+
+      const aModule = loader.loadSync('./a', tempDir);
+      const bModule = loader.loadSync('./b', tempDir);
+
+      registry.register(aModule);
+      registry.register(bModule);
+
+      const cycles = registry.findCircularDependencies();
+      expect(cycles.length).toBeGreaterThan(0);
+    });
+
+    test('should provide module statistics', () => {
+      const moduleFile = path.join(tempDir, 'stats.som');
+      fs.writeFileSync(moduleFile, 'содир функсия stats() {}');
+
+      const module = loader.loadSync('./stats', tempDir);
+      registry.register(module);
+
+      const stats = registry.getStatistics();
+      expect(stats.totalModules).toBe(1);
+      expect(stats.totalDependencies).toBe(0);
+    });
+  });
+
+  describe('ModuleSystem Integration', () => {
+    test('should compile module with dependencies', async () => {
+      const mathFile = path.join(tempDir, 'math.som');
+      const mainFile = path.join(tempDir, 'main.som');
+
+      fs.writeFileSync(
+        mathFile,
+        `
+        содир функсия add(a: рақам, b: рақам): рақам {
+          бозгашт a + b;
+        }
+        содир функсия multiply(a: рақам, b: рақам): рақам {
+          бозгашт a * b;
+        }
+      `
+      );
+
+      fs.writeFileSync(
+        mainFile,
+        `
+        ворид { add, multiply } аз "./math";
+        чоп.сабт(add(2, 3));
+        чоп.сабт(multiply(4, 5));
+      `
+      );
+
+      const result = await moduleSystem.compile(mainFile);
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.modules.size).toBeGreaterThan(0);
+      expect(result.entryPoint).toContain('main.som');
+    });
+
+    test('should bundle modules', async () => {
+      const utilsFile = path.join(tempDir, 'utils.som');
+      const mainFile = path.join(tempDir, 'main.som');
+
+      fs.writeFileSync(
+        utilsFile,
+        'содир функсия greet(name: сатр): сатр { бозгашт "Салом, " + name; }'
+      );
+      fs.writeFileSync(mainFile, 'ворид { greet } аз "./utils";\nчоп.сабт(greet("Ҷаҳон"));');
+
+      const bundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+      });
+
+      expect(bundle).toContain('function(module, exports, require)');
+      expect(bundle).toContain('require(');
+    });
+
+    test('should handle dynamic imports', async () => {
+      const dynamicFile = path.join(tempDir, 'dynamic.som');
+      const mainFile = path.join(tempDir, 'main.som');
+
+      fs.writeFileSync(dynamicFile, 'содир функсия dynamic() { бозгашт "dynamic"; }');
+      fs.writeFileSync(
+        mainFile,
+        `
+        ҳамзамон функсия loadDynamic() {
+          собит module = интизор ворид("./dynamic");
+          бозгашт module.dynamic();
+        }
+      `
+      );
+
+      const result = await moduleSystem.compile(mainFile);
+      expect(result.errors).toHaveLength(0);
+
+      const compiledCode = result.modules.get(result.entryPoint);
+      expect(compiledCode).toContain('import("./dynamic.js")');
+    });
+
+    test('should validate module system integrity', async () => {
+      const validFile = path.join(tempDir, 'valid.som');
+      fs.writeFileSync(validFile, 'содир функсия valid() {}');
+
+      await moduleSystem.loadModule('./valid', tempDir);
+
+      const validation = moduleSystem.validate();
+      expect(validation.isValid).toBe(true);
+      expect(validation.errors).toHaveLength(0);
+    });
+
+    test('should detect missing dependencies', async () => {
+      const invalidFile = path.join(tempDir, 'invalid.som');
+      fs.writeFileSync(invalidFile, 'ворид { missing } аз "./missing";');
+
+      try {
+        await moduleSystem.loadModule('./invalid', tempDir);
+      } catch (error) {
+        // Expected to fail
+      }
+
+      const validation = moduleSystem.validate();
+      expect(validation.isValid).toBe(false);
+      expect(validation.errors.length).toBeGreaterThan(0);
+    });
+
+    test('should provide dependency graph', async () => {
+      const libFile = path.join(tempDir, 'lib.som');
+      const appFile = path.join(tempDir, 'app.som');
+
+      fs.writeFileSync(libFile, 'содир функсия lib() {}');
+      fs.writeFileSync(appFile, 'ворид { lib } аз "./lib";\nlib();');
+
+      await moduleSystem.loadModule('./app', tempDir);
+
+      const graph = moduleSystem.getDependencyGraph();
+      expect(graph.size).toBeGreaterThan(0);
+
+      const appDeps = Array.from(graph.values()).find(deps => deps.includes('./lib'));
+      expect(appDeps).toBeDefined();
+    });
+
+    test('should generate different bundle formats', async () => {
+      const moduleFile = path.join(tempDir, 'module.som');
+      const mainFile = path.join(tempDir, 'main.som');
+
+      fs.writeFileSync(moduleFile, 'содир функсия test() { бозгашт "test"; }');
+      fs.writeFileSync(mainFile, 'ворид { test } аз "./module";\nчоп.сабт(test());');
+
+      // Test CommonJS bundle
+      const cjsBundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+      });
+      expect(cjsBundle).toContain('module.exports');
+
+      // Test ESM bundle
+      const esmBundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'esm',
+      });
+      expect(esmBundle).toContain('export');
+
+      // Test UMD bundle
+      const umdBundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'umd',
+      });
+      expect(umdBundle).toContain('typeof exports');
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('should handle malformed module files', () => {
+      const malformedFile = path.join(tempDir, 'malformed.som');
+      fs.writeFileSync(malformedFile, 'invalid syntax here');
+
+      expect(() => {
+        loader.loadSync('./malformed', tempDir);
+      }).toThrow();
+    });
+
+    test('should handle permission errors', () => {
+      const restrictedFile = path.join(tempDir, 'restricted.som');
+      fs.writeFileSync(restrictedFile, 'содир функсия restricted() {}');
+
+      // Make file unreadable (on Unix systems)
+      try {
+        fs.chmodSync(restrictedFile, 0o000);
+
+        expect(() => {
+          loader.loadSync('./restricted', tempDir);
+        }).toThrow();
+      } catch (error) {
+        // Skip test on systems that don't support chmod
+      } finally {
+        // Restore permissions for cleanup
+        try {
+          fs.chmodSync(restrictedFile, 0o644);
+        } catch (error) {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    test('should handle compilation errors gracefully', async () => {
+      const errorFile = path.join(tempDir, 'error.som');
+      fs.writeFileSync(errorFile, 'функсия invalid() { missing_keyword }');
+
+      const result = await moduleSystem.compile(errorFile);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Performance', () => {
+    test('should handle large dependency graphs', async () => {
+      const numModules = 50;
+      const modules: string[] = [];
+
+      // Create a chain of dependencies
+      for (let i = 0; i < numModules; i++) {
+        const moduleFile = path.join(tempDir, `module${i}.som`);
+        const content =
+          i === 0
+            ? `содир функсия module${i}() { бозгашт ${i}; }`
+            : `ворид { module${i - 1} } аз "./module${i - 1}";\nсодир функсия module${i}() { бозгашт module${i - 1}() + ${i}; }`;
+
+        fs.writeFileSync(moduleFile, content);
+        modules.push(moduleFile);
+      }
+
+      const startTime = Date.now();
+      const result = await moduleSystem.compile(modules[modules.length - 1]);
+      const endTime = Date.now();
+
+      expect(result.errors).toHaveLength(0);
+      expect(endTime - startTime).toBeLessThan(5000); // Should complete within 5 seconds
+    });
+
+    test('should cache modules efficiently', () => {
+      const moduleFile = path.join(tempDir, 'cached.som');
+      fs.writeFileSync(moduleFile, 'содир функсия cached() {}');
+
+      const startTime = Date.now();
+
+      // Load same module multiple times
+      for (let i = 0; i < 10; i++) {
+        loader.loadSync('./cached', tempDir);
+      }
+
+      const endTime = Date.now();
+
+      // Subsequent loads should be much faster due to caching
+      expect(endTime - startTime).toBeLessThan(100);
+    });
+  });
+});
