@@ -323,5 +323,33 @@ describe('Template Literals', () => {
       expect(expression.arguments).toHaveLength(1);
       expect(expression.arguments[0].type).toBe('BinaryExpression');
     });
+
+    test('should handle empty interpolations gracefully', () => {
+      const code = '`Empty: ${}`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // Should parse empty interpolation as undefined identifier
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('Identifier');
+      expect(expression.name).toBe('undefined');
+    });
+
+    test('should handle whitespace-only interpolations', () => {
+      const code = '`Whitespace: ${   }`';
+      const lexer = new Lexer(code);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // Should parse whitespace-only interpolation as undefined identifier
+      const stmt = ast.body[0] as any;
+      const expression = stmt.expression.expressions[0];
+      expect(expression.type).toBe('Identifier');
+      expect(expression.name).toBe('undefined');
+    });
   });
 });

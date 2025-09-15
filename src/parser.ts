@@ -939,22 +939,34 @@ export class Parser {
         });
       } else if (part.type === 'expression') {
         // Parse the expression inside ${}
-        const exprParser = new Parser([]);
-        const exprTokens = this.tokenizeExpression(part.value);
-        exprParser.tokens = exprTokens;
-        exprParser.current = 0;
+        const trimmedValue = part.value.trim();
 
-        try {
-          const expr = exprParser.expression();
-          expressions.push(expr);
-        } catch (error) {
-          // If parsing fails, treat as identifier
+        // Handle empty expressions by using undefined
+        if (!trimmedValue) {
           expressions.push({
             type: 'Identifier',
-            name: part.value.trim(),
+            name: 'undefined',
             line: token.line,
             column: token.column,
           } as Identifier);
+        } else {
+          const exprParser = new Parser([]);
+          const exprTokens = this.tokenizeExpression(part.value);
+          exprParser.tokens = exprTokens;
+          exprParser.current = 0;
+
+          try {
+            const expr = exprParser.expression();
+            expressions.push(expr);
+          } catch (error) {
+            // If parsing fails, treat as identifier
+            expressions.push({
+              type: 'Identifier',
+              name: part.value.trim(),
+              line: token.line,
+              column: token.column,
+            } as Identifier);
+          }
         }
       }
     }
