@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-09-14T01:12:10.374Z",
-  "total": 32,
-  "working": 32,
+  "timestamp": "2025-09-15T18:15:11.670Z",
+  "total": 34,
+  "working": 34,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -128,6 +128,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "25-template-literal-interpolation.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -139,6 +144,11 @@
       },
       {
         "name": "simple-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "template-literals.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },

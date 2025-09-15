@@ -40,6 +40,7 @@ import {
   ArrayPattern,
   ObjectPattern,
   PropertyPattern,
+  TemplateLiteral,
 } from './types';
 // import { BaseVisitor } from './visitor'; // Simplified for now
 
@@ -305,7 +306,13 @@ export class CodeGenerator {
   // eslint-disable-next-line complexity
   private generateExpression(node: Expression): string {
     // Use a more direct delegation approach
-    const simpleExpressions = ['Identifier', 'Literal', 'ThisExpression', 'Super'];
+    const simpleExpressions = [
+      'Identifier',
+      'Literal',
+      'TemplateLiteral',
+      'ThisExpression',
+      'Super',
+    ];
     if (simpleExpressions.includes(node.type)) {
       return this.generateSimpleExpression(node);
     }
@@ -339,6 +346,8 @@ export class CodeGenerator {
         return this.generateIdentifier(node as Identifier);
       case 'Literal':
         return this.generateLiteral(node as Literal);
+      case 'TemplateLiteral':
+        return this.generateTemplateLiteral(node as TemplateLiteral);
       case 'ThisExpression':
         return 'this';
       case 'Super':
@@ -508,6 +517,27 @@ export class CodeGenerator {
       return 'null';
     }
     return String(node.value);
+  }
+
+  private generateTemplateLiteral(node: TemplateLiteral): string {
+    let result = '`';
+
+    for (let i = 0; i < node.quasis.length; i++) {
+      const quasi = node.quasis[i];
+
+      // Add the text part
+      result += quasi.value.raw;
+
+      // Add the expression part if it exists
+      if (i < node.expressions.length) {
+        result += '${';
+        result += this.generateExpression(node.expressions[i]);
+        result += '}';
+      }
+    }
+
+    result += '`';
+    return result;
   }
 
   private generateBinaryExpression(node: BinaryExpression): string {

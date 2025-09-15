@@ -86,6 +86,21 @@ export interface Literal extends Expression {
   raw: string;
 }
 
+export interface TemplateLiteral extends Expression {
+  type: 'TemplateLiteral';
+  quasis: TemplateElement[];
+  expressions: Expression[];
+}
+
+export interface TemplateElement extends ASTNode {
+  type: 'TemplateElement';
+  value: {
+    raw: string;
+    cooked: string;
+  };
+  tail: boolean;
+}
+
 export interface BinaryExpression extends Expression {
   type: 'BinaryExpression';
   left: Expression;
