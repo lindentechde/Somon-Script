@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "sourceMap": false,
+    "minify": false,
+    "noTypeCheck": false,
+    "strict": false,
+    "outDir": "dist",
+    "watch": false,
+    "compileOnSave": false
+  }
+}

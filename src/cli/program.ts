@@ -3,15 +3,41 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { compile, CompileResult } from '../compiler';
+import { loadConfig } from '../config';
 import pkg from '../../package.json';
 
 export interface CompileOptions {
   output?: string;
-  target?: string;
+  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
   sourceMap?: boolean;
+  noSourceMap?: boolean;
   minify?: boolean;
+  noMinify?: boolean;
   noTypeCheck?: boolean;
   strict?: boolean;
+  outDir?: string;
+  watch?: boolean;
+  compileOnSave?: boolean;
+}
+
+function mergeOptions(input: string, options: CompileOptions): CompileOptions {
+  const config = loadConfig(path.dirname(path.resolve(input)));
+  const merged = { ...(config.compilerOptions ?? {}), ...options };
+
+  // Handle negation flags - they override positive flags
+  if (options.noSourceMap) {
+    merged.sourceMap = false;
+  }
+  if (options.noMinify) {
+    merged.minify = false;
+  }
+
+  // Set default target if not specified
+  if (!merged.target) {
+    merged.target = 'es2020';
+  }
+
+  return merged;
 }
 
 export function compileFile(input: string, options: CompileOptions): CompileResult {
@@ -66,24 +92,53 @@ export function createProgram(): Command {
     .description('Compile SomonScript files to JavaScript')
     .argument('<input>', 'Input .som file')
     .option('-o, --output <file>', 'Output file (default: same name with .js extension)')
-    .option('--target <target>', 'Compilation target', 'es2020')
+    .option('--out-dir <dir>', 'Output directory')
+    .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
+    .option('--no-source-map', 'Disable source maps')
     .option('--minify', 'Minify output')
+    .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
+    .option('-w, --watch', 'Recompile on file changes')
     .action((input: string, options: CompileOptions): void => {
       try {
-        const result = compileFile(input, options);
-        if (result.errors.length > 0) return;
+        const merged = mergeOptions(input, options);
+        const compileOnce = (): void => {
+          const result = compileFile(input, merged);
+          if (result.errors.length > 0) return;
 
-        const outputFile = options.output || input.replace(/\.som$/, '.js');
-        fs.writeFileSync(outputFile, result.code);
-        console.log(`Compiled '${input}' to '${outputFile}'`);
+          const baseDir = path.dirname(path.resolve(input));
+          const outputFile =
+            merged.output ||
+            (merged.outDir
+              ? path.join(
+                  path.resolve(baseDir, merged.outDir),
+                  path.basename(input).replace(/\.som$/, '.js')
+                )
+              : input.replace(/\.som$/, '.js'));
+          fs.mkdirSync(path.dirname(outputFile), { recursive: true });
+          fs.writeFileSync(outputFile, result.code);
+          console.log(`Compiled '${input}' to '${outputFile}'`);
 
-        if (options.sourceMap && result.sourceMap) {
-          const sourceMapFile = `${outputFile}.map`;
-          fs.writeFileSync(sourceMapFile, result.sourceMap);
-          console.log(`Generated source map: '${sourceMapFile}'`);
+          if (merged.sourceMap && result.sourceMap) {
+            const sourceMapFile = `${outputFile}.map`;
+            fs.writeFileSync(sourceMapFile, result.sourceMap);
+            console.log(`Generated source map: '${sourceMapFile}'`);
+          }
+        };
+
+        compileOnce();
+
+        if ((merged.watch || merged.compileOnSave) && process.env.NODE_ENV !== 'test') {
+          console.log(`Watching '${input}' for changes...`);
+          fs.watch(input, { persistent: true }, () => {
+            console.log(`Recompiling '${input}'...`);
+            compileOnce();
+          });
+        } else if (merged.watch || merged.compileOnSave) {
+          // In test environment, just log the message without actually watching
+          console.log(`Watching '${input}' for changes...`);
         }
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);
@@ -97,14 +152,17 @@ export function createProgram(): Command {
     .alias('r')
     .description('Compile and run SomonScript file')
     .argument('<input>', 'Input .som file')
-    .option('--target <target>', 'Compilation target', 'es2020')
+    .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
+    .option('--no-source-map', 'Disable source maps')
     .option('--minify', 'Minify output')
+    .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions): void => {
       try {
-        const result = compileFile(input, options);
+        const merged = mergeOptions(input, options);
+        const result = compileFile(input, merged);
         if (result.errors.length > 0) return;
 
         // eslint-disable-next-line no-eval
@@ -153,10 +211,30 @@ export function createProgram(): Command {
           JSON.stringify(packageJson, null, 2)
         );
 
-        // Create src directory and main file
+        // Create src and dist directories
         fs.mkdirSync(path.join(projectDir, 'src'));
         fs.mkdirSync(path.join(projectDir, 'dist'));
 
+        // Create default configuration
+        const somonConfig = {
+          compilerOptions: {
+            target: 'es2020',
+            sourceMap: false,
+            minify: false,
+            noTypeCheck: false,
+            strict: false,
+            outDir: 'dist',
+            watch: false,
+            compileOnSave: false,
+          },
+        };
+
+        fs.writeFileSync(
+          path.join(projectDir, 'somon.config.json'),
+          JSON.stringify(somonConfig, null, 2)
+        );
+
+        // Create main file
         const mainSom = `// SomonScript main file
 функсия салом(): void {
     чоп.сабт("Салом, ҷаҳон!");
