@@ -128,12 +128,14 @@ export class ModuleLoader {
         const parser = new Parser(tokens);
         module.ast = parser.parse();
 
-        // Extract dependencies
-        module.dependencies = this.extractDependencies(module.ast);
+        // Extract and resolve dependencies
+        const rawDependencies = this.extractDependencies(module.ast);
+        module.dependencies = [];
 
-        // Load dependencies recursively
-        for (const dep of module.dependencies) {
-          this.loadSync(dep, resolved.resolvedPath);
+        // Load dependencies recursively and store resolved IDs
+        for (const dep of rawDependencies) {
+          const depModule = this.loadSync(dep, resolved.resolvedPath);
+          module.dependencies.push(depModule.id);
         }
       }
 
@@ -183,19 +185,23 @@ export class ModuleLoader {
     );
   }
 
+  /**
+   * Extract raw dependency specifiers from AST (e.g., "./utils", "../math")
+   * These need to be resolved to absolute paths before being stored in the dependency graph
+   */
   private extractDependencies(ast: Program): string[] {
-    const dependencies: string[] = [];
+    const rawSpecifiers: string[] = [];
 
     for (const statement of ast.body) {
       if (statement.type === 'ImportDeclaration') {
         const importDecl = statement as any; // ImportDeclaration from types
         if (importDecl.source && importDecl.source.value) {
-          dependencies.push(importDecl.source.value);
+          rawSpecifiers.push(importDecl.source.value);
         }
       }
     }
 
-    return dependencies;
+    return rawSpecifiers;
   }
 
   private getModuleId(resolvedPath: string): string {

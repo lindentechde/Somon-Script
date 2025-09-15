@@ -229,19 +229,36 @@ export class ModuleRegistry {
 
   private updateDependencyGraph(moduleId: string, dependencies: string[]): void {
     // Create or update node
-    const node: DependencyNode = {
-      id: moduleId,
-      dependencies: [...dependencies],
-      dependents: [],
-      level: 0,
-    };
+    let node = this.dependencyGraph.get(moduleId);
+    if (node) {
+      // Update existing node
+      node.dependencies = [...dependencies];
+    } else {
+      // Create new node
+      node = {
+        id: moduleId,
+        dependencies: [...dependencies],
+        dependents: [],
+        level: 0,
+      };
+      this.dependencyGraph.set(moduleId, node);
+    }
 
-    this.dependencyGraph.set(moduleId, node);
-
-    // Update dependents for dependencies
+    // Ensure all dependency nodes exist and update dependents
     for (const dep of dependencies) {
-      const depNode = this.dependencyGraph.get(dep);
-      if (depNode && !depNode.dependents.includes(moduleId)) {
+      let depNode = this.dependencyGraph.get(dep);
+      if (!depNode) {
+        // Create placeholder node for dependency
+        depNode = {
+          id: dep,
+          dependencies: [],
+          dependents: [],
+          level: 0,
+        };
+        this.dependencyGraph.set(dep, depNode);
+      }
+
+      if (!depNode.dependents.includes(moduleId)) {
         depNode.dependents.push(moduleId);
       }
     }
