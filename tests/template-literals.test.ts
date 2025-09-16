@@ -2,6 +2,22 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { CodeGenerator } from '../src/codegen';
 import { TokenType } from '../src/tokens';
+import { Program, ExpressionStatement } from '../src/types';
+
+// Helper type guards for cleaner tests without using 'as any'
+function isExpressionStatement(node: unknown): node is ExpressionStatement {
+  return (
+    !!node && typeof node === 'object' && (node as { type?: string }).type === 'ExpressionStatement'
+  );
+}
+
+function firstExpressionStatement(ast: Program): ExpressionStatement {
+  const node = ast.body[0];
+  if (!isExpressionStatement(node)) {
+    throw new Error('AST first node is not an ExpressionStatement');
+  }
+  return node;
+}
 
 describe('Template Literals', () => {
   describe('Lexer', () => {
@@ -65,12 +81,16 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       expect(ast.body).toHaveLength(1);
-      const stmt = ast.body[0] as any;
-      expect(stmt.type).toBe('ExpressionStatement');
-      expect(stmt.expression.type).toBe('TemplateLiteral');
-      expect(stmt.expression.quasis).toHaveLength(1);
-      expect(stmt.expression.expressions).toHaveLength(0);
-      expect(stmt.expression.quasis[0].value.cooked).toBe('Салом, ҷаҳон!');
+      const stmt = firstExpressionStatement(ast);
+      const expr = stmt.expression;
+      expect(expr.type).toBe('TemplateLiteral');
+      // Template literal specific expectations
+      // @ts-expect-error intentional narrow without full union refinement
+      expect(expr.quasis).toHaveLength(1);
+      // @ts-expect-error see above
+      expect(expr.expressions).toHaveLength(0);
+      // @ts-expect-error see above
+      expect(expr.quasis[0].value.cooked).toBe('Салом, ҷаҳон!');
     });
 
     test('should parse template literal with single interpolation', () => {
@@ -79,14 +99,14 @@ describe('Template Literals', () => {
       const parser = new Parser(tokens);
       const ast = parser.parse();
 
-      const stmt = ast.body[0] as any;
-      expect(stmt.expression.type).toBe('TemplateLiteral');
-      expect(stmt.expression.quasis).toHaveLength(2);
-      expect(stmt.expression.expressions).toHaveLength(1);
-      expect(stmt.expression.quasis[0].value.cooked).toBe('Салом, ');
-      expect(stmt.expression.quasis[1].value.cooked).toBe('!');
-      expect(stmt.expression.expressions[0].type).toBe('Identifier');
-      expect(stmt.expression.expressions[0].name).toBe('ном');
+      const expr = firstExpressionStatement(ast).expression as any; // local constrained any to limit scope
+      expect(expr.type).toBe('TemplateLiteral');
+      expect(expr.quasis).toHaveLength(2);
+      expect(expr.expressions).toHaveLength(1);
+      expect(expr.quasis[0].value.cooked).toBe('Салом, ');
+      expect(expr.quasis[1].value.cooked).toBe('!');
+      expect(expr.expressions[0].type).toBe('Identifier');
+      expect(expr.expressions[0].name).toBe('ном');
     });
 
     test('should parse template literal with multiple interpolations', () => {
@@ -95,13 +115,13 @@ describe('Template Literals', () => {
       const parser = new Parser(tokens);
       const ast = parser.parse();
 
-      const stmt = ast.body[0] as any;
-      expect(stmt.expression.type).toBe('TemplateLiteral');
-      expect(stmt.expression.quasis).toHaveLength(4);
-      expect(stmt.expression.expressions).toHaveLength(3);
-      expect(stmt.expression.expressions[0].name).toBe('исм');
-      expect(stmt.expression.expressions[1].name).toBe('фамилия');
-      expect(stmt.expression.expressions[2].name).toBe('синну');
+      const expr = firstExpressionStatement(ast).expression as any;
+      expect(expr.type).toBe('TemplateLiteral');
+      expect(expr.quasis).toHaveLength(4);
+      expect(expr.expressions).toHaveLength(3);
+      expect(expr.expressions[0].name).toBe('исм');
+      expect(expr.expressions[1].name).toBe('фамилия');
+      expect(expr.expressions[2].name).toBe('синну');
     });
 
     test('should parse empty template literal', () => {
@@ -110,11 +130,11 @@ describe('Template Literals', () => {
       const parser = new Parser(tokens);
       const ast = parser.parse();
 
-      const stmt = ast.body[0] as any;
-      expect(stmt.expression.type).toBe('TemplateLiteral');
-      expect(stmt.expression.quasis).toHaveLength(1);
-      expect(stmt.expression.expressions).toHaveLength(0);
-      expect(stmt.expression.quasis[0].value.cooked).toBe('');
+      const expr = firstExpressionStatement(ast).expression as any;
+      expect(expr.type).toBe('TemplateLiteral');
+      expect(expr.quasis).toHaveLength(1);
+      expect(expr.expressions).toHaveLength(0);
+      expect(expr.quasis[0].value.cooked).toBe('');
     });
   });
 
@@ -270,8 +290,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // The expression should be properly parsed as a binary expression, not a single identifier
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('BinaryExpression');
       expect(expression.operator).toBe('+');
       expect(expression.left.name).toBe('a');
@@ -286,8 +305,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // The expression should be properly parsed as member access
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('MemberExpression');
       expect(expression.object.name).toBe('arr');
       expect(expression.property.name).toBe('length');
@@ -301,8 +319,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // The expression should be properly parsed as a function call
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('CallExpression');
       expect(expression.callee.name).toBe('func');
       expect(expression.arguments).toHaveLength(2);
@@ -316,8 +333,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // Should parse the complex nested expression correctly
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('CallExpression');
       expect(expression.callee.type).toBe('MemberExpression');
       expect(expression.arguments).toHaveLength(1);
@@ -332,8 +348,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // Should parse empty interpolation as undefined identifier
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('Identifier');
       expect(expression.name).toBe('undefined');
     });
@@ -346,8 +361,7 @@ describe('Template Literals', () => {
       const ast = parser.parse();
 
       // Should parse whitespace-only interpolation as undefined identifier
-      const stmt = ast.body[0] as any;
-      const expression = stmt.expression.expressions[0];
+      const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('Identifier');
       expect(expression.name).toBe('undefined');
     });

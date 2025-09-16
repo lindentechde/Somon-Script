@@ -21,3 +21,16 @@ Thanks for your interest in improving SomonScript!
 2. Push your branch and open a pull request.
 
 We appreciate your contributions!
+
+## Type Safety Policy
+
+- Production source (`src/`) must not use `as any` or explicit `any` types. The
+  linter (`@typescript-eslint/no-explicit-any`) enforces this as an error.
+- Tests (`tests/`) may use `any` sparingly for:
+  - Constructing deliberately malformed AST nodes
+  - Simplifying deep union pattern assertions
+- Prefer narrow helpers or type guards over `any` where practical.
+- If you need an exception in source, refactor with a discriminated union or
+  introduce a minimal interface instead.
+
+Run `npm run lint` before committing to catch violations early.

@@ -13,7 +13,7 @@ declare global {
     }
   }
 
-  var testUtils: {
+  interface TestUtilsApi {
     createTempFile: (
       content: string,
       extension?: string
@@ -21,7 +21,10 @@ declare global {
       path: string;
       cleanup: () => void;
     };
-  };
+  }
+
+  // eslint-disable-next-line no-var -- ambient declaration for global test utilities shape
+  var testUtils: TestUtilsApi;
 }
 
 // Export to make this file a module
@@ -80,7 +83,7 @@ expect.extend({
 });
 
 // Global test utilities
-(global as any).testUtils = {
+global.testUtils = {
   createTempFile: (content: string, extension = '.som') => {
     const fs = require('fs');
     const path = require('path');
@@ -95,7 +98,11 @@ expect.extend({
         try {
           fs.unlinkSync(tempFile);
         } catch (e) {
-          // Ignore cleanup errors
+          // Swallow cleanup errors but record for potential debugging
+          if (process.env.DEBUG_CLEANUP) {
+            // eslint-disable-next-line no-console
+            console.warn('Temp file cleanup failed:', e);
+          }
         }
       },
     };

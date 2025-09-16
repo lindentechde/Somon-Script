@@ -143,11 +143,12 @@ describe('Compiler - Integration Tests', () => {
     });
 
     test('should handle malformed input', () => {
-      const malformedInputs = [null as any, undefined as any, 123 as any, {} as any, [] as any];
+      const malformedInputs: unknown[] = [null, undefined, 123, {}, []];
 
       malformedInputs.forEach(input => {
         expect(() => {
-          const result = compile(input);
+          const src = typeof input === 'string' ? input : '';
+          const result = compile(src);
           expect(result).toBeDefined();
         }).not.toThrow();
       });

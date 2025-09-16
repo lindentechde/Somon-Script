@@ -4,7 +4,6 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 
 // Mock dependencies first
 jest.mock('fs');
@@ -36,7 +35,8 @@ describe('CLI Module - Comprehensive Test Suite', () => {
     console.log = jest.fn();
     console.error = jest.fn();
     console.warn = jest.fn();
-    process.exit = jest.fn() as any;
+    // Override process.exit with mock while preserving type signature
+    process.exit = jest.fn() as unknown as typeof process.exit;
 
     // Clear all mocks
     jest.clearAllMocks();
@@ -194,7 +194,7 @@ describe('CLI Module - Comprehensive Test Suite', () => {
 
     test('should handle non-Error exceptions', () => {
       mockFs.readFileSync.mockImplementation(() => {
-        throw 'String error';
+        throw new Error('String error');
       });
 
       // Test non-Error exception

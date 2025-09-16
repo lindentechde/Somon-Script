@@ -133,13 +133,7 @@ describe('TypeChecker - Core Coverage Tests', () => {
     test('should handle programs with unknown statement types', () => {
       const program = {
         type: 'Program' as const,
-        body: [
-          {
-            type: 'UnknownStatement' as any,
-            line: 1,
-            column: 1,
-          },
-        ],
+        body: [{ type: 'UnknownStatement', line: 1, column: 1 } as unknown as any],
         line: 1,
         column: 1,
       };
@@ -181,11 +175,7 @@ describe('TypeChecker - Core Coverage Tests', () => {
             line: 1,
             column: 1,
           },
-          {
-            type: 'UnknownStatement' as any,
-            line: 2,
-            column: 1,
-          },
+          { type: 'UnknownStatement', line: 2, column: 1 } as unknown as any,
         ],
         line: 1,
         column: 1,
@@ -245,16 +235,16 @@ describe('TypeChecker - Core Coverage Tests', () => {
       const malformedPrograms = [
         {
           type: 'Program' as const,
-          body: null as any,
+          body: null,
           line: 1,
           column: 1,
-        },
+        } as unknown as any,
         {
           type: 'Program' as const,
-          body: undefined as any,
+          body: undefined,
           line: 1,
           column: 1,
-        },
+        } as unknown as any,
       ];
 
       malformedPrograms.forEach(program => {
