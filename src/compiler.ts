@@ -152,8 +152,8 @@ function minifyCode(
   }
   const babel = transformSync(code, {
     sourceMaps: sourceMap,
-    // Cast due to differing type declarations between source-map and @babel/core
-    inputSourceMap: map as unknown as any,
+    // Cast RawSourceMap to Babel's InputSourceMap - they have compatible structures
+    inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
     presets: [preset],
     comments: false,
     compact: true,

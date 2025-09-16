@@ -30,6 +30,7 @@ import {
   ThrowStatement,
   AwaitExpression,
   NewExpression,
+  ImportExpression,
   ClassDeclaration,
   MethodDefinition,
   PropertyDefinition,
@@ -42,7 +43,6 @@ import {
   PropertyPattern,
   TemplateLiteral,
 } from './types';
-// import { BaseVisitor } from './visitor'; // Simplified for now
 
 export class CodeGenerator {
   private indentLevel: number = 0;
@@ -404,13 +404,13 @@ export class CodeGenerator {
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
       case 'ImportExpression':
-        return this.generateImportExpression(node as any);
+        return this.generateImportExpression(node as ImportExpression);
       default:
         return this.handleUnknownExpression(node);
     }
   }
 
-  private generateImportExpression(node: any): string {
+  private generateImportExpression(node: ImportExpression): string {
     // Dynamic import: ворид(specifier) -> import(specifier)
     let source = this.generateExpression(node.source);
 

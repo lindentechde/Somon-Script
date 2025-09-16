@@ -6,6 +6,19 @@ import { compile, CompileResult } from '../compiler';
 import { loadConfig } from '../config';
 import pkg from '../../package.json';
 
+type BufferEncoding =
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
+
 export interface CompileOptions {
   output?: string;
   target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
@@ -282,7 +295,12 @@ export function createProgram(): Command {
             baseUrl: baseDir,
             ...(config.moduleSystem?.resolution || {}),
           },
-          loading: config.moduleSystem?.loading,
+          loading: config.moduleSystem?.loading
+            ? {
+                ...config.moduleSystem.loading,
+                encoding: config.moduleSystem.loading.encoding as BufferEncoding | undefined,
+              }
+            : undefined,
           compilation: config.moduleSystem?.compilation,
         });
 

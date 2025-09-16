@@ -3,7 +3,20 @@ import * as path from 'path';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
-import { Program } from '../types';
+import { Program, ImportDeclaration } from '../types';
+
+type BufferEncoding =
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
 
 export interface LoadedModule {
   id: string;
@@ -23,7 +36,7 @@ export interface ModuleExports {
 }
 
 export interface ModuleLoadOptions {
-  encoding?: string;
+  encoding?: BufferEncoding;
   cache?: boolean;
   circularDependencyStrategy?: 'error' | 'warn' | 'ignore';
 }
@@ -37,7 +50,7 @@ export class ModuleLoader {
   constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
     this.resolver = resolver;
     this.options = {
-      encoding: options.encoding || 'utf-8',
+      encoding: options.encoding || ('utf-8' as BufferEncoding),
       cache: options.cache ?? true,
       circularDependencyStrategy: options.circularDependencyStrategy || 'warn',
     };
@@ -116,10 +129,9 @@ export class ModuleLoader {
 
     try {
       // Read source file
-      const fileContent = fs.readFileSync(resolved.resolvedPath, {
-        encoding: this.options.encoding as any,
+      module.source = fs.readFileSync(resolved.resolvedPath, {
+        encoding: this.options.encoding,
       });
-      module.source = typeof fileContent === 'string' ? fileContent : fileContent.toString();
 
       // Parse only if it's a SomonScript file
       if (resolved.extension === '.som') {
@@ -129,8 +141,8 @@ export class ModuleLoader {
         module.ast = parser.parse();
 
         // If parsing produced errors, surface them as a load error
-        const parseErrors = (parser as any).getErrors ? (parser as any).getErrors() : [];
-        if (Array.isArray(parseErrors) && parseErrors.length > 0) {
+        const parseErrors = parser.getErrors();
+        if (parseErrors.length > 0) {
           throw new Error(`Parse error(s) in ${resolved.resolvedPath}: ${parseErrors[0]}`);
         }
 
@@ -198,8 +210,8 @@ export class ModuleLoader {
 
     for (const statement of ast.body) {
       if (statement.type === 'ImportDeclaration') {
-        const importDecl = statement as any; // ImportDeclaration from types
-        if (importDecl.source && importDecl.source.value) {
+        const importDecl = statement as ImportDeclaration;
+        if (importDecl.source?.value && typeof importDecl.source.value === 'string') {
           rawSpecifiers.push(importDecl.source.value);
         }
       }

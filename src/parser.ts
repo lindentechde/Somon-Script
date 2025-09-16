@@ -22,6 +22,7 @@ import {
   ImportDeclaration,
   ImportSpecifier,
   ImportDefaultSpecifier,
+  ImportExpression,
   ExportDeclaration,
   ArrayExpression,
   TypeAnnotation,
@@ -873,7 +874,7 @@ export class Parser {
         source,
         line: importToken.line,
         column: importToken.column,
-      } as any; // ImportExpression from ast.ts
+      } as ImportExpression;
     }
 
     if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {

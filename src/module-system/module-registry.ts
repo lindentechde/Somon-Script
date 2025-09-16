@@ -1,5 +1,5 @@
 import { LoadedModule, ModuleExports } from './module-loader';
-import { Program } from '../types';
+import { Program, ImportDeclaration } from '../types';
 import { ModuleResolver } from './module-resolver';
 
 export interface ModuleMetadata {
@@ -298,7 +298,7 @@ export class ModuleRegistry {
 
     for (const statement of ast.body) {
       if (statement.type === 'ImportDeclaration') {
-        const importDecl = statement as any; // ImportDeclaration
+        const importDecl = statement as ImportDeclaration;
         const source = String(importDecl.source.value);
 
         this.processImportSpecifiers(importDecl.specifiers || [], source, imports);
