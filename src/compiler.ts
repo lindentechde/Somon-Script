@@ -1,4 +1,4 @@
-import { transformSync } from '@babel/core';
+import { transformSync, type PluginItem } from '@babel/core';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 import ts from 'typescript';
 
@@ -150,12 +150,17 @@ function minifyCode(
     const basic = code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
     return { code: basic, map };
   }
+  // Safely coerce the dynamically required preset into a PluginItem if possible.
+  // babel-preset-minify exports either a function or an object acceptable as a preset.
+  const presetItems: PluginItem[] = [];
+  if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
+    presetItems.push(presetModule as PluginItem);
+  }
   const babel = transformSync(code, {
     sourceMaps: sourceMap,
     // Cast RawSourceMap to Babel's InputSourceMap - they have compatible structures
     inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external dependency, minimal typing
-    presets: [presetModule as any],
+    presets: presetItems,
     comments: false,
     compact: true,
   });

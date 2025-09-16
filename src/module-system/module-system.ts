@@ -3,7 +3,7 @@ import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { CodeGenerator } from '../codegen';
-import { transformSync } from '@babel/core';
+import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 
 export interface ModuleSystemOptions {
@@ -357,11 +357,13 @@ ${commonjsBundle}
       // Fallback: conservative whitespace trim for simple cases
       return code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
     }
+    const presetItems: PluginItem[] = [];
+    if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
+      presetItems.push(presetModule as PluginItem);
+    }
     const out = transformSync(code, {
       sourceMaps: false,
-      // Cast preset module to the expected babel PluginItem[] element.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external dependency lacks detailed typing
-      presets: [presetModule as any],
+      presets: presetItems,
       comments: false,
       compact: true,
     });
