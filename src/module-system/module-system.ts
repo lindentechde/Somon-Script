@@ -3,6 +3,7 @@ import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { CodeGenerator } from '../codegen';
+import { transformSync } from '@babel/core';
 import { CompilerOptions } from '../config';
 
 export interface ModuleSystemOptions {
@@ -26,6 +27,8 @@ export interface BundleOptions {
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
+  // Require explicit confirmation to use experimental formats
+  force?: boolean;
 }
 
 export class ModuleSystem {
@@ -45,9 +48,23 @@ export class ModuleSystem {
    * Load a module and all its dependencies
    */
   async loadModule(specifier: string, fromFile: string): Promise<LoadedModule> {
-    const module = await this.loader.load(specifier, fromFile);
-    this.registry.register(module);
-    return module;
+    try {
+      const module = await this.loader.load(specifier, fromFile);
+      this.registry.register(module);
+      return module;
+    } catch (error) {
+      // Try to register partial module (if any) to enable validation
+      try {
+        const resolved = this.resolver.resolve(specifier, fromFile);
+        const partial = this.loader.getModule(resolved.resolvedPath);
+        if (partial) {
+          this.registry.register(partial);
+        }
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
   }
 
   /**
@@ -124,6 +141,15 @@ export class ModuleSystem {
    * Bundle modules into a single file
    */
   async bundle(options: BundleOptions): Promise<string> {
+    const format = options.format ?? 'commonjs';
+    if (format !== 'commonjs' && !options.force) {
+      throw new Error(
+        'ESM/UMD bundle formats are experimental. Re-run with force: true (or --force).'
+      );
+    }
+    if (format !== 'commonjs' && options.force) {
+      console.warn('Warning: ESM/UMD bundle formats are experimental; prefer commonjs.');
+    }
     const compilationResult = await this.compile(options.entryPoint);
 
     if (compilationResult.errors.length > 0) {
@@ -133,7 +159,7 @@ export class ModuleSystem {
     }
 
     // Generate bundle based on format
-    switch (options.format || 'commonjs') {
+    switch (format) {
       case 'commonjs':
         return this.generateCommonJSBundle(compilationResult, options);
       case 'esm':
@@ -210,73 +236,41 @@ export class ModuleSystem {
     const moduleMap: string[] = [];
     const moduleIdMapping = new Map<string, string>();
 
-    // Create module ID mapping
+    // Create module ID mapping: use a stable key relative to cwd
     for (const [moduleId] of result.modules) {
-      const relativePath = path.relative(process.cwd(), moduleId);
-      moduleIdMapping.set(moduleId, relativePath);
+      const key = path.relative(process.cwd(), moduleId);
+      moduleIdMapping.set(moduleId, key);
     }
+
+    // Helper to rewrite require calls to mapped IDs
+    const rewriteRequires = (ownerModuleId: string, code: string) => {
+      const pattern = /require\((['"])([^'"\)]+)\1\)/g; // eslint-disable-line no-useless-escape
+      return code.replace(pattern, (_m, _q, spec: string) => {
+        const tryResolveToKey = (s: string): string | null => {
+          try {
+            const resolved = this.resolver.resolve(s, ownerModuleId);
+            const mapped = moduleIdMapping.get(resolved.resolvedPath);
+            return mapped ?? null;
+          } catch {
+            return null;
+          }
+        };
+
+        // 1) Try as-is
+        let key = tryResolveToKey(spec);
+        // 2) If it looks like a compiled relative import and failed, try .som fallback
+        if (!key && /^(\.\.?\/).+\.js$/i.test(spec)) {
+          key = tryResolveToKey(spec.replace(/\.js$/i, '.som'));
+        }
+        return key ? `require("${key}")` : _m;
+      });
+    };
 
     // Generate module wrapper for each module
     for (const [moduleId, code] of result.modules) {
-      const relativePath = moduleIdMapping.get(moduleId)!;
-
-      // Replace require statements with correct module IDs
-      let processedCode = code;
-
-      // Use a comprehensive regex to find all require statements
-      processedCode = processedCode.replace(/require\(["']([^"']+)["']\)/g, (match, specifier) => {
-        // Handle relative imports
-        if (specifier.startsWith('./') || specifier.startsWith('../')) {
-          const currentDir = path.dirname(moduleId);
-
-          // Try different resolution strategies
-          let targetModuleId: string | undefined;
-
-          // Strategy 1: Try with .som extension (for .js -> .som conversion)
-          try {
-            let somSpecifier = specifier;
-            if (somSpecifier.endsWith('.js')) {
-              somSpecifier = somSpecifier.replace(/\.js$/, '.som');
-            } else if (!somSpecifier.endsWith('.som')) {
-              somSpecifier = somSpecifier + '.som';
-            }
-            const resolvedPath = path.resolve(currentDir, somSpecifier);
-            targetModuleId = moduleIdMapping.get(resolvedPath);
-          } catch {
-            // Continue to next strategy
-          }
-
-          // Strategy 2: Search through all loaded modules for a match
-          if (!targetModuleId) {
-            const specifierWithoutExt = specifier.replace(/\.(js|som)$/, '');
-            for (const [loadedModuleId, bundleId] of moduleIdMapping) {
-              const loadedWithoutExt = path.basename(loadedModuleId, '.som');
-              const specifierBasename = path.basename(specifierWithoutExt);
-
-              // Check if this could be the target module
-              if (loadedWithoutExt === specifierBasename) {
-                const expectedPath = path.resolve(currentDir, specifierWithoutExt + '.som');
-
-                if (loadedModuleId === expectedPath) {
-                  targetModuleId = bundleId;
-                  break;
-                }
-              }
-            }
-          }
-
-          if (targetModuleId) {
-            return `require("${targetModuleId}")`;
-          }
-        }
-
-        // For non-relative imports, keep as-is (external modules)
-        return match;
-      });
-
-      moduleMap.push(
-        `  '${relativePath}': function(module, exports, require) {\n${processedCode}\n  }`
-      );
+      const key = moduleIdMapping.get(moduleId)!;
+      const processedCode = rewriteRequires(moduleId, code);
+      moduleMap.push(`  '${key}': function(module, exports, require) {\n${processedCode}\n  }`);
     }
 
     // Generate bundle
@@ -319,6 +313,7 @@ ${moduleMap.join(',\n')}
     const modules: string[] = [];
 
     for (const [moduleId, code] of result.modules) {
+      modules.push(`// Experimental ESM bundle: linking is not resolved`);
       modules.push(`// Module: ${path.relative(process.cwd(), moduleId)}`);
       modules.push(code);
       modules.push('');
@@ -332,6 +327,7 @@ ${moduleMap.join(',\n')}
     const commonjsBundle = this.generateCommonJSBundle(result, options);
 
     const umdWrapper = `
+/* Experimental UMD bundle: internal linking is simplified */
 (function (root, factory) {
   if (typeof exports === 'object' && typeof module !== 'undefined') {
     // CommonJS
@@ -352,13 +348,22 @@ ${commonjsBundle}
   }
 
   private minify(code: string): string {
-    // Simple minification - remove comments and extra whitespace
-    return code
-      .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
-      .replace(/\/\/.*$/gm, '') // Remove line comments
-      .replace(/\s+/g, ' ') // Collapse whitespace
-      .replace(/;\s*}/g, '}') // Remove semicolons before closing braces
-      .trim();
+    // Lazy-load preset to avoid runtime hard dependency
+    let preset: any = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      preset = require('babel-preset-minify');
+    } catch {
+      // Fallback: conservative whitespace trim for simple cases
+      return code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
+    }
+    const out = transformSync(code, {
+      sourceMaps: false,
+      presets: [preset],
+      comments: false,
+      compact: true,
+    });
+    return out?.code && out.code.length > 0 ? out.code : code;
   }
 
   /**

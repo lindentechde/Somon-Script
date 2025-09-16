@@ -15,6 +15,8 @@ export interface CompilerOptions {
 
 export interface SomonConfig {
   compilerOptions?: CompilerOptions;
+  moduleSystem?: ModuleSystemConfig;
+  bundle?: BundleConfig;
 }
 
 export interface ConfigValidationError {
@@ -86,6 +88,157 @@ function validateCompilerOptions(options: any, path = 'compilerOptions'): Config
   return errors;
 }
 
+// Module System configuration (kept independent of runtime types)
+export interface ModuleSystemConfig {
+  resolution?: {
+    baseUrl?: string;
+    paths?: Record<string, string[]>;
+    extensions?: string[];
+    moduleDirectories?: string[];
+    allowJs?: boolean;
+    resolveJsonModule?: boolean;
+  };
+  loading?: {
+    encoding?: string;
+    cache?: boolean;
+    circularDependencyStrategy?: 'error' | 'warn' | 'ignore';
+  };
+  // Optional: delegate to compiler options used during module compilation if needed
+  compilation?: CompilerOptions;
+}
+
+export interface BundleConfig {
+  format?: 'commonjs' | 'esm' | 'umd';
+  minify?: boolean;
+  sourceMaps?: boolean;
+  externals?: string[];
+  force?: boolean;
+  output?: string;
+}
+
+function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (config === undefined) return errors;
+  if (typeof config !== 'object' || config === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const knownTop = ['resolution', 'loading', 'compilation'];
+  for (const key of Object.keys(config)) {
+    if (!knownTop.includes(key)) {
+      errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
+    }
+  }
+
+  const res = config.resolution;
+  if (res !== undefined) {
+    if (typeof res !== 'object' || res === null) {
+      errors.push({ path: `${basePath}.resolution`, message: 'must be an object' });
+    } else {
+      if (res.baseUrl !== undefined && typeof res.baseUrl !== 'string') {
+        errors.push({ path: `${basePath}.resolution.baseUrl`, message: 'must be a string' });
+      }
+      if (res.paths !== undefined) {
+        if (typeof res.paths !== 'object' || res.paths === null) {
+          errors.push({ path: `${basePath}.resolution.paths`, message: 'must be an object' });
+        } else {
+          for (const [k, v] of Object.entries(res.paths)) {
+            if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
+              errors.push({
+                path: `${basePath}.resolution.paths`,
+                message: 'must be Record<string,string[]>',
+              });
+              break;
+            }
+          }
+        }
+      }
+      const stringArray = (arr: any) => Array.isArray(arr) && arr.every(x => typeof x === 'string');
+      if (res.extensions !== undefined && !stringArray(res.extensions)) {
+        errors.push({ path: `${basePath}.resolution.extensions`, message: 'must be string[]' });
+      }
+      if (res.moduleDirectories !== undefined && !stringArray(res.moduleDirectories)) {
+        errors.push({
+          path: `${basePath}.resolution.moduleDirectories`,
+          message: 'must be string[]',
+        });
+      }
+      if (res.allowJs !== undefined && typeof res.allowJs !== 'boolean') {
+        errors.push({ path: `${basePath}.resolution.allowJs`, message: 'must be a boolean' });
+      }
+      if (res.resolveJsonModule !== undefined && typeof res.resolveJsonModule !== 'boolean') {
+        errors.push({
+          path: `${basePath}.resolution.resolveJsonModule`,
+          message: 'must be a boolean',
+        });
+      }
+    }
+  }
+
+  const load = config.loading;
+  if (load !== undefined) {
+    if (typeof load !== 'object' || load === null) {
+      errors.push({ path: `${basePath}.loading`, message: 'must be an object' });
+    } else {
+      if (load.encoding !== undefined && typeof load.encoding !== 'string') {
+        errors.push({ path: `${basePath}.loading.encoding`, message: 'must be a string' });
+      }
+      if (load.cache !== undefined && typeof load.cache !== 'boolean') {
+        errors.push({ path: `${basePath}.loading.cache`, message: 'must be a boolean' });
+      }
+      if (
+        load.circularDependencyStrategy !== undefined &&
+        !['error', 'warn', 'ignore'].includes(load.circularDependencyStrategy)
+      ) {
+        errors.push({
+          path: `${basePath}.loading.circularDependencyStrategy`,
+          message: `must be one of: error, warn, ignore`,
+        });
+      }
+    }
+  }
+
+  // Reuse compiler options validation for optional compilation section
+  if (config.compilation !== undefined) {
+    errors.push(...validateCompilerOptions(config.compilation, `${basePath}.compilation`));
+  }
+
+  return errors;
+}
+
+function validateBundle(config: any, basePath = 'bundle'): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (config === undefined) return errors;
+  if (typeof config !== 'object' || config === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  if (config.format !== undefined && !['commonjs', 'esm', 'umd'].includes(config.format)) {
+    errors.push({ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' });
+  }
+  if (config.minify !== undefined && typeof config.minify !== 'boolean') {
+    errors.push({ path: `${basePath}.minify`, message: 'must be a boolean' });
+  }
+  if (config.sourceMaps !== undefined && typeof config.sourceMaps !== 'boolean') {
+    errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
+  }
+  if (config.force !== undefined && typeof config.force !== 'boolean') {
+    errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
+  }
+  if (config.output !== undefined && typeof config.output !== 'string') {
+    errors.push({ path: `${basePath}.output`, message: 'must be a string' });
+  }
+  if (config.externals !== undefined) {
+    if (
+      !Array.isArray(config.externals) ||
+      config.externals.some((x: any) => typeof x !== 'string')
+    ) {
+      errors.push({ path: `${basePath}.externals`, message: 'must be string[]' });
+    }
+  }
+  return errors;
+}
+
 function validateConfig(config: any): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
@@ -94,7 +247,7 @@ function validateConfig(config: any): ConfigValidationError[] {
   }
 
   // Check for unknown top-level properties
-  const knownProperties = ['compilerOptions'];
+  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle'];
   for (const key of Object.keys(config)) {
     if (!knownProperties.includes(key)) {
       errors.push({
@@ -107,6 +260,14 @@ function validateConfig(config: any): ConfigValidationError[] {
   // Validate compilerOptions if present
   if (config.compilerOptions !== undefined) {
     errors.push(...validateCompilerOptions(config.compilerOptions));
+  }
+  // Validate moduleSystem if present
+  if (config.moduleSystem !== undefined) {
+    errors.push(...validateModuleSystem(config.moduleSystem));
+  }
+  // Validate bundle if present
+  if (config.bundle !== undefined) {
+    errors.push(...validateBundle(config.bundle));
   }
 
   return errors;

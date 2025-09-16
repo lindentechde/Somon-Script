@@ -35,7 +35,18 @@ export class ModuleResolver {
    * Resolve a module specifier to an absolute file path
    */
   resolve(specifier: string, fromFile: string): ResolvedModule {
-    const fromDir = path.dirname(fromFile);
+    // Determine a correct base directory whether 'fromFile' is a file path or a directory path
+    let fromDir: string;
+    try {
+      if (fs.existsSync(fromFile) && fs.statSync(fromFile).isDirectory()) {
+        fromDir = fromFile;
+      } else {
+        fromDir = path.dirname(fromFile);
+      }
+    } catch {
+      // Fallback: treat input as a file path
+      fromDir = path.dirname(fromFile);
+    }
 
     // Handle already absolute file paths
     if (path.isAbsolute(specifier) && fs.existsSync(specifier)) {

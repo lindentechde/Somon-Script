@@ -90,6 +90,7 @@ export function createProgram(): Command {
     .command('compile')
     .alias('c')
     .description('Compile SomonScript files to JavaScript')
+    .usage('[input] [options]')
     .argument('<input>', 'Input .som file')
     .option('-o, --output <file>', 'Output file (default: same name with .js extension)')
     .option('--out-dir <dir>', 'Output directory')
@@ -151,6 +152,7 @@ export function createProgram(): Command {
     .command('run')
     .alias('r')
     .description('Compile and run SomonScript file')
+    .usage('[input] [options]')
     .argument('<input>', 'Input .som file')
     .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
@@ -261,35 +263,56 @@ export function createProgram(): Command {
     .command('bundle')
     .alias('b')
     .description('Bundle SomonScript modules into a single file')
+    .usage('[input] [options]')
     .argument('<input>', 'Entry point file')
     .option('-o, --output <file>', 'Output file path')
     .option('-f, --format <format>', 'Bundle format (commonjs, esm, umd)', 'commonjs')
     .option('--minify', 'Minify the output')
     .option('--source-map', 'Generate source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
+    .option('--force', 'Allow experimental formats (esm/umd)')
     .action(async (input: string, options: any) => {
       try {
         const { ModuleSystem } = await import('../module-system');
 
+        const baseDir = path.dirname(path.resolve(input));
+        const config = loadConfig(baseDir);
         const moduleSystem = new ModuleSystem({
           resolution: {
-            baseUrl: path.dirname(path.resolve(input)),
+            baseUrl: baseDir,
+            ...(config.moduleSystem?.resolution || {}),
           },
+          loading: config.moduleSystem?.loading,
+          compilation: config.moduleSystem?.compilation,
         });
 
         const bundleOptions = {
           entryPoint: path.resolve(input),
-          outputPath: options.output,
-          format: options.format,
-          minify: options.minify,
-          sourceMaps: options.sourceMap,
-          externals: options.externals ? options.externals.split(',') : [],
-        };
+          outputPath: options.output ?? config.bundle?.output,
+          format: options.format ?? config.bundle?.format,
+          minify: options.minify ?? config.bundle?.minify,
+          sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+          externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
+          force: options.force ?? config.bundle?.force,
+        } as const;
 
+        if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
+          console.error('ESM/UMD bundle formats are experimental. Re-run with --force to proceed.');
+          process.exitCode = 1;
+          return;
+        }
         console.log(`📦 Bundling ${input}...`);
+        if (bundleOptions.format !== 'commonjs') {
+          console.warn('Warning: ESM/UMD formats are experimental; prefer commonjs for execution.');
+        }
         const bundle = await moduleSystem.bundle(bundleOptions);
 
-        const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
+        const outputPath = bundleOptions.outputPath
+          ? path.isAbsolute(bundleOptions.outputPath)
+            ? bundleOptions.outputPath
+            : path.resolve(baseDir, bundleOptions.outputPath)
+          : input.replace(/\.som$/, '.bundle.js');
+        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
         fs.writeFileSync(outputPath, bundle);
 
         console.log(`✅ Bundle created: ${outputPath}`);
@@ -298,7 +321,7 @@ export function createProgram(): Command {
         console.log(`📊 Bundled ${stats.totalModules} modules`);
       } catch (error) {
         console.error('Bundle error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+        process.exitCode = 1;
       }
     });
 
@@ -307,6 +330,7 @@ export function createProgram(): Command {
     .command('module-info')
     .alias('info')
     .description('Show module dependency information')
+    .usage('[input] [options]')
     .argument('<input>', 'Entry point file')
     .option('--graph', 'Show dependency graph')
     .option('--stats', 'Show module statistics')
@@ -367,6 +391,7 @@ export function createProgram(): Command {
   program
     .command('resolve')
     .description('Resolve a module specifier to its file path')
+    .usage('<specifier> [options]')
     .argument('<specifier>', 'Module specifier to resolve')
     .option('-f, --from <file>', 'Resolve from this file', process.cwd())
     .action(async (specifier: string, options: any) => {

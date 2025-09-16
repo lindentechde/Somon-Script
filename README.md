@@ -158,6 +158,32 @@ somon run hello.som
 }
 ```
 
+### Bundling (Module System)
+
+- CommonJS bundle is recommended for execution. ESM and UMD outputs are
+  experimental.
+
+```sh
+somon bundle src/main.som --format commonjs -o dist/bundle.js
+```
+
+Other formats are available, but meant for inspection rather than direct
+execution:
+
+```sh
+somon bundle src/main.som --format esm
+somon bundle src/main.som --format umd
+```
+
+The bundler rewrites internal `require()` calls to a module map. When compiling
+SomonScript sources, relative imports may appear as `.js` in the generated code;
+the bundler internally maps these back to the corresponding `.som` modules when
+necessary.
+
+## Documentation
+
+- Module System guide: `docs/module-system.md`
+
 ### **Production-Ready Module System** ✅ 100% Complete
 
 SomonScript features a comprehensive module system designed for large-scale

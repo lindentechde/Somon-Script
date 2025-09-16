@@ -1,5 +1,6 @@
 import { LoadedModule, ModuleExports } from './module-loader';
 import { Program } from '../types';
+import { ModuleResolver } from './module-resolver';
 
 export interface ModuleMetadata {
   id: string;
@@ -30,6 +31,7 @@ export interface DependencyNode {
 export class ModuleRegistry {
   private modules = new Map<string, ModuleMetadata>();
   private dependencyGraph = new Map<string, DependencyNode>();
+  private resolver = new ModuleResolver();
 
   /**
    * Register a loaded module
@@ -75,8 +77,8 @@ export class ModuleRegistry {
    * Get module dependencies
    */
   getDependencies(moduleId: string): string[] {
-    const node = this.dependencyGraph.get(moduleId);
-    return node ? [...node.dependencies] : [];
+    const meta = this.modules.get(moduleId);
+    return meta ? [...meta.dependencies] : [];
   }
 
   /**
@@ -109,12 +111,9 @@ export class ModuleRegistry {
       }
 
       visiting.add(moduleId);
-      const node = this.dependencyGraph.get(moduleId);
-
-      if (node) {
-        for (const dep of node.dependencies) {
-          visit(dep);
-        }
+      const deps = this.getResolvedDependencies(moduleId);
+      for (const depId of deps) {
+        visit(depId);
       }
 
       visiting.delete(moduleId);
@@ -150,11 +149,9 @@ export class ModuleRegistry {
       visiting.add(moduleId);
       path.push(moduleId);
 
-      const node = this.dependencyGraph.get(moduleId);
-      if (node) {
-        for (const dep of node.dependencies) {
-          visit(dep);
-        }
+      const deps = this.getResolvedDependencies(moduleId);
+      for (const depId of deps) {
+        visit(depId);
       }
 
       path.pop();
@@ -244,22 +241,23 @@ export class ModuleRegistry {
       this.dependencyGraph.set(moduleId, node);
     }
 
-    // Ensure all dependency nodes exist and update dependents
+    // Update dependents for dependencies (resolve specifiers to module IDs when possible)
     for (const dep of dependencies) {
-      let depNode = this.dependencyGraph.get(dep);
-      if (!depNode) {
-        // Create placeholder node for dependency
-        depNode = {
-          id: dep,
-          dependencies: [],
-          dependents: [],
-          level: 0,
-        };
-        this.dependencyGraph.set(dep, depNode);
-      }
-
-      if (!depNode.dependents.includes(moduleId)) {
-        depNode.dependents.push(moduleId);
+      try {
+        const resolved = this.resolver.resolve(dep, moduleId);
+        // Ensure dependency node exists
+        if (!this.dependencyGraph.has(resolved.resolvedPath)) {
+          this.dependencyGraph.set(resolved.resolvedPath, {
+            id: resolved.resolvedPath,
+            dependencies: [],
+            dependents: [],
+            level: 0,
+          });
+        }
+        const depNode = this.dependencyGraph.get(resolved.resolvedPath)!;
+        if (!depNode.dependents.includes(moduleId)) depNode.dependents.push(moduleId);
+      } catch {
+        // Ignore unresolved here; validation will report them
       }
     }
 
@@ -280,7 +278,11 @@ export class ModuleRegistry {
         return 0;
       }
 
-      const maxDepLevel = Math.max(...node.dependencies.map(dep => calculateLevel(dep)));
+      // Use resolved adjacency for level calculation
+      const resolvedDeps = this.getResolvedDependencies(moduleId);
+      const maxDepLevel = resolvedDeps.length
+        ? Math.max(...resolvedDeps.map(depId => calculateLevel(depId)))
+        : 0;
 
       node.level = maxDepLevel + 1;
       return node.level;
@@ -359,5 +361,25 @@ export class ModuleRegistry {
         imports.namespace.push(source);
       }
     }
+  }
+
+  // Resolve specifier dependencies for a given module ID to registered module IDs
+  private getResolvedDependencies(moduleId: string): string[] {
+    const node = this.dependencyGraph.get(moduleId);
+    if (!node) return [];
+
+    const deps: string[] = [];
+    for (const depSpec of node.dependencies) {
+      try {
+        const resolved = this.resolver.resolve(depSpec, moduleId);
+        const depId = resolved.resolvedPath;
+        if (this.dependencyGraph.has(depId)) {
+          deps.push(depId);
+        }
+      } catch {
+        // Unresolvable dependency will be caught by validation; ignore for traversal
+      }
+    }
+    return deps;
   }
 }

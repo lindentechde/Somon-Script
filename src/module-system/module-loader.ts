@@ -128,14 +128,18 @@ export class ModuleLoader {
         const parser = new Parser(tokens);
         module.ast = parser.parse();
 
-        // Extract and resolve dependencies
-        const rawDependencies = this.extractDependencies(module.ast);
-        module.dependencies = [];
+        // If parsing produced errors, surface them as a load error
+        const parseErrors = (parser as any).getErrors ? (parser as any).getErrors() : [];
+        if (Array.isArray(parseErrors) && parseErrors.length > 0) {
+          throw new Error(`Parse error(s) in ${resolved.resolvedPath}: ${parseErrors[0]}`);
+        }
 
-        // Load dependencies recursively and store resolved IDs
-        for (const dep of rawDependencies) {
-          const depModule = this.loadSync(dep, resolved.resolvedPath);
-          module.dependencies.push(depModule.id);
+        // Extract dependency specifiers (raw, e.g. "./utils")
+        module.dependencies = this.extractDependencies(module.ast);
+
+        // Load dependencies recursively (keep original specifiers in metadata)
+        for (const dep of module.dependencies) {
+          this.loadSync(dep, resolved.resolvedPath);
         }
       }
 
@@ -252,42 +256,6 @@ export class ModuleLoader {
   }
 
   /**
-   * Get topologically sorted modules for compilation
+   * Note: topological ordering is provided by ModuleRegistry.
    */
-  getCompilationOrder(): string[] {
-    const graph = this.getDependencyGraph();
-    const visited = new Set<string>();
-    const visiting = new Set<string>();
-    const result: string[] = [];
-
-    const visit = (moduleId: string) => {
-      if (visited.has(moduleId)) return;
-      if (visiting.has(moduleId)) {
-        throw new Error(`Circular dependency detected involving: ${moduleId}`);
-      }
-
-      visiting.add(moduleId);
-      const dependencies = graph.get(moduleId) || [];
-
-      for (const dep of dependencies) {
-        // Resolve dependency to module ID
-        const module = Array.from(this.moduleCache.values()).find(m =>
-          m.dependencies.includes(dep)
-        );
-        if (module) {
-          visit(module.id);
-        }
-      }
-
-      visiting.delete(moduleId);
-      visited.add(moduleId);
-      result.push(moduleId);
-    };
-
-    for (const moduleId of graph.keys()) {
-      visit(moduleId);
-    }
-
-    return result;
-  }
 }

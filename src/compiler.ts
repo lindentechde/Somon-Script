@@ -1,5 +1,4 @@
 import { transformSync } from '@babel/core';
-import minifyPreset from 'babel-preset-minify';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 import ts from 'typescript';
 
@@ -118,7 +117,7 @@ function transpile(code: string, options: CompileOptions) {
   });
   const map =
     options.sourceMap && transpile.sourceMapText
-      ? (JSON.parse(transpile.sourceMapText) as RawSourceMap)
+      ? (JSON.parse(transpile.sourceMapText) as unknown as RawSourceMap)
       : undefined;
   return { code: transpile.outputText, map };
 }
@@ -133,7 +132,7 @@ function generateIdentityMap(code: string): RawSourceMap {
       source: 'source.som',
     });
   }
-  return JSON.parse(generator.toString()) as RawSourceMap;
+  return JSON.parse(generator.toString()) as unknown as RawSourceMap;
 }
 
 function minifyCode(
@@ -141,16 +140,27 @@ function minifyCode(
   map: RawSourceMap | undefined,
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
+  // Lazy-load minify preset to avoid hard dependency at runtime
+  let preset: any = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    preset = require('babel-preset-minify');
+  } catch {
+    // Preset not available; apply a conservative whitespace trim as fallback
+    const basic = code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
+    return { code: basic, map };
+  }
   const babel = transformSync(code, {
     sourceMaps: sourceMap,
-    inputSourceMap: map,
-    presets: [minifyPreset],
+    // Cast due to differing type declarations between source-map and @babel/core
+    inputSourceMap: map as unknown as any,
+    presets: [preset],
     comments: false,
     compact: true,
   });
 
   return {
     code: babel?.code && babel.code.length > 0 ? babel.code : code,
-    map: sourceMap && babel?.map ? (babel.map as RawSourceMap) : map,
+    map: sourceMap && babel?.map ? (babel.map as unknown as RawSourceMap) : map,
   };
 }

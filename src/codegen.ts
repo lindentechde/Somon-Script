@@ -47,6 +47,7 @@ import {
 export class CodeGenerator {
   private indentLevel: number = 0;
   private readonly indentSize: number = 2;
+  private importCounter: number = 0;
 
   // Mapping of Tajik built-in functions to JavaScript equivalents
   private readonly builtinMappings: Map<string, string> = new Map([
@@ -438,14 +439,14 @@ export class CodeGenerator {
     }
 
     const results: string[] = [];
+    const tmpVar = `__somon_import_${this.importCounter++}`;
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
       const localName = defaultImports[0].local.name;
-      results.push(
-        this.indent(`const ${localName} = require(${source}).default || require(${source});`)
-      );
+      results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
     }
 
     // Handle named imports
@@ -458,7 +459,7 @@ export class CodeGenerator {
           return imported === local ? imported : `${imported}: ${local}`;
         })
         .join(', ');
-      results.push(this.indent(`const { ${destructuring} } = require(${source});`));
+      results.push(this.indent(`const { ${destructuring} } = ${tmpVar};`));
     }
 
     return results.join('\n');
