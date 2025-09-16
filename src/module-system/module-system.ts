@@ -50,7 +50,7 @@ export class ModuleSystem {
   async loadModule(specifier: string, fromFile: string): Promise<LoadedModule> {
     try {
       const module = await this.loader.load(specifier, fromFile);
-      this.registry.register(module);
+      this.registerAllLoadedModules();
       return module;
     } catch (error) {
       // Try to register partial module (if any) to enable validation
@@ -72,17 +72,24 @@ export class ModuleSystem {
    */
   loadModuleSync(specifier: string, fromFile: string): LoadedModule {
     const module = this.loader.loadSync(specifier, fromFile);
-    this.registry.register(module);
+    this.registerAllLoadedModules();
     return module;
   }
 
   /**
    * Compile a module and all its dependencies
    */
-  async compile(entryPoint: string): Promise<CompilationResult> {
+  async compile(entryPoint: string, externals?: string[]): Promise<CompilationResult> {
     const errors: Error[] = [];
     const warnings: string[] = [];
     const modules = new Map<string, string>();
+    const previousExternals = this.loader.getExternals();
+
+    if (externals !== undefined) {
+      this.loader.setExternals(externals);
+    } else if (previousExternals.length > 0) {
+      this.loader.setExternals();
+    }
 
     try {
       // Load entry point and all dependencies
@@ -134,6 +141,8 @@ export class ModuleSystem {
         errors,
         warnings,
       };
+    } finally {
+      this.loader.setExternals(previousExternals);
     }
   }
 
@@ -150,7 +159,7 @@ export class ModuleSystem {
     if (format !== 'commonjs' && options.force) {
       console.warn('Warning: ESM/UMD bundle formats are experimental; prefer commonjs.');
     }
-    const compilationResult = await this.compile(options.entryPoint);
+    const compilationResult = await this.compile(options.entryPoint, options.externals);
 
     if (compilationResult.errors.length > 0) {
       throw new Error(
@@ -232,9 +241,20 @@ export class ModuleSystem {
     // Note: Loader and registry options would need to be updated if they supported it
   }
 
+  private registerAllLoadedModules(): void {
+    const loadedModules = this.loader.getAllModules();
+    for (const loaded of loadedModules) {
+      this.registry.register(loaded);
+    }
+  }
+
   private generateCommonJSBundle(result: CompilationResult, options: BundleOptions): string {
     const moduleMap: string[] = [];
     const moduleIdMapping = new Map<string, string>();
+    const externals = new Set(
+      (options.externals ?? []).map(ext => ext.trim()).filter(ext => ext.length > 0)
+    );
+    const externalModuleIds = new Set<string>();
 
     // Create module ID mapping: use a stable key relative to cwd
     for (const [moduleId] of result.modules) {
@@ -242,34 +262,107 @@ export class ModuleSystem {
       moduleIdMapping.set(moduleId, key);
     }
 
+    const buildExternalCandidates = (raw: string): string[] => {
+      const variants = new Set<string>();
+      variants.add(raw);
+      if (/\.js$/i.test(raw)) {
+        const withoutExt = raw.replace(/\.js$/i, '');
+        variants.add(withoutExt);
+        variants.add(`${withoutExt}.som`);
+      } else {
+        variants.add(`${raw}.js`);
+      }
+      if (/\.som$/i.test(raw)) {
+        const withoutExt = raw.replace(/\.som$/i, '');
+        variants.add(withoutExt);
+        variants.add(`${withoutExt}.js`);
+      } else {
+        variants.add(`${raw}.som`);
+      }
+      return Array.from(variants);
+    };
+
+    const matchesExternal = (raw: string): boolean => {
+      if (externals.size === 0) return false;
+      for (const candidate of buildExternalCandidates(raw)) {
+        if (externals.has(candidate)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const markExternalModule = (ownerModuleId: string, raw: string): void => {
+      for (const candidate of buildExternalCandidates(raw)) {
+        try {
+          const resolved = this.resolver.resolve(candidate, ownerModuleId);
+          externalModuleIds.add(resolved.resolvedPath);
+          return;
+        } catch {
+          // Ignore failures; we only care about candidates that resolve
+        }
+      }
+    };
+
     // Helper to rewrite require calls to mapped IDs
     const rewriteRequires = (ownerModuleId: string, code: string) => {
       const pattern = /require\((['"])([^'"\)]+)\1\)/g; // eslint-disable-line no-useless-escape
       return code.replace(pattern, (_m, _q, spec: string) => {
-        const tryResolveToKey = (s: string): string | null => {
+        if (matchesExternal(spec)) {
+          markExternalModule(ownerModuleId, spec);
+          return _m;
+        }
+
+        const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
           try {
             const resolved = this.resolver.resolve(s, ownerModuleId);
             const mapped = moduleIdMapping.get(resolved.resolvedPath);
-            return mapped ?? null;
+            if (!mapped) {
+              return null;
+            }
+            if (externalModuleIds.has(resolved.resolvedPath)) {
+              return null;
+            }
+            return { key: mapped, resolvedPath: resolved.resolvedPath };
           } catch {
             return null;
           }
         };
 
         // 1) Try as-is
-        let key = tryResolveToKey(spec);
+        let resolved = tryResolveToKey(spec);
         // 2) If it looks like a compiled relative import and failed, try .som fallback
-        if (!key && /^(\.\.?\/).+\.js$/i.test(spec)) {
-          key = tryResolveToKey(spec.replace(/\.js$/i, '.som'));
+        if (!resolved && /^(\.\.?\/).+\.js$/i.test(spec)) {
+          const fallbackSpec = spec.replace(/\.js$/i, '.som');
+          if (matchesExternal(fallbackSpec)) {
+            markExternalModule(ownerModuleId, fallbackSpec);
+            return _m;
+          }
+          resolved = tryResolveToKey(fallbackSpec);
         }
-        return key ? `require("${key}")` : _m;
+        if (!resolved) {
+          return _m;
+        }
+        return `require("${resolved.key}")`;
       });
     };
 
-    // Generate module wrapper for each module
+    // Pre-mark explicitly configured externals relative to the entry point
+    for (const ext of externals) {
+      markExternalModule(result.entryPoint, ext);
+    }
+
+    const processedModules = new Map<string, string>();
     for (const [moduleId, code] of result.modules) {
-      const key = moduleIdMapping.get(moduleId)!;
       const processedCode = rewriteRequires(moduleId, code);
+      processedModules.set(moduleId, processedCode);
+    }
+
+    for (const [moduleId, processedCode] of processedModules) {
+      if (externalModuleIds.has(moduleId)) {
+        continue;
+      }
+      const key = moduleIdMapping.get(moduleId)!;
       moduleMap.push(`  '${key}': function(module, exports, require) {\n${processedCode}\n  }`);
     }
 
@@ -283,18 +376,30 @@ ${moduleMap.join(',\n')}
   };
   
   var cache = {};
+  var __externalRequire = typeof module !== 'undefined' && module.require
+    ? module.require.bind(module)
+    : typeof require === 'function'
+      ? require
+      : null;
   
-  function require(id) {
+  function _require(id) {
     if (cache[id]) return cache[id].exports;
-    
+
+    if (!modules[id]) {
+      if (__externalRequire) {
+        return __externalRequire(id);
+      }
+      throw new Error("Module '" + id + "' not found in bundle and no external require available.");
+    }
+
     var module = cache[id] = { exports: {} };
-    modules[id](module, module.exports, require);
-    
+    modules[id](module, module.exports, _require);
+
     return module.exports;
   }
   
   // Start with entry point and expose its exports
-  var entryModule = require('${path.relative(process.cwd(), result.entryPoint)}');
+  var entryModule = _require('${path.relative(process.cwd(), result.entryPoint)}');
   
   // Expose entry point exports as bundle exports (for Node.js)
   if (typeof module !== 'undefined' && module.exports) {

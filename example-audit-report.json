@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-09-16T09:59:59.739Z",
+  "timestamp": "2025-09-16T21:46:25.902Z",
   "total": 34,
-  "working": 23,
-  "partial": 11,
+  "working": 34,
+  "partial": 0,
   "failing": 0,
-  "workingPercentage": 68,
+  "workingPercentage": 100,
   "details": {
     "working": [
       {
@@ -28,7 +28,22 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "05-typed-functions.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "06-conditionals.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "07-loops.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "08-arrays.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -39,6 +54,16 @@
       },
       {
         "name": "10-classes-basic.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "11-classes-advanced.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "12-student-management-system.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -63,12 +88,27 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "17-comprehensive-demo.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "18-union-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "19-intersection-types.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
       {
         "name": "20-advanced-classes.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "21-conditional-types.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -88,12 +128,27 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "25-template-literal-interpolation.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
       {
         "name": "simple-class-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "simple-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "template-literals.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -123,63 +178,7 @@
         "reason": "Compiles and runs successfully"
       }
     ],
-    "partial": [
-      {
-        "name": "05-typed-functions.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-05-typed-functions.js\""
-      },
-      {
-        "name": "07-loops.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-07-loops.js\""
-      },
-      {
-        "name": "08-arrays.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-08-arrays.js\""
-      },
-      {
-        "name": "11-classes-advanced.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-11-classes-advanced.js\""
-      },
-      {
-        "name": "12-student-management-system.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-12-student-management-system.js\""
-      },
-      {
-        "name": "17-comprehensive-demo.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-17-comprehensive-demo.js\""
-      },
-      {
-        "name": "18-union-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-18-union-types.js\""
-      },
-      {
-        "name": "21-conditional-types.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-21-conditional-types.js\""
-      },
-      {
-        "name": "25-template-literal-interpolation.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-25-template-literal-interpolation.js\""
-      },
-      {
-        "name": "simple-test.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-simple-test.js\""
-      },
-      {
-        "name": "template-literals.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"/tmp/test-template-literals.js\""
-      }
-    ],
+    "partial": [],
     "failing": []
   }
 }

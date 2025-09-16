@@ -22,6 +22,7 @@ import {
   ImportDeclaration,
   ImportSpecifier,
   ImportDefaultSpecifier,
+  ImportNamespaceSpecifier,
   ImportExpression,
   ExportDeclaration,
   ArrayExpression,
@@ -1148,7 +1149,8 @@ export class Parser {
 
   public importDeclaration(): ImportDeclaration {
     const importToken = this.previous();
-    const specifiers: (ImportSpecifier | ImportDefaultSpecifier)[] = [];
+    const specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier> =
+      [];
 
     // Handle default import or named imports
     if (this.check(TokenType.IDENTIFIER)) {
@@ -1171,6 +1173,31 @@ export class Parser {
         this.parseNamedImports(specifiers);
         this.consume(TokenType.RIGHT_BRACE, "Expected '}' after named imports");
       }
+    } else if (this.match(TokenType.MULTIPLY)) {
+      this.consume(TokenType.ЧУН, "Expected 'чун' after '*' in namespace import");
+      let local: Token;
+      if (this.check(TokenType.IDENTIFIER)) {
+        local = this.advance();
+      } else if (this.matchBuiltinIdentifier()) {
+        local = this.previous();
+      } else {
+        const token = this.peek();
+        throw new Error(
+          `Expected namespace alias after 'чун' at line ${token.line}, column ${token.column}`
+        );
+      }
+
+      specifiers.push({
+        type: 'ImportNamespaceSpecifier',
+        local: {
+          type: 'Identifier',
+          name: local.value,
+          line: local.line,
+          column: local.column,
+        } as Identifier,
+        line: local.line,
+        column: local.column,
+      } as ImportNamespaceSpecifier);
     } else if (this.match(TokenType.LEFT_BRACE)) {
       // Handle only named imports
       this.parseNamedImports(specifiers);
@@ -1183,7 +1210,7 @@ export class Parser {
 
     return {
       type: 'ImportDeclaration',
-      specifiers: specifiers as ImportSpecifier[],
+      specifiers,
       source: {
         type: 'Literal',
         value: source.value,
@@ -1196,7 +1223,9 @@ export class Parser {
     };
   }
 
-  private parseNamedImports(specifiers: (ImportSpecifier | ImportDefaultSpecifier)[]): void {
+  private parseNamedImports(
+    specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier>
+  ): void {
     if (!this.check(TokenType.RIGHT_BRACE)) {
       do {
         let imported: Token;
@@ -1299,6 +1328,11 @@ export class Parser {
       TokenType.ЗАРБ,
       TokenType.ТАҚСИМ,
       TokenType.ҲОЛАТ, // Allow 'case' keyword as identifier (for property names)
+      // Basic type keywords can appear as variable names in examples
+      TokenType.РАҚАМ,
+      TokenType.САТР,
+      TokenType.МАНТИҚӢ,
+      TokenType.ХОЛӢ,
       // Note: We don't include control flow keywords here as they have special parsing
     ];
 
@@ -2157,6 +2191,11 @@ export class Parser {
 
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after method parameters");
 
+    let returnType: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
+    }
+
     let body = null;
     if (isAbstract) {
       // Abstract methods end with semicolon, no body
@@ -2179,6 +2218,7 @@ export class Parser {
         type: 'FunctionExpression',
         params: params,
         body: body || this.blockStatement(),
+        returnType,
         line: nameToken.line,
         column: nameToken.column,
       },
@@ -2414,6 +2454,15 @@ export class Parser {
         name: identTok.value,
         line: identTok.line,
         column: identTok.column,
+      } as Identifier;
+    }
+    if (this.matchBuiltinIdentifier()) {
+      const token = this.previous();
+      return {
+        type: 'Identifier',
+        name: token.value,
+        line: token.line,
+        column: token.column,
       } as Identifier;
     }
     const ident = this.consume(TokenType.IDENTIFIER, 'Expected identifier');

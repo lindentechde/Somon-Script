@@ -40,6 +40,7 @@ export interface ModuleLoadOptions {
   encoding?: BufferEncoding;
   cache?: boolean;
   circularDependencyStrategy?: 'error' | 'warn' | 'ignore';
+  externals?: string[];
 }
 
 export class ModuleLoader {
@@ -47,6 +48,7 @@ export class ModuleLoader {
   private readonly moduleCache = new Map<string, LoadedModule>();
   private readonly loadingStack = new Set<string>();
   private readonly options: Required<ModuleLoadOptions>;
+  private externalSpecifiers: Set<string> = new Set();
 
   constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
     this.resolver = resolver;
@@ -54,13 +56,20 @@ export class ModuleLoader {
       encoding: options.encoding || ('utf-8' as BufferEncoding),
       cache: options.cache ?? true,
       circularDependencyStrategy: options.circularDependencyStrategy || 'warn',
+      externals: options.externals ?? [],
     };
+    this.setExternals(options.externals);
   }
 
   /**
    * Load a module and all its dependencies
    */
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
+    const externalMatch = this.matchExternal(specifier);
+    if (externalMatch) {
+      return this.getOrCreateExternalModule(specifier, externalMatch);
+    }
+
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
 
@@ -87,6 +96,11 @@ export class ModuleLoader {
    * Load module synchronously
    */
   loadSync(specifier: string, fromFile: string): LoadedModule {
+    const externalMatch = this.matchExternal(specifier);
+    if (externalMatch) {
+      return this.getOrCreateExternalModule(specifier, externalMatch);
+    }
+
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
 
@@ -271,4 +285,78 @@ export class ModuleLoader {
   /**
    * Note: topological ordering is provided by ModuleRegistry.
    */
+
+  setExternals(externals?: string[]): void {
+    this.externalSpecifiers = new Set(
+      (externals ?? []).map(ext => ext.trim()).filter(ext => ext.length > 0)
+    );
+  }
+
+  getExternals(): string[] {
+    return Array.from(this.externalSpecifiers);
+  }
+
+  private matchExternal(specifier: string): string | null {
+    if (this.externalSpecifiers.size === 0) return null;
+
+    const trimmed = specifier.trim();
+    const candidates = this.buildExternalCandidates(trimmed);
+    for (const candidate of candidates) {
+      if (this.externalSpecifiers.has(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private buildExternalCandidates(specifier: string): string[] {
+    const variants = new Set<string>();
+    variants.add(specifier);
+
+    if (/\.js$/i.test(specifier)) {
+      const withoutExt = specifier.replace(/\.js$/i, '');
+      variants.add(withoutExt);
+      variants.add(`${withoutExt}.som`);
+    } else {
+      variants.add(`${specifier}.js`);
+    }
+
+    if (/\.som$/i.test(specifier)) {
+      const withoutExt = specifier.replace(/\.som$/i, '');
+      variants.add(withoutExt);
+      variants.add(`${withoutExt}.js`);
+    } else {
+      variants.add(`${specifier}.som`);
+    }
+
+    return Array.from(variants.values());
+  }
+
+  private getOrCreateExternalModule(specifier: string, canonical: string): LoadedModule {
+    const moduleId = this.getExternalModuleId(canonical);
+    if (this.options.cache && this.moduleCache.has(moduleId)) {
+      return this.moduleCache.get(moduleId)!;
+    }
+
+    const module: LoadedModule = {
+      id: moduleId,
+      resolvedPath: canonical,
+      source: '',
+      ast: { type: 'Program', body: [], line: 1, column: 1 },
+      dependencies: [],
+      exports: { named: {} },
+      isLoaded: true,
+      isLoading: false,
+    };
+
+    if (this.options.cache) {
+      this.moduleCache.set(moduleId, module);
+    }
+
+    return module;
+  }
+
+  private getExternalModuleId(specifier: string): string {
+    return `external:${specifier}`;
+  }
 }

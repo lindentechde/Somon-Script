@@ -9,6 +9,7 @@ import {
   ExpressionStatement,
   ReturnStatement,
   TypeAlias,
+  ImportDeclaration,
 } from '../src/types';
 
 function asVarDecl(stmt: Statement): VariableDeclaration {
@@ -151,6 +152,20 @@ describe('Parser', () => {
     expect(expr.arguments).toHaveLength(2);
     expect(expr.arguments[0].value).toBe('дунё');
     expect(expr.arguments[1].value).toBe(42);
+  });
+
+  test('should parse namespace imports', () => {
+    const source = 'ворид * чун MathUtils аз "./math";';
+    const ast = parseSource(source);
+
+    expect(ast.body).toHaveLength(1);
+    const stmt = ast.body[0] as ImportDeclaration;
+    expect(stmt.type).toBe('ImportDeclaration');
+    expect(stmt.specifiers).toHaveLength(1);
+    const namespaceSpec = stmt.specifiers[0];
+    expect(namespaceSpec.type).toBe('ImportNamespaceSpecifier');
+    expect((namespaceSpec as any).local.name).toBe('MathUtils');
+    expect((stmt.source as any).value).toBe('./math');
   });
 
   test('should parse return statement', () => {

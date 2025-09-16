@@ -20,6 +20,7 @@ import {
   MemberExpression,
   ImportDeclaration,
   ImportSpecifier,
+  ImportNamespaceSpecifier,
   ExportDeclaration,
   ArrayExpression,
   ObjectExpression,
@@ -447,6 +448,13 @@ export class CodeGenerator {
     if (defaultImports.length > 0) {
       const localName = defaultImports[0].local.name;
       results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
+    }
+
+    const namespaceImport = specifiers.find(s => s.type === 'ImportNamespaceSpecifier') as
+      | ImportNamespaceSpecifier
+      | undefined;
+    if (namespaceImport) {
+      results.push(this.indent(`const ${namespaceImport.local.name} = ${tmpVar};`));
     }
 
     // Handle named imports
