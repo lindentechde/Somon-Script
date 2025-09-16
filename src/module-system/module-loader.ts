@@ -30,9 +30,10 @@ export interface LoadedModule {
   error?: Error;
 }
 
+// Export map for a module. "default" holds default export runtime value; named holds each named export.
 export interface ModuleExports {
-  default?: any;
-  named: Record<string, any>;
+  default?: unknown;
+  named: Record<string, unknown>;
 }
 
 export interface ModuleLoadOptions {
@@ -42,10 +43,10 @@ export interface ModuleLoadOptions {
 }
 
 export class ModuleLoader {
-  private resolver: ModuleResolver;
-  private moduleCache = new Map<string, LoadedModule>();
-  private loadingStack = new Set<string>();
-  private options: Required<ModuleLoadOptions>;
+  private readonly resolver: ModuleResolver;
+  private readonly moduleCache = new Map<string, LoadedModule>();
+  private readonly loadingStack = new Set<string>();
+  private readonly options: Required<ModuleLoadOptions>;
 
   constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
     this.resolver = resolver;

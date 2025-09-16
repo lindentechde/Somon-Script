@@ -304,12 +304,12 @@ export abstract class CompilationStep<TInput, TOutput, TError extends Compilatio
 
 export class CompilationPipeline {
   constructor(
-    private readonly steps: CompilationStep<any, any, any>[],
+    private readonly steps: CompilationStep<unknown, unknown, CompilationError>[],
     private readonly reporter: IDiagnosticsReporter
   ) {}
 
   async execute<TInput, TOutput>(input: TInput): Promise<Result<TOutput, CompilationError[]>> {
-    let current: any = input;
+    let current: unknown = input as unknown;
     const allErrors: CompilationError[] = [];
 
     for (const step of this.steps) {
@@ -334,7 +334,7 @@ export class CompilationPipeline {
 
     return allErrors.length > 0 && allErrors.some(e => e.severity === 'error')
       ? Result.failures(allErrors)
-      : Result.success(current);
+      : Result.success(current as TOutput);
   }
 }
 
@@ -468,7 +468,8 @@ import {
 
 export interface AnalyzedProgram {
   readonly ast: Program;
-  readonly typeInformation: any; // Will be properly typed later
+  // Placeholder for future rich type info structure
+  readonly typeInformation: unknown;
 }
 
 export interface GenerationOptions {

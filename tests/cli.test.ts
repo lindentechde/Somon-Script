@@ -23,11 +23,7 @@ describe('CLI Integration Tests', () => {
 
   beforeAll(() => {
     // Build the project first
-    try {
-      execSync('npm run build', { stdio: 'pipe' });
-    } catch (error) {
-      console.warn('Build failed, tests may not work correctly');
-    }
+    execSync('npm run build', { stdio: 'pipe' });
     cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
   });
 
@@ -67,7 +63,7 @@ describe('CLI Integration Tests', () => {
       try {
         execSync(`node "${cliPath}" compile "${inputFile}"`, { stdio: 'pipe' });
         // If we reach here, the command succeeded when it should have failed
-        fail('Expected compilation to fail but it succeeded');
+        throw new Error('Expected compilation to fail but it succeeded');
       } catch (error: any) {
         // Expect the command to exit with non-zero status
         expect(error.status).not.toBe(0);

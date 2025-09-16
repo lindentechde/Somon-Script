@@ -284,64 +284,83 @@ export function createProgram(): Command {
     .option('--source-map', 'Generate source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
     .option('--force', 'Allow experimental formats (esm/umd)')
-    .action(async (input: string, options: any) => {
-      try {
-        const { ModuleSystem } = await import('../module-system');
+    .action(
+      async (
+        input: string,
+        options: {
+          output?: string;
+          format?: string;
+          minify?: boolean;
+          sourceMap?: boolean;
+          externals?: string;
+          force?: boolean;
+        }
+      ) => {
+        try {
+          const { ModuleSystem } = await import('../module-system');
 
-        const baseDir = path.dirname(path.resolve(input));
-        const config = loadConfig(baseDir);
-        const moduleSystem = new ModuleSystem({
-          resolution: {
-            baseUrl: baseDir,
-            ...(config.moduleSystem?.resolution || {}),
-          },
-          loading: config.moduleSystem?.loading
-            ? {
-                ...config.moduleSystem.loading,
-                encoding: config.moduleSystem.loading.encoding as BufferEncoding | undefined,
-              }
-            : undefined,
-          compilation: config.moduleSystem?.compilation,
-        });
+          const baseDir = path.dirname(path.resolve(input));
+          const config = loadConfig(baseDir);
+          const moduleSystem = new ModuleSystem({
+            resolution: {
+              baseUrl: baseDir,
+              ...(config.moduleSystem?.resolution || {}),
+            },
+            loading: config.moduleSystem?.loading
+              ? {
+                  ...config.moduleSystem.loading,
+                  encoding: config.moduleSystem.loading.encoding as BufferEncoding | undefined,
+                }
+              : undefined,
+            compilation: config.moduleSystem?.compilation,
+          });
 
-        const bundleOptions = {
-          entryPoint: path.resolve(input),
-          outputPath: options.output ?? config.bundle?.output,
-          format: options.format ?? config.bundle?.format,
-          minify: options.minify ?? config.bundle?.minify,
-          sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
-          externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
-          force: options.force ?? config.bundle?.force,
-        } as const;
+          const bundleOptions = {
+            entryPoint: path.resolve(input),
+            outputPath: options.output ?? config.bundle?.output,
+            format: (options.format ?? config.bundle?.format ?? 'commonjs') as
+              | 'commonjs'
+              | 'esm'
+              | 'umd',
+            minify: options.minify ?? config.bundle?.minify,
+            sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+            externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
+            force: options.force ?? config.bundle?.force,
+          } as const;
 
-        if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
-          console.error('ESM/UMD bundle formats are experimental. Re-run with --force to proceed.');
+          if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
+            console.error(
+              'ESM/UMD bundle formats are experimental. Re-run with --force to proceed.'
+            );
+            process.exitCode = 1;
+            return;
+          }
+          console.log(`📦 Bundling ${input}...`);
+          if (bundleOptions.format !== 'commonjs') {
+            console.warn(
+              'Warning: ESM/UMD formats are experimental; prefer commonjs for execution.'
+            );
+          }
+          const bundle = await moduleSystem.bundle(bundleOptions);
+
+          const outputPath = bundleOptions.outputPath
+            ? path.isAbsolute(bundleOptions.outputPath)
+              ? bundleOptions.outputPath
+              : path.resolve(baseDir, bundleOptions.outputPath)
+            : input.replace(/\.som$/, '.bundle.js');
+          fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+          fs.writeFileSync(outputPath, bundle);
+
+          console.log(`✅ Bundle created: ${outputPath}`);
+
+          const stats = moduleSystem.getStatistics();
+          console.log(`📊 Bundled ${stats.totalModules} modules`);
+        } catch (error) {
+          console.error('Bundle error:', error instanceof Error ? error.message : error);
           process.exitCode = 1;
-          return;
         }
-        console.log(`📦 Bundling ${input}...`);
-        if (bundleOptions.format !== 'commonjs') {
-          console.warn('Warning: ESM/UMD formats are experimental; prefer commonjs for execution.');
-        }
-        const bundle = await moduleSystem.bundle(bundleOptions);
-
-        const outputPath = bundleOptions.outputPath
-          ? path.isAbsolute(bundleOptions.outputPath)
-            ? bundleOptions.outputPath
-            : path.resolve(baseDir, bundleOptions.outputPath)
-          : input.replace(/\.som$/, '.bundle.js');
-        fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-        fs.writeFileSync(outputPath, bundle);
-
-        console.log(`✅ Bundle created: ${outputPath}`);
-
-        const stats = moduleSystem.getStatistics();
-        console.log(`📊 Bundled ${stats.totalModules} modules`);
-      } catch (error) {
-        console.error('Bundle error:', error instanceof Error ? error.message : error);
-        process.exitCode = 1;
       }
-    });
+    );
 
   // Module info command
   program
@@ -353,57 +372,61 @@ export function createProgram(): Command {
     .option('--graph', 'Show dependency graph')
     .option('--stats', 'Show module statistics')
     .option('--circular', 'Check for circular dependencies')
-    .action(async (input: string, options: any) => {
-      try {
-        const { ModuleSystem } = await import('../module-system');
+    .action(
+      async (input: string, options: { graph?: boolean; stats?: boolean; circular?: boolean }) => {
+        try {
+          const { ModuleSystem } = await import('../module-system');
 
-        const moduleSystem = new ModuleSystem({
-          resolution: {
-            baseUrl: path.dirname(path.resolve(input)),
-          },
-        });
+          const moduleSystem = new ModuleSystem({
+            resolution: {
+              baseUrl: path.dirname(path.resolve(input)),
+            },
+          });
 
-        console.log(`🔍 Analyzing ${input}...`);
-        await moduleSystem.loadModule(path.resolve(input), process.cwd());
+          console.log(`🔍 Analyzing ${input}...`);
+          await moduleSystem.loadModule(path.resolve(input), process.cwd());
 
-        if (options.stats) {
-          const stats = moduleSystem.getStatistics();
-          console.log('\n📊 Module Statistics:');
-          console.log(`  Total modules: ${stats.totalModules}`);
-          console.log(`  Total dependencies: ${stats.totalDependencies}`);
-          console.log(`  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`);
-          console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
-          console.log(`  Circular dependencies: ${stats.circularDependencies}`);
-        }
+          if (options.stats) {
+            const stats = moduleSystem.getStatistics();
+            console.log('\n📊 Module Statistics:');
+            console.log(`  Total modules: ${stats.totalModules}`);
+            console.log(`  Total dependencies: ${stats.totalDependencies}`);
+            console.log(
+              `  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`
+            );
+            console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
+            console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+          }
 
-        if (options.graph) {
-          const graph = moduleSystem.getDependencyGraph();
-          console.log('\n🕸️  Dependency Graph:');
-          for (const [moduleId, deps] of graph) {
-            const relativePath = path.relative(process.cwd(), moduleId);
-            console.log(`  ${relativePath}:`);
-            for (const dep of deps) {
-              console.log(`    └── ${dep}`);
+          if (options.graph) {
+            const graph = moduleSystem.getDependencyGraph();
+            console.log('\n🕸️  Dependency Graph:');
+            for (const [moduleId, deps] of graph) {
+              const relativePath = path.relative(process.cwd(), moduleId);
+              console.log(`  ${relativePath}:`);
+              for (const dep of deps) {
+                console.log(`    └── ${dep}`);
+              }
             }
           }
-        }
 
-        if (options.circular) {
-          const validation = moduleSystem.validate();
-          if (validation.isValid) {
-            console.log('\n✅ No circular dependencies found');
-          } else {
-            console.log('\n❌ Issues found:');
-            for (const error of validation.errors) {
-              console.log(`  • ${error}`);
+          if (options.circular) {
+            const validation = moduleSystem.validate();
+            if (validation.isValid) {
+              console.log('\n✅ No circular dependencies found');
+            } else {
+              console.log('\n❌ Issues found:');
+              for (const error of validation.errors) {
+                console.log(`  • ${error}`);
+              }
             }
           }
+        } catch (error) {
+          console.error('Analysis error:', error instanceof Error ? error.message : error);
+          process.exit(1);
         }
-      } catch (error) {
-        console.error('Analysis error:', error instanceof Error ? error.message : error);
-        process.exit(1);
       }
-    });
+    );
 
   // Resolve command
   program
@@ -412,15 +435,14 @@ export function createProgram(): Command {
     .usage('<specifier> [options]')
     .argument('<specifier>', 'Module specifier to resolve')
     .option('-f, --from <file>', 'Resolve from this file', process.cwd())
-    .action(async (specifier: string, options: any) => {
+    .action(async (specifier: string, options: { from?: string }) => {
       try {
         const { ModuleResolver } = await import('../module-system');
-
+        const fromFile = options.from ?? process.cwd();
         const resolver = new ModuleResolver({
-          baseUrl: path.dirname(path.resolve(options.from)),
+          baseUrl: path.dirname(path.resolve(fromFile)),
         });
-
-        const resolved = resolver.resolve(specifier, options.from);
+        const resolved = resolver.resolve(specifier, fromFile);
 
         console.log(`🎯 Resolved '${specifier}':`);
         console.log(`  Path: ${resolved.resolvedPath}`);

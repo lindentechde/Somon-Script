@@ -32,10 +32,10 @@ export interface BundleOptions {
 }
 
 export class ModuleSystem {
-  private resolver: ModuleResolver;
-  private loader: ModuleLoader;
-  private registry: ModuleRegistry;
-  private codeGenerator: CodeGenerator;
+  private readonly resolver: ModuleResolver;
+  private readonly loader: ModuleLoader;
+  private readonly registry: ModuleRegistry;
+  private readonly codeGenerator: CodeGenerator;
 
   constructor(options: ModuleSystemOptions = {}) {
     this.resolver = new ModuleResolver(options.resolution);
@@ -108,7 +108,7 @@ export class ModuleSystem {
       // Compile each module
       for (const moduleId of compilationOrder) {
         const module = this.loader.getModule(moduleId);
-        if (module && module.resolvedPath.endsWith('.som')) {
+        if (module?.resolvedPath.endsWith('.som')) {
           try {
             const compiledCode = this.codeGenerator.generate(module.ast);
             modules.set(moduleId, compiledCode);
@@ -349,17 +349,19 @@ ${commonjsBundle}
 
   private minify(code: string): string {
     // Lazy-load preset to avoid runtime hard dependency
-    let preset: any = null;
+    let presetModule: unknown = null;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      preset = require('babel-preset-minify');
+      presetModule = require('babel-preset-minify');
     } catch {
       // Fallback: conservative whitespace trim for simple cases
       return code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
     }
     const out = transformSync(code, {
       sourceMaps: false,
-      presets: [preset],
+      // Cast preset module to the expected babel PluginItem[] element.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external dependency lacks detailed typing
+      presets: [presetModule as any],
       comments: false,
       compact: true,
     });
@@ -395,7 +397,8 @@ ${commonjsBundle}
         try {
           this.resolver.resolve(dep, module.resolvedPath);
         } catch (error) {
-          errors.push(`Missing dependency '${dep}' in module '${module.id}'`);
+          // Record a validation error with context
+          errors.push(`Missing dependency '${dep}' in module '${module.id}': ${error}`);
         }
       }
     }

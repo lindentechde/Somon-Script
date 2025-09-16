@@ -15,7 +15,9 @@ describe('ModuleSystem Bundle Runtime', () => {
   afterEach(() => {
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      /* ignore cleanup errors */
+    }
   });
 
   test('commonjs bundle executes with rewritten requires', async () => {

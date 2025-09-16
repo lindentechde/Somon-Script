@@ -28,10 +28,15 @@ export interface DependencyNode {
   level: number;
 }
 
+// Public tree node type used by getDependencyTree
+export type DependencyTreeNode =
+  | { id: string; level?: number; circular?: false; dependencies: DependencyTreeNode[] }
+  | { id: string; circular: true };
+
 export class ModuleRegistry {
-  private modules = new Map<string, ModuleMetadata>();
-  private dependencyGraph = new Map<string, DependencyNode>();
-  private resolver = new ModuleResolver();
+  private readonly modules = new Map<string, ModuleMetadata>();
+  private readonly dependencyGraph = new Map<string, DependencyNode>();
+  private readonly resolver = new ModuleResolver();
 
   /**
    * Register a loaded module
@@ -329,35 +334,47 @@ export class ModuleRegistry {
   /**
    * Get dependency tree for a specific module
    */
-  getDependencyTree(moduleId: string, visited = new Set<string>()): any {
+  getDependencyTree(moduleId: string, visited = new Set<string>()): DependencyTreeNode {
+    // Return a structured dependency tree node. Use a discriminated union for circular nodes.
     if (visited.has(moduleId)) {
-      return { id: moduleId, circular: true };
+      return { id: moduleId, circular: true } as const;
     }
 
     visited.add(moduleId);
     const node = this.dependencyGraph.get(moduleId);
 
     if (!node) {
-      return { id: moduleId, dependencies: [] };
+      return { id: moduleId, dependencies: [] } as DependencyTreeNode;
     }
 
     return {
       id: moduleId,
       level: node.level,
       dependencies: node.dependencies.map(dep => this.getDependencyTree(dep, new Set(visited))),
-    };
+    } as DependencyTreeNode;
   }
 
-  private processImportSpecifiers(specifiers: any[], source: string, imports: any): void {
+  private processImportSpecifiers(
+    specifiers: Array<{ type: string; imported?: { name?: string } }>,
+    source: string,
+    imports: ModuleImports
+  ): void {
     for (const specifier of specifiers) {
       if (specifier.type === 'ImportDefaultSpecifier') {
-        if (!imports.default) imports.default = [];
+        // Initialize default import list lazily
+        if (imports.default == null) {
+          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          imports.default = [];
+        }
         imports.default.push(source);
       } else if (specifier.type === 'ImportSpecifier') {
         if (!imports.named[source]) imports.named[source] = [];
         imports.named[source].push(specifier.imported?.name || '');
       } else if (specifier.type === 'ImportNamespaceSpecifier') {
-        if (!imports.namespace) imports.namespace = [];
+        if (imports.namespace == null) {
+          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          imports.namespace = [];
+        }
         imports.namespace.push(source);
       }
     }

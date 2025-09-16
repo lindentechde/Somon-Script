@@ -141,10 +141,10 @@ function minifyCode(
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
   // Lazy-load minify preset to avoid hard dependency at runtime
-  let preset: any = null;
+  let presetModule: unknown = null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    preset = require('babel-preset-minify');
+    presetModule = require('babel-preset-minify');
   } catch {
     // Preset not available; apply a conservative whitespace trim as fallback
     const basic = code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
@@ -154,7 +154,8 @@ function minifyCode(
     sourceMaps: sourceMap,
     // Cast RawSourceMap to Babel's InputSourceMap - they have compatible structures
     inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
-    presets: [preset],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- external dependency, minimal typing
+    presets: [presetModule as any],
     comments: false,
     compact: true,
   });

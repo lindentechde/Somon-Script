@@ -11,7 +11,6 @@ module.exports = {
     node: true,
     jest: true,
   },
-  // Do not ignore tests so overrides can relax certain rules there
   ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/'],
   rules: {
     // General rules

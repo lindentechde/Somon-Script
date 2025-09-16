@@ -24,10 +24,18 @@ export interface ConfigValidationError {
   message: string;
 }
 
-function validateCompilerOptions(options: any, path = 'compilerOptions'): ConfigValidationError[] {
+type UnknownRecord = Record<string, unknown>;
+function isObject(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function validateCompilerOptions(
+  options: unknown,
+  path = 'compilerOptions'
+): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
-  if (typeof options !== 'object' || options === null) {
+  if (!isObject(options)) {
     return [{ path, message: 'must be an object' }];
   }
 
@@ -116,10 +124,10 @@ export interface BundleConfig {
   output?: string;
 }
 
-function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigValidationError[] {
+function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
   if (config === undefined) return errors;
-  if (typeof config !== 'object' || config === null) {
+  if (!isObject(config)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 
@@ -130,7 +138,7 @@ function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigVal
     }
   }
 
-  const res = config.resolution;
+  const res = (config as ModuleSystemConfig).resolution;
   if (res !== undefined) {
     if (typeof res !== 'object' || res === null) {
       errors.push({ path: `${basePath}.resolution`, message: 'must be an object' });
@@ -153,7 +161,8 @@ function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigVal
           }
         }
       }
-      const stringArray = (arr: any) => Array.isArray(arr) && arr.every(x => typeof x === 'string');
+      const stringArray = (arr: unknown): arr is string[] =>
+        Array.isArray(arr) && arr.every(x => typeof x === 'string');
       if (res.extensions !== undefined && !stringArray(res.extensions)) {
         errors.push({ path: `${basePath}.resolution.extensions`, message: 'must be string[]' });
       }
@@ -175,7 +184,7 @@ function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigVal
     }
   }
 
-  const load = config.loading;
+  const load = (config as ModuleSystemConfig).loading;
   if (load !== undefined) {
     if (typeof load !== 'object' || load === null) {
       errors.push({ path: `${basePath}.loading`, message: 'must be an object' });
@@ -200,49 +209,54 @@ function validateModuleSystem(config: any, basePath = 'moduleSystem'): ConfigVal
 
   // Reuse compiler options validation for optional compilation section
   if (config.compilation !== undefined) {
-    errors.push(...validateCompilerOptions(config.compilation, `${basePath}.compilation`));
+    errors.push(
+      ...validateCompilerOptions(
+        (config as ModuleSystemConfig).compilation,
+        `${basePath}.compilation`
+      )
+    );
   }
 
   return errors;
 }
 
-function validateBundle(config: any, basePath = 'bundle'): ConfigValidationError[] {
+function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
   if (config === undefined) return errors;
-  if (typeof config !== 'object' || config === null) {
+  if (!isObject(config)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 
-  if (config.format !== undefined && !['commonjs', 'esm', 'umd'].includes(config.format)) {
+  const obj = config as Partial<BundleConfig>;
+
+  if (obj.format !== undefined && !['commonjs', 'esm', 'umd'].includes(obj.format)) {
     errors.push({ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' });
   }
-  if (config.minify !== undefined && typeof config.minify !== 'boolean') {
+  if (obj.minify !== undefined && typeof obj.minify !== 'boolean') {
     errors.push({ path: `${basePath}.minify`, message: 'must be a boolean' });
   }
-  if (config.sourceMaps !== undefined && typeof config.sourceMaps !== 'boolean') {
+  if (obj.sourceMaps !== undefined && typeof obj.sourceMaps !== 'boolean') {
     errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
   }
-  if (config.force !== undefined && typeof config.force !== 'boolean') {
+  if (obj.force !== undefined && typeof obj.force !== 'boolean') {
     errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
   }
-  if (config.output !== undefined && typeof config.output !== 'string') {
+  if (obj.output !== undefined && typeof obj.output !== 'string') {
     errors.push({ path: `${basePath}.output`, message: 'must be a string' });
   }
-  if (config.externals !== undefined) {
-    if (
-      !Array.isArray(config.externals) ||
-      config.externals.some((x: any) => typeof x !== 'string')
-    ) {
+  if (obj.externals !== undefined) {
+    const externals = obj.externals;
+    if (!Array.isArray(externals) || externals.some(x => typeof x !== 'string')) {
       errors.push({ path: `${basePath}.externals`, message: 'must be string[]' });
     }
   }
   return errors;
 }
 
-function validateConfig(config: any): ConfigValidationError[] {
+function validateConfig(config: unknown): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
-  if (typeof config !== 'object' || config === null) {
+  if (!isObject(config)) {
     return [{ path: 'root', message: 'configuration must be an object' }];
   }
 
@@ -258,16 +272,16 @@ function validateConfig(config: any): ConfigValidationError[] {
   }
 
   // Validate compilerOptions if present
-  if (config.compilerOptions !== undefined) {
-    errors.push(...validateCompilerOptions(config.compilerOptions));
+  if ((config as SomonConfig).compilerOptions !== undefined) {
+    errors.push(...validateCompilerOptions((config as SomonConfig).compilerOptions));
   }
   // Validate moduleSystem if present
-  if (config.moduleSystem !== undefined) {
-    errors.push(...validateModuleSystem(config.moduleSystem));
+  if ((config as SomonConfig).moduleSystem !== undefined) {
+    errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
   }
   // Validate bundle if present
-  if (config.bundle !== undefined) {
-    errors.push(...validateBundle(config.bundle));
+  if ((config as SomonConfig).bundle !== undefined) {
+    errors.push(...validateBundle((config as SomonConfig).bundle));
   }
 
   return errors;

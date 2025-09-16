@@ -13,7 +13,9 @@ describe('somon.config.json loader/validation', () => {
   afterEach(() => {
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      /* ignore cleanup errors */
+    }
   });
 
   test('returns empty config on invalid content', () => {

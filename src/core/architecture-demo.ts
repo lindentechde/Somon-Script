@@ -198,18 +198,14 @@ async function demonstrateAdvancedScenarios(): Promise<void> {
   );
 }
 
-function groupErrorsByCategory(errors: any[]): Record<string, any[]> {
-  return errors.reduce(
-    (groups, error) => {
-      const category = error.category || 'unknown';
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push(error);
-      return groups;
-    },
-    {} as Record<string, any[]>
-  );
+type CategorizedErrorLike = { category?: string } & Record<string, unknown>;
+function groupErrorsByCategory<T extends { category?: string }>(errors: T[]): Record<string, T[]> {
+  return errors.reduce<Record<string, T[]>>((groups, error) => {
+    const category = (error.category && String(error.category)) || 'unknown';
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(error);
+    return groups;
+  }, {});
 }
 
 // ===== EXAMPLE INTEGRATION WITH EXISTING CODEBASE =====
