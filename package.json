@@ -1,6 +1,6 @@
 {
   "name": "somon-script",
-  "version": "0.2.90",
+  "version": "0.2.91",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -30,7 +30,7 @@
     "docs:serve": "typedoc --watch --serve",
     "type-check": "tsc --noEmit",
     "start": "node dist/cli.js",
-    "clean": "rm -rf dist coverage *.tgz",
+    "clean": "node -e \"const fs = require('fs'); const path = require('path'); ['dist', 'coverage'].forEach(dir => { try { fs.rmSync(dir, {recursive: true, force: true}); } catch(e) {} }); try { fs.readdirSync('.').filter(f => f.endsWith('.tgz')).forEach(f => fs.unlinkSync(f)); } catch(e) {} console.log('✅ Clean completed successfully');\"",
     "prepublishOnly": "npm run build && npm run test:ci",
     "prepack": "npm run build",
     "benchmark": "node scripts/benchmark.js",
