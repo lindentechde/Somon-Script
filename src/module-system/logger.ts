@@ -335,8 +335,8 @@ export class Logger {
  * Global logger factory and manager
  */
 export class LoggerFactory {
-  private static loggers = new Map<string, Logger>();
-  private static globalConfig: Partial<LoggerConfig> = {
+  private static readonly loggers = new Map<string, Logger>();
+  private static readonly globalConfig: Partial<LoggerConfig> = {
     level: 'info',
     format: 'json',
     enableTracing: true,

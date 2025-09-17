@@ -1,5 +1,9 @@
 # SomonScript
 
+<div align="center">
+  <img src="images/somon-script-banner.png" alt="SomonScript Banner" width="800" style="max-width: 100%; height: auto;" />
+</div>
+
 **Production-Grade Programming Language with Tajik Syntax**
 
 [![Version](https://img.shields.io/badge/version-0.2.57-blue.svg)](https://github.com/Slashmsu/somoni-script)

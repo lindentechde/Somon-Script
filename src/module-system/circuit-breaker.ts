@@ -306,7 +306,7 @@ export class CircuitBreaker {
  * Circuit breaker manager for multiple external dependencies
  */
 export class CircuitBreakerManager {
-  private breakers = new Map<string, CircuitBreaker>();
+  private readonly breakers = new Map<string, CircuitBreaker>();
   private readonly defaultOptions: Partial<CircuitBreakerOptions>;
 
   constructor(defaultOptions: Partial<CircuitBreakerOptions> = {}) {
