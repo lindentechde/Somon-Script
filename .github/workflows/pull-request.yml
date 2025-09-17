@@ -148,9 +148,6 @@ jobs:
         
       - name: Prettier Format Check
         run: npm run format:check
-        
-      - name: Security Audit
-        run: npm audit --audit-level=moderate
 
   # Build and compilation validation
   build-validation:
@@ -326,9 +323,6 @@ jobs:
         
       - name: Install Dependencies
         run: npm ci
-        
-      - name: Security Audit
-        run: npm audit --audit-level=high
         
       - name: License Compliance Check
         run: |

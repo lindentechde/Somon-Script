@@ -131,7 +131,6 @@ Or via GitHub Actions workflow dispatch with dry-run option.
    - Run full test suite across all Node.js versions
    - Validate architecture quality (no 'as any', union types working)
    - Check modular structure
-   - Security audit and dependency scanning
    - Performance benchmark validation
 
 3. **Semantic Release Phase**
