@@ -4,12 +4,12 @@
  */
 
 export interface CircuitBreakerOptions {
-  failureThreshold: number;       // Number of failures before opening circuit
-  recoveryTimeout: number;        // Time to wait before attempting recovery (ms)
-  monitoringPeriod: number;       // Time window for failure counting (ms)
-  exponentialBackoff: boolean;    // Use exponential backoff for retries
-  maxBackoffTime: number;         // Maximum backoff time (ms)
-  jitterEnabled: boolean;         // Add jitter to prevent thundering herd
+  failureThreshold: number; // Number of failures before opening circuit
+  recoveryTimeout: number; // Time to wait before attempting recovery (ms)
+  monitoringPeriod: number; // Time window for failure counting (ms)
+  exponentialBackoff: boolean; // Use exponential backoff for retries
+  maxBackoffTime: number; // Maximum backoff time (ms)
+  jitterEnabled: boolean; // Add jitter to prevent thundering herd
 }
 
 export interface CircuitBreakerState {
@@ -69,7 +69,9 @@ export class CircuitBreaker {
       if (fallback) {
         return fallback();
       }
-      throw new Error(`Circuit breaker is OPEN. Next retry at ${new Date(this.state.nextRetryTime).toISOString()}`);
+      throw new Error(
+        `Circuit breaker is OPEN. Next retry at ${new Date(this.state.nextRetryTime).toISOString()}`
+      );
     }
 
     if (this.isHalfOpen()) {
@@ -98,27 +100,27 @@ export class CircuitBreaker {
     };
 
     let lastError: Error | null = null;
-    
+
     for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
       try {
         return await this.execute(operation, fallback);
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt === options.maxRetries) {
           break; // No more retries
         }
 
         // Calculate delay with exponential backoff
-        let delay = options.exponential 
+        let delay = options.exponential
           ? options.initialDelay * Math.pow(2, attempt)
           : options.initialDelay;
-        
+
         delay = Math.min(delay, options.maxDelay);
-        
+
         // Add jitter to prevent thundering herd
         if (options.jitter) {
-          delay *= (0.5 + Math.random() * 0.5);
+          delay *= 0.5 + Math.random() * 0.5;
         }
 
         await this.sleep(delay);
@@ -132,18 +134,21 @@ export class CircuitBreaker {
     throw lastError || new Error('All retry attempts failed');
   }
 
-  private async attemptOperation<T>(operation: () => Promise<T>, fallback?: () => Promise<T>): Promise<T> {
+  private async attemptOperation<T>(
+    operation: () => Promise<T>,
+    fallback?: () => Promise<T>
+  ): Promise<T> {
     try {
       const result = await operation();
       this.recordSuccess();
       return result;
     } catch (error) {
       this.recordFailure();
-      
+
       if (fallback && this.isOpen()) {
         return fallback();
       }
-      
+
       throw error;
     }
   }
@@ -180,10 +185,10 @@ export class CircuitBreaker {
 
   private openCircuit(): void {
     this.state.state = 'open';
-    
+
     // Calculate next retry time with exponential backoff
     let backoffTime = this.options.recoveryTimeout;
-    
+
     if (this.options.exponentialBackoff) {
       const failureCount = Math.min(this.state.failures - this.options.failureThreshold, 10);
       backoffTime = Math.min(
@@ -194,7 +199,7 @@ export class CircuitBreaker {
 
     // Add jitter to prevent thundering herd
     if (this.options.jitterEnabled) {
-      backoffTime *= (0.5 + Math.random() * 0.5);
+      backoffTime *= 0.5 + Math.random() * 0.5;
     }
 
     this.state.nextRetryTime = Date.now() + backoffTime;
@@ -203,7 +208,7 @@ export class CircuitBreaker {
   private cleanupOldFailures(): void {
     const cutoff = Date.now() - this.options.monitoringPeriod;
     const validFailures = this.failureTimes.filter(time => time > cutoff);
-    
+
     this.failureTimes.length = 0;
     this.failureTimes.push(...validFailures);
     this.state.failures = this.failureTimes.length;
@@ -285,15 +290,14 @@ export class CircuitBreaker {
     nextRetry?: string;
   } {
     const failureRate = this.getFailureRate();
-    
+
     return {
       healthy: this.state.state === 'closed' && failureRate < 0.1,
       state: this.state.state,
       failureRate,
       failures: this.state.failures,
-      nextRetry: this.state.state === 'open' 
-        ? new Date(this.state.nextRetryTime).toISOString()
-        : undefined,
+      nextRetry:
+        this.state.state === 'open' ? new Date(this.state.nextRetryTime).toISOString() : undefined,
     };
   }
 }
@@ -352,11 +356,11 @@ export class CircuitBreakerManager {
    */
   getAllStatus(): Record<string, ReturnType<CircuitBreaker['getHealthStatus']>> {
     const status: Record<string, ReturnType<CircuitBreaker['getHealthStatus']>> = {};
-    
+
     for (const [moduleId, breaker] of this.breakers) {
       status[moduleId] = breaker.getHealthStatus();
     }
-    
+
     return status;
   }
 
@@ -396,7 +400,7 @@ export class CircuitBreakerManager {
   } {
     let healthyCount = 0;
     let openCount = 0;
-    
+
     for (const breaker of this.breakers.values()) {
       const status = breaker.getHealthStatus();
       if (status.healthy) healthyCount++;

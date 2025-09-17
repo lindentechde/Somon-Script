@@ -40,23 +40,29 @@ export interface ModuleSystemStats {
   cacheHitRate: number;
   cacheMemoryUsage: number;
   cacheMemoryLimit: number;
-  
+
   // Performance metrics
   loadLatency: LatencyMetrics;
   compileLatency: LatencyMetrics;
   bundleLatency: LatencyMetrics;
-  
+
   // Error metrics
   loadErrors: number;
   compileErrors: number;
   bundleErrors: number;
   circuitBreakerTrips: number;
-  
+
   // System metrics
-  processMemoryUsage: NodeJS.MemoryUsage;
+  processMemoryUsage: {
+    rss: number;
+    heapTotal: number;
+    heapUsed: number;
+    external: number;
+    arrayBuffers: number;
+  };
   cpuUsage: number;
   systemLoad: number[];
-  
+
   // Operational metrics
   requestCount: number;
   errorRate: number;
@@ -79,7 +85,7 @@ export class LatencyRecorder {
     this.totalSum += latencyMs;
     this.minValue = Math.min(this.minValue, latencyMs);
     this.maxValue = Math.max(this.maxValue, latencyMs);
-    
+
     // Keep sliding window of measurements for percentiles
     this.measurements.push(latencyMs);
     if (this.measurements.length > this.maxSamples) {
@@ -103,7 +109,7 @@ export class LatencyRecorder {
     }
 
     const sorted = [...this.measurements].sort((a, b) => a - b);
-    
+
     return {
       count: this.totalCount,
       sum: this.totalSum,
@@ -137,15 +143,15 @@ export class LatencyRecorder {
  */
 export class Counter {
   private count = 0;
-  
+
   increment(delta = 1): void {
     this.count += delta;
   }
-  
+
   getValue(): number {
     return this.count;
   }
-  
+
   reset(): void {
     this.count = 0;
   }
@@ -159,16 +165,16 @@ export class ModuleSystemMetrics {
   public readonly loadLatency = new LatencyRecorder();
   public readonly compileLatency = new LatencyRecorder();
   public readonly bundleLatency = new LatencyRecorder();
-  
+
   // Error counters
   public readonly loadErrors = new Counter();
   public readonly compileErrors = new Counter();
   public readonly bundleErrors = new Counter();
   public readonly circuitBreakerTrips = new Counter();
-  
+
   // Operational counters
   public readonly requestCount = new Counter();
-  
+
   private startTime = Date.now();
   private lastCpuUsage = process.cpuUsage();
   private lastCpuTime = Date.now();
@@ -176,10 +182,7 @@ export class ModuleSystemMetrics {
   /**
    * Record the latency of an async operation
    */
-  async recordAsync<T>(
-    recorder: LatencyRecorder,
-    operation: () => Promise<T>
-  ): Promise<T> {
+  async recordAsync<T>(recorder: LatencyRecorder, operation: () => Promise<T>): Promise<T> {
     const start = Date.now();
     try {
       const result = await operation();
@@ -212,31 +215,32 @@ export class ModuleSystemMetrics {
   private calculateCpuUsage(): number {
     const currentUsage = process.cpuUsage();
     const currentTime = Date.now();
-    
+
     // Handle first measurement - return reasonable default
     if (this.lastCpuTime === 0) {
       this.lastCpuUsage = currentUsage;
       this.lastCpuTime = currentTime;
       return 0; // No usage data available yet
     }
-    
+
     const timeDelta = currentTime - this.lastCpuTime;
     const userDelta = currentUsage.user - this.lastCpuUsage.user;
     const systemDelta = currentUsage.system - this.lastCpuUsage.system;
-    
+
     this.lastCpuUsage = currentUsage;
     this.lastCpuTime = currentTime;
-    
+
     // Ensure minimum time delta to avoid division issues
-    if (timeDelta < 100) { // Less than 100ms
+    if (timeDelta < 100) {
+      // Less than 100ms
       return 0; // Too small time window for accurate measurement
     }
-    
+
     // Convert microseconds to percentage over time window
     const totalCpuTimeMicroseconds = userDelta + systemDelta;
     const totalCpuTimeMs = totalCpuTimeMicroseconds / 1000;
     const cpuUsagePercent = (totalCpuTimeMs / timeDelta) * 100;
-    
+
     // Cap at reasonable maximum (shouldn't exceed 100% in normal cases)
     return Math.min(Math.max(cpuUsagePercent, 0), 100);
   }
@@ -244,19 +248,25 @@ export class ModuleSystemMetrics {
   /**
    * Get comprehensive system statistics
    */
-  getStats(cacheSize: number, cacheMemoryUsage: number, cacheMemoryLimit: number): ModuleSystemStats {
+  getStats(
+    cacheSize: number,
+    cacheMemoryUsage: number,
+    cacheMemoryLimit: number
+  ): ModuleSystemStats {
     const memoryUsage = process.memoryUsage();
     const loadMetrics = this.loadLatency.getMetrics();
     const compileMetrics = this.compileLatency.getMetrics();
     const bundleMetrics = this.bundleLatency.getMetrics();
-    
+
     // Calculate cache hit rate (simplified)
     const totalRequests = this.requestCount.getValue();
-    const cacheHitRate = totalRequests > 0 ? ((totalRequests - loadMetrics.count) / totalRequests) : 0;
-    
+    const cacheHitRate =
+      totalRequests > 0 ? (totalRequests - loadMetrics.count) / totalRequests : 0;
+
     // Calculate error rate
-    const totalErrors = this.loadErrors.getValue() + this.compileErrors.getValue() + this.bundleErrors.getValue();
-    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) : 0;
+    const totalErrors =
+      this.loadErrors.getValue() + this.compileErrors.getValue() + this.bundleErrors.getValue();
+    const errorRate = totalRequests > 0 ? totalErrors / totalRequests : 0;
 
     return {
       // Module metrics
@@ -265,23 +275,23 @@ export class ModuleSystemMetrics {
       cacheHitRate: Math.max(0, Math.min(1, cacheHitRate)),
       cacheMemoryUsage,
       cacheMemoryLimit,
-      
+
       // Performance metrics
       loadLatency: loadMetrics,
       compileLatency: compileMetrics,
       bundleLatency: bundleMetrics,
-      
+
       // Error metrics
       loadErrors: this.loadErrors.getValue(),
       compileErrors: this.compileErrors.getValue(),
       bundleErrors: this.bundleErrors.getValue(),
       circuitBreakerTrips: this.circuitBreakerTrips.getValue(),
-      
+
       // System metrics
       processMemoryUsage: memoryUsage,
       cpuUsage: this.calculateCpuUsage(),
       systemLoad: os.loadavg(),
-      
+
       // Operational metrics
       requestCount: totalRequests,
       errorRate,
@@ -300,7 +310,8 @@ export class ModuleSystemMetrics {
     const memoryCheck = await this.checkMemoryHealth();
     checks.push(memoryCheck);
     if (memoryCheck.status === 'fail') overallStatus = 'unhealthy';
-    else if (memoryCheck.status === 'warn' && overallStatus === 'healthy') overallStatus = 'degraded';
+    else if (memoryCheck.status === 'warn' && overallStatus === 'healthy')
+      overallStatus = 'degraded';
 
     // CPU health check
     const cpuCheck = await this.checkCpuHealth();
@@ -312,13 +323,15 @@ export class ModuleSystemMetrics {
     const cacheCheck = this.checkCacheHealth(cacheSize, cacheMemoryLimit);
     checks.push(cacheCheck);
     if (cacheCheck.status === 'fail') overallStatus = 'unhealthy';
-    else if (cacheCheck.status === 'warn' && overallStatus === 'healthy') overallStatus = 'degraded';
+    else if (cacheCheck.status === 'warn' && overallStatus === 'healthy')
+      overallStatus = 'degraded';
 
     // Error rate check
     const errorCheck = this.checkErrorRate();
     checks.push(errorCheck);
     if (errorCheck.status === 'fail') overallStatus = 'unhealthy';
-    else if (errorCheck.status === 'warn' && overallStatus === 'healthy') overallStatus = 'degraded';
+    else if (errorCheck.status === 'warn' && overallStatus === 'healthy')
+      overallStatus = 'degraded';
 
     return {
       status: overallStatus,
@@ -368,15 +381,15 @@ export class ModuleSystemMetrics {
     // Use industry standard thresholds based on load per core and CPU usage
     // Adjusted for development systems which may have higher background load
     const isCriticalLoad = loadPerCore > 2.0; // More than 2.0x load per core
-    const isCriticalCpu = cpuUsage > 90;       // More than 90% CPU usage
-    const isHighLoad = loadPerCore > 1.5;     // More than 1.5x load per core  
-    const isHighCpu = cpuUsage > 80;          // More than 80% CPU usage
+    const isCriticalCpu = cpuUsage > 90; // More than 90% CPU usage
+    const isHighLoad = loadPerCore > 1.5; // More than 1.5x load per core
+    const isHighCpu = cpuUsage > 80; // More than 80% CPU usage
 
     if (isCriticalLoad || isCriticalCpu) {
       status = 'fail';
       message = `Critical CPU: usage=${cpuUsage.toFixed(1)}%, load=${loadAvg.toFixed(2)} (${loadPerCore.toFixed(2)}/core)`;
     } else if (isHighLoad || isHighCpu) {
-      status = 'warn';  
+      status = 'warn';
       message = `High CPU: usage=${cpuUsage.toFixed(1)}%, load=${loadAvg.toFixed(2)} (${loadPerCore.toFixed(2)}/core)`;
     }
 
@@ -392,22 +405,23 @@ export class ModuleSystemMetrics {
   private checkCacheHealth(cacheSize: number, cacheMemoryLimit: number): HealthCheck {
     const start = Date.now();
     const memoryUsage = process.memoryUsage();
-    
+
     // Calculate cache utilization more accurately
     // Use heap usage relative to total system memory for a more realistic assessment
     const totalSystemMemory = os.totalmem();
     const heapUsagePercent = (memoryUsage.heapUsed / totalSystemMemory) * 100;
-    
+
     // Also calculate cache limit utilization (estimated)
     const estimatedCacheUsage = cacheSize * 50000; // Rough estimate: 50KB per module
-    const cacheLimitPercent = cacheMemoryLimit > 0 ? (estimatedCacheUsage / cacheMemoryLimit) * 100 : 0;
+    const cacheLimitPercent =
+      cacheMemoryLimit > 0 ? (estimatedCacheUsage / cacheMemoryLimit) * 100 : 0;
 
     let status: HealthCheck['status'] = 'pass';
     let message = `Cache: ${cacheSize} modules (~${(estimatedCacheUsage / 1024 / 1024).toFixed(1)}MB), heap: ${heapUsagePercent.toFixed(1)}%`;
 
     // Use more realistic thresholds based on actual cache usage estimation
     const isCritical = cacheLimitPercent > 90 || heapUsagePercent > 15; // 15% of system memory is quite high for heap
-    const isHigh = cacheLimitPercent > 75 || heapUsagePercent > 10;     // 10% of system memory is concerning
+    const isHigh = cacheLimitPercent > 75 || heapUsagePercent > 10; // 10% of system memory is concerning
 
     if (isCritical) {
       status = 'fail';
@@ -429,7 +443,8 @@ export class ModuleSystemMetrics {
   private checkErrorRate(): HealthCheck {
     const start = Date.now();
     const totalRequests = this.requestCount.getValue();
-    const totalErrors = this.loadErrors.getValue() + this.compileErrors.getValue() + this.bundleErrors.getValue();
+    const totalErrors =
+      this.loadErrors.getValue() + this.compileErrors.getValue() + this.bundleErrors.getValue();
     const errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
 
     let status: HealthCheck['status'] = 'pass';

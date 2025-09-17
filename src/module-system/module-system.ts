@@ -5,7 +5,7 @@ import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { CodeGenerator } from '../codegen';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
-import { ModuleSystemMetrics } from './metrics';
+import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics';
 import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
@@ -46,7 +46,7 @@ export class ModuleSystem {
   private readonly loader: ModuleLoader;
   private readonly registry: ModuleRegistry;
   private readonly codeGenerator: CodeGenerator;
-  
+
   // Production systems
   private readonly metrics?: ModuleSystemMetrics;
   private readonly circuitBreakers?: CircuitBreakerManager;
@@ -56,20 +56,20 @@ export class ModuleSystem {
 
   constructor(options: ModuleSystemOptions = {}) {
     this.resolver = new ModuleResolver(options.resolution);
-    
+
     // Initialize production systems if requested
     if (options.metrics) {
       this.metrics = new ModuleSystemMetrics();
     }
-    
+
     if (options.circuitBreakers) {
       this.circuitBreakers = new CircuitBreakerManager();
     }
-    
+
     if (options.logger) {
       this.logger = new Logger('ModuleSystem');
     }
-    
+
     if (options.managementServer && this.metrics && this.circuitBreakers) {
       this.configManager = new RuntimeConfigManager();
       this.managementServer = new ManagementServer(
@@ -79,23 +79,23 @@ export class ModuleSystem {
       );
       // Async start will be called separately
     }
-    
+
     // Initialize loader with production systems
     this.loader = new ModuleLoader(
-      this.resolver, 
+      this.resolver,
       options.loading || {},
       this.metrics,
       this.circuitBreakers
     );
-    
+
     this.registry = new ModuleRegistry();
     this.codeGenerator = new CodeGenerator();
-    
+
     if (this.logger) {
       this.logger.info('ModuleSystem initialized with production features', {
         metrics: !!this.metrics,
         circuitBreakers: !!this.circuitBreakers,
-        managementServer: !!this.managementServer
+        managementServer: !!this.managementServer,
       });
     }
   }
@@ -304,13 +304,13 @@ export class ModuleSystem {
     if (this.logger) {
       this.logger.info('Shutting down ModuleSystem');
     }
-    
+
     // Stop management server
     await this.stopManagementServer();
-    
+
     // Clear caches
     this.clearCache();
-    
+
     if (this.logger) {
       this.logger.info('ModuleSystem shutdown complete');
     }
@@ -607,9 +607,9 @@ ${commonjsBundle}
   /**
    * Get production metrics
    */
-  getMetrics(): any {
+  getMetrics(): ModuleSystemStats | null {
     if (!this.metrics) return null;
-    
+
     const stats = this.registry.getStatistics();
     return this.metrics.getStats(
       stats.totalModules,
@@ -621,9 +621,16 @@ ${commonjsBundle}
   /**
    * Get system health status
    */
-  async getHealth(): Promise<any> {
-    if (!this.metrics) return { status: 'unavailable' };
-    
+  async getHealth(): Promise<SystemHealth> {
+    if (!this.metrics)
+      return {
+        status: 'unhealthy',
+        uptime: process.uptime(),
+        version: '1.0.0',
+        timestamp: Date.now(),
+        checks: [],
+      };
+
     const stats = this.registry.getStatistics();
     return await this.metrics.performHealthChecks(
       stats.totalModules,

@@ -106,8 +106,8 @@ export class Logger {
   private static readonly COLORS: Record<LogLevel, string> = {
     trace: '\x1b[90m', // gray
     debug: '\x1b[36m', // cyan
-    info: '\x1b[32m',  // green
-    warn: '\x1b[33m',  // yellow
+    info: '\x1b[32m', // green
+    warn: '\x1b[33m', // yellow
     error: '\x1b[31m', // red
     fatal: '\x1b[35m', // magenta
   };
@@ -132,7 +132,8 @@ export class Logger {
   child(additionalComponent: string, metadata: Record<string, unknown> = {}): Logger {
     const childLogger = new Logger(`${this.component}.${additionalComponent}`, this.config);
     // Store metadata for all child logger calls
-    (childLogger as any).defaultMetadata = metadata;
+    (childLogger as Logger & { defaultMetadata?: Record<string, unknown> }).defaultMetadata =
+      metadata;
     return childLogger;
   }
 
@@ -167,7 +168,7 @@ export class Logger {
     metadata: Record<string, unknown> = {}
   ): Promise<T> {
     const trace = this.startTrace(operation, metadata);
-    
+
     try {
       const result = await fn();
       trace.complete(this, 'success');
@@ -181,13 +182,9 @@ export class Logger {
   /**
    * Measure and log the execution of a sync operation
    */
-  measureSync<T>(
-    operation: string,
-    fn: () => T,
-    metadata: Record<string, unknown> = {}
-  ): T {
+  measureSync<T>(operation: string, fn: () => T, metadata: Record<string, unknown> = {}): T {
     const trace = this.startTrace(operation, metadata);
-    
+
     try {
       const result = fn();
       trace.complete(this, 'success');
@@ -214,7 +211,11 @@ export class Logger {
     this.log('warn', message, metadata);
   }
 
-  error(message: string, error?: Error | Record<string, unknown>, metadata?: Record<string, unknown>): void {
+  error(
+    message: string,
+    error?: Error | Record<string, unknown>,
+    metadata?: Record<string, unknown>
+  ): void {
     let errorData: Record<string, unknown> = {};
     let metaData = metadata || {};
 
@@ -224,7 +225,7 @@ export class Logger {
           name: error.name,
           message: error.message,
           stack: this.config.includeStack ? error.stack : undefined,
-          code: (error as any).code,
+          code: (error as Error & { code?: string }).code,
         },
       };
     } else if (error && typeof error === 'object') {
@@ -234,7 +235,11 @@ export class Logger {
     this.log('error', message, { ...errorData, ...metaData });
   }
 
-  fatal(message: string, error?: Error | Record<string, unknown>, metadata?: Record<string, unknown>): void {
+  fatal(
+    message: string,
+    error?: Error | Record<string, unknown>,
+    metadata?: Record<string, unknown>
+  ): void {
     this.error(message, error, metadata);
     // In production, this might trigger alerts or shutdown procedures
   }
@@ -249,12 +254,12 @@ export class Logger {
       level,
       message,
       component: this.component,
-      ...((this as any).defaultMetadata || {}),
+      ...((this as Logger & { defaultMetadata?: Record<string, unknown> }).defaultMetadata || {}),
       ...metadata,
     };
 
     const output = this.formatLogEntry(entry);
-    
+
     // Write to appropriate stream
     const stream = level === 'error' || level === 'fatal' ? process.stderr : process.stdout;
     stream.write(output + '\n');
@@ -275,9 +280,9 @@ export class Logger {
     const timestamp = entry.timestamp ? `[${entry.timestamp}] ` : '';
     const level = entry.level.toUpperCase().padEnd(5);
     const component = entry.component ? `[${entry.component}] ` : '';
-    
+
     let message = `${color}${timestamp}${level}${reset} ${component}${entry.message}`;
-    
+
     // Add operation and duration if available
     if (entry.operation) {
       message += ` (${entry.operation}`;
@@ -288,9 +293,11 @@ export class Logger {
     }
 
     // Add metadata if present
-    const metadataEntries = Object.entries(entry)
-      .filter(([key]) => !['timestamp', 'level', 'message', 'component', 'operation', 'duration'].includes(key));
-    
+    const metadataEntries = Object.entries(entry).filter(
+      ([key]) =>
+        !['timestamp', 'level', 'message', 'component', 'operation', 'duration'].includes(key)
+    );
+
     if (metadataEntries.length > 0) {
       const metadata = Object.fromEntries(metadataEntries);
       message += ` ${JSON.stringify(metadata)}`;
@@ -300,8 +307,9 @@ export class Logger {
   }
 
   private generateTraceId(): string {
-    return Math.random().toString(36).substring(2, 15) + 
-           Math.random().toString(36).substring(2, 15);
+    return (
+      Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+    );
   }
 
   private generateSpanId(): string {
@@ -352,7 +360,7 @@ export class LoggerFactory {
    */
   static updateGlobalConfig(config: Partial<LoggerConfig>): void {
     Object.assign(this.globalConfig, config);
-    
+
     // Update existing loggers
     for (const logger of this.loggers.values()) {
       logger.updateConfig(config);

@@ -56,13 +56,13 @@ export class ModuleLoader {
   private readonly options: Required<ModuleLoadOptions>;
   private externalSpecifiers: Set<string> = new Set();
   private currentMemoryUsage: number = 0;
-  
+
   // Production systems
   private readonly metrics: ModuleSystemMetrics;
   private readonly circuitBreakers: CircuitBreakerManager;
 
   constructor(
-    resolver: ModuleResolver, 
+    resolver: ModuleResolver,
     options: ModuleLoadOptions = {},
     metrics?: ModuleSystemMetrics,
     circuitBreakers?: CircuitBreakerManager
@@ -76,11 +76,11 @@ export class ModuleLoader {
       maxCacheSize: options.maxCacheSize ?? 1000, // Default 1000 modules
       maxCacheMemory: options.maxCacheMemory ?? 100 * 1024 * 1024, // Default 100MB
     };
-    
+
     // Initialize production systems
     this.metrics = metrics || new ModuleSystemMetrics();
     this.circuitBreakers = circuitBreakers || new CircuitBreakerManager();
-    
+
     this.setExternals(options.externals);
   }
 
@@ -90,7 +90,7 @@ export class ModuleLoader {
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
     return this.metrics.recordAsync(this.metrics.loadLatency, async () => {
       this.metrics.requestCount.increment();
-      
+
       logger.debug('Loading module', { specifier, fromFile });
 
       const externalMatch = this.matchExternal(specifier);
@@ -121,10 +121,10 @@ export class ModuleLoader {
 
       try {
         const result = await this.loadModule(resolved, moduleId);
-        logger.info('Module loaded successfully', { 
-          moduleId, 
+        logger.info('Module loaded successfully', {
+          moduleId,
           dependencies: result.dependencies.length,
-          sourceSize: result.source.length 
+          sourceSize: result.source.length,
         });
         return result;
       } catch (error) {
@@ -165,7 +165,10 @@ export class ModuleLoader {
     return this.loadModuleSync(resolved, moduleId);
   }
 
-  private async loadExternalModuleWithCircuitBreaker(specifier: string, externalMatch: string): Promise<LoadedModule> {
+  private async loadExternalModuleWithCircuitBreaker(
+    specifier: string,
+    externalMatch: string
+  ): Promise<LoadedModule> {
     return this.circuitBreakers.executeWithRetry(
       `external:${externalMatch}`,
       async () => {
@@ -182,7 +185,7 @@ export class ModuleLoader {
 
   private createStubExternalModule(specifier: string, canonical: string): LoadedModule {
     const moduleId = this.getExternalModuleId(canonical);
-    
+
     return {
       id: moduleId,
       resolvedPath: canonical,
@@ -198,30 +201,30 @@ export class ModuleLoader {
   }
 
   private async loadModule(resolved: ResolvedModule, moduleId: string): Promise<LoadedModule> {
-    const isExternal = resolved.resolvedPath.startsWith('http') || 
-                      resolved.resolvedPath.includes('node_modules');
-    
+    const isExternal =
+      resolved.resolvedPath.startsWith('http') || resolved.resolvedPath.includes('node_modules');
+
     if (isExternal && this.circuitBreakers) {
       return this.loadExternalModuleWithCircuitBreaker(moduleId, resolved.resolvedPath);
     }
-    
+
     const startTime = process.hrtime.bigint();
-    
+
     try {
       const result = this.loadModuleSync(resolved, moduleId);
-      
+
       if (this.metrics) {
         const endTime = process.hrtime.bigint();
         const duration = Number(endTime - startTime) / 1000000; // Convert to milliseconds
         this.metrics.loadLatency.record(duration);
       }
-      
+
       return result;
     } catch (error) {
       if (this.metrics) {
         this.metrics.loadErrors.increment();
       }
-      
+
       // Ensure we're throwing an Error object for Promise rejection
       if (error instanceof Error) {
         throw error;
@@ -249,7 +252,7 @@ export class ModuleLoader {
       isLoading: true,
       lastAccessed: Date.now(),
     };
-    
+
     // Add to loading stack first to detect circular dependencies early
     this.loadingStack.add(moduleId);
     let moduleAddedToCache = false;
@@ -297,7 +300,7 @@ export class ModuleLoader {
         this.currentMemoryUsage += this.estimateModuleSize(module);
         this.enforceCacheLimits();
       }
-      
+
       return module;
     } catch (error) {
       // Handle loading/parsing errors with proper cleanup

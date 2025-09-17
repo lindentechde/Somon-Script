@@ -13,17 +13,17 @@ export interface RuntimeConfig {
   maxCacheSize: number;
   maxCacheMemory: number;
   circularDependencyStrategy: 'error' | 'warn' | 'ignore';
-  
+
   // Performance tuning
   enableTracing: boolean;
   logLevel: LogLevel;
   enableMetrics: boolean;
-  
+
   // Circuit breaker configuration
   circuitBreakerEnabled: boolean;
   failureThreshold: number;
   recoveryTimeout: number;
-  
+
   // Health check configuration
   healthCheckInterval: number;
   enableHealthEndpoint: boolean;
@@ -43,7 +43,7 @@ export interface HealthEndpointResponse {
     duration: number;
   }[];
   details?: {
-    circuitBreakers?: Record<string, any>;
+    circuitBreakers?: Record<string, unknown>;
     cache?: {
       size: number;
       memoryUsage: number;
@@ -57,7 +57,10 @@ export interface HealthEndpointResponse {
  */
 export class RuntimeConfigManager {
   private config: RuntimeConfig;
-  private readonly configChangeCallbacks = new Map<string, (newValue: any, oldValue: any) => void>();
+  private readonly configChangeCallbacks = new Map<
+    string,
+    (_newValue: unknown, _oldValue: unknown) => void
+  >();
 
   constructor(initialConfig: Partial<RuntimeConfig> = {}) {
     this.config = {
@@ -120,9 +123,12 @@ export class RuntimeConfigManager {
    */
   onConfigChange<K extends keyof RuntimeConfig>(
     key: K,
-    callback: (newValue: RuntimeConfig[K], oldValue: RuntimeConfig[K]) => void
+    callback: (_newValue: RuntimeConfig[K], _oldValue: RuntimeConfig[K]) => void
   ): void {
-    this.configChangeCallbacks.set(key, callback);
+    this.configChangeCallbacks.set(
+      key,
+      callback as (_newValue: unknown, _oldValue: unknown) => void
+    );
   }
 
   /**
@@ -194,8 +200,8 @@ export class ManagementServer {
   start(port: number): Promise<number> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer(this.handleRequest.bind(this));
-      
-      this.server.on('error', (error) => {
+
+      this.server.on('error', error => {
         this.logger.error('Management server error', error);
         reject(error);
       });
@@ -203,7 +209,7 @@ export class ManagementServer {
       this.server.listen(port, () => {
         const address = this.server!.address();
         const actualPort = typeof address === 'object' && address ? address.port : port;
-        
+
         this.logger.info('Management server started', { port: actualPort });
         resolve(actualPort);
       });
@@ -214,7 +220,7 @@ export class ManagementServer {
    * Stop the management server
    */
   stop(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (this.server) {
         this.server.close(() => {
           this.logger.info('Management server stopped');
@@ -273,10 +279,13 @@ export class ManagementServer {
     }
   }
 
-  private async handleHealthCheck(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  private async handleHealthCheck(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
     const config = this.configManager.getConfig();
     const health = await this.metrics.performHealthChecks(0, config.maxCacheMemory);
-    
+
     const response: HealthEndpointResponse = {
       status: health.status,
       timestamp: new Date().toISOString(),
@@ -299,11 +308,14 @@ export class ManagementServer {
     } else {
       statusCode = 503;
     }
-    
+
     this.sendJsonResponse(res, statusCode, response);
   }
 
-  private async handleReadinessCheck(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  private async handleReadinessCheck(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
     // Readiness check - simplified version of health check
     const overallHealth = this.circuitBreakers.getOverallHealth();
     const ready = overallHealth.healthy;
@@ -324,23 +336,23 @@ export class ManagementServer {
   private async handleMetrics(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const config = this.configManager.getConfig();
     const stats = this.metrics.getStats(0, 0, config.maxCacheMemory);
-    
+
     this.sendJsonResponse(res, 200, stats);
   }
 
   private async handleConfig(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const method = req.method || 'GET';
-    
+
     if (method === 'GET') {
       const config = this.configManager.getConfig();
       this.sendJsonResponse(res, 200, config);
     } else if (method === 'PUT' || method === 'POST') {
       const body = await this.readRequestBody(req);
-      
+
       try {
         const updates = JSON.parse(body);
         this.configManager.updateMultiple(updates);
-        
+
         const validation = this.configManager.validateConfig();
         if (!validation.valid) {
           this.sendJsonResponse(res, 400, {
@@ -349,7 +361,7 @@ export class ManagementServer {
           });
           return;
         }
-        
+
         this.sendJsonResponse(res, 200, {
           message: 'Configuration updated',
           config: this.configManager.getConfig(),
@@ -365,23 +377,26 @@ export class ManagementServer {
     }
   }
 
-  private async handleCircuitBreakers(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  private async handleCircuitBreakers(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
     const method = req.method || 'GET';
-    
+
     if (method === 'GET') {
       const status = this.circuitBreakers.getAllStatus();
       const overall = this.circuitBreakers.getOverallHealth();
-      
+
       this.sendJsonResponse(res, 200, {
         overall,
         breakers: status,
       });
     } else if (method === 'POST') {
       const body = await this.readRequestBody(req);
-      
+
       try {
         const action = JSON.parse(body);
-        
+
         if (action.type === 'reset') {
           if (action.moduleId) {
             const breaker = this.circuitBreakers.getBreaker(action.moduleId);
@@ -389,7 +404,7 @@ export class ManagementServer {
           } else {
             this.circuitBreakers.resetAll();
           }
-          
+
           this.sendJsonResponse(res, 200, { message: 'Circuit breakers reset' });
         } else {
           this.sendJsonResponse(res, 400, { error: 'Unknown action type' });
@@ -414,7 +429,7 @@ export class ManagementServer {
     // Reset all systems
     this.metrics.reset();
     this.circuitBreakers.resetAll();
-    
+
     this.sendJsonResponse(res, 200, {
       message: 'All systems reset',
       timestamp: new Date().toISOString(),
@@ -425,7 +440,7 @@ export class ManagementServer {
     this.sendErrorResponse(res, 404, 'Not Found');
   }
 
-  private sendJsonResponse(res: http.ServerResponse, statusCode: number, data: any): void {
+  private sendJsonResponse(res: http.ServerResponse, statusCode: number, data: unknown): void {
     res.writeHead(statusCode, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(data, null, 2));
   }
