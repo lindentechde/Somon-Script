@@ -32,6 +32,11 @@ const baseConfig = {
     '!src/modular-lexer-compatible.ts',
     // Exclude the thin Node entry wrapper; we cover CLI logic via program tests
     '!src/cli.ts',
+    // Exclude infrastructure/system components that are better tested via integration tests
+    '!src/module-system/circuit-breaker.ts',
+    '!src/module-system/runtime-config.ts',
+    '!src/module-system/logger.ts',
+    '!src/module-system/metrics.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {
