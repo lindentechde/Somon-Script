@@ -120,12 +120,21 @@ Or via GitHub Actions workflow dispatch with dry-run option.
 
 ## Release Process Flow
 
-1. **Validation Phase**
-   - Run full test suite
+1. **Pull Request Validation** (New!)
+   - Comprehensive quality checks on every PR
+   - Multi-Node.js version testing (18.x-24.x)
+   - Smart change detection (only runs relevant checks)
+   - Automatic merge blocking if validation fails
+   - Success/failure status posted to PR
+
+2. **Validation Phase**
+   - Run full test suite across all Node.js versions
    - Validate architecture quality (no 'as any', union types working)
    - Check modular structure
+   - Security audit and dependency scanning
+   - Performance benchmark validation
 
-2. **Semantic Release Phase**
+3. **Semantic Release Phase**
    - Analyze commits since last release
    - Determine next version number
    - Generate changelog and release notes
@@ -134,12 +143,12 @@ Or via GitHub Actions workflow dispatch with dry-run option.
    - Publish to NPM
    - Create GitHub release
 
-3. **Multi-Registry Publishing**
+4. **Multi-Registry Publishing**
    - Publish to JSR with updated version
    - Publish to GitHub Packages
    - Update documentation
 
-4. **Post-Release**
+5. **Post-Release**
    - Update README with installation instructions
    - Generate API documentation
    - Commit documentation changes

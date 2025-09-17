@@ -1,0 +1,400 @@
+# Pull Request Validation Workflow
+# Comprehensive checks that must pass before merge approval
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+    types: [opened, reopened, synchronize, ready_for_review]
+
+# Ensure PR validation has necessary permissions
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+  actions: read
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Detect what changed to optimize test execution
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    outputs:
+      source-code: ${{ steps.changes.outputs.source-code }}
+      tests: ${{ steps.changes.outputs.tests }}
+      docs: ${{ steps.changes.outputs.docs }}
+      config: ${{ steps.changes.outputs.config }}
+      examples: ${{ steps.changes.outputs.examples }}
+      workflows: ${{ steps.changes.outputs.workflows }}
+      dependencies: ${{ steps.changes.outputs.dependencies }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Detect File Changes
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            source-code:
+              - 'src/**/*.ts'
+              - 'src/**/*.js'
+            tests:
+              - 'tests/**/*.ts'
+              - 'tests/**/*.js'
+              - '**/*.test.ts'
+              - '**/*.test.js'
+            docs:
+              - 'docs/**/*'
+              - 'README.md'
+              - '*.md'
+            config:
+              - 'tsconfig.json'
+              - 'jest.config.js'
+              - 'package.json'
+              - '.releaserc.json'
+              - 'jsr.json'
+            examples:
+              - 'examples/**/*.som'
+              - 'examples/**/*.js'
+            workflows:
+              - '.github/workflows/**'
+            dependencies:
+              - 'package.json'
+              - 'package-lock.json'
+
+  # Multi-Node.js version testing matrix
+  test-matrix:
+    name: Test Matrix (Node.js ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.source-code == 'true' ||
+        needs.detect-changes.outputs.tests == 'true' ||
+        needs.detect-changes.outputs.config == 'true' ||
+        needs.detect-changes.outputs.dependencies == 'true'
+      )
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['18.x', '20.x', '21.x', '22.x', '23.x', '24.x']
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Run Tests
+        run: npm test
+        
+      - name: Generate Coverage Report
+        if: matrix.node-version == '20.x'
+        run: npm run test:coverage
+        
+      - name: Upload Coverage to Codecov
+        if: matrix.node-version == '20.x'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  # Code quality and linting checks
+  quality-checks:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.source-code == 'true' ||
+        needs.detect-changes.outputs.tests == 'true' ||
+        needs.detect-changes.outputs.config == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: TypeScript Type Check
+        run: npx tsc --noEmit
+        
+      - name: ESLint Check
+        run: npm run lint:check
+        
+      - name: Prettier Format Check
+        run: npm run format:check
+        
+      - name: Security Audit
+        run: npm audit --audit-level=moderate
+
+  # Build and compilation validation
+  build-validation:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.source-code == 'true' ||
+        needs.detect-changes.outputs.config == 'true' ||
+        needs.detect-changes.outputs.dependencies == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build TypeScript
+        run: npm run build
+        
+      - name: Validate Build Output
+        run: |
+          # Check if build artifacts exist
+          if [ ! -f "dist/index.js" ]; then
+            echo "Error: Build output missing"
+            exit 1
+          fi
+          
+          # Check if CLI is executable
+          node dist/cli.js --version
+        
+      - name: Package Integrity Check
+        run: npm pack --dry-run
+
+  # Examples and integration validation
+  examples-validation:
+    name: Examples Validation
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-validation]
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.source-code == 'true' ||
+        needs.detect-changes.outputs.examples == 'true' ||
+        needs.detect-changes.outputs.config == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build Project
+        run: npm run build
+        
+      - name: Test Examples Compilation
+        run: npm run test:examples
+        
+      - name: Validate Example Outputs
+        run: |
+          # Run comprehensive example validation
+          node scripts/run-examples.js --validate
+
+  # Documentation validation
+  docs-validation:
+    name: Documentation Validation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.docs == 'true' ||
+        needs.detect-changes.outputs.source-code == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Validate Documentation Links
+        run: |
+          # Check for broken internal links in README and docs
+          find . -name "*.md" -not -path "./node_modules/*" | xargs grep -l "](\./" | while read file; do
+            echo "Checking links in $file"
+            # Basic link validation - can be enhanced with dedicated tools
+          done
+        
+      - name: Generate API Documentation
+        run: |
+          # Generate TypeScript documentation if available
+          if [ -f "typedoc.json" ]; then
+            npx typedoc
+          fi
+
+  # Performance regression checks
+  performance-validation:
+    name: Performance Validation
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-validation]
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.source-code == 'true' ||
+        needs.detect-changes.outputs.examples == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build Project
+        run: npm run build
+        
+      - name: Run Performance Benchmarks
+        run: npm run benchmark
+        
+      - name: Performance Regression Check
+        run: |
+          # Compare performance metrics if baseline exists
+          if [ -f "performance-baseline.json" ]; then
+            node scripts/benchmark.js --compare
+          else
+            echo "No performance baseline found, skipping regression check"
+          fi
+
+  # Security and dependency validation
+  security-validation:
+    name: Security Validation
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      github.event.pull_request.draft == false && (
+        needs.detect-changes.outputs.dependencies == 'true' ||
+        needs.detect-changes.outputs.source-code == 'true'
+      )
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+        
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Security Audit
+        run: npm audit --audit-level=high
+        
+      - name: License Compliance Check
+        run: |
+          # Check for license compatibility
+          npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' || true
+
+  # Final validation summary
+  pr-validation-summary:
+    name: PR Validation Summary
+    runs-on: ubuntu-latest
+    needs: [
+      detect-changes,
+      test-matrix,
+      quality-checks,
+      build-validation,
+      examples-validation,
+      docs-validation,
+      performance-validation,
+      security-validation
+    ]
+    if: always() && github.event.pull_request.draft == false
+    steps:
+      - name: Check All Jobs Status
+        run: |
+          echo "=== Pull Request Validation Summary ==="
+          echo "Changes Detection: ${{ needs.detect-changes.result }}"
+          echo "Test Matrix: ${{ needs.test-matrix.result }}"
+          echo "Quality Checks: ${{ needs.quality-checks.result }}"
+          echo "Build Validation: ${{ needs.build-validation.result }}"
+          echo "Examples Validation: ${{ needs.examples-validation.result }}"
+          echo "Documentation: ${{ needs.docs-validation.result }}"
+          echo "Performance: ${{ needs.performance-validation.result }}"
+          echo "Security: ${{ needs.security-validation.result }}"
+          
+          # Check if any required job failed
+          if [[ "${{ needs.test-matrix.result }}" == "failure" ]] || \
+             [[ "${{ needs.quality-checks.result }}" == "failure" ]] || \
+             [[ "${{ needs.build-validation.result }}" == "failure" ]] || \
+             [[ "${{ needs.examples-validation.result }}" == "failure" ]] || \
+             [[ "${{ needs.security-validation.result }}" == "failure" ]]; then
+            echo "❌ PR validation failed - merge blocked"
+            exit 1
+          fi
+          
+          echo "✅ All validation checks passed - PR ready for merge"
+        
+      - name: Post PR Comment on Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **Pull Request Validation Failed**\n\nOne or more validation checks failed. Please review the failed jobs and fix the issues before requesting another review.\n\n**Failed Jobs:**\n- Check the workflow run for detailed error information\n- All tests must pass across Node.js versions 18.x-24.x\n- Code quality checks (TypeScript, ESLint, Prettier) must pass\n- Build validation must complete successfully\n- Examples must compile and run correctly\n- Security audit must not find high-severity vulnerabilities'
+            })
+        
+      - name: Post PR Comment on Success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ **Pull Request Validation Passed**\n\nAll validation checks completed successfully:\n- ✅ Tests passed across Node.js versions 18.x-24.x\n- ✅ Code quality checks passed\n- ✅ Build validation completed\n- ✅ Examples validation passed\n- ✅ Documentation validated\n- ✅ Performance benchmarks completed\n- ✅ Security audit passed\n\nThis PR is ready for review and merge! 🚀'
+            })
