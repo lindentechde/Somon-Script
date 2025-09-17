@@ -13,7 +13,7 @@ on:
 # Ensure PR validation has necessary permissions
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write    # Required for posting comments on PRs
   checks: write
   actions: read
 
