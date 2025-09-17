@@ -4,6 +4,9 @@ import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import { Program, ImportDeclaration } from '../types';
+import { ModuleSystemMetrics } from './metrics';
+import { CircuitBreakerManager } from './circuit-breaker';
+import { moduleLoaderLogger as logger } from './logger';
 
 type BufferEncoding =
   | 'ascii'
@@ -53,8 +56,17 @@ export class ModuleLoader {
   private readonly options: Required<ModuleLoadOptions>;
   private externalSpecifiers: Set<string> = new Set();
   private currentMemoryUsage: number = 0;
+  
+  // Production systems
+  private readonly metrics: ModuleSystemMetrics;
+  private readonly circuitBreakers: CircuitBreakerManager;
 
-  constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
+  constructor(
+    resolver: ModuleResolver, 
+    options: ModuleLoadOptions = {},
+    metrics?: ModuleSystemMetrics,
+    circuitBreakers?: CircuitBreakerManager
+  ) {
     this.resolver = resolver;
     this.options = {
       encoding: options.encoding || ('utf-8' as BufferEncoding),
@@ -64,6 +76,11 @@ export class ModuleLoader {
       maxCacheSize: options.maxCacheSize ?? 1000, // Default 1000 modules
       maxCacheMemory: options.maxCacheMemory ?? 100 * 1024 * 1024, // Default 100MB
     };
+    
+    // Initialize production systems
+    this.metrics = metrics || new ModuleSystemMetrics();
+    this.circuitBreakers = circuitBreakers || new CircuitBreakerManager();
+    
     this.setExternals(options.externals);
   }
 
@@ -71,30 +88,51 @@ export class ModuleLoader {
    * Load a module and all its dependencies
    */
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
-    const externalMatch = this.matchExternal(specifier);
-    if (externalMatch) {
-      return this.getOrCreateExternalModule(specifier, externalMatch);
-    }
+    return this.metrics.recordAsync(this.metrics.loadLatency, async () => {
+      this.metrics.requestCount.increment();
+      
+      logger.debug('Loading module', { specifier, fromFile });
 
-    const resolved = this.resolver.resolve(specifier, fromFile);
-    const moduleId = this.getModuleId(resolved.resolvedPath);
+      const externalMatch = this.matchExternal(specifier);
+      if (externalMatch) {
+        return this.loadExternalModuleWithCircuitBreaker(specifier, externalMatch);
+      }
 
-    // Atomic cache check - single operation to avoid race conditions
-    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
-    if (cached?.isLoaded) {
-      cached.lastAccessed = Date.now();
-      return cached;
-    }
-    if (cached?.isLoading) {
-      return this.handleCircularDependency(moduleId, cached);
-    }
+      const resolved = this.resolver.resolve(specifier, fromFile);
+      const moduleId = this.getModuleId(resolved.resolvedPath);
 
-    // Check for circular dependency in loading stack
-    if (this.loadingStack.has(moduleId)) {
-      return this.handleCircularDependency(moduleId);
-    }
+      // Atomic cache check - single operation to avoid race conditions
+      const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
+      if (cached?.isLoaded) {
+        cached.lastAccessed = Date.now();
+        logger.debug('Module loaded from cache', { moduleId });
+        return cached;
+      }
+      if (cached?.isLoading) {
+        logger.warn('Circular dependency detected during load', { moduleId });
+        return this.handleCircularDependency(moduleId, cached);
+      }
 
-    return this.loadModule(resolved, moduleId);
+      // Check for circular dependency in loading stack
+      if (this.loadingStack.has(moduleId)) {
+        logger.warn('Circular dependency in loading stack', { moduleId });
+        return this.handleCircularDependency(moduleId);
+      }
+
+      try {
+        const result = await this.loadModule(resolved, moduleId);
+        logger.info('Module loaded successfully', { 
+          moduleId, 
+          dependencies: result.dependencies.length,
+          sourceSize: result.source.length 
+        });
+        return result;
+      } catch (error) {
+        this.metrics.loadErrors.increment();
+        logger.error('Module load failed', error as Error, { moduleId, specifier });
+        throw error;
+      }
+    });
   }
 
   /**
@@ -127,8 +165,74 @@ export class ModuleLoader {
     return this.loadModuleSync(resolved, moduleId);
   }
 
-  private loadModule(resolved: ResolvedModule, moduleId: string): LoadedModule {
-    // Create module entry
+  private async loadExternalModuleWithCircuitBreaker(specifier: string, externalMatch: string): Promise<LoadedModule> {
+    return this.circuitBreakers.executeWithRetry(
+      `external:${externalMatch}`,
+      async () => {
+        return this.getOrCreateExternalModule(specifier, externalMatch);
+      },
+      { maxRetries: 3, initialDelay: 1000 },
+      async () => {
+        // Fallback: create a stub external module
+        logger.warn('Using fallback for external module', { specifier, externalMatch });
+        return this.createStubExternalModule(specifier, externalMatch);
+      }
+    );
+  }
+
+  private createStubExternalModule(specifier: string, canonical: string): LoadedModule {
+    const moduleId = this.getExternalModuleId(canonical);
+    
+    return {
+      id: moduleId,
+      resolvedPath: canonical,
+      source: '// External module stub',
+      ast: { type: 'Program', body: [], line: 1, column: 1 },
+      dependencies: [],
+      exports: { named: {} },
+      isLoaded: true,
+      isLoading: false,
+      lastAccessed: Date.now(),
+      error: new Error(`External module ${specifier} failed to load - using stub`),
+    };
+  }
+
+  private async loadModule(resolved: ResolvedModule, moduleId: string): Promise<LoadedModule> {
+    const isExternal = resolved.resolvedPath.startsWith('http') || 
+                      resolved.resolvedPath.includes('node_modules');
+    
+    if (isExternal && this.circuitBreakers) {
+      return this.loadExternalModuleWithCircuitBreaker(moduleId, resolved.resolvedPath);
+    }
+    
+    const startTime = process.hrtime.bigint();
+    
+    try {
+      const result = this.loadModuleSync(resolved, moduleId);
+      
+      if (this.metrics) {
+        const endTime = process.hrtime.bigint();
+        const duration = Number(endTime - startTime) / 1000000; // Convert to milliseconds
+        this.metrics.loadLatency.record(duration);
+      }
+      
+      return result;
+    } catch (error) {
+      if (this.metrics) {
+        this.metrics.loadErrors.increment();
+      }
+      
+      // Ensure we're throwing an Error object for Promise rejection
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(String(error));
+      }
+    }
+  }
+
+  private loadModuleSync(resolved: ResolvedModule, moduleId: string): LoadedModule {
+    // Synchronous version of loadModule for backward compatibility
     const module: LoadedModule = {
       id: moduleId,
       resolvedPath: resolved.resolvedPath,
@@ -144,7 +248,9 @@ export class ModuleLoader {
       isLoaded: false,
       isLoading: true,
       lastAccessed: Date.now(),
-    }; // Add to loading stack first to detect circular dependencies early
+    };
+    
+    // Add to loading stack first to detect circular dependencies early
     this.loadingStack.add(moduleId);
     let moduleAddedToCache = false;
 
@@ -191,6 +297,8 @@ export class ModuleLoader {
         this.currentMemoryUsage += this.estimateModuleSize(module);
         this.enforceCacheLimits();
       }
+      
+      return module;
     } catch (error) {
       // Handle loading/parsing errors with proper cleanup
       module.error = error as Error;
@@ -204,12 +312,6 @@ export class ModuleLoader {
       // Always clean up loading stack
       this.loadingStack.delete(moduleId);
     }
-
-    return module;
-  }
-
-  private loadModuleSync(resolved: ResolvedModule, moduleId: string): LoadedModule {
-    return this.loadModule(resolved, moduleId);
   }
 
   private handleCircularDependency(moduleId: string, module?: LoadedModule): LoadedModule {

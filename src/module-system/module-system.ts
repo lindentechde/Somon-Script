@@ -5,11 +5,21 @@ import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { CodeGenerator } from '../codegen';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
+import { ModuleSystemMetrics } from './metrics';
+import { CircuitBreakerManager } from './circuit-breaker';
+import { Logger } from './logger';
+import { RuntimeConfigManager, ManagementServer } from './runtime-config';
 
 export interface ModuleSystemOptions {
   resolution?: ModuleResolutionOptions;
   loading?: ModuleLoadOptions;
   compilation?: CompilerOptions;
+  // Production systems
+  metrics?: boolean;
+  circuitBreakers?: boolean;
+  logger?: boolean;
+  managementServer?: boolean;
+  managementPort?: number;
 }
 
 export interface CompilationResult {
@@ -36,12 +46,58 @@ export class ModuleSystem {
   private readonly loader: ModuleLoader;
   private readonly registry: ModuleRegistry;
   private readonly codeGenerator: CodeGenerator;
+  
+  // Production systems
+  private readonly metrics?: ModuleSystemMetrics;
+  private readonly circuitBreakers?: CircuitBreakerManager;
+  private readonly logger?: Logger;
+  private readonly configManager?: RuntimeConfigManager;
+  private readonly managementServer?: ManagementServer;
 
   constructor(options: ModuleSystemOptions = {}) {
     this.resolver = new ModuleResolver(options.resolution);
-    this.loader = new ModuleLoader(this.resolver, options.loading);
+    
+    // Initialize production systems if requested
+    if (options.metrics) {
+      this.metrics = new ModuleSystemMetrics();
+    }
+    
+    if (options.circuitBreakers) {
+      this.circuitBreakers = new CircuitBreakerManager();
+    }
+    
+    if (options.logger) {
+      this.logger = new Logger('ModuleSystem');
+    }
+    
+    if (options.managementServer && this.metrics && this.circuitBreakers) {
+      this.configManager = new RuntimeConfigManager();
+      this.managementServer = new ManagementServer(
+        this.metrics,
+        this.circuitBreakers,
+        this.configManager
+      );
+      // Async start will be called separately
+    }
+    
+    // Initialize loader with production systems
+    this.loader = new ModuleLoader(
+      this.resolver, 
+      options.loading || {},
+      this.metrics,
+      this.circuitBreakers
+    );
+    
     this.registry = new ModuleRegistry();
     this.codeGenerator = new CodeGenerator();
+    
+    if (this.logger) {
+      this.logger.info('ModuleSystem initialized with production features', {
+        metrics: !!this.metrics,
+        circuitBreakers: !!this.circuitBreakers,
+        managementServer: !!this.managementServer
+      });
+    }
   }
 
   /**
@@ -239,6 +295,25 @@ export class ModuleSystem {
       this.resolver.updateOptions(options.resolution);
     }
     // Note: Loader and registry options would need to be updated if they supported it
+  }
+
+  /**
+   * Gracefully shutdown the module system
+   */
+  async shutdown(): Promise<void> {
+    if (this.logger) {
+      this.logger.info('Shutting down ModuleSystem');
+    }
+    
+    // Stop management server
+    await this.stopManagementServer();
+    
+    // Clear caches
+    this.clearCache();
+    
+    if (this.logger) {
+      this.logger.info('ModuleSystem shutdown complete');
+    }
   }
 
   private registerAllLoadedModules(): void {
@@ -508,6 +583,52 @@ ${commonjsBundle}
       compact: true,
     });
     return out?.code && out.code.length > 0 ? out.code : code;
+  }
+
+  /**
+   * Start management server for production monitoring
+   */
+  async startManagementServer(port?: number): Promise<number | null> {
+    if (!this.managementServer) {
+      return null;
+    }
+    return await this.managementServer.start(port || 8080);
+  }
+
+  /**
+   * Stop management server
+   */
+  async stopManagementServer(): Promise<void> {
+    if (this.managementServer) {
+      await this.managementServer.stop();
+    }
+  }
+
+  /**
+   * Get production metrics
+   */
+  getMetrics(): any {
+    if (!this.metrics) return null;
+    
+    const stats = this.registry.getStatistics();
+    return this.metrics.getStats(
+      stats.totalModules,
+      0, // Current memory usage - would need to be implemented in ModuleLoader
+      100 * 1024 * 1024 // Default 100MB limit
+    );
+  }
+
+  /**
+   * Get system health status
+   */
+  async getHealth(): Promise<any> {
+    if (!this.metrics) return { status: 'unavailable' };
+    
+    const stats = this.registry.getStatistics();
+    return await this.metrics.performHealthChecks(
+      stats.totalModules,
+      100 * 1024 * 1024 // Default 100MB limit
+    );
   }
 
   /**

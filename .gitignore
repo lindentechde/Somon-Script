@@ -72,6 +72,7 @@ examples/*.js
 # Temporary compilation artifacts
 *.temp.js
 *.temp.som
+temp/
 
 # Ona configuration (contains API keys)
 .ona/
