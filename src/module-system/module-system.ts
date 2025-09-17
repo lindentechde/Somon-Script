@@ -256,8 +256,12 @@ export class ModuleSystem {
     );
     const externalModuleIds = new Set<string>();
 
-    // Create module ID mapping: use a stable key relative to cwd
+    // Create module ID mapping: convert absolute module IDs to relative keys for bundle
+    // Note: moduleId should always be absolute path (standardized by ModuleLoader.getModuleId)
     for (const [moduleId] of result.modules) {
+      if (!path.isAbsolute(moduleId)) {
+        throw new Error(`Module ID should be absolute path, got: ${moduleId}`);
+      }
       const key = path.relative(process.cwd(), moduleId);
       moduleIdMapping.set(moduleId, key);
     }
@@ -304,13 +308,35 @@ export class ModuleSystem {
       }
     };
 
-    // Helper to rewrite require calls to mapped IDs
-    const rewriteRequires = (ownerModuleId: string, code: string) => {
-      const pattern = /require\((['"])([^'"\)]+)\1\)/g; // eslint-disable-line no-useless-escape
-      return code.replace(pattern, (_m, _q, spec: string) => {
+    // Helper to rewrite require calls to mapped IDs - using safer pattern matching
+    const rewriteRequires = (ownerModuleId: string, code: string): string => {
+      // Validate input to prevent ReDoS attacks
+      if (typeof code !== 'string') {
+        throw new Error('Code input must be a string');
+      }
+      if (code.length > 10 * 1024 * 1024) {
+        // 10MB limit
+        throw new Error('Code input too large for require rewriting');
+      }
+
+      // More restrictive regex patterns to prevent ReDoS
+      const singleQuotePattern = /require\('([^'\n\r]{1,500})'\)/g;
+      const doubleQuotePattern = /require\("([^"\n\r]{1,500})"\)/g;
+
+      const processMatch = (match: string, spec: string): string => {
+        // Validate specifier format
+        if (!spec || spec.length === 0 || spec.length > 500) {
+          return match; // Keep original if invalid
+        }
+
+        // Check for potential injection attempts
+        if (spec.includes('..') && spec.split('..').length > 3) {
+          return match; // Suspicious path traversal
+        }
+
         if (matchesExternal(spec)) {
           markExternalModule(ownerModuleId, spec);
-          return _m;
+          return match;
         }
 
         const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
@@ -336,15 +362,24 @@ export class ModuleSystem {
           const fallbackSpec = spec.replace(/\.js$/i, '.som');
           if (matchesExternal(fallbackSpec)) {
             markExternalModule(ownerModuleId, fallbackSpec);
-            return _m;
+            return match;
           }
           resolved = tryResolveToKey(fallbackSpec);
         }
         if (!resolved) {
-          return _m;
+          return match;
         }
-        return `require("${resolved.key}")`;
-      });
+
+        // Sanitize the key to prevent injection
+        const sanitizedKey = resolved.key.replace(/['"\\]/g, '');
+        return match.includes("'") ? `require('${sanitizedKey}')` : `require("${sanitizedKey}")`;
+      };
+
+      // Process single quotes first, then double quotes
+      let result = code.replace(singleQuotePattern, (match, spec) => processMatch(match, spec));
+      result = result.replace(doubleQuotePattern, (match, spec) => processMatch(match, spec));
+
+      return result;
     };
 
     // Pre-mark explicitly configured externals relative to the entry point

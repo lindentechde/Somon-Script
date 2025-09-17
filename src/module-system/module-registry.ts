@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { LoadedModule, ModuleExports } from './module-loader';
 import { Program, ImportDeclaration } from '../types';
 import { ModuleResolver } from './module-resolver';
@@ -42,6 +43,11 @@ export class ModuleRegistry {
    * Register a loaded module
    */
   register(module: LoadedModule): void {
+    // Validate module ID is absolute path or external module
+    if (!path.isAbsolute(module.id) && !module.id.startsWith('external:')) {
+      throw new Error(`Module ID must be absolute path or external module, got: ${module.id}`);
+    }
+
     const metadata: ModuleMetadata = {
       id: module.id,
       resolvedPath: module.resolvedPath,
@@ -362,19 +368,13 @@ export class ModuleRegistry {
     for (const specifier of specifiers) {
       if (specifier.type === 'ImportDefaultSpecifier') {
         // Initialize default import list lazily
-        if (imports.default == null) {
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-          imports.default = [];
-        }
+        imports.default ??= [];
         imports.default.push(source);
       } else if (specifier.type === 'ImportSpecifier') {
         if (!imports.named[source]) imports.named[source] = [];
         imports.named[source].push(specifier.imported?.name || '');
       } else if (specifier.type === 'ImportNamespaceSpecifier') {
-        if (imports.namespace == null) {
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-          imports.namespace = [];
-        }
+        imports.namespace ??= [];
         imports.namespace.push(source);
       }
     }

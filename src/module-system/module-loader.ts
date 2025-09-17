@@ -27,6 +27,7 @@ export interface LoadedModule {
   exports: ModuleExports;
   isLoaded: boolean;
   isLoading: boolean;
+  lastAccessed: number; // Timestamp for LRU eviction
   error?: Error;
 }
 
@@ -41,6 +42,8 @@ export interface ModuleLoadOptions {
   cache?: boolean;
   circularDependencyStrategy?: 'error' | 'warn' | 'ignore';
   externals?: string[];
+  maxCacheSize?: number; // Maximum number of cached modules
+  maxCacheMemory?: number; // Maximum memory usage in bytes
 }
 
 export class ModuleLoader {
@@ -49,6 +52,7 @@ export class ModuleLoader {
   private readonly loadingStack = new Set<string>();
   private readonly options: Required<ModuleLoadOptions>;
   private externalSpecifiers: Set<string> = new Set();
+  private currentMemoryUsage: number = 0;
 
   constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
     this.resolver = resolver;
@@ -57,6 +61,8 @@ export class ModuleLoader {
       cache: options.cache ?? true,
       circularDependencyStrategy: options.circularDependencyStrategy || 'warn',
       externals: options.externals ?? [],
+      maxCacheSize: options.maxCacheSize ?? 1000, // Default 1000 modules
+      maxCacheMemory: options.maxCacheMemory ?? 100 * 1024 * 1024, // Default 100MB
     };
     this.setExternals(options.externals);
   }
@@ -73,18 +79,17 @@ export class ModuleLoader {
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
 
-    // Check cache first
-    if (this.options.cache && this.moduleCache.has(moduleId)) {
-      const cached = this.moduleCache.get(moduleId)!;
-      if (cached.isLoaded) {
-        return cached;
-      }
-      if (cached.isLoading) {
-        return this.handleCircularDependency(moduleId, cached);
-      }
+    // Atomic cache check - single operation to avoid race conditions
+    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
+    if (cached?.isLoaded) {
+      cached.lastAccessed = Date.now();
+      return cached;
+    }
+    if (cached?.isLoading) {
+      return this.handleCircularDependency(moduleId, cached);
     }
 
-    // Check for circular dependency
+    // Check for circular dependency in loading stack
     if (this.loadingStack.has(moduleId)) {
       return this.handleCircularDependency(moduleId);
     }
@@ -104,18 +109,17 @@ export class ModuleLoader {
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
 
-    // Check cache first
-    if (this.options.cache && this.moduleCache.has(moduleId)) {
-      const cached = this.moduleCache.get(moduleId)!;
-      if (cached.isLoaded) {
-        return cached;
-      }
-      if (cached.isLoading) {
-        return this.handleCircularDependency(moduleId, cached);
-      }
+    // Atomic cache check - single operation to avoid race conditions
+    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
+    if (cached?.isLoaded) {
+      cached.lastAccessed = Date.now();
+      return cached;
+    }
+    if (cached?.isLoading) {
+      return this.handleCircularDependency(moduleId, cached);
     }
 
-    // Check for circular dependency
+    // Check for circular dependency in loading stack
     if (this.loadingStack.has(moduleId)) {
       return this.handleCircularDependency(moduleId);
     }
@@ -129,20 +133,28 @@ export class ModuleLoader {
       id: moduleId,
       resolvedPath: resolved.resolvedPath,
       source: '',
-      ast: { type: 'Program', body: [], line: 1, column: 1 },
+      ast: {
+        type: 'Program',
+        body: [],
+        line: 1,
+        column: 1,
+      } as Program,
       dependencies: [],
       exports: { named: {} },
       isLoaded: false,
       isLoading: true,
-    };
-
-    // Add to cache and loading stack
-    if (this.options.cache) {
-      this.moduleCache.set(moduleId, module);
-    }
+      lastAccessed: Date.now(),
+    }; // Add to loading stack first to detect circular dependencies early
     this.loadingStack.add(moduleId);
+    let moduleAddedToCache = false;
 
     try {
+      // Add to cache only after loading stack is set
+      if (this.options.cache) {
+        this.moduleCache.set(moduleId, module);
+        moduleAddedToCache = true;
+      }
+
       // Read source file
       module.source = fs.readFileSync(resolved.resolvedPath, {
         encoding: this.options.encoding,
@@ -170,14 +182,26 @@ export class ModuleLoader {
         }
       }
 
-      // Mark as loaded
+      // Mark as loaded successfully
       module.isLoaded = true;
       module.isLoading = false;
+
+      // Update memory usage tracking and enforce cache limits
+      if (this.options.cache && moduleAddedToCache) {
+        this.currentMemoryUsage += this.estimateModuleSize(module);
+        this.enforceCacheLimits();
+      }
     } catch (error) {
+      // Handle loading/parsing errors with proper cleanup
       module.error = error as Error;
       module.isLoading = false;
+
+      // Keep module in cache with error state for validation purposes
+      // Don't delete from cache - let the registry validate broken dependencies
+
       throw error;
     } finally {
+      // Always clean up loading stack
       this.loadingStack.delete(moduleId);
     }
 
@@ -212,6 +236,7 @@ export class ModuleLoader {
         exports: { named: {} },
         isLoaded: false,
         isLoading: true,
+        lastAccessed: Date.now(),
       }
     );
   }
@@ -223,12 +248,35 @@ export class ModuleLoader {
   private extractDependencies(ast: Program): string[] {
     const rawSpecifiers: string[] = [];
 
+    // Validate AST input
+    if (!ast?.body || !Array.isArray(ast.body)) {
+      return rawSpecifiers;
+    }
+
     for (const statement of ast.body) {
-      if (statement.type === 'ImportDeclaration') {
+      if (statement?.type === 'ImportDeclaration') {
         const importDecl = statement as ImportDeclaration;
-        if (importDecl.source?.value && typeof importDecl.source.value === 'string') {
-          rawSpecifiers.push(importDecl.source.value);
+
+        // Validate import declaration structure
+        if (!importDecl.source?.value) {
+          continue;
         }
+
+        const specifier = importDecl.source.value;
+
+        // Validate specifier is string and reasonable length
+        if (typeof specifier !== 'string' || specifier.length === 0 || specifier.length > 500) {
+          continue;
+        }
+
+        // Basic security validation - prevent obvious path traversal attacks
+        const normalizedSpec = specifier.trim();
+        if (normalizedSpec.includes('\\') || normalizedSpec.split('..').length > 5) {
+          console.warn(`Suspicious import specifier detected and skipped: ${specifier}`);
+          continue;
+        }
+
+        rawSpecifiers.push(normalizedSpec);
       }
     }
 
@@ -260,6 +308,74 @@ export class ModuleLoader {
   clearCache(): void {
     this.moduleCache.clear();
     this.loadingStack.clear();
+    this.currentMemoryUsage = 0;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; memoryUsage: number; maxSize: number; maxMemory: number } {
+    return {
+      size: this.moduleCache.size,
+      memoryUsage: this.currentMemoryUsage,
+      maxSize: this.options.maxCacheSize,
+      maxMemory: this.options.maxCacheMemory,
+    };
+  }
+
+  /**
+   * Enforce cache limits by evicting least recently used modules
+   */
+  private enforceCacheLimits(): void {
+    if (!this.options.cache) return;
+
+    // Check size limit
+    if (this.moduleCache.size > this.options.maxCacheSize) {
+      const excess = this.moduleCache.size - this.options.maxCacheSize;
+      const keysToEvict = Array.from(this.moduleCache.keys()).slice(0, excess);
+
+      for (const key of keysToEvict) {
+        this.evictModule(key);
+      }
+    }
+
+    // Check memory limit
+    if (this.currentMemoryUsage > this.options.maxCacheMemory) {
+      // Evict modules until under memory limit (simple LRU approximation)
+      const sortedEntries = Array.from(this.moduleCache.entries()).sort(
+        (a, b) => a[1].lastAccessed - b[1].lastAccessed
+      );
+
+      for (const [key] of sortedEntries) {
+        this.evictModule(key);
+        if (this.currentMemoryUsage <= this.options.maxCacheMemory * 0.8) {
+          break; // Leave some headroom
+        }
+      }
+    }
+  }
+
+  /**
+   * Evict a specific module from cache
+   */
+  private evictModule(moduleId: string): void {
+    const module = this.moduleCache.get(moduleId);
+    if (module) {
+      this.currentMemoryUsage -= this.estimateModuleSize(module);
+      this.moduleCache.delete(moduleId);
+    }
+  }
+
+  /**
+   * Estimate memory usage of a module
+   */
+  private estimateModuleSize(module: LoadedModule): number {
+    return (
+      module.source.length * 2 + // UTF-16 characters
+      JSON.stringify(module.ast).length * 2 +
+      module.dependencies.length * 50 + // Estimated string overhead
+      200 // Object overhead
+    );
   }
 
   /**
@@ -335,7 +451,9 @@ export class ModuleLoader {
   private getOrCreateExternalModule(specifier: string, canonical: string): LoadedModule {
     const moduleId = this.getExternalModuleId(canonical);
     if (this.options.cache && this.moduleCache.has(moduleId)) {
-      return this.moduleCache.get(moduleId)!;
+      const cached = this.moduleCache.get(moduleId)!;
+      cached.lastAccessed = Date.now();
+      return cached;
     }
 
     const module: LoadedModule = {
@@ -347,10 +465,13 @@ export class ModuleLoader {
       exports: { named: {} },
       isLoaded: true,
       isLoading: false,
+      lastAccessed: Date.now(),
     };
 
     if (this.options.cache) {
       this.moduleCache.set(moduleId, module);
+      this.currentMemoryUsage += this.estimateModuleSize(module);
+      this.enforceCacheLimits();
     }
 
     return module;
