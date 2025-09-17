@@ -1,66 +1,36 @@
-name: Release and Deploy (Legacy - Disabled)
+name: Manual Release and Deploy
 
-# MIGRATION NOTICE: This workflow has been disabled during migration to semantic-release
-# The new automated release system provides:
-# - Automatic version management based on conventional commits
-# - Multi-registry publishing (NPM, JSR, GitHub Packages)
-# - Automated changelog generation
-# - Better release coordination
-#
-# See docs/RELEASE-PROCESS.md for the new process
-# Use semantic-release.yml workflow instead
+# Emergency manual release workflow for critical situations
+# This workflow provides manual release capabilities when automated releases cannot be used
+# Normal releases should use the automated semantic-release.yml workflow
 
 on:
-  # Disabled: push events on tags no longer trigger releases
-  # push:
-  #   tags:
-  #     - 'v*'
-  workflow_dispatch:  # Keep manual dispatch for emergency fallback
+  workflow_dispatch:
     inputs:
       version:
-        description: 'LEGACY: Version to release (e.g., v1.0.0) - Consider using semantic-release instead'
+        description: 'Version to release (e.g., v1.0.0)'
         required: true
         type: string
-      force_legacy_release:
-        description: 'Confirm you want to use legacy release instead of semantic-release'
-        required: true
+      create_github_release:
+        description: 'Create GitHub release'
+        required: false
+        default: true
         type: boolean
-        default: false
+      publish_npm:
+        description: 'Publish to NPM'
+        required: false
+        default: true
+        type: boolean
+      publish_github_packages:
+        description: 'Publish to GitHub Packages'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
-  migration-warning:
-    name: Migration Warning
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-    - name: Show Migration Notice
-      run: |
-        echo "⚠️  LEGACY RELEASE WORKFLOW NOTICE"
-        echo "=================================="
-        echo "This workflow has been superseded by semantic-release automation."
-        echo ""
-        echo "🔄 New Process:"
-        echo "  • Push commits with conventional commit messages to 'main' branch"
-        echo "  • Releases are automatically triggered and published to all registries"
-        echo "  • No manual version management needed"
-        echo ""
-        echo "📖 Documentation: docs/RELEASE-PROCESS.md"
-        echo "🚀 New Workflow: .github/workflows/semantic-release.yml"
-        echo ""
-        if [ "${{ inputs.force_legacy_release }}" != "true" ]; then
-          echo "❌ Legacy release aborted - force_legacy_release not confirmed"
-          echo "   Set 'force_legacy_release' to true if you really need to use this workflow"
-          exit 1
-        else
-          echo "⚠️  Proceeding with legacy release as requested..."
-        fi
-
   validate-release:
-    name: Validate Release (Legacy)
+    name: Validate Release
     runs-on: ubuntu-latest
-    needs: migration-warning
-    if: inputs.force_legacy_release == true
     
     steps:
     - name: Checkout code
@@ -74,6 +44,22 @@ jobs:
         
     - name: Install dependencies
       run: npm ci
+      
+    - name: Update version in package.json
+      run: |
+        echo "Updating version to ${{ inputs.version }}"
+        npm version ${{ inputs.version }} --no-git-tag-version
+        
+    - name: Update JSR version if exists
+      run: |
+        if [ -f "jsr.json" ]; then
+          echo "Updating JSR version to ${{ inputs.version }}"
+          node -e "
+            const jsr = require('./jsr.json');
+            jsr.version = '${{ inputs.version }}';
+            require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
+          "
+        fi
       
     - name: Run full test suite
       run: npm run test:ci
@@ -113,10 +99,10 @@ jobs:
       run: npm run examples || echo "Examples test completed with warnings"
 
   create-release:
-    name: Create GitHub Release (Legacy)
+    name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: validate-release
-    if: inputs.force_legacy_release == true
+    if: inputs.create_github_release == true
     
     outputs:
       release-id: ${{ steps.create-release.outputs.id }}
@@ -198,10 +184,10 @@ jobs:
         generate_release_notes: true
 
   publish-npm:
-    name: Publish to NPM (Legacy)
+    name: Publish to NPM
     runs-on: ubuntu-latest
     needs: create-release
-    if: inputs.force_legacy_release == true && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha')
+    if: inputs.publish_npm == true
     
     steps:
     - name: Checkout code
@@ -231,10 +217,10 @@ jobs:
         echo "📦 Package: somon-script@$(node -p 'require("./package.json").version')"
 
   publish-github-packages:
-    name: Publish to GitHub Packages (Legacy)
+    name: Publish to GitHub Packages
     runs-on: ubuntu-latest
     needs: create-release
-    if: inputs.force_legacy_release == true
+    if: inputs.publish_github_packages == true
     
     steps:
     - name: Checkout code
@@ -269,10 +255,10 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-documentation:
-    name: Update Documentation (Legacy)
+    name: Update Documentation
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm]
-    if: inputs.force_legacy_release == true && always() && needs.create-release.result == 'success'
+    if: always() && needs.create-release.result == 'success'
     
     steps:
     - name: Checkout code
@@ -318,15 +304,15 @@ jobs:
         git push || true
 
   notify-completion:
-    name: Notify Release Completion (Legacy)
+    name: Notify Release Completion
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm, publish-github-packages, update-documentation]
-    if: inputs.force_legacy_release == true && always()
+    if: always()
     
     steps:
     - name: Release Summary
       run: |
-        echo "🎉 Release ${{ github.ref_name }} Summary:"
+        echo "🎉 Manual Release ${{ inputs.version }} Summary:"
         echo "✅ GitHub Release: ${{ needs.create-release.result }}"
         echo "📦 NPM Publish: ${{ needs.publish-npm.result }}"
         echo "📦 GitHub Packages: ${{ needs.publish-github-packages.result }}"
@@ -336,6 +322,10 @@ jobs:
         echo "🔒 Type Safety: 100%"
         echo "🔗 Union Types: Working"
         echo "📁 Modular Design: Complete"
+        echo ""
+        echo "🌍 Available on multiple registries:"
+        echo "• NPM: npm install -g somon-script"
+        echo "• GitHub: npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com"
         echo ""
         echo "SomonScript continues to set the standard for"
         echo "internationalized programming languages! 🚀"
