@@ -289,9 +289,17 @@ somon resolve "./utils" --from src/main.som
 
 ### Installation
 
+Choose from multiple package registries:
+
 ```bash
-# Install globally
+# NPM (recommended for most users)
 npm install -g somon-script
+
+# JSR (recommended for TypeScript projects)
+npx jsr add @lindentechde/somon-script
+
+# GitHub Packages (for enterprise usage)
+npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
 
 # Or use in a project
 npm install somon-script --save-dev
@@ -482,8 +490,23 @@ Professional development opportunities for technical teams:
 4. **Integration**: Build tooling and IDE support
 5. **Performance**: Optimize compilation and runtime efficiency
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for technical contribution guidelines and
-[AGENTS.md](AGENTS.md) for code style, commit message, and testing rules.
+**🚀 New: Automated Release Process**
+
+SomonScript now uses semantic-release for automated, professional-grade
+releases:
+
+- **Conventional Commits**: Use `feat:`, `fix:`, `docs:` etc. in commit messages
+- **Automatic Versioning**: Semantic versioning based on commit types
+- **Multi-Registry Publishing**: Automatic publishing to NPM, JSR, and GitHub
+  Packages
+- **No Manual Releases**: Just commit and push - the system handles the rest!
+
+📖 **Documentation**:
+
+- [Release Process Guide](docs/RELEASE-PROCESS.md) - Complete automation details
+- [CI/CD Migration Guide](docs/CICD-MIGRATION.md) - Step-by-step migration info
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Technical contribution guidelines
+- [AGENTS.md](AGENTS.md) - Code style, commit message, and testing rules
 
 ---
 

@@ -1,20 +1,66 @@
-name: Release and Deploy
+name: Release and Deploy (Legacy - Disabled)
+
+# MIGRATION NOTICE: This workflow has been disabled during migration to semantic-release
+# The new automated release system provides:
+# - Automatic version management based on conventional commits
+# - Multi-registry publishing (NPM, JSR, GitHub Packages)
+# - Automated changelog generation
+# - Better release coordination
+#
+# See docs/RELEASE-PROCESS.md for the new process
+# Use semantic-release.yml workflow instead
 
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+  # Disabled: push events on tags no longer trigger releases
+  # push:
+  #   tags:
+  #     - 'v*'
+  workflow_dispatch:  # Keep manual dispatch for emergency fallback
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: 'LEGACY: Version to release (e.g., v1.0.0) - Consider using semantic-release instead'
         required: true
         type: string
+      force_legacy_release:
+        description: 'Confirm you want to use legacy release instead of semantic-release'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
-  validate-release:
-    name: Validate Release
+  migration-warning:
+    name: Migration Warning
     runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Show Migration Notice
+      run: |
+        echo "⚠️  LEGACY RELEASE WORKFLOW NOTICE"
+        echo "=================================="
+        echo "This workflow has been superseded by semantic-release automation."
+        echo ""
+        echo "🔄 New Process:"
+        echo "  • Push commits with conventional commit messages to 'main' branch"
+        echo "  • Releases are automatically triggered and published to all registries"
+        echo "  • No manual version management needed"
+        echo ""
+        echo "📖 Documentation: docs/RELEASE-PROCESS.md"
+        echo "🚀 New Workflow: .github/workflows/semantic-release.yml"
+        echo ""
+        if [ "${{ inputs.force_legacy_release }}" != "true" ]; then
+          echo "❌ Legacy release aborted - force_legacy_release not confirmed"
+          echo "   Set 'force_legacy_release' to true if you really need to use this workflow"
+          exit 1
+        else
+          echo "⚠️  Proceeding with legacy release as requested..."
+        fi
+
+  validate-release:
+    name: Validate Release (Legacy)
+    runs-on: ubuntu-latest
+    needs: migration-warning
+    if: inputs.force_legacy_release == true
     
     steps:
     - name: Checkout code
@@ -67,9 +113,10 @@ jobs:
       run: npm run examples || echo "Examples test completed with warnings"
 
   create-release:
-    name: Create GitHub Release
+    name: Create GitHub Release (Legacy)
     runs-on: ubuntu-latest
     needs: validate-release
+    if: inputs.force_legacy_release == true
     
     outputs:
       release-id: ${{ steps.create-release.outputs.id }}
@@ -151,10 +198,10 @@ jobs:
         generate_release_notes: true
 
   publish-npm:
-    name: Publish to NPM
+    name: Publish to NPM (Legacy)
     runs-on: ubuntu-latest
     needs: create-release
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha')
+    if: inputs.force_legacy_release == true && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, 'beta') && !contains(github.ref_name, 'alpha')
     
     steps:
     - name: Checkout code
@@ -184,9 +231,10 @@ jobs:
         echo "📦 Package: somon-script@$(node -p 'require("./package.json").version')"
 
   publish-github-packages:
-    name: Publish to GitHub Packages
+    name: Publish to GitHub Packages (Legacy)
     runs-on: ubuntu-latest
     needs: create-release
+    if: inputs.force_legacy_release == true
     
     steps:
     - name: Checkout code
@@ -221,10 +269,10 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-documentation:
-    name: Update Documentation
+    name: Update Documentation (Legacy)
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm]
-    if: always() && needs.create-release.result == 'success'
+    if: inputs.force_legacy_release == true && always() && needs.create-release.result == 'success'
     
     steps:
     - name: Checkout code
@@ -270,10 +318,10 @@ jobs:
         git push || true
 
   notify-completion:
-    name: Notify Release Completion
+    name: Notify Release Completion (Legacy)
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm, publish-github-packages, update-documentation]
-    if: always()
+    if: inputs.force_legacy_release == true && always()
     
     steps:
     - name: Release Summary

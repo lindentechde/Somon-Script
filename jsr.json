@@ -1,0 +1,19 @@
+{
+  "name": "@lindentechde/somon-script",
+  "version": "0.2.83",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "license": "MIT",
+  "publish": {
+    "include": ["dist/**/*", "README.md", "LICENSE", "CHANGELOG.md"],
+    "exclude": ["dist/**/*.test.*", "dist/**/*.spec.*"]
+  }
+}

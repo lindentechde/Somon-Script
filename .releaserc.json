@@ -1,0 +1,92 @@
+{
+  "branches": [
+    "main",
+    {
+      "name": "develop",
+      "prerelease": "dev"
+    },
+    {
+      "name": "beta",
+      "prerelease": "beta"
+    }
+  ],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits",
+        "releaseRules": [
+          { "type": "feat", "release": "minor" },
+          { "type": "fix", "release": "patch" },
+          { "type": "perf", "release": "patch" },
+          { "type": "docs", "release": "patch" },
+          { "type": "style", "release": "patch" },
+          { "type": "refactor", "release": "patch" },
+          { "type": "test", "release": false },
+          { "type": "build", "release": "patch" },
+          { "type": "ci", "release": false },
+          { "type": "chore", "release": false },
+          { "type": "revert", "release": "patch" },
+          { "breaking": true, "release": "major" }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits",
+        "presetConfig": {
+          "types": [
+            { "type": "feat", "section": "✨ Features" },
+            { "type": "fix", "section": "🐛 Bug Fixes" },
+            { "type": "perf", "section": "⚡ Performance Improvements" },
+            { "type": "docs", "section": "📚 Documentation" },
+            { "type": "style", "section": "💎 Code Style" },
+            { "type": "refactor", "section": "♻️ Code Refactoring" },
+            { "type": "build", "section": "🏗️ Build System" },
+            { "type": "revert", "section": "⏪ Reverts" }
+          ]
+        }
+      }
+    ],
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md",
+        "changelogTitle": "# Changelog\n\nAll notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines."
+      }
+    ],
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": true,
+        "tarballDir": "dist-packages"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "dist-packages/*.tgz",
+            "label": "SomonScript Package"
+          },
+          {
+            "path": "CHANGELOG.md",
+            "label": "Changelog"
+          }
+        ],
+        "addReleases": "bottom",
+        "releasedLabels": false,
+        "successComment": "🎉 This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} :tada:\n\nThe release is available on:\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/${name}/v/${nextRelease.version})\n- [GitHub release](${releases.filter(release => /github\\.com/.test(release.url))[0].url})\n\nYour **${issue.pull_request ? 'pull request' : 'issue'}** is now live! 🚀"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["CHANGELOG.md", "package.json", "package-lock.json"],
+        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ]
+  ]
+}
