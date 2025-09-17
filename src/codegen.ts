@@ -20,6 +20,7 @@ import {
   MemberExpression,
   ImportDeclaration,
   ImportSpecifier,
+  ImportNamespaceSpecifier,
   ExportDeclaration,
   ArrayExpression,
   ObjectExpression,
@@ -30,6 +31,7 @@ import {
   ThrowStatement,
   AwaitExpression,
   NewExpression,
+  ImportExpression,
   ClassDeclaration,
   MethodDefinition,
   PropertyDefinition,
@@ -42,11 +44,11 @@ import {
   PropertyPattern,
   TemplateLiteral,
 } from './types';
-// import { BaseVisitor } from './visitor'; // Simplified for now
 
 export class CodeGenerator {
   private indentLevel: number = 0;
   private readonly indentSize: number = 2;
+  private importCounter: number = 0;
 
   // Mapping of Tajik built-in functions to JavaScript equivalents
   private readonly builtinMappings: Map<string, string> = new Map([
@@ -332,7 +334,7 @@ export class CodeGenerator {
       return this.generateStructuralExpression(node);
     }
 
-    const specialExpressions = ['AwaitExpression', 'NewExpression'];
+    const specialExpressions = ['AwaitExpression', 'NewExpression', 'ImportExpression'];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
     }
@@ -402,9 +404,26 @@ export class CodeGenerator {
         return this.generateAwaitExpression(node as AwaitExpression);
       case 'NewExpression':
         return this.generateNewExpression(node as NewExpression);
+      case 'ImportExpression':
+        return this.generateImportExpression(node as ImportExpression);
       default:
         return this.handleUnknownExpression(node);
     }
+  }
+
+  private generateImportExpression(node: ImportExpression): string {
+    // Dynamic import: ворид(specifier) -> import(specifier)
+    let source = this.generateExpression(node.source);
+
+    // Handle .som extension conversion for dynamic imports
+    if (source.includes('.som')) {
+      source = source.replace(/\.som/g, '.js');
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
+    }
+
+    return `import(${source})`;
   }
 
   private handleUnknownExpression(node: Expression): string {
@@ -421,14 +440,21 @@ export class CodeGenerator {
     }
 
     const results: string[] = [];
+    const tmpVar = `__somon_import_${this.importCounter++}`;
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
       const localName = defaultImports[0].local.name;
-      results.push(
-        this.indent(`const ${localName} = require(${source}).default || require(${source});`)
-      );
+      results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
+    }
+
+    const namespaceImport = specifiers.find(s => s.type === 'ImportNamespaceSpecifier') as
+      | ImportNamespaceSpecifier
+      | undefined;
+    if (namespaceImport) {
+      results.push(this.indent(`const ${namespaceImport.local.name} = ${tmpVar};`));
     }
 
     // Handle named imports
@@ -441,7 +467,7 @@ export class CodeGenerator {
           return imported === local ? imported : `${imported}: ${local}`;
         })
         .join(', ');
-      results.push(this.indent(`const { ${destructuring} } = require(${source});`));
+      results.push(this.indent(`const { ${destructuring} } = ${tmpVar};`));
     }
 
     return results.join('\n');

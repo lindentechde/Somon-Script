@@ -1,5 +1,51 @@
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
+import {
+  Statement,
+  VariableDeclaration,
+  FunctionDeclaration,
+  IfStatement,
+  WhileStatement,
+  ExpressionStatement,
+  ReturnStatement,
+  TypeAlias,
+  ImportDeclaration,
+} from '../src/types';
+
+function asVarDecl(stmt: Statement): VariableDeclaration {
+  if (stmt.type !== 'VariableDeclaration') throw new Error('Expected VariableDeclaration');
+  return stmt as VariableDeclaration; // local precise cast
+}
+
+function asFuncDecl(stmt: Statement): FunctionDeclaration {
+  if (stmt.type !== 'FunctionDeclaration') throw new Error('Expected FunctionDeclaration');
+  return stmt as FunctionDeclaration;
+}
+
+function asIf(stmt: Statement): IfStatement {
+  if (stmt.type !== 'IfStatement') throw new Error('Expected IfStatement');
+  return stmt as IfStatement;
+}
+
+function asWhile(stmt: Statement): WhileStatement {
+  if (stmt.type !== 'WhileStatement') throw new Error('Expected WhileStatement');
+  return stmt as WhileStatement;
+}
+
+function asExprStmt(stmt: Statement): ExpressionStatement {
+  if (stmt.type !== 'ExpressionStatement') throw new Error('Expected ExpressionStatement');
+  return stmt as ExpressionStatement;
+}
+
+function asReturn(stmt: Statement): ReturnStatement {
+  if (stmt.type !== 'ReturnStatement') throw new Error('Expected ReturnStatement');
+  return stmt as ReturnStatement;
+}
+
+function asTypeAlias(stmt: Statement): TypeAlias {
+  if (stmt.type !== 'TypeAlias') throw new Error('Expected TypeAlias');
+  return stmt as TypeAlias;
+}
 
 describe('Parser', () => {
   function parseSource(source: string) {
@@ -17,11 +63,13 @@ describe('Parser', () => {
     expect(ast.body).toHaveLength(1);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('VariableDeclaration');
-    expect((stmt as any).kind).toBe('ТАҒЙИРЁБАНДА');
-    expect((stmt as any).identifier.name).toBe('ном');
-    expect((stmt as any).init.type).toBe('Literal');
-    expect((stmt as any).init.value).toBe('Аҳмад');
+    const decl = asVarDecl(stmt);
+    expect(decl.kind).toBe('ТАҒЙИРЁБАНДА');
+    expect(decl.identifier.type).toBe('Identifier');
+    // @ts-expect-error legacy AST shape may have different identifier node
+    expect(decl.identifier.name).toBe('ном');
+    expect(decl.init && decl.init.type).toBe('Literal');
+    expect(decl.init && (decl.init as any).value).toBe('Аҳмад');
   });
 
   test('should parse constant declaration', () => {
@@ -29,10 +77,10 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('VariableDeclaration');
-    expect((stmt as any).kind).toBe('СОБИТ');
-    expect((stmt as any).identifier.name).toBe('сол');
-    expect((stmt as any).init.value).toBe(2024);
+    const decl = asVarDecl(stmt);
+    expect(decl.kind).toBe('СОБИТ');
+    expect((decl.identifier as any).name).toBe('сол');
+    expect((decl.init as any).value).toBe(2024);
   });
 
   test('should parse function declaration', () => {
@@ -40,11 +88,11 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('FunctionDeclaration');
-    expect((stmt as any).name.name).toBe('салом');
-    expect((stmt as any).params).toHaveLength(1);
-    expect((stmt as any).params[0].name.name).toBe('ном');
-    expect((stmt as any).body.type).toBe('BlockStatement');
+    const fn = asFuncDecl(stmt);
+    expect(fn.name.name).toBe('салом');
+    expect(fn.params).toHaveLength(1);
+    expect(fn.params[0].name.name).toBe('ном');
+    expect(fn.body.type).toBe('BlockStatement');
   });
 
   test('should parse if statement', () => {
@@ -52,10 +100,10 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('IfStatement');
-    expect((stmt as any).test.type).toBe('BinaryExpression');
-    expect((stmt as any).test.operator).toBe('>');
-    expect((stmt as any).consequent.type).toBe('BlockStatement');
+    const iff = asIf(stmt);
+    expect(iff.test.type).toBe('BinaryExpression');
+    expect((iff.test as any).operator).toBe('>');
+    expect(iff.consequent.type).toBe('BlockStatement');
   });
 
   test('should parse if-else statement', () => {
@@ -63,9 +111,9 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('IfStatement');
-    expect((stmt as any).alternate).toBeDefined();
-    expect((stmt as any).alternate.type).toBe('BlockStatement');
+    const iff = asIf(stmt);
+    expect(iff.alternate).toBeDefined();
+    expect(iff.alternate && iff.alternate.type).toBe('BlockStatement');
   });
 
   test('should parse while loop', () => {
@@ -73,9 +121,9 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('WhileStatement');
-    expect((stmt as any).test.type).toBe('BinaryExpression');
-    expect((stmt as any).body.type).toBe('BlockStatement');
+    const loop = asWhile(stmt);
+    expect(loop.test.type).toBe('BinaryExpression');
+    expect(loop.body.type).toBe('BlockStatement');
   });
 
   test('should parse binary expressions', () => {
@@ -85,7 +133,7 @@ describe('Parser', () => {
     const stmt = ast.body[0];
     expect(stmt.type).toBe('ExpressionStatement');
 
-    const expr = (stmt as any).expression;
+    const expr = asExprStmt(stmt).expression as any;
     expect(expr.type).toBe('BinaryExpression');
     expect(expr.operator).toBe('+');
     expect(expr.left.name).toBe('х');
@@ -98,7 +146,7 @@ describe('Parser', () => {
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    const expr = (stmt as any).expression;
+    const expr = asExprStmt(stmt).expression as any;
     expect(expr.type).toBe('CallExpression');
     expect(expr.callee.name).toBe('салом');
     expect(expr.arguments).toHaveLength(2);
@@ -106,13 +154,27 @@ describe('Parser', () => {
     expect(expr.arguments[1].value).toBe(42);
   });
 
+  test('should parse namespace imports', () => {
+    const source = 'ворид * чун MathUtils аз "./math";';
+    const ast = parseSource(source);
+
+    expect(ast.body).toHaveLength(1);
+    const stmt = ast.body[0] as ImportDeclaration;
+    expect(stmt.type).toBe('ImportDeclaration');
+    expect(stmt.specifiers).toHaveLength(1);
+    const namespaceSpec = stmt.specifiers[0];
+    expect(namespaceSpec.type).toBe('ImportNamespaceSpecifier');
+    expect((namespaceSpec as any).local.name).toBe('MathUtils');
+    expect((stmt.source as any).value).toBe('./math');
+  });
+
   test('should parse return statement', () => {
     const source = 'бозгашт х + у;';
     const ast = parseSource(source);
 
     const stmt = ast.body[0];
-    expect(stmt.type).toBe('ReturnStatement');
-    expect((stmt as any).argument.type).toBe('BinaryExpression');
+    const ret = asReturn(stmt);
+    expect(ret.argument && ret.argument.type).toBe('BinaryExpression');
   });
 
   describe('Type System Parsing', () => {
@@ -121,10 +183,11 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('VariableDeclaration');
-      expect((stmt as any).typeAnnotation).toBeDefined();
-      expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('PrimitiveType');
-      expect((stmt as any).typeAnnotation.typeAnnotation.name).toBe('сатр');
+      const decl = asVarDecl(stmt);
+      expect(decl.typeAnnotation).toBeDefined();
+      expect(decl.typeAnnotation && decl.typeAnnotation.typeAnnotation.type).toBe('PrimitiveType');
+      // @ts-expect-error legacy field
+      expect(decl.typeAnnotation && decl.typeAnnotation.typeAnnotation.name).toBe('сатр');
     });
 
     test('should parse function with typed parameters', () => {
@@ -132,11 +195,11 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('FunctionDeclaration');
-      expect((stmt as any).params).toHaveLength(2);
-      expect((stmt as any).params[0].type).toBe('Parameter');
-      expect((stmt as any).params[0].typeAnnotation).toBeDefined();
-      expect((stmt as any).returnType).toBeDefined();
+      const fn = asFuncDecl(stmt);
+      expect(fn.params).toHaveLength(2);
+      expect(fn.params[0].type).toBe('Parameter');
+      expect(fn.params[0].typeAnnotation).toBeDefined();
+      expect(fn.returnType).toBeDefined();
     });
 
     test('should parse interface declaration', () => {
@@ -160,9 +223,12 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('VariableDeclaration');
-      expect((stmt as any).typeAnnotation.typeAnnotation.type).toBe('ArrayType');
-      expect((stmt as any).typeAnnotation.typeAnnotation.elementType.type).toBe('PrimitiveType');
+      const decl = asVarDecl(stmt);
+      expect(decl.typeAnnotation && decl.typeAnnotation.typeAnnotation.type).toBe('ArrayType');
+      // @ts-expect-error elementType is specific to ArrayType
+      expect(decl.typeAnnotation && decl.typeAnnotation.typeAnnotation.elementType.type).toBe(
+        'PrimitiveType'
+      );
     });
 
     test('should parse union type annotation', () => {
@@ -170,9 +236,8 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('VariableDeclaration');
-      // Union types may not be fully implemented yet
-      expect((stmt as any).typeAnnotation).toBeDefined();
+      const decl = asVarDecl(stmt);
+      expect(decl.typeAnnotation).toBeDefined();
     });
 
     test('should parse type alias', () => {
@@ -180,9 +245,9 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('TypeAlias');
-      expect((stmt as any).name.name).toBe('КорбарИД');
-      expect((stmt as any).typeAnnotation).toBeDefined();
+      const alias = asTypeAlias(stmt);
+      expect(alias.name.name).toBe('КорбарИД');
+      expect(alias.typeAnnotation).toBeDefined();
     });
 
     test('should parse unique type alias', () => {
@@ -190,8 +255,8 @@ describe('Parser', () => {
       const ast = parseSource(source);
 
       const stmt = ast.body[0];
-      expect(stmt.type).toBe('TypeAlias');
-      const typeNode = (stmt as any).typeAnnotation.typeAnnotation;
+      const alias = asTypeAlias(stmt);
+      const typeNode: any = alias.typeAnnotation.typeAnnotation;
       expect(typeNode.type).toBe('UniqueType');
       expect(typeNode.baseType.type).toBe('PrimitiveType');
     });

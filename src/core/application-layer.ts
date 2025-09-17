@@ -24,7 +24,7 @@ export interface ILexicalAnalysisUseCase {
 
 export interface IValidationUseCase {
   validateSyntax(source: string): ValidationResult;
-  validateTypes(ast: any): ValidationResult;
+  validateTypes(ast: unknown): ValidationResult;
 }
 
 // ===== DATA STRUCTURES =====
@@ -119,8 +119,8 @@ export interface LexicalMetrics {
 export class ErrorAggregationService {
   static aggregateErrors(
     lexicalErrors: LexicalError[],
-    syntaxErrors: any[] = [],
-    typeErrors: any[] = []
+    syntaxErrors: unknown[] = [],
+    typeErrors: unknown[] = []
   ): CompilationError[] {
     const errors: CompilationError[] = [];
 
@@ -290,7 +290,7 @@ export class ValidationUseCase implements IValidationUseCase {
     };
   }
 
-  validateTypes(ast: any): ValidationResult {
+  validateTypes(ast: unknown): ValidationResult {
     // Placeholder for type validation
     return {
       isValid: true,

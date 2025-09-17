@@ -38,7 +38,7 @@ describe('Error Handling Tests', () => {
 
       try {
         lexer.tokenize();
-        fail('Expected lexer to throw an error');
+        throw new Error('Expected lexer to throw an error');
       } catch (error) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain('Unexpected character');

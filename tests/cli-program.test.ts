@@ -29,6 +29,9 @@ describe('CLI Program (in-process)', () => {
     skipCleanup = false;
   });
 
+  // Note: bundle subcommand integration is covered by module-system tests.
+  // Config loader behavior is covered in tests/config.test.ts.
+
   afterEach(() => {
     // Cleanup temp dir
     if (!skipCleanup && fs.existsSync(tempDir)) {

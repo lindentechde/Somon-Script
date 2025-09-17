@@ -15,6 +15,8 @@ export interface CompilerOptions {
 
 export interface SomonConfig {
   compilerOptions?: CompilerOptions;
+  moduleSystem?: ModuleSystemConfig;
+  bundle?: BundleConfig;
 }
 
 export interface ConfigValidationError {
@@ -22,10 +24,18 @@ export interface ConfigValidationError {
   message: string;
 }
 
-function validateCompilerOptions(options: any, path = 'compilerOptions'): ConfigValidationError[] {
+type UnknownRecord = Record<string, unknown>;
+function isObject(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function validateCompilerOptions(
+  options: unknown,
+  path = 'compilerOptions'
+): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
-  if (typeof options !== 'object' || options === null) {
+  if (!isObject(options)) {
     return [{ path, message: 'must be an object' }];
   }
 
@@ -86,15 +96,257 @@ function validateCompilerOptions(options: any, path = 'compilerOptions'): Config
   return errors;
 }
 
-function validateConfig(config: any): ConfigValidationError[] {
+// Module System configuration (kept independent of runtime types)
+export interface ModuleSystemConfig {
+  resolution?: {
+    baseUrl?: string;
+    paths?: Record<string, string[]>;
+    extensions?: string[];
+    moduleDirectories?: string[];
+    allowJs?: boolean;
+    resolveJsonModule?: boolean;
+  };
+  loading?: {
+    encoding?: string;
+    cache?: boolean;
+    circularDependencyStrategy?: 'error' | 'warn' | 'ignore';
+  };
+  // Optional: delegate to compiler options used during module compilation if needed
+  compilation?: CompilerOptions;
+}
+
+export interface BundleConfig {
+  format?: 'commonjs' | 'esm' | 'umd';
+  minify?: boolean;
+  sourceMaps?: boolean;
+  externals?: string[];
+  force?: boolean;
+  output?: string;
+}
+
+function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (config === undefined) return errors;
+  if (!isObject(config)) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  // Validate top-level properties
+  errors.push(...validateModuleSystemTopLevel(config, basePath));
+
+  const moduleConfig = config as ModuleSystemConfig;
+
+  // Validate each section
+  errors.push(...validateResolutionSection(moduleConfig.resolution, `${basePath}.resolution`));
+  errors.push(...validateLoadingSection(moduleConfig.loading, `${basePath}.loading`));
+
+  // Reuse compiler options validation for optional compilation section
+  if (moduleConfig.compilation !== undefined) {
+    errors.push(...validateCompilerOptions(moduleConfig.compilation, `${basePath}.compilation`));
+  }
+
+  return errors;
+}
+
+function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  const knownTop = ['resolution', 'loading', 'compilation'];
+
+  for (const key of Object.keys(config)) {
+    if (!knownTop.includes(key)) {
+      errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
+    }
+  }
+
+  return errors;
+}
+
+function validateResolutionSection(resolution: unknown, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (resolution === undefined) return errors;
+
+  if (typeof resolution !== 'object' || resolution === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const res = resolution as NonNullable<ModuleSystemConfig['resolution']>;
+
+  // Validate individual properties
+  errors.push(...validateResolutionBaseUrl(res.baseUrl, basePath));
+  errors.push(...validateResolutionPaths(res.paths, basePath));
+  errors.push(...validateResolutionExtensions(res.extensions, basePath));
+  errors.push(...validateResolutionModuleDirectories(res.moduleDirectories, basePath));
+  errors.push(...validateResolutionBooleanFlags(res, basePath));
+
+  return errors;
+}
+
+function validateResolutionBaseUrl(baseUrl: unknown, basePath: string): ConfigValidationError[] {
+  if (baseUrl !== undefined && typeof baseUrl !== 'string') {
+    return [{ path: `${basePath}.baseUrl`, message: 'must be a string' }];
+  }
+  return [];
+}
+
+function validateResolutionPaths(paths: unknown, basePath: string): ConfigValidationError[] {
+  if (paths === undefined) return [];
+
+  if (typeof paths !== 'object' || paths === null) {
+    return [{ path: `${basePath}.paths`, message: 'must be an object' }];
+  }
+
+  for (const [k, v] of Object.entries(paths)) {
+    if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
+      return [{ path: `${basePath}.paths`, message: 'must be Record<string,string[]>' }];
+    }
+  }
+
+  return [];
+}
+
+function validateResolutionExtensions(
+  extensions: unknown,
+  basePath: string
+): ConfigValidationError[] {
+  const stringArray = (arr: unknown): arr is string[] =>
+    Array.isArray(arr) && arr.every(x => typeof x === 'string');
+
+  if (extensions !== undefined && !stringArray(extensions)) {
+    return [{ path: `${basePath}.extensions`, message: 'must be string[]' }];
+  }
+  return [];
+}
+
+function validateResolutionModuleDirectories(
+  moduleDirectories: unknown,
+  basePath: string
+): ConfigValidationError[] {
+  const stringArray = (arr: unknown): arr is string[] =>
+    Array.isArray(arr) && arr.every(x => typeof x === 'string');
+
+  if (moduleDirectories !== undefined && !stringArray(moduleDirectories)) {
+    return [{ path: `${basePath}.moduleDirectories`, message: 'must be string[]' }];
+  }
+  return [];
+}
+
+function validateResolutionBooleanFlags(
+  res: NonNullable<ModuleSystemConfig['resolution']>,
+  basePath: string
+): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
-  if (typeof config !== 'object' || config === null) {
+  if (res.allowJs !== undefined && typeof res.allowJs !== 'boolean') {
+    errors.push({ path: `${basePath}.allowJs`, message: 'must be a boolean' });
+  }
+
+  if (res.resolveJsonModule !== undefined && typeof res.resolveJsonModule !== 'boolean') {
+    errors.push({ path: `${basePath}.resolveJsonModule`, message: 'must be a boolean' });
+  }
+
+  return errors;
+}
+
+function validateLoadingSection(loading: unknown, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (loading === undefined) return errors;
+
+  if (typeof loading !== 'object' || loading === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const load = loading as NonNullable<ModuleSystemConfig['loading']>;
+
+  if (load.encoding !== undefined && typeof load.encoding !== 'string') {
+    errors.push({ path: `${basePath}.encoding`, message: 'must be a string' });
+  }
+
+  if (load.cache !== undefined && typeof load.cache !== 'boolean') {
+    errors.push({ path: `${basePath}.cache`, message: 'must be a boolean' });
+  }
+
+  if (
+    load.circularDependencyStrategy !== undefined &&
+    !['error', 'warn', 'ignore'].includes(load.circularDependencyStrategy)
+  ) {
+    errors.push({
+      path: `${basePath}.circularDependencyStrategy`,
+      message: `must be one of: error, warn, ignore`,
+    });
+  }
+
+  return errors;
+}
+
+function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (config === undefined) return errors;
+  if (!isObject(config)) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const obj = config as Partial<BundleConfig>;
+
+  // Validate each property separately to reduce complexity
+  errors.push(...validateBundleFormat(obj.format, basePath));
+  errors.push(...validateBundleBooleanProps(obj, basePath));
+  errors.push(...validateBundleOutput(obj.output, basePath));
+  errors.push(...validateBundleExternals(obj.externals, basePath));
+
+  return errors;
+}
+
+function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
+  if (format !== undefined && !['commonjs', 'esm', 'umd'].includes(format as string)) {
+    return [{ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' }];
+  }
+  return [];
+}
+
+function validateBundleBooleanProps(
+  obj: Partial<BundleConfig>,
+  basePath: string
+): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+
+  if (obj.minify !== undefined && typeof obj.minify !== 'boolean') {
+    errors.push({ path: `${basePath}.minify`, message: 'must be a boolean' });
+  }
+  if (obj.sourceMaps !== undefined && typeof obj.sourceMaps !== 'boolean') {
+    errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
+  }
+  if (obj.force !== undefined && typeof obj.force !== 'boolean') {
+    errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
+  }
+
+  return errors;
+}
+
+function validateBundleOutput(output: unknown, basePath: string): ConfigValidationError[] {
+  if (output !== undefined && typeof output !== 'string') {
+    return [{ path: `${basePath}.output`, message: 'must be a string' }];
+  }
+  return [];
+}
+
+function validateBundleExternals(externals: unknown, basePath: string): ConfigValidationError[] {
+  if (externals !== undefined) {
+    if (!Array.isArray(externals) || externals.some(x => typeof x !== 'string')) {
+      return [{ path: `${basePath}.externals`, message: 'must be string[]' }];
+    }
+  }
+  return [];
+}
+
+function validateConfig(config: unknown): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+
+  if (!isObject(config)) {
     return [{ path: 'root', message: 'configuration must be an object' }];
   }
 
   // Check for unknown top-level properties
-  const knownProperties = ['compilerOptions'];
+  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle'];
   for (const key of Object.keys(config)) {
     if (!knownProperties.includes(key)) {
       errors.push({
@@ -105,8 +357,16 @@ function validateConfig(config: any): ConfigValidationError[] {
   }
 
   // Validate compilerOptions if present
-  if (config.compilerOptions !== undefined) {
-    errors.push(...validateCompilerOptions(config.compilerOptions));
+  if ((config as SomonConfig).compilerOptions !== undefined) {
+    errors.push(...validateCompilerOptions((config as SomonConfig).compilerOptions));
+  }
+  // Validate moduleSystem if present
+  if ((config as SomonConfig).moduleSystem !== undefined) {
+    errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
+  }
+  // Validate bundle if present
+  if ((config as SomonConfig).bundle !== undefined) {
+    errors.push(...validateBundle((config as SomonConfig).bundle));
   }
 
   return errors;

@@ -64,9 +64,9 @@ describe('CodeGenerator - Core Coverage Tests', () => {
 
   describe('Error Handling', () => {
     test('should handle invalid input gracefully', () => {
-      const invalidProgram = {
-        type: 'Program' as const,
-        body: null as any,
+      const invalidProgram: any = {
+        type: 'Program',
+        body: null, // intentionally invalid to trigger error path
         line: 1,
         column: 1,
       };
@@ -89,11 +89,11 @@ describe('CodeGenerator - Core Coverage Tests', () => {
     });
 
     test('should handle malformed AST nodes', () => {
-      const program = {
-        type: 'Program' as const,
+      const program: any = {
+        type: 'Program',
         body: [
           {
-            type: 'InvalidStatement' as any,
+            type: 'InvalidStatement', // invalid on purpose
             line: 1,
             column: 1,
           },
@@ -210,7 +210,6 @@ describe('CodeGenerator - Core Coverage Tests', () => {
     test('should handle Tajik Cyrillic characters', () => {
       // Test Unicode character handling
       const cyrillicText = 'тағйирёбанда';
-      const arabicText = 'متغیر';
 
       expect(cyrillicText).toMatch(/[а-яё]/);
       expect(typeof cyrillicText).toBe('string');

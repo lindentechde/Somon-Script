@@ -3,8 +3,118 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { compile, CompileResult } from '../compiler';
-import { loadConfig } from '../config';
+import { loadConfig, SomonConfig } from '../config';
+import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
 import pkg from '../../package.json';
+
+type BufferEncoding =
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
+
+interface BundleOptions {
+  output?: string;
+  format?: string;
+  minify?: boolean;
+  sourceMap?: boolean;
+  externals?: string;
+  force?: boolean;
+}
+
+async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
+  try {
+    const baseDir = path.dirname(path.resolve(input));
+    const config = loadConfig(baseDir);
+    const moduleSystem = await createModuleSystem(baseDir, config);
+
+    const bundleOptions = createBundleOptions(input, options, config, baseDir);
+
+    if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
+      console.error('ESM/UMD bundle formats are experimental. Re-run with --force to proceed.');
+      process.exitCode = 1;
+      return;
+    }
+
+    await performBundling(moduleSystem, bundleOptions, input);
+  } catch (error) {
+    console.error('Bundle error:', error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
+}
+
+async function createModuleSystem(baseDir: string, config: SomonConfig) {
+  const { ModuleSystem } = await import('../module-system');
+  return new ModuleSystem({
+    resolution: {
+      baseUrl: baseDir,
+      ...(config.moduleSystem?.resolution || {}),
+    },
+    loading: config.moduleSystem?.loading
+      ? {
+          ...config.moduleSystem.loading,
+          encoding: config.moduleSystem.loading.encoding as BufferEncoding | undefined,
+        }
+      : undefined,
+    compilation: config.moduleSystem?.compilation,
+  });
+}
+
+function createBundleOptions(
+  input: string,
+  options: BundleOptions,
+  config: SomonConfig,
+  _baseDir: string
+): ModuleBundleOptions {
+  return {
+    entryPoint: path.resolve(input),
+    outputPath: options.output ?? config.bundle?.output,
+    format: (options.format ?? config.bundle?.format ?? 'commonjs') as 'commonjs' | 'esm' | 'umd',
+    minify: options.minify ?? config.bundle?.minify,
+    sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+    externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
+    force: options.force ?? config.bundle?.force,
+  };
+}
+
+async function performBundling(
+  moduleSystem: ModuleSystem,
+  bundleOptions: ModuleBundleOptions,
+  input: string
+): Promise<void> {
+  console.log(`📦 Bundling ${input}...`);
+
+  if (bundleOptions.format !== 'commonjs') {
+    console.warn('Warning: ESM/UMD formats are experimental; prefer commonjs for execution.');
+  }
+
+  const bundle = await moduleSystem.bundle(bundleOptions);
+  const outputPath = getBundleOutputPath(bundleOptions, input);
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, bundle);
+
+  console.log(`✅ Bundle created: ${outputPath}`);
+
+  const stats = moduleSystem.getStatistics();
+  console.log(`📊 Bundled ${stats.totalModules} modules`);
+}
+
+function getBundleOutputPath(bundleOptions: ModuleBundleOptions, input: string): string {
+  if (bundleOptions.outputPath) {
+    return path.isAbsolute(bundleOptions.outputPath)
+      ? bundleOptions.outputPath
+      : path.resolve(path.dirname(path.resolve(input)), bundleOptions.outputPath);
+  }
+  return input.replace(/\.som$/, '.bundle.js');
+}
 
 export interface CompileOptions {
   output?: string;
@@ -51,7 +161,7 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
 
     const source = fs.readFileSync(input, 'utf-8');
     const result = compile(source, {
-      target: options.target as 'es5' | 'es2015' | 'es2020' | 'esnext' | undefined,
+      target: options.target,
       sourceMap: options.sourceMap,
       minify: options.minify,
       typeCheck: !options.noTypeCheck,
@@ -90,6 +200,7 @@ export function createProgram(): Command {
     .command('compile')
     .alias('c')
     .description('Compile SomonScript files to JavaScript')
+    .usage('[input] [options]')
     .argument('<input>', 'Input .som file')
     .option('-o, --output <file>', 'Output file (default: same name with .js extension)')
     .option('--out-dir <dir>', 'Output directory')
@@ -151,6 +262,7 @@ export function createProgram(): Command {
     .command('run')
     .alias('r')
     .description('Compile and run SomonScript file')
+    .usage('[input] [options]')
     .argument('<input>', 'Input .som file')
     .option('--target <target>', 'Compilation target')
     .option('--source-map', 'Generate source maps')
@@ -252,6 +364,118 @@ export function createProgram(): Command {
         console.log(`  npm run dev`);
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);
+        process.exit(1);
+      }
+    });
+
+  // Bundle command
+  program
+    .command('bundle')
+    .alias('b')
+    .description('Bundle SomonScript modules into a single file')
+    .usage('[input] [options]')
+    .argument('<input>', 'Entry point file')
+    .option('-o, --output <file>', 'Output file path')
+    .option('-f, --format <format>', 'Bundle format (commonjs, esm, umd)', 'commonjs')
+    .option('--minify', 'Minify the output')
+    .option('--source-map', 'Generate source maps')
+    .option('--externals <modules>', 'External modules (comma-separated)')
+    .option('--force', 'Allow experimental formats (esm/umd)')
+    .action(async (input: string, options: BundleOptions) => {
+      await executeBundleCommand(input, options);
+    });
+
+  // Module info command
+  program
+    .command('module-info')
+    .alias('info')
+    .description('Show module dependency information')
+    .usage('[input] [options]')
+    .argument('<input>', 'Entry point file')
+    .option('--graph', 'Show dependency graph')
+    .option('--stats', 'Show module statistics')
+    .option('--circular', 'Check for circular dependencies')
+    .action(
+      async (input: string, options: { graph?: boolean; stats?: boolean; circular?: boolean }) => {
+        try {
+          const { ModuleSystem } = await import('../module-system');
+
+          const moduleSystem = new ModuleSystem({
+            resolution: {
+              baseUrl: path.dirname(path.resolve(input)),
+            },
+          });
+
+          console.log(`🔍 Analyzing ${input}...`);
+          await moduleSystem.loadModule(path.resolve(input), process.cwd());
+
+          if (options.stats) {
+            const stats = moduleSystem.getStatistics();
+            console.log('\n📊 Module Statistics:');
+            console.log(`  Total modules: ${stats.totalModules}`);
+            console.log(`  Total dependencies: ${stats.totalDependencies}`);
+            console.log(
+              `  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`
+            );
+            console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
+            console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+          }
+
+          if (options.graph) {
+            const graph = moduleSystem.getDependencyGraph();
+            console.log('\n🕸️  Dependency Graph:');
+            for (const [moduleId, deps] of graph) {
+              const relativePath = path.relative(process.cwd(), moduleId);
+              console.log(`  ${relativePath}:`);
+              for (const dep of deps) {
+                console.log(`    └── ${dep}`);
+              }
+            }
+          }
+
+          if (options.circular) {
+            const validation = moduleSystem.validate();
+            if (validation.isValid) {
+              console.log('\n✅ No circular dependencies found');
+            } else {
+              console.log('\n❌ Issues found:');
+              for (const error of validation.errors) {
+                console.log(`  • ${error}`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Analysis error:', error instanceof Error ? error.message : error);
+          process.exit(1);
+        }
+      }
+    );
+
+  // Resolve command
+  program
+    .command('resolve')
+    .description('Resolve a module specifier to its file path')
+    .usage('<specifier> [options]')
+    .argument('<specifier>', 'Module specifier to resolve')
+    .option('-f, --from <file>', 'Resolve from this file', process.cwd())
+    .action(async (specifier: string, options: { from?: string }) => {
+      try {
+        const { ModuleResolver } = await import('../module-system');
+        const fromFile = options.from ?? process.cwd();
+        const resolver = new ModuleResolver({
+          baseUrl: path.dirname(path.resolve(fromFile)),
+        });
+        const resolved = resolver.resolve(specifier, fromFile);
+
+        console.log(`🎯 Resolved '${specifier}':`);
+        console.log(`  Path: ${resolved.resolvedPath}`);
+        console.log(`  Extension: ${resolved.extension}`);
+        console.log(`  External: ${resolved.isExternalLibrary ? 'Yes' : 'No'}`);
+        if (resolved.packageName) {
+          console.log(`  Package: ${resolved.packageName}`);
+        }
+      } catch (error) {
+        console.error('Resolve error:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
     });

@@ -3,31 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-// Direct imports for unit testing
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-const originalProcessExit = process.exit;
-const originalFsExistsSync = fs.existsSync;
-const originalFsReadFileSync = fs.readFileSync;
-const originalFsWriteFileSync = fs.writeFileSync;
-const originalFsMkdirSync = fs.mkdirSync;
-
 describe('CLI Integration Tests', () => {
   let tempDir: string;
   let cliPath: string;
-  let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
-  let consoleWarnSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
 
   beforeAll(() => {
     // Build the project first
-    try {
-      execSync('npm run build', { stdio: 'pipe' });
-    } catch (error) {
-      console.warn('Build failed, tests may not work correctly');
-    }
+    execSync('npm run build', { stdio: 'pipe' });
     cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
   });
 
@@ -67,7 +49,7 @@ describe('CLI Integration Tests', () => {
       try {
         execSync(`node "${cliPath}" compile "${inputFile}"`, { stdio: 'pipe' });
         // If we reach here, the command succeeded when it should have failed
-        fail('Expected compilation to fail but it succeeded');
+        throw new Error('Expected compilation to fail but it succeeded');
       } catch (error: any) {
         // Expect the command to exit with non-zero status
         expect(error.status).not.toBe(0);
@@ -96,7 +78,6 @@ describe('CLI Integration Tests', () => {
     test('should generate source maps when requested', () => {
       const inputFile = path.join(tempDir, 'sourcemap.som');
       const outputFile = path.join(tempDir, 'sourcemap.js');
-      const sourceMapFile = `${outputFile}.map`;
 
       fs.writeFileSync(inputFile, 'чоп.сабт("Test");');
 
@@ -106,7 +87,7 @@ describe('CLI Integration Tests', () => {
 
       expect(fs.existsSync(outputFile)).toBe(true);
       // Note: Source map generation may not be fully implemented yet
-      // expect(fs.existsSync(sourceMapFile)).toBe(true);
+      // expect(fs.existsSync(`${outputFile}.map`)).toBe(true);
     });
   });
 

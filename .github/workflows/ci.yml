@@ -125,14 +125,14 @@ jobs:
     - name: Code formatting check
       run: npm run format:check
       
-    - name: Check for type safety violations
+    - name: Check for type safety violations (source only)
       run: |
-        echo "Checking for 'as any' assertions..."
+        echo "Checking for 'as any' assertions in source (tests ignored)..."
         if grep -r "as any" src/; then
-          echo "❌ Found 'as any' assertions - type safety violation!"
+          echo "❌ Found 'as any' assertions in src/ - type safety violation!"
           exit 1
         else
-          echo "✅ No 'as any' assertions found - 100% type safety maintained!"
+          echo "✅ No 'as any' assertions in src/ - production code type safety maintained!"
         fi
         
     - name: Verify union type support
