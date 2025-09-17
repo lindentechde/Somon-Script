@@ -42,7 +42,7 @@ let totalCount = examples.length;
 
 examples.forEach(example => {
   const examplePath = path.join(examplesDir, example);
-  const outputPath = path.join(examplesDir, example.replace('.som', '.js'));
+  const outputPath = path.join(examplesDir, 'dist', example.replace('.som', '.js'));
 
   if (shouldShowOutput) {
     console.log(`📝 Testing ${example}:`);
