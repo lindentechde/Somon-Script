@@ -210,7 +210,6 @@ describe('CodeGenerator - Core Coverage Tests', () => {
     test('should handle Tajik Cyrillic characters', () => {
       // Test Unicode character handling
       const cyrillicText = 'тағйирёбанда';
-      const arabicText = 'متغیر';
 
       expect(cyrillicText).toMatch(/[а-яё]/);
       expect(typeof cyrillicText).toBe('string');

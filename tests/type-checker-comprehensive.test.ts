@@ -11,7 +11,6 @@ import {
   FunctionDeclaration,
   Expression,
   Identifier,
-  Literal,
   BlockStatement,
 } from '../src/ast';
 import { TypeAnnotation, PrimitiveType } from '../src/types';

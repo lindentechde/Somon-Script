@@ -35,7 +35,6 @@ import {
   GenericType,
   TupleType,
   InterfaceDeclaration,
-  InterfaceBody, // eslint-disable-line no-unused-vars
   PropertySignature,
   TypeParameter,
   TypeAlias,
@@ -2393,57 +2392,69 @@ export class Parser {
 
   private parsePattern(): Identifier | ArrayPattern | ObjectPattern {
     if (this.match(TokenType.LEFT_BRACKET)) {
-      const elements: (Identifier | ArrayPattern | ObjectPattern | SpreadElement | null)[] = [];
-      while (!this.check(TokenType.RIGHT_BRACKET) && !this.isAtEnd()) {
-        if (this.match(TokenType.COMMA)) {
-          elements.push(null);
-          continue;
-        }
-        if (this.match(TokenType.SPREAD)) {
-          const spreadElem = this.parseSpreadElement();
-          elements.push(spreadElem); // SpreadElement typed in AST union
-        } else {
-          elements.push(this.parsePattern());
-        }
-        if (!this.match(TokenType.COMMA)) break;
-      }
-      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' in array pattern");
-      return {
-        type: 'ArrayPattern',
-        elements,
-        line: this.previous().line,
-        column: this.previous().column,
-      } as ArrayPattern;
+      return this.parseArrayPattern();
     }
     if (this.match(TokenType.LEFT_BRACE)) {
-      const properties: (PropertyPattern | SpreadElement)[] = [];
-      while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-        if (this.match(TokenType.SPREAD)) {
-          properties.push(this.parseSpreadElement() as SpreadElement);
-        } else {
-          const key = this.consume(TokenType.IDENTIFIER, 'Expected identifier in object pattern');
-          let value: Identifier | ArrayPattern | ObjectPattern | undefined;
-          if (this.match(TokenType.COLON)) {
-            value = this.parsePattern();
-          }
-          properties.push({
-            type: 'PropertyPattern',
-            key: { type: 'Identifier', name: key.value, line: key.line, column: key.column },
-            value,
-            line: key.line,
-            column: key.column,
-          } as PropertyPattern);
-        }
-        if (!this.match(TokenType.COMMA)) break;
-      }
-      this.consume(TokenType.RIGHT_BRACE, "Expected '}' in object pattern");
-      return {
-        type: 'ObjectPattern',
-        properties,
-        line: this.previous().line,
-        column: this.previous().column,
-      } as ObjectPattern;
+      return this.parseObjectPattern();
     }
+    return this.parseIdentifierPattern();
+  }
+
+  private parseArrayPattern(): ArrayPattern {
+    const elements: (Identifier | ArrayPattern | ObjectPattern | SpreadElement | null)[] = [];
+    while (!this.check(TokenType.RIGHT_BRACKET) && !this.isAtEnd()) {
+      if (this.match(TokenType.COMMA)) {
+        elements.push(null);
+        continue;
+      }
+      if (this.match(TokenType.SPREAD)) {
+        const spreadElem = this.parseSpreadElement();
+        elements.push(spreadElem);
+      } else {
+        elements.push(this.parsePattern());
+      }
+      if (!this.match(TokenType.COMMA)) break;
+    }
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' in array pattern");
+    return {
+      type: 'ArrayPattern',
+      elements,
+      line: this.previous().line,
+      column: this.previous().column,
+    } as ArrayPattern;
+  }
+
+  private parseObjectPattern(): ObjectPattern {
+    const properties: (PropertyPattern | SpreadElement)[] = [];
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      if (this.match(TokenType.SPREAD)) {
+        properties.push(this.parseSpreadElement());
+      } else {
+        const key = this.consume(TokenType.IDENTIFIER, 'Expected identifier in object pattern');
+        let value: Identifier | ArrayPattern | ObjectPattern | undefined;
+        if (this.match(TokenType.COLON)) {
+          value = this.parsePattern();
+        }
+        properties.push({
+          type: 'PropertyPattern',
+          key: { type: 'Identifier', name: key.value, line: key.line, column: key.column },
+          value,
+          line: key.line,
+          column: key.column,
+        } as PropertyPattern);
+      }
+      if (!this.match(TokenType.COMMA)) break;
+    }
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' in object pattern");
+    return {
+      type: 'ObjectPattern',
+      properties,
+      line: this.previous().line,
+      column: this.previous().column,
+    } as ObjectPattern;
+  }
+
+  private parseIdentifierPattern(): Identifier {
     // Allow certain keyword tokens to be treated as identifiers in binding patterns
     // 'объект' is a keyword mapped to TokenType.ОБЪЕКТ but test suite expects it
     // can be used as a normal variable name. Extendable list if more appear.

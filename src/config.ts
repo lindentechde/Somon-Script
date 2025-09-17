@@ -131,90 +131,148 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
     return [{ path: basePath, message: 'must be an object' }];
   }
 
+  // Validate top-level properties
+  errors.push(...validateModuleSystemTopLevel(config, basePath));
+
+  const moduleConfig = config as ModuleSystemConfig;
+
+  // Validate each section
+  errors.push(...validateResolutionSection(moduleConfig.resolution, `${basePath}.resolution`));
+  errors.push(...validateLoadingSection(moduleConfig.loading, `${basePath}.loading`));
+
+  // Reuse compiler options validation for optional compilation section
+  if (moduleConfig.compilation !== undefined) {
+    errors.push(...validateCompilerOptions(moduleConfig.compilation, `${basePath}.compilation`));
+  }
+
+  return errors;
+}
+
+function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
   const knownTop = ['resolution', 'loading', 'compilation'];
+
   for (const key of Object.keys(config)) {
     if (!knownTop.includes(key)) {
       errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
     }
   }
 
-  const res = (config as ModuleSystemConfig).resolution;
-  if (res !== undefined) {
-    if (typeof res !== 'object' || res === null) {
-      errors.push({ path: `${basePath}.resolution`, message: 'must be an object' });
-    } else {
-      if (res.baseUrl !== undefined && typeof res.baseUrl !== 'string') {
-        errors.push({ path: `${basePath}.resolution.baseUrl`, message: 'must be a string' });
-      }
-      if (res.paths !== undefined) {
-        if (typeof res.paths !== 'object' || res.paths === null) {
-          errors.push({ path: `${basePath}.resolution.paths`, message: 'must be an object' });
-        } else {
-          for (const [k, v] of Object.entries(res.paths)) {
-            if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
-              errors.push({
-                path: `${basePath}.resolution.paths`,
-                message: 'must be Record<string,string[]>',
-              });
-              break;
-            }
-          }
-        }
-      }
-      const stringArray = (arr: unknown): arr is string[] =>
-        Array.isArray(arr) && arr.every(x => typeof x === 'string');
-      if (res.extensions !== undefined && !stringArray(res.extensions)) {
-        errors.push({ path: `${basePath}.resolution.extensions`, message: 'must be string[]' });
-      }
-      if (res.moduleDirectories !== undefined && !stringArray(res.moduleDirectories)) {
-        errors.push({
-          path: `${basePath}.resolution.moduleDirectories`,
-          message: 'must be string[]',
-        });
-      }
-      if (res.allowJs !== undefined && typeof res.allowJs !== 'boolean') {
-        errors.push({ path: `${basePath}.resolution.allowJs`, message: 'must be a boolean' });
-      }
-      if (res.resolveJsonModule !== undefined && typeof res.resolveJsonModule !== 'boolean') {
-        errors.push({
-          path: `${basePath}.resolution.resolveJsonModule`,
-          message: 'must be a boolean',
-        });
-      }
+  return errors;
+}
+
+function validateResolutionSection(resolution: unknown, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (resolution === undefined) return errors;
+
+  if (typeof resolution !== 'object' || resolution === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const res = resolution as NonNullable<ModuleSystemConfig['resolution']>;
+
+  // Validate individual properties
+  errors.push(...validateResolutionBaseUrl(res.baseUrl, basePath));
+  errors.push(...validateResolutionPaths(res.paths, basePath));
+  errors.push(...validateResolutionExtensions(res.extensions, basePath));
+  errors.push(...validateResolutionModuleDirectories(res.moduleDirectories, basePath));
+  errors.push(...validateResolutionBooleanFlags(res, basePath));
+
+  return errors;
+}
+
+function validateResolutionBaseUrl(baseUrl: unknown, basePath: string): ConfigValidationError[] {
+  if (baseUrl !== undefined && typeof baseUrl !== 'string') {
+    return [{ path: `${basePath}.baseUrl`, message: 'must be a string' }];
+  }
+  return [];
+}
+
+function validateResolutionPaths(paths: unknown, basePath: string): ConfigValidationError[] {
+  if (paths === undefined) return [];
+
+  if (typeof paths !== 'object' || paths === null) {
+    return [{ path: `${basePath}.paths`, message: 'must be an object' }];
+  }
+
+  for (const [k, v] of Object.entries(paths)) {
+    if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
+      return [{ path: `${basePath}.paths`, message: 'must be Record<string,string[]>' }];
     }
   }
 
-  const load = (config as ModuleSystemConfig).loading;
-  if (load !== undefined) {
-    if (typeof load !== 'object' || load === null) {
-      errors.push({ path: `${basePath}.loading`, message: 'must be an object' });
-    } else {
-      if (load.encoding !== undefined && typeof load.encoding !== 'string') {
-        errors.push({ path: `${basePath}.loading.encoding`, message: 'must be a string' });
-      }
-      if (load.cache !== undefined && typeof load.cache !== 'boolean') {
-        errors.push({ path: `${basePath}.loading.cache`, message: 'must be a boolean' });
-      }
-      if (
-        load.circularDependencyStrategy !== undefined &&
-        !['error', 'warn', 'ignore'].includes(load.circularDependencyStrategy)
-      ) {
-        errors.push({
-          path: `${basePath}.loading.circularDependencyStrategy`,
-          message: `must be one of: error, warn, ignore`,
-        });
-      }
-    }
+  return [];
+}
+
+function validateResolutionExtensions(
+  extensions: unknown,
+  basePath: string
+): ConfigValidationError[] {
+  const stringArray = (arr: unknown): arr is string[] =>
+    Array.isArray(arr) && arr.every(x => typeof x === 'string');
+
+  if (extensions !== undefined && !stringArray(extensions)) {
+    return [{ path: `${basePath}.extensions`, message: 'must be string[]' }];
+  }
+  return [];
+}
+
+function validateResolutionModuleDirectories(
+  moduleDirectories: unknown,
+  basePath: string
+): ConfigValidationError[] {
+  const stringArray = (arr: unknown): arr is string[] =>
+    Array.isArray(arr) && arr.every(x => typeof x === 'string');
+
+  if (moduleDirectories !== undefined && !stringArray(moduleDirectories)) {
+    return [{ path: `${basePath}.moduleDirectories`, message: 'must be string[]' }];
+  }
+  return [];
+}
+
+function validateResolutionBooleanFlags(
+  res: NonNullable<ModuleSystemConfig['resolution']>,
+  basePath: string
+): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+
+  if (res.allowJs !== undefined && typeof res.allowJs !== 'boolean') {
+    errors.push({ path: `${basePath}.allowJs`, message: 'must be a boolean' });
   }
 
-  // Reuse compiler options validation for optional compilation section
-  if (config.compilation !== undefined) {
-    errors.push(
-      ...validateCompilerOptions(
-        (config as ModuleSystemConfig).compilation,
-        `${basePath}.compilation`
-      )
-    );
+  if (res.resolveJsonModule !== undefined && typeof res.resolveJsonModule !== 'boolean') {
+    errors.push({ path: `${basePath}.resolveJsonModule`, message: 'must be a boolean' });
+  }
+
+  return errors;
+}
+
+function validateLoadingSection(loading: unknown, basePath: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (loading === undefined) return errors;
+
+  if (typeof loading !== 'object' || loading === null) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+
+  const load = loading as NonNullable<ModuleSystemConfig['loading']>;
+
+  if (load.encoding !== undefined && typeof load.encoding !== 'string') {
+    errors.push({ path: `${basePath}.encoding`, message: 'must be a string' });
+  }
+
+  if (load.cache !== undefined && typeof load.cache !== 'boolean') {
+    errors.push({ path: `${basePath}.cache`, message: 'must be a boolean' });
+  }
+
+  if (
+    load.circularDependencyStrategy !== undefined &&
+    !['error', 'warn', 'ignore'].includes(load.circularDependencyStrategy)
+  ) {
+    errors.push({
+      path: `${basePath}.circularDependencyStrategy`,
+      message: `must be one of: error, warn, ignore`,
+    });
   }
 
   return errors;
@@ -229,9 +287,28 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 
   const obj = config as Partial<BundleConfig>;
 
-  if (obj.format !== undefined && !['commonjs', 'esm', 'umd'].includes(obj.format)) {
-    errors.push({ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' });
+  // Validate each property separately to reduce complexity
+  errors.push(...validateBundleFormat(obj.format, basePath));
+  errors.push(...validateBundleBooleanProps(obj, basePath));
+  errors.push(...validateBundleOutput(obj.output, basePath));
+  errors.push(...validateBundleExternals(obj.externals, basePath));
+
+  return errors;
+}
+
+function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
+  if (format !== undefined && !['commonjs', 'esm', 'umd'].includes(format as string)) {
+    return [{ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' }];
   }
+  return [];
+}
+
+function validateBundleBooleanProps(
+  obj: Partial<BundleConfig>,
+  basePath: string
+): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+
   if (obj.minify !== undefined && typeof obj.minify !== 'boolean') {
     errors.push({ path: `${basePath}.minify`, message: 'must be a boolean' });
   }
@@ -241,16 +318,24 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
   if (obj.force !== undefined && typeof obj.force !== 'boolean') {
     errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
   }
-  if (obj.output !== undefined && typeof obj.output !== 'string') {
-    errors.push({ path: `${basePath}.output`, message: 'must be a string' });
+
+  return errors;
+}
+
+function validateBundleOutput(output: unknown, basePath: string): ConfigValidationError[] {
+  if (output !== undefined && typeof output !== 'string') {
+    return [{ path: `${basePath}.output`, message: 'must be a string' }];
   }
-  if (obj.externals !== undefined) {
-    const externals = obj.externals;
+  return [];
+}
+
+function validateBundleExternals(externals: unknown, basePath: string): ConfigValidationError[] {
+  if (externals !== undefined) {
     if (!Array.isArray(externals) || externals.some(x => typeof x !== 'string')) {
-      errors.push({ path: `${basePath}.externals`, message: 'must be string[]' });
+      return [{ path: `${basePath}.externals`, message: 'must be string[]' }];
     }
   }
-  return errors;
+  return [];
 }
 
 function validateConfig(config: unknown): ConfigValidationError[] {

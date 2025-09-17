@@ -3,7 +3,7 @@
  * Focus on testing core functionality that works with current type system
  */
 
-import { TypeChecker, TypeCheckError, TypeCheckResult } from '../src/type-checker';
+import { TypeChecker, TypeCheckError } from '../src/type-checker';
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 
