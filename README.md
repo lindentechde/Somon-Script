@@ -1,7 +1,7 @@
 # SomonScript
 
 <div align="center">
-  <img src="images/somon-script-banner.png" alt="SomonScript Banner" width="800" style="max-width: 100%; height: auto;" />
+  <img src="images/somon-script-banner.png" alt="SomonScript Banner" width="500" style="max-width: 100%; height: auto;" />
 </div>
 
 **Production-Grade Programming Language with Tajik Syntax**
