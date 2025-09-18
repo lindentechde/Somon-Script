@@ -4,15 +4,17 @@ import * as path from 'path';
 import type { Module as NodeModuleType } from 'module';
 
 import type { CompileResult } from '../compiler';
-import { loadConfig, SomonConfig } from '../config';
+import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
 import pkg from '../../package.json';
 
 type CompilerModule = typeof import('../compiler');
+type ConfigModule = typeof import('../config');
 
 let tsRuntimeRegistered = false;
 
 const { compile } = loadCompiler();
+const { loadConfig } = loadConfigModule();
 
 type BufferEncoding =
   | 'ascii'
@@ -518,6 +520,36 @@ function loadCompiler(): CompilerModule {
   registerRuntimeTsTranspiler(ts);
 
   return require(compilerSourcePath) as CompilerModule;
+}
+
+function loadConfigModule(): ConfigModule {
+  try {
+    return require('../config') as ConfigModule;
+  } catch (error) {
+    if (!isModuleNotFound(error)) {
+      throw error;
+    }
+  }
+
+  const compiledPath = path.join(__dirname, '..', 'config.js');
+  try {
+    return require(compiledPath) as ConfigModule;
+  } catch (error) {
+    if (!isModuleNotFound(error)) {
+      throw error;
+    }
+  }
+
+  const ts = loadTypeScript();
+  const configSourcePath = path.resolve(__dirname, '..', '..', 'src', 'config.ts');
+
+  if (!fs.existsSync(configSourcePath)) {
+    throw new Error("Config module not found. Run 'npm run build' before executing the CLI.");
+  }
+
+  registerRuntimeTsTranspiler(ts);
+
+  return require(configSourcePath) as ConfigModule;
 }
 
 function isModuleNotFound(error: unknown): boolean {
