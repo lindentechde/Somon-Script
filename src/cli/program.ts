@@ -2,10 +2,14 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { compile, CompileResult } from '../compiler';
+import type { CompileResult } from '../compiler';
 import { loadConfig, SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
 import pkg from '../../package.json';
+
+type CompilerModule = typeof import('../compiler');
+
+const { compile } = loadCompiler();
 
 type BufferEncoding =
   | 'ascii'
@@ -481,4 +485,63 @@ export function createProgram(): Command {
     });
 
   return program;
+}
+
+function loadCompiler(): CompilerModule {
+  try {
+    return require('../compiler') as CompilerModule;
+  } catch (error) {
+    if (!isModuleNotFound(error, '../compiler')) {
+      throw error;
+    }
+  }
+
+  const compiledPath = path.join(__dirname, '..', 'compiler.js');
+  try {
+    return require(compiledPath) as CompilerModule;
+  } catch (error) {
+    if (!isModuleNotFound(error, compiledPath)) {
+      throw error;
+    }
+  }
+
+  const ts = require('typescript') as typeof import('typescript');
+  const compilerSourcePath = path.resolve(__dirname, '..', '..', 'src', 'compiler.ts');
+
+  if (!fs.existsSync(compilerSourcePath)) {
+    throw new Error("Compiler module not found. Run 'npm run build' before executing the CLI.");
+  }
+
+  const source = fs.readFileSync(compilerSourcePath, 'utf-8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      esModuleInterop: true,
+    },
+    fileName: compilerSourcePath,
+  });
+
+  const module = { exports: {} as CompilerModule };
+  const compiled = new Function(
+    'require',
+    'module',
+    'exports',
+    '__dirname',
+    '__filename',
+    outputText
+  );
+  compiled(require, module, module.exports, path.dirname(compilerSourcePath), compilerSourcePath);
+  return module.exports;
+}
+
+function isModuleNotFound(error: unknown, request: string): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  if (code !== 'MODULE_NOT_FOUND') {
+    return false;
+  }
+  return error.message.includes(request);
 }
