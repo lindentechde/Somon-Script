@@ -286,6 +286,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-matrix, quality-checks, build-validation, performance-benchmarks]
     if: needs.quality-checks.outputs.should-release == 'true'
+    env:
+      # Ensure both npm CLI and semantic-release share the same publish token
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: write
       issues: write
