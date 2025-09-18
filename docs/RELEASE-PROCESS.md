@@ -122,13 +122,13 @@ Or via GitHub Actions workflow dispatch with dry-run option.
 
 1. **Pull Request Validation** (New!)
    - Comprehensive quality checks on every PR
-   - Multi-Node.js version testing (18.x-24.x)
+   - Multi-Node.js version testing (20.x & 22.x)
    - Smart change detection (only runs relevant checks)
    - Automatic merge blocking if validation fails
    - Success/failure status posted to PR
 
 2. **Validation Phase**
-   - Run full test suite across all Node.js versions
+   - Run full test suite across supported Node.js versions (20.x & 22.x)
    - Validate architecture quality (no 'as any', union types working)
    - Check modular structure
    - Performance benchmark validation

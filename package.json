@@ -1,10 +1,13 @@
 {
   "name": "somon-script",
-  "version": "0.3.3",
+  "version": "0.3.5",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
     "somon": "dist/cli.js"
+  },
+  "engines": {
+    "node": "^20.0.0 || ^22.0.0"
   },
   "scripts": {
     "build": "npm run clean && tsc",

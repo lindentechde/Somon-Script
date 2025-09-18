@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Module as NodeModuleType } from 'module';
 
 import type { CompileResult } from '../compiler';
 import { loadConfig, SomonConfig } from '../config';
@@ -8,6 +9,8 @@ import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../modu
 import pkg from '../../package.json';
 
 type CompilerModule = typeof import('../compiler');
+
+let tsRuntimeRegistered = false;
 
 const { compile } = loadCompiler();
 
@@ -505,34 +508,16 @@ function loadCompiler(): CompilerModule {
     }
   }
 
-  const ts = require('typescript') as typeof import('typescript');
+  const ts = loadTypeScript();
   const compilerSourcePath = path.resolve(__dirname, '..', '..', 'src', 'compiler.ts');
 
   if (!fs.existsSync(compilerSourcePath)) {
     throw new Error("Compiler module not found. Run 'npm run build' before executing the CLI.");
   }
 
-  const source = fs.readFileSync(compilerSourcePath, 'utf-8');
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-      esModuleInterop: true,
-    },
-    fileName: compilerSourcePath,
-  });
+  registerRuntimeTsTranspiler(ts);
 
-  const module = { exports: {} as CompilerModule };
-  const compiled = new Function(
-    'require',
-    'module',
-    'exports',
-    '__dirname',
-    '__filename',
-    outputText
-  );
-  compiled(require, module, module.exports, path.dirname(compilerSourcePath), compilerSourcePath);
-  return module.exports;
+  return require(compilerSourcePath) as CompilerModule;
 }
 
 function isModuleNotFound(error: unknown, request: string): boolean {
@@ -544,4 +529,42 @@ function isModuleNotFound(error: unknown, request: string): boolean {
     return false;
   }
   return error.message.includes(request);
+}
+
+function loadTypeScript(): typeof import('typescript') {
+  try {
+    return require('typescript') as typeof import('typescript');
+  } catch (error) {
+    throw new Error(
+      'TypeScript runtime is required to execute the CLI without compiled artifacts. Please install dev dependencies.'
+    );
+  }
+}
+
+function registerRuntimeTsTranspiler(ts: typeof import('typescript')): void {
+  if (tsRuntimeRegistered || require.extensions['.ts']) {
+    // Either we already registered our hook or another tool (e.g. ts-node) is handling .ts files.
+    tsRuntimeRegistered = true;
+    return;
+  }
+
+  require.extensions['.ts'] = (module: NodeModuleType, filename: string): void => {
+    const source = fs.readFileSync(filename, 'utf-8');
+    const { outputText } = ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2020,
+        esModuleInterop: true,
+        sourceMap: false,
+      },
+      fileName: filename,
+    });
+
+    (module as NodeModuleType & { _compile(_code: string, _filename: string): void })._compile(
+      outputText,
+      filename
+    );
+  };
+
+  tsRuntimeRegistered = true;
 }

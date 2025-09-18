@@ -16,7 +16,7 @@ By the end of this tutorial, you'll be able to:
 ## Prerequisites
 
 - Basic programming knowledge (any language)
-- Node.js 16+ installed on your system
+- Node.js 20.x or 22.x installed on your system
 - A text editor or IDE (VS Code recommended)
 
 ## Step 1: Installation

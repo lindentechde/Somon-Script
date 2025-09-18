@@ -399,7 +399,7 @@ Source Code (.som)
 
 ### Prerequisites
 
-- Node.js 16+
+- Node.js 20.x or 22.x (LTS)
 - npm or yarn
 - TypeScript knowledge (for contributing)
 

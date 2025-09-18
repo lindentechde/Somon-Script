@@ -66,7 +66,7 @@ Each tutorial follows a consistent structure:
 
 ### System Requirements
 
-- Node.js 16 or later
+- Node.js 20.x or 22.x
 - npm or yarn package manager
 - Modern terminal/command prompt
 
