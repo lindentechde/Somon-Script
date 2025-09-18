@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.3.16](https://github.com/lindentechde/Somon-Script/compare/v0.3.15...v0.3.16) (2025-09-18)
+
+### 🐛 Bug Fixes
+
+* fixed author ([4f95ba6](https://github.com/lindentechde/Somon-Script/commit/4f95ba624e5fce9909d32230fb4b0575e0c9428f))
+
 ## 1.0.0 (2025-09-18)
 
 ### ✨ Features
