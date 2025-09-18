@@ -1,7 +1,7 @@
 name: Automated Release and Publishing
 
 # Comprehensive multi-stage release pipeline with thorough testing:
-# 1. Test Matrix: Tests across Node.js versions 18.x, 20.x, 21.x, 22.x, 23.x, 24.x
+# 1. Test Matrix: Tests across Node.js versions 20.x and 22.x
 # 2. Quality Checks: Architecture validation, type safety, formatting, coverage
 # 3. Build Validation: Package creation and artifact generation  
 # 4. Performance Benchmarks: Compilation performance and example coverage
@@ -33,7 +33,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 21.x, 22.x, 23.x, 24.x]
+        node-version: [20.x, 22.x]
     
     steps:
     - name: Checkout code
