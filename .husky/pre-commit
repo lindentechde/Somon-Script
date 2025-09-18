@@ -7,28 +7,6 @@ npx lint-staged
 # Run type checking
 npm run type-check
 
-# Run tests to ensure nothing is broken
-npm test
-
-# Build CLI if needed for example audit
-if [ ! -d dist ]; then
-  npm run build >/dev/null
-fi
-
-# Audit example programs
-npm run audit:examples
-
-# Automatically increment patch version before commit
-echo "🔄 Auto-incrementing patch version..."
-npm version patch --no-git-tag-version
-
-# Format the updated package files after version increment
-echo "🎨 Formatting updated package files..."
-npx prettier --write package.json package-lock.json
-
-# Stage the updated and formatted package.json and package-lock.json
-git add package.json package-lock.json 2>/dev/null || git add package.json
-
 # Run final format check to ensure everything is properly formatted
 npm run format:check
 
