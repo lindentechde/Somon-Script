@@ -1,4 +1,7 @@
 module.exports = {
+  ignores: [
+    commit => commit.includes('[skip ci]'), // Allow semantic-release commits with long release notes
+  ],
   extends: ['@commitlint/config-conventional'],
   rules: {
     'type-enum': [
