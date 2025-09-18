@@ -78,7 +78,7 @@
         ],
         "addReleases": "bottom",
         "releasedLabels": false,
-        "successComment": "🎉 This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} :tada:\n\nThe release is available on:\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/${name}/v/${nextRelease.version})\n- [GitHub release](${releases.filter(release => /github\\.com/.test(release.url))[0].url})\n\nYour **${issue.pull_request ? 'pull request' : 'issue'}** is now live! 🚀"
+        "successComment": "🎉 This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version} :tada:\n\nThe release is available on:\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/somon-script/v/${nextRelease.version})\n- [GitHub release](${releases.filter(release => /github\\.com/.test(release.url))[0].url})\n\nYour **${issue.pull_request ? 'pull request' : 'issue'}** is now live! 🚀"
       }
     ],
     [
