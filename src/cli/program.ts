@@ -494,7 +494,7 @@ function loadCompiler(): CompilerModule {
   try {
     return require('../compiler') as CompilerModule;
   } catch (error) {
-    if (!isModuleNotFound(error, '../compiler')) {
+    if (!isModuleNotFound(error)) {
       throw error;
     }
   }
@@ -503,7 +503,7 @@ function loadCompiler(): CompilerModule {
   try {
     return require(compiledPath) as CompilerModule;
   } catch (error) {
-    if (!isModuleNotFound(error, compiledPath)) {
+    if (!isModuleNotFound(error)) {
       throw error;
     }
   }
@@ -520,15 +520,8 @@ function loadCompiler(): CompilerModule {
   return require(compilerSourcePath) as CompilerModule;
 }
 
-function isModuleNotFound(error: unknown, request: string): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const code = (error as { code?: unknown }).code;
-  if (code !== 'MODULE_NOT_FOUND') {
-    return false;
-  }
-  return error.message.includes(request);
+function isModuleNotFound(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: unknown }).code === 'MODULE_NOT_FOUND';
 }
 
 function loadTypeScript(): typeof import('typescript') {
