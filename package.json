@@ -61,7 +61,7 @@
     "javascript",
     "programming-language"
   ],
-  "author": "LindenTech IT Consulting",
+  "author": "Bakhtier Gaibulloev",
   "license": "MIT",
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",
