@@ -2,6 +2,9 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
+  push:
     tags:
       - 'v*'
 
@@ -9,6 +12,9 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Required for JSR OIDC authentication
     
     steps:
     - name: Checkout
@@ -61,9 +67,23 @@ jobs:
         echo 'npm install -g somon-script' >> RELEASE_NOTES.md
         echo '```' >> RELEASE_NOTES.md
         
+    - name: Get version from package.json
+      id: version
+      run: echo "version=v$(node -p 'require("./package.json").version')" >> $GITHUB_OUTPUT
+      
+    - name: Create and push tag
+      if: github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag ${{ steps.version.outputs.version }}
+        git push origin ${{ steps.version.outputs.version }}
+        
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: ${{ github.ref == 'refs/heads/main' && steps.version.outputs.version || github.ref_name }}
+        name: "SomonScript ${{ github.ref == 'refs/heads/main' && steps.version.outputs.version || github.ref_name }}"
         body_path: RELEASE_NOTES.md
         files: |
           *.tgz
@@ -74,3 +94,6 @@ jobs:
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+    - name: Publish to JSR
+      run: npx jsr publish

@@ -14,3 +14,8 @@
 
 - Run `npm run lint`, `npm test`, and `npm run audit:examples` before pushing
   changes.
+
+## Additional Guidelines
+
+- Use context7 for information and documentation retrieval.
+- Use sequential thinking for complex tasks.

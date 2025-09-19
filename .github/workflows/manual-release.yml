@@ -17,11 +17,19 @@ on:
         required: false
         default: true
         type: boolean
+      publish_jsr:
+        description: 'Publish to JSR'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   manual-release:
     name: Manual Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Required for JSR OIDC authentication
     
     steps:
     - name: Checkout
@@ -100,16 +108,40 @@ jobs:
         draft: false
         prerelease: false
         
+    - name: Update JSR version
+      if: inputs.publish_jsr == true
+      run: |
+        if [ -f "jsr.json" ]; then
+          echo "Updating JSR version to ${{ inputs.version }}"
+          node -e "
+            const jsr = require('./jsr.json');
+            jsr.version = '${{ inputs.version }}';
+            require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
+          "
+        fi
+        
     - name: Publish to NPM
       if: inputs.publish_npm == true
       run: npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         
+    - name: Publish to JSR
+      if: inputs.publish_jsr == true
+      run: npx jsr publish
+        
     - name: Summary
       run: |
         echo "🎉 Manual Release v${{ inputs.version }} completed!"
         echo "✅ Version updated in package.json"
+        echo "✅ Git tag created: v${{ inputs.version }}"
+        echo "✅ GitHub release created"
+        if [ "${{ inputs.publish_npm }}" == "true" ]; then
+          echo "✅ NPM package published"
+        fi
+        if [ "${{ inputs.publish_jsr }}" == "true" ]; then
+          echo "✅ JSR package published"
+        fi
         echo "✅ Git tag created: v${{ inputs.version }}"
         echo "✅ GitHub release created"
         echo "✅ NPM package published"
