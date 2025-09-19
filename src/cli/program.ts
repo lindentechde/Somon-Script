@@ -6,7 +6,8 @@ import type { Module as NodeModuleType } from 'module';
 import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
-import pkg from '../../package.json';
+// Read package.json at runtime to avoid import attribute issues
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
 
 type CompilerModule = typeof import('../compiler');
 type ConfigModule = typeof import('../config');
