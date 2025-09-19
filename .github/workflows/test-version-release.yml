@@ -98,20 +98,9 @@ jobs:
     - name: Increment version
       id: version
       run: |
-        # Increment package.json version
+        # Use npm version with lifecycle script for automatic jsr.json synchronization
         NEW_VERSION=$(npm version ${{ steps.version_type.outputs.type }} --no-git-tag-version)
         echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-        
-        # Update jsr.json to match
-        if [ -f "jsr.json" ]; then
-          echo "Updating JSR version to $NEW_VERSION"
-          node -e "
-            const jsr = require('./jsr.json');
-            jsr.version = '$NEW_VERSION'.replace('v', '');
-            require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
-          "
-        fi
-        
         echo "📦 New version: $NEW_VERSION"
         
     - name: Commit and tag version
@@ -200,7 +189,7 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         
     - name: Publish to JSR
-      run: npx jsr publish
+      run: npx jsr publish --allow-slow-types
         
     - name: Summary
       run: |

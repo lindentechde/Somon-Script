@@ -46,6 +46,7 @@
     "version:auto": "node scripts/increment-version.js",
     "version:auto:minor": "node scripts/increment-version.js minor",
     "version:auto:major": "node scripts/increment-version.js major",
+    "version": "node -e \"const pkg=require('./package.json'); const jsr=require('./jsr.json'); jsr.version=pkg.version; require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2)); console.log('✅ Synchronized jsr.json version to', pkg.version);\"",
     "prepare": "husky install"
   },
   "lint-staged": {
