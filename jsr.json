@@ -2,8 +2,7 @@
   "name": "@lindentechde/somon-script",
   "version": "0.3.21",
   "exports": {
-    ".": "./src/index.ts",
-    "./cli": "./src/cli.ts"
+    ".": "./src/index.ts"
   },
   "license": "MIT",
   "publish": {

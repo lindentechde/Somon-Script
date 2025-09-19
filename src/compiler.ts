@@ -8,31 +8,53 @@ import { Parser } from './parser';
 import { TypeChecker } from './type-checker';
 
 /**
- * Options for compilation process
+ * Configuration flags that control how SomonScript source is transformed into JavaScript.
  */
 export interface CompileOptions {
+  /**
+   * Emit source maps that map the generated JavaScript back to the SomonScript input.
+   * Enabled automatically when the pipeline needs stack traces or debugger support.
+   */
   sourceMap?: boolean;
+  /**
+   * Reduce output size by removing whitespace and simplifying expressions where possible.
+   */
   minify?: boolean;
+  /**
+   * JavaScript target version for the generated code. Defaults to `es2020` for modern runtimes.
+   */
   target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  /**
+   * Toggle semantic analysis. Disable only when experimenting with partially valid programs.
+   */
   typeCheck?: boolean;
+  /**
+   * Abort compilation when any type errors are encountered instead of emitting code.
+   */
   strict?: boolean;
 }
 
 /**
- * Result of compilation process
+ * Result of compiling SomonScript source into JavaScript.
  */
 export interface CompileResult {
+  /** Generated JavaScript code, or an empty string if compilation failed. */
   code: string;
+  /** Optional source map bundled as a JSON string when `sourceMap` is enabled. */
   sourceMap?: string;
+  /** Collection of fatal issues that prevented emission. */
   errors: string[];
+  /** Diagnostics that highlight potential problems but do not stop emission. */
   warnings: string[];
 }
 
 /**
- * Compile SomonScript source code to JavaScript
- * @param source - The SomonScript source code
- * @param options - Compilation options
- * @returns Compilation result with generated code, errors, and warnings
+ * Compile SomonScript source code to JavaScript.
+ *
+ * @param source Raw SomonScript program text.
+ * @param options Optional compiler configuration. See {@link CompileOptions} for details.
+ * @returns Structured {@link CompileResult} output containing emitted JavaScript, source maps,
+ * diagnostics, and warnings.
  */
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
   const errors: string[] = [];
