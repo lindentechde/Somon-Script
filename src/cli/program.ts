@@ -315,7 +315,7 @@ export function createProgram(): Command {
         // Create package.json
         const packageJson = {
           name,
-          version: '1.0.0',
+          version: '0.1.0',
           description: 'A SomonScript project',
           main: 'dist/main.js',
           scripts: {

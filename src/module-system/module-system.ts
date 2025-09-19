@@ -626,7 +626,7 @@ ${commonjsBundle}
       return {
         status: 'unhealthy',
         uptime: process.uptime(),
-        version: '1.0.0',
+        version: '0.3.16',
         timestamp: Date.now(),
         checks: [],
       };
