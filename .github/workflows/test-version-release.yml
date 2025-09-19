@@ -1,0 +1,213 @@
+name: Test, Version, and Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Lint
+      run: npm run lint
+      
+    - name: Type check
+      run: npm run type-check
+      
+    - name: Build
+      run: npm run build
+      
+    - name: Test
+      run: npm run test:ci
+      
+    - name: Upload coverage
+      if: matrix.node-version == '20.x'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        fail_ci_if_error: false
+
+  version:
+    name: Version Increment
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: Determine version type
+      id: version_type
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "type=${{ inputs.version_type }}" >> $GITHUB_OUTPUT
+        else
+          echo "type=patch" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Increment version
+      id: version
+      run: |
+        # Increment package.json version
+        NEW_VERSION=$(npm version ${{ steps.version_type.outputs.type }} --no-git-tag-version)
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        # Update jsr.json to match
+        if [ -f "jsr.json" ]; then
+          echo "Updating JSR version to $NEW_VERSION"
+          node -e "
+            const jsr = require('./jsr.json');
+            jsr.version = '$NEW_VERSION'.replace('v', '');
+            require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
+          "
+        fi
+        
+        echo "📦 New version: $NEW_VERSION"
+        
+    - name: Commit and tag version
+      run: |
+        git add package.json package-lock.json jsr.json
+        git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}
+
+        Co-authored-by: Ona <no-reply@ona.com>"
+        git tag ${{ steps.version.outputs.new_version }}
+        git push origin main
+        git push origin ${{ steps.version.outputs.new_version }}
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: version
+    permissions:
+      contents: write
+      id-token: write # Required for JSR OIDC authentication
+      
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version.outputs.new_version }}
+        fetch-depth: 0
+        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        registry-url: 'https://registry.npmjs.org'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build
+      run: npm run build
+      
+    - name: Create package
+      run: npm pack
+      
+    - name: Generate changelog
+      run: |
+        echo "## 🎉 SomonScript ${{ needs.version.outputs.new_version }}" > RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        echo "### ✨ What's New" >> RELEASE_NOTES.md
+        echo "" >> RELEASE_NOTES.md
+        
+        # Get commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        if [ -n "$LAST_TAG" ]; then
+          echo "Changes since $LAST_TAG:" >> RELEASE_NOTES.md
+          git log --pretty=format:"- %s" $LAST_TAG..HEAD^ >> RELEASE_NOTES.md
+        else
+          echo "- Automatic version increment to ${{ needs.version.outputs.new_version }}" >> RELEASE_NOTES.md
+          echo "- Comprehensive architecture with union type support" >> RELEASE_NOTES.md
+          echo "- Type-safe compilation" >> RELEASE_NOTES.md
+          echo "- Modular design" >> RELEASE_NOTES.md
+        fi
+        
+        echo "" >> RELEASE_NOTES.md
+        echo "### 📦 Installation" >> RELEASE_NOTES.md
+        echo '```bash' >> RELEASE_NOTES.md
+        echo 'npm install -g somon-script' >> RELEASE_NOTES.md
+        echo '```' >> RELEASE_NOTES.md
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.version.outputs.new_version }}
+        name: "SomonScript ${{ needs.version.outputs.new_version }}"
+        body_path: RELEASE_NOTES.md
+        files: |
+          *.tgz
+        draft: false
+        prerelease: false
+        
+    - name: Publish to NPM
+      run: |
+        echo "⏳ NPM publishing temporarily disabled due to 24-hour republish policy"
+        echo "Will be re-enabled after 2025-09-19T10:40:10.137Z"
+        # npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
+    - name: Publish to JSR
+      run: npx jsr publish
+        
+    - name: Summary
+      run: |
+        echo "🎉 Release ${{ needs.version.outputs.new_version }} completed!"
+        echo "✅ Tests passed"
+        echo "✅ Version incremented automatically"
+        echo "✅ Git tag created and pushed"
+        echo "✅ GitHub release created"
+        echo "✅ JSR package published"
+        echo "⏳ NPM publishing pending (24-hour restriction)"
