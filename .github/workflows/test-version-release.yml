@@ -99,7 +99,11 @@ jobs:
       id: version
       run: |
         # Use npm version with lifecycle script for automatic jsr.json synchronization
-        NEW_VERSION=$(npm version ${{ steps.version_type.outputs.type }} --no-git-tag-version)
+        echo "Running npm version ${{ steps.version_type.outputs.type }}..."
+        npm version ${{ steps.version_type.outputs.type }} --no-git-tag-version
+        
+        # Get the new version from package.json (more reliable than parsing npm output)
+        NEW_VERSION="v$(node -p 'require("./package.json").version')"
         echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
         echo "📦 New version: $NEW_VERSION"
         
