@@ -152,7 +152,7 @@ jobs:
       run: |
         echo "⏳ NPM publishing temporarily disabled due to 24-hour republish policy"
         echo "Will be re-enabled after 2025-09-19T10:40:10.137Z"
-        # npm publish --access public
+        npm publish --access public
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         
