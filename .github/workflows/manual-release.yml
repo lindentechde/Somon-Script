@@ -65,7 +65,7 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add package.json package-lock.json
+        git add package.json package-lock.json jsr.json
         git commit -m "chore: bump version to ${{ inputs.version }}"
         git push
         
@@ -74,39 +74,6 @@ jobs:
       run: |
         git tag v${{ inputs.version }}
         git push origin v${{ inputs.version }}
-        
-    - name: Generate changelog
-      run: |
-        echo "## 🎉 SomonScript v${{ inputs.version }}" > RELEASE_NOTES.md
-        echo "" >> RELEASE_NOTES.md
-        echo "### ✨ What's New" >> RELEASE_NOTES.md
-        echo "" >> RELEASE_NOTES.md
-        
-        # Get commits since last tag
-        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -n "$LAST_TAG" ]; then
-          echo "Changes since $LAST_TAG:" >> RELEASE_NOTES.md
-          git log --pretty=format:"- %s" $LAST_TAG..HEAD^ >> RELEASE_NOTES.md
-        else
-          echo "- Manual release v${{ inputs.version }}" >> RELEASE_NOTES.md
-        fi
-        
-        echo "" >> RELEASE_NOTES.md
-        echo "### 📦 Installation" >> RELEASE_NOTES.md
-        echo '```bash' >> RELEASE_NOTES.md
-        echo 'npm install -g somon-script' >> RELEASE_NOTES.md
-        echo '```' >> RELEASE_NOTES.md
-        
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ inputs.version }}
-        name: "SomonScript v${{ inputs.version }}"
-        body_path: RELEASE_NOTES.md
-        files: |
-          *.tgz
-        draft: false
-        prerelease: false
         
     - name: Update JSR version
       if: inputs.publish_jsr == true
@@ -118,6 +85,13 @@ jobs:
             jsr.version = '${{ inputs.version }}';
             require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
           "
+          git add jsr.json
+          if git diff --cached --quiet; then
+            echo "JSR version already aligned with package.json"
+          else
+            git commit --amend --no-edit
+            git push --force-with-lease
+          fi
         fi
         
     - name: Publish to NPM
@@ -128,20 +102,60 @@ jobs:
         
     - name: Publish to JSR
       if: inputs.publish_jsr == true
-      run: npx jsr publish
-        
+      run: |
+        git status --short
+        npx jsr publish
+
+    - name: Generate changelog
+      id: release_notes
+      run: |
+        NOTES="$RUNNER_TEMP/release_notes.md"
+        {
+          echo "## 🎉 SomonScript v${{ inputs.version }}";
+          echo "";
+          echo "### ✨ What's New";
+          echo "";
+
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "");
+          if [ -n "$LAST_TAG" ]; then
+            echo "Changes since $LAST_TAG:";
+            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD^;
+          else
+            echo "- Manual release v${{ inputs.version }}";
+          fi
+
+          echo "";
+          echo "### 📦 Installation";
+          echo '```bash';
+          echo 'npm install -g somon-script';
+          echo '```';
+        } > "$NOTES"
+        echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ inputs.version }}
+        name: "SomonScript v${{ inputs.version }}"
+        body_path: ${{ steps.release_notes.outputs.path }}
+        files: |
+          *.tgz
+        draft: false
+        prerelease: false
+
     - name: Summary
       run: |
         echo "🎉 Manual Release v${{ inputs.version }} completed!"
-        echo "✅ Version updated in package.json"
+        echo "✅ Version metadata committed"
         echo "✅ Git tag created: v${{ inputs.version }}"
         echo "✅ GitHub release created"
         if [ "${{ inputs.publish_npm }}" == "true" ]; then
           echo "✅ NPM package published"
+        else
+          echo "⏸️ NPM publish skipped"
         fi
         if [ "${{ inputs.publish_jsr }}" == "true" ]; then
           echo "✅ JSR package published"
+        else
+          echo "⏸️ JSR publish skipped"
         fi
-        echo "✅ Git tag created: v${{ inputs.version }}"
-        echo "✅ GitHub release created"
-        echo "✅ NPM package published"

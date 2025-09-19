@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createRequire } from 'module';
 import type { Module as NodeModuleType } from 'module';
 
 import type { CompileResult } from '../compiler';
@@ -29,6 +30,12 @@ type CompilerModule = typeof import('../compiler');
 type ConfigModule = typeof import('../config');
 
 let tsRuntimeRegistered = false;
+
+const localRequire = createRequire(__filename);
+const compiledCompilerModuleId = '../compiler';
+const sourceCompilerModuleId = '../../src/compiler.ts';
+const compiledConfigModuleId = '../config';
+const sourceConfigModuleId = '../../src/config.ts';
 
 const { compile } = loadCompiler();
 const { loadConfig } = loadConfigModule();
@@ -511,16 +518,15 @@ export function createProgram(): Command {
 
 function loadCompiler(): CompilerModule {
   try {
-    return require('../compiler') as CompilerModule;
+    return localRequire(compiledCompilerModuleId) as CompilerModule;
   } catch (error) {
     if (!isModuleNotFound(error)) {
       throw error;
     }
   }
 
-  const compiledPath = path.join(__dirname, '..', 'compiler.js');
   try {
-    return require(compiledPath) as CompilerModule;
+    return localRequire('../compiler.js') as CompilerModule;
   } catch (error) {
     if (!isModuleNotFound(error)) {
       throw error;
@@ -536,21 +542,20 @@ function loadCompiler(): CompilerModule {
 
   registerRuntimeTsTranspiler(ts);
 
-  return require(compilerSourcePath) as CompilerModule;
+  return localRequire(sourceCompilerModuleId) as CompilerModule;
 }
 
 function loadConfigModule(): ConfigModule {
   try {
-    return require('../config') as ConfigModule;
+    return localRequire(compiledConfigModuleId) as ConfigModule;
   } catch (error) {
     if (!isModuleNotFound(error)) {
       throw error;
     }
   }
 
-  const compiledPath = path.join(__dirname, '..', 'config.js');
   try {
-    return require(compiledPath) as ConfigModule;
+    return localRequire('../config.js') as ConfigModule;
   } catch (error) {
     if (!isModuleNotFound(error)) {
       throw error;
@@ -566,7 +571,7 @@ function loadConfigModule(): ConfigModule {
 
   registerRuntimeTsTranspiler(ts);
 
-  return require(configSourcePath) as ConfigModule;
+  return localRequire(sourceConfigModuleId) as ConfigModule;
 }
 
 function isModuleNotFound(error: unknown): boolean {

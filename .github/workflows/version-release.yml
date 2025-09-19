@@ -148,42 +148,6 @@ jobs:
     - name: Create package
       run: npm pack
       
-    - name: Generate changelog
-      run: |
-        echo "## 🎉 SomonScript ${{ needs.version.outputs.new_version }}" > RELEASE_NOTES.md
-        echo "" >> RELEASE_NOTES.md
-        echo "### ✨ What's New" >> RELEASE_NOTES.md
-        echo "" >> RELEASE_NOTES.md
-        
-        # Get commits since last tag
-        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -n "$LAST_TAG" ]; then
-          echo "Changes since $LAST_TAG:" >> RELEASE_NOTES.md
-          git log --pretty=format:"- %s" $LAST_TAG..HEAD^ >> RELEASE_NOTES.md
-        else
-          echo "- Automatic version increment to ${{ needs.version.outputs.new_version }}" >> RELEASE_NOTES.md
-          echo "- Comprehensive architecture with union type support" >> RELEASE_NOTES.md
-          echo "- Type-safe compilation" >> RELEASE_NOTES.md
-          echo "- Modular design" >> RELEASE_NOTES.md
-        fi
-        
-        echo "" >> RELEASE_NOTES.md
-        echo "### 📦 Installation" >> RELEASE_NOTES.md
-        echo '```bash' >> RELEASE_NOTES.md
-        echo 'npm install -g somon-script' >> RELEASE_NOTES.md
-        echo '```' >> RELEASE_NOTES.md
-        
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ needs.version.outputs.new_version }}
-        name: "SomonScript ${{ needs.version.outputs.new_version }}"
-        body_path: RELEASE_NOTES.md
-        files: |
-          *.tgz
-        draft: false
-        prerelease: false
-        
     - name: Publish to NPM
       run: |
         echo "⏳ NPM publishing temporarily disabled due to 24-hour republish policy"
@@ -193,7 +157,49 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         
     - name: Publish to JSR
-      run: npx jsr publish --allow-slow-types
+      run: |
+        git status --short
+        npx jsr publish --allow-slow-types
+        
+    - name: Generate changelog
+      id: release_notes
+      run: |
+        NOTES="$RUNNER_TEMP/release_notes.md"
+        {
+          echo "## 🎉 SomonScript ${{ needs.version.outputs.new_version }}";
+          echo "";
+          echo "### ✨ What's New";
+          echo "";
+
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "");
+          if [ -n "$LAST_TAG" ]; then
+            echo "Changes since $LAST_TAG:";
+            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD^;
+          else
+            echo "- Automatic version increment to ${{ needs.version.outputs.new_version }}";
+            echo "- Comprehensive architecture with union type support";
+            echo "- Type-safe compilation";
+            echo "- Modular design";
+          fi
+
+          echo "";
+          echo "### 📦 Installation";
+          echo '```bash';
+          echo 'npm install -g somon-script';
+          echo '```';
+        } > "$NOTES"
+        echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.version.outputs.new_version }}
+        name: "SomonScript ${{ needs.version.outputs.new_version }}"
+        body_path: ${{ steps.release_notes.outputs.path }}
+        files: |
+          *.tgz
+        draft: false
+        prerelease: false
         
     - name: Summary
       run: |
