@@ -1,6 +1,6 @@
 {
   "name": "somon-script",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -46,7 +46,6 @@
     "version:auto": "node scripts/increment-version.js",
     "version:auto:minor": "node scripts/increment-version.js minor",
     "version:auto:major": "node scripts/increment-version.js major",
-
     "prepare": "husky install"
   },
   "lint-staged": {
@@ -65,19 +64,16 @@
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",
     "@commitlint/config-conventional": "^17.0.0",
-
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
-
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^9.0.0",
     "husky": "^8.0.0",
     "jest": "^29.0.0",
     "lint-staged": "^13.0.0",
     "prettier": "^3.0.0",
-
     "ts-jest": "^29.4.1",
     "typedoc": "^0.25.0",
     "typescript": "^5.0.0"
