@@ -7,7 +7,23 @@ import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
 // Read package.json at runtime to avoid import attribute issues
-const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
+function findPackageJson(): { name: string; version: string } {
+  let currentDir = __dirname;
+  while (currentDir !== path.dirname(currentDir)) {
+    const packagePath = path.join(currentDir, 'package.json');
+    if (fs.existsSync(packagePath)) {
+      return JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  // Fallback for test environments
+  const fallbackPath = path.resolve(process.cwd(), 'package.json');
+  if (fs.existsSync(fallbackPath)) {
+    return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
+  }
+  throw new Error('package.json not found');
+}
+const pkg = findPackageJson();
 
 type CompilerModule = typeof import('../compiler');
 type ConfigModule = typeof import('../config');

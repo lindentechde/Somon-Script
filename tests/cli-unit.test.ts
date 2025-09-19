@@ -10,6 +10,21 @@ jest.mock('../src/compiler', () => ({
 jest.mock('fs');
 const mockFs = fs as jest.Mocked<typeof fs>;
 
+// Mock package.json reading for the program module
+mockFs.existsSync.mockImplementation((filePath: string) => {
+  if (typeof filePath === 'string' && filePath.endsWith('package.json')) {
+    return true;
+  }
+  return false;
+});
+
+mockFs.readFileSync.mockImplementation((filePath: string) => {
+  if (typeof filePath === 'string' && filePath.endsWith('package.json')) {
+    return JSON.stringify({ name: 'somon-script', version: '0.3.19' });
+  }
+  return '';
+});
+
 import { compileFile } from '../src/cli/program';
 
 describe('CLI Unit Tests', () => {
