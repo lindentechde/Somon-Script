@@ -1,6 +1,6 @@
 {
   "name": "@lindentechde/somon-script",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "exports": {
     ".": "./src/index.ts",
     "./cli": "./src/cli.ts"
