@@ -1,7 +1,7 @@
 # SomonScript
 
 <div align="center">
-  <img src="images/somon-script-banner.png" alt="SomonScript Banner" width="500" style="max-width: 100%; height: auto;" />
+  <img src="https://raw.githubusercontent.com/lindentechde/Somon-Script/main/images/somon-script-banner.png" alt="SomonScript Banner" width="500" style="max-width: 100%; height: auto;" />
 </div>
 
 **Production-Grade Programming Language with Tajik Syntax**
@@ -80,7 +80,7 @@ Advanced static analysis system with TypeScript-level safety features:
 
 ```bash
 # Quick setup and deployment
-npm install -g somon-script
+npm install -g @lindentech/somon-script
 echo 'чоп.сабт("Hello, World!");' > hello.som
 somon run hello.som
 ```
@@ -293,7 +293,7 @@ Choose from multiple package registries:
 
 ```bash
 # NPM (recommended for most users)
-npm install -g somon-script
+npm install -g @lindentech/somon-script
 
 # JSR (recommended for TypeScript projects)
 npx jsr add @lindentechde/somon-script
@@ -302,7 +302,7 @@ npx jsr add @lindentechde/somon-script
 npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
 
 # Or use in a project
-npm install somon-script --save-dev
+npm install @lindentech/somon-script --save-dev
 ```
 
 ### Your First Program
@@ -407,8 +407,8 @@ Source Code (.som)
 
 ```bash
 # Clone repository
-git clone https://github.com/Slashmsu/somoni-script.git
-cd somoni-script
+git clone https://github.com/lindentechde/Somon-Script.git
+cd Somon-Script
 
 # Install dependencies
 npm install
@@ -474,9 +474,9 @@ npm run audit:examples
 ### Technical Services
 
 - 💬
-  [GitHub Discussions](https://github.com/Slashmsu/somoni-script/discussions) -
+  [GitHub Discussions](https://github.com/lindentechde/Somon-Script/discussions) -
   Technical discussions and Q&A
-- 🐛 [Issues](https://github.com/Slashmsu/somoni-script/issues) - Bug reports
+- 🐛 [Issues](https://github.com/lindentechde/Somon-Script/issues) - Bug reports
   and feature requests
 - 📧 [Email](mailto:support@somoni-script.org) - Professional support inquiries
 
@@ -559,45 +559,14 @@ Built on proven software engineering principles and modern compiler technology:
 - Modern JavaScript target compilation
 - Comprehensive testing framework
 
----
-
-## 📦 Production & Distribution
-
-SomonScript follows semantic versioning and publishes packages through an
-automated GitHub Actions pipeline. To release a new version:
-
-1. Run `npm run version:patch` (or `version:minor`/`version:major`).
-2. Push the commit and associated tag (`vX.Y.Z`).
-3. The CI pipeline builds, tests, and publishes the package to npm.
-
-Breaking changes and migration notes are documented in release notes and the
-`examples/` directory to ease adoption in production environments.
-
-## 📚 Migration Guide
-
-See [docs/migration-guide.md](docs/migration-guide.md) for steps to upgrade
-between releases.
-
-## 🚀 Getting Started
-
-Ready to integrate SomonScript into your development workflow?
-
-**🎯 [Start with the Tutorial →](docs/tutorial/getting-started.md)**
-
-**⚡ [Try Online Environment →](https://playground.somoni-script.org)**
-
-**📚 [Browse Code Examples →](examples/)**
-
----
-
 <div align="center">
 
 **SomonScript** - _Professional programming with localized syntax_
 
 Professional software development solution
 
-[Website](https://somoni-script.org) •
-[GitHub](https://github.com/Slashmsu/somoni-script) • [Documentation](docs/) •
-[Support](https://github.com/Slashmsu/somoni-script/discussions)
+[Website](https://somoni-script.org) _(in development)_ •
+[GitHub](https://github.com/lindentechde/Somon-Script) • [Documentation](docs/)
+• [Support](https://github.com/lindentechde/Somon-Script/discussions)
 
 </div>

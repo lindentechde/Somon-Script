@@ -75,6 +75,13 @@
     }
   ],
   "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lindentechde/Somon-Script.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lindentechde/Somon-Script/issues"
+  },
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",
     "@commitlint/config-conventional": "^17.0.0",
