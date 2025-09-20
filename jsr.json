@@ -4,14 +4,27 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": {
+    "name": "LindenTech IT Consulting",
+    "email": "info@lindentech.de",
+    "url": "https://lindentech.de"
+  },
+  "maintainers": [
+    {
+      "name": "Bakhtier Gaibulloev",
+      "email": "bakhtier.gaibulloev@gmail.com",
+      "url": "https://www.linkedin.com/in/gbakhtier/"
+    }
+  ],
   "publish": {
     "include": [
       "src/**/*.ts",
       "package.json",
       "README.md",
       "LICENSE",
-      "CHANGELOG.md"
+      "CHANGELOG.md",
+      "AUTHORS.md"
     ],
     "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
   }

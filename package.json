@@ -61,8 +61,20 @@
     "javascript",
     "programming-language"
   ],
-  "author": "Bakhtier Gaibulloev",
-  "license": "MIT",
+  "author": {
+    "name": "LindenTech IT Consulting",
+    "email": "info@lindentech.de",
+    "url": "https://lindentech.de"
+  },
+  "contributors": [
+    {
+      "name": "Bakhtier Gaibulloev",
+      "email": "bakhtier.gaibulloev@gmail.com",
+      "url": "https://www.linkedin.com/in/gbakhtier/",
+      "role": "original creator, language author"
+    }
+  ],
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@commitlint/cli": "^17.0.0",
     "@commitlint/config-conventional": "^17.0.0",
