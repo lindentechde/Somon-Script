@@ -26,7 +26,7 @@ By the end of this tutorial, you'll be able to:
 Install SomonScript globally to use it from anywhere:
 
 ```bash
-npm install -g somon-script
+npm install -g @lindentech/somon-script
 ```
 
 ### Project Installation

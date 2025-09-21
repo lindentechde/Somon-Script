@@ -186,7 +186,7 @@ jobs:
           echo "";
           echo "### 📦 Installation";
           echo '```bash';
-          echo 'npm install -g somon-script';
+          echo 'npm install -g @lindentech/somon-script';
           echo '```';
         } > "$NOTES"
         echo "path=$NOTES" >> "$GITHUB_OUTPUT"

@@ -55,7 +55,7 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 
    ```bash
    # For global installation
-   npm install -g somon-script@latest
+   npm install -g @lindentech/somon-script@latest
 
    # For project installation
    npm update somon-script
@@ -459,7 +459,7 @@ Error: Type 'сатр | рақам' is not assignable to type 'сатр'
 
 ### During Migration
 
-- [ ] Update SomonScript (`npm install -g somon-script@latest`)
+- [ ] Update SomonScript (`npm install -g @lindentech/somon-script@latest`)
 - [ ] Run migration tool (`somon migrate`)
 - [ ] Fix compilation errors
 - [ ] Update deprecated syntax

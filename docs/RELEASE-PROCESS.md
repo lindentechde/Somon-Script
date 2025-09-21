@@ -18,7 +18,7 @@ The project now uses **semantic-release** to automatically:
 ### 1. NPM Registry (Primary)
 
 - **URL**: https://www.npmjs.com/package/somon-script
-- **Installation**: `npm install -g somon-script`
+- **Installation**: `npm install -g @lindentech/somon-script`
 - **Automatic**: Published on every release
 
 ### 2. JSR (JavaScript Registry)
@@ -181,7 +181,7 @@ Or via GitHub Actions workflow dispatch with dry-run option.
 
 ```bash
 # NPM (recommended for most users)
-npm install -g somon-script
+npm install -g @lindentech/somon-script
 
 # JSR (recommended for TypeScript projects)
 npx jsr add @lindentechde/somon-script

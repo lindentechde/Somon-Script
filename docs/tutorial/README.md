@@ -103,7 +103,7 @@ Each tutorial follows a consistent structure:
 
 ```bash
 # Install SomonScript
-npm install -g somon-script
+npm install -g @lindentech/somon-script
 
 # Verify installation
 somon --version
