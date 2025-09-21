@@ -6,7 +6,7 @@
 
 **Production-Grade Programming Language with Tajik Syntax**
 
-[![Version](https://img.shields.io/npm/v/somon-script)](https://www.npmjs.com/package/somon-script)
+[![Version](https://img.shields.io/npm/v/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#)
 [![Examples Success](https://img.shields.io/badge/examples-100%25-brightgreen.svg)](#)
