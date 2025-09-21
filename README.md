@@ -7,9 +7,9 @@
 **Production-Grade Programming Language with Tajik Syntax**
 
 [![Version](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
-[![Test Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#)
-[![Examples Success](https://img.shields.io/badge/examples-100%25-brightgreen.svg)](#)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
+[![Test Coverage](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
+[![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
 [![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
 A feature-complete programming language that combines modern type safety with
