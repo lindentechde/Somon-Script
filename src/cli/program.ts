@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2025 LindenTech IT Consulting. All Rights Reserved.
+ *
+ * Original Creator: Bakhtier Gaibulloev
+ *
+ * This software is proprietary and confidential. Unauthorized copying, modification,
+ * distribution, or use of this software is strictly prohibited. See LICENSE file for terms.
+ */
+
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';

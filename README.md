@@ -6,11 +6,11 @@
 
 **Production-Grade Programming Language with Tajik Syntax**
 
-[![Version](https://img.shields.io/npm/v/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
+[![Version](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](#)
 [![Examples Success](https://img.shields.io/badge/examples-100%25-brightgreen.svg)](#)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
 
 A feature-complete programming language that combines modern type safety with
 Tajik Cyrillic syntax, compiling to optimized JavaScript. Currently in beta with
@@ -512,10 +512,12 @@ releases:
 
 ## 📄 License
 
-**MIT License** - see [LICENSE](LICENSE) file for details.
+**Proprietary License** - see [LICENSE](LICENSE) file for details.
 
-SomonScript is open-source software designed for professional and commercial
-use.
+SomonScript is proprietary software owned by LindenTech IT Consulting. Usage is
+permitted under the terms specified in the license agreement for personal,
+educational, and commercial purposes, but modification and redistribution of
+source code is prohibited.
 
 ---
 
