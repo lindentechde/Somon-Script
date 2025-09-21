@@ -96,13 +96,13 @@
     "lint-staged": "^13.0.0",
     "prettier": "^3.0.0",
     "ts-jest": "^29.4.1",
-    "typedoc": "^0.25.0",
-    "typescript": "^5.0.0"
+    "typedoc": "^0.25.0"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",
     "babel-preset-minify": "^0.5.2",
     "commander": "^11.0.0",
-    "source-map": "^0.7.6"
+    "source-map": "^0.7.6",
+    "typescript": "^5.0.0"
   }
 }
