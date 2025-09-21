@@ -96,9 +96,11 @@ jobs:
         
     - name: Publish to NPM
       if: inputs.publish_npm == true
-      run: npm publish --access public
+      run: |
+        echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+        npm publish --access public
       env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         
     - name: Publish to JSR
       if: inputs.publish_jsr == true
