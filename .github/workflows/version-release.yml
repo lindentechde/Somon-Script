@@ -150,6 +150,8 @@ jobs:
       
     - name: Publish to NPM
       run: |
+        echo "⏳ NPM publishing temporarily disabled due to 24-hour republish policy"
+        echo "Will be re-enabled after 2025-09-19T10:40:10.137Z"
         echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
         npm publish --access public
       env:
