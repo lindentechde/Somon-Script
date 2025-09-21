@@ -19,8 +19,8 @@ excellent test coverage and comprehensive language features.
 ## 🗣️ **Other Languages**
 
 - 🇺🇸 **English** - Main language
-- 🇷🇺 [Русский](README.ru.md) - Russian language
 - 🇹🇯 [Тоҷикӣ](README.tj.md) - Native language
+- 🇷🇺 [Русский](README.ru.md) - Russian language
 
 ---
 
