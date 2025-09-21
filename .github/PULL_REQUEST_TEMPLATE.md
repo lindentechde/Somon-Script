@@ -1,91 +1,40 @@
-# Pull Request
+# ⚠️ Pull Requests Not Accepted
 
-## Description
+## Proprietary Software Notice
 
-<!-- Provide a brief description of the changes in this PR -->
+**SomonScript is proprietary software** owned by LindenTech IT Consulting.
 
-## Type of Change
+### 🚫 **Code Contributions Are Not Permitted**
 
-<!-- Mark the relevant option with an "x" -->
+This repository **does not accept pull requests** due to our proprietary license
+terms. The following activities are prohibited:
 
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality
-      to not work as expected)
-- [ ] 📚 Documentation update
-- [ ] 🔧 Configuration change
-- [ ] 🧪 Test improvement
-- [ ] ♻️ Code refactoring
-- [ ] 🎨 Style/formatting changes
-- [ ] ⚡ Performance improvement
+- ❌ **Forking** or redistributing the SomonScript codebase
+- ❌ **Modifying** the SomonScript source code or creating derivative works
+- ❌ **Contributing code changes** or pull requests to the repository
+- ❌ **Creating competing** programming languages based on SomonScript
 
-## Related Issues
+### ✅ **How to Report Issues Instead**
 
-<!-- Link any related issues using #issue_number -->
+If you've encountered a bug or have a feature suggestion, please:
 
-Fixes # Closes # Related to #
+1. **🐛 Report bugs** via
+   [GitHub Issues](https://github.com/lindentechde/Somon-Script/issues)
+2. **💡 Request features** through issue discussions
+3. **📞 Contact us** at **info@lindentech.de** for business inquiries
 
-## Changes Made
+### 📋 **Legal Information**
 
-<!-- List the specific changes made in this PR -->
+- **License:** Proprietary (see [LICENSE](../LICENSE) file)
+- **Owner:** LindenTech IT Consulting
+- **Contact:** info@lindentech.de
 
--
--
--
+For complete licensing terms and permitted uses, please review:
 
-## Testing
-
-<!-- Describe the testing performed -->
-
-- [ ] Unit tests pass
-- [ ] Integration tests pass
-- [ ] Manual testing completed
-- [ ] Examples compile and run correctly
-- [ ] Performance benchmarks run (if applicable)
-
-### Test Coverage
-
-<!-- If this PR affects test coverage, provide details -->
-
-- Current coverage: \_\_%
-- New coverage: \_\_%
-
-## Screenshots/Output
-
-<!-- If applicable, add screenshots or command outputs -->
-
-## Breaking Changes
-
-<!-- If this is a breaking change, describe what breaks and how to migrate -->
-
-## Checklist
-
-<!-- Mark completed items with an "x" -->
-
-- [ ] My code follows the project's style guidelines
-- [ ] I have performed a self-review of my code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
-- [ ] Any dependent changes have been merged and published
-
-## Additional Notes
-
-<!-- Add any additional notes, concerns, or questions -->
+- [LICENSE](../LICENSE) - Complete legal terms
+- [AUTHORS.md](../AUTHORS.md) - Ownership and participation guidelines
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Community engagement guidelines
 
 ---
 
-<!--
-This PR will be automatically validated by our CI/CD pipeline:
-- ✅ Tests across Node.js versions 18.x-24.x
-- ✅ Code quality checks (TypeScript, ESLint, Prettier)
-- ✅ Build validation
-- ✅ Examples validation
-- ✅ Documentation checks
-- ✅ Security audit
-- ✅ Performance benchmarks
-
-All checks must pass before this PR can be merged.
--->
+**Thank you for your understanding and interest in SomonScript!**

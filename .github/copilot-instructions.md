@@ -186,7 +186,12 @@ npm run benchmark
 npm run audit:examples
 ```
 
-## When Contributing
+## Internal Development Standards
+
+**Note: This project uses proprietary licensing. External contributions are not
+accepted.**
+
+For LindenTech IT Consulting internal development:
 
 1. **Always run the full test suite**:
    `npm run lint && npm test && npm run audit:examples`

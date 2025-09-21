@@ -1,36 +1,70 @@
-# Contributing
+# Community Participation
 
-Thanks for your interest in improving SomonScript!
+Thanks for your interest in SomonScript!
 
-## Getting Started
+**Important:** SomonScript operates under a proprietary license. Please read the
+[LICENSE](LICENSE) and [AUTHORS.md](AUTHORS.md) files to understand permitted
+uses and restrictions.
 
-1. Fork and clone the repository.
-2. Install dependencies with `npm install`.
-3. Create your change.
+## 🚫 What Is Not Permitted
 
-## Before Commit
+Due to our proprietary license, the following activities are **prohibited**:
 
-- Review the guidelines in [AGENTS.md](AGENTS.md).
-- Ensure code is formatted and passes lint: `npm run lint`.
-- Run the test suite: `npm test`.
-- Audit example programs: `npm run audit:examples`.
+- **Forking** or redistributing the SomonScript codebase
+- **Modifying** the SomonScript source code or creating derivative works
+- **Contributing code changes** or pull requests to the repository
+- **Creating competing** programming languages based on SomonScript
+- **Reverse engineering** or attempting to alter the compiler
 
-## Submitting Changes
+## ✅ How You Can Participate
 
-1. Commit using Conventional Commits.
-2. Push your branch and open a pull request.
+While direct code contributions are not accepted, you can engage with the
+SomonScript community through:
 
-We appreciate your contributions!
+### **Bug Reports & Feature Requests**
 
-## Type Safety Policy
+- 🐛 **Report bugs** via
+  [GitHub Issues](https://github.com/lindentechde/Somon-Script/issues)
+- 💡 **Suggest improvements** that align with the project roadmap
+- 📋 **Request features** through issue discussions
 
-- Production source (`src/`) must not use `as any` or explicit `any` types. The
-  linter (`@typescript-eslint/no-explicit-any`) enforces this as an error.
-- Tests (`tests/`) may use `any` sparingly for:
-  - Constructing deliberately malformed AST nodes
-  - Simplifying deep union pattern assertions
-- Prefer narrow helpers or type guards over `any` where practical.
-- If you need an exception in source, refactor with a discriminated union or
-  introduce a minimal interface instead.
+### **Community Support**
 
-Run `npm run lint` before committing to catch violations early.
+- 💬 **Share usage experiences** and provide feedback
+- 🤝 **Help other users** with questions and best practices
+- 📚 **Create tutorials** and usage examples (subject to approval)
+- 🗣️ **Participate in discussions** about SomonScript usage
+
+### **Documentation & Examples**
+
+- 📖 **Suggest documentation improvements** (subject to approval)
+- 🎯 **Share usage examples** and tutorials
+- 🌍 **Contribute translations** of documentation
+
+## 📞 Contact
+
+For questions, suggestions, or business inquiries, please contact: **LindenTech
+IT Consulting** at **info@lindentech.de**
+
+## 📋 Development Standards (Internal Use)
+
+_The following information is provided for transparency about our internal
+development standards:_
+
+### Type Safety Policy
+
+- Production source (`src/`) must not use `as any` or explicit `any` types
+- Tests (`tests/`) may use `any` sparingly for constructing test scenarios
+- Prefer type guards over `any` where practical
+
+### Code Quality
+
+- All code must pass `npm run lint`
+- Test suite must pass: `npm test`
+- Examples must be validated: `npm run audit:examples`
+- Follow Conventional Commits for commit messages
+
+---
+
+_For complete licensing terms and ownership information, see [LICENSE](LICENSE)
+and [AUTHORS.md](AUTHORS.md)._

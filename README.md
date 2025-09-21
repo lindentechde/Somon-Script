@@ -16,6 +16,14 @@ A feature-complete programming language that combines modern type safety with
 Tajik Cyrillic syntax, compiling to optimized JavaScript. Currently in beta with
 excellent test coverage and comprehensive language features.
 
+## 🗣️ **Other Languages**
+
+- 🇺🇸 **English** - Main language
+- 🇷🇺 [Русский](README.ru.md) - Russian language
+- 🇹🇯 [Тоҷикӣ](README.tj.md) - Native language
+
+---
+
 **Breaking Language Barriers in Software Development**
 
 SomonScript was specifically created to eliminate the language barrier that
@@ -401,7 +409,7 @@ Source Code (.som)
 
 - Node.js 20.x or 22.x (LTS)
 - npm or yarn
-- TypeScript knowledge (for contributing)
+- TypeScript knowledge (for internal development)
 
 ### Setup
 
@@ -465,7 +473,7 @@ npm run audit:examples
   principles
 - [🧪 Testing Guide](docs/explanation/testing.md) - Quality assurance
   methodology
-- [🤝 Contributing](CONTRIBUTING.md) - Development workflow
+- [🤝 Community Participation](CONTRIBUTING.md) - Engagement guidelines
 
 ---
 
@@ -480,9 +488,9 @@ npm run audit:examples
   and feature requests
 - 📧 [Email](mailto:support@somoni-script.org) - Professional support inquiries
 
-### Contributing to Development
+### Professional Services
 
-Professional development opportunities for technical teams:
+LindenTech IT Consulting offers professional development services:
 
 1. **Core Development**: Enhance compiler capabilities and performance
 2. **Documentation**: Improve technical documentation and guides
@@ -505,7 +513,7 @@ releases:
 
 - [Release Process Guide](docs/RELEASE-PROCESS.md) - Complete automation details
 - [CI/CD Migration Guide](docs/CICD-MIGRATION.md) - Step-by-step migration info
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Technical contribution guidelines
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Community participation guidelines
 - [AGENTS.md](AGENTS.md) - Code style, commit message, and testing rules
 
 ---
