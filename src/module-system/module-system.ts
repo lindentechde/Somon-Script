@@ -4,13 +4,16 @@ import * as path from 'path';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
-import { CodeGenerator } from '../codegen';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics';
 import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
+import {
+  compile as compileSource,
+  type CompileOptions as PipelineCompileOptions,
+} from '../compiler';
 
 export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
 
@@ -61,8 +64,8 @@ export class ModuleSystem {
   private readonly resolver: ModuleResolver;
   private readonly loader: ModuleLoader;
   private readonly registry: ModuleRegistry;
-  private readonly codeGenerator: CodeGenerator;
   private readonly activeWatchers = new Set<FSWatcher>();
+  private readonly defaultCompilation: CompilerOptions;
 
   // Production systems
   private readonly metrics?: ModuleSystemMetrics;
@@ -106,7 +109,7 @@ export class ModuleSystem {
     );
 
     this.registry = new ModuleRegistry();
-    this.codeGenerator = new CodeGenerator();
+    this.defaultCompilation = options.compilation ?? {};
 
     if (this.logger) {
       this.logger.info('ModuleSystem initialized with production features', {
@@ -152,7 +155,11 @@ export class ModuleSystem {
   /**
    * Compile a module and all its dependencies
    */
-  async compile(entryPoint: string, externals?: string[]): Promise<CompilationResult> {
+  async compile(
+    entryPoint: string,
+    externals?: string[],
+    overrideCompilation?: Partial<CompilerOptions>
+  ): Promise<CompilationResult> {
     const errors: Error[] = [];
     const warnings: string[] = [];
     const modules = new Map<string, string>();
@@ -186,12 +193,32 @@ export class ModuleSystem {
       }
 
       // Compile each module
+      const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
+
       for (const moduleId of compilationOrder) {
         const module = this.loader.getModule(moduleId);
         if (module?.resolvedPath.endsWith('.som')) {
           try {
-            const compiledCode = this.codeGenerator.generate(module.ast);
-            modules.set(moduleId, compiledCode);
+            const compileResult = compileSource(
+              module.source,
+              this.toPipelineOptions(compilationConfig)
+            );
+
+            if (compileResult.errors.length > 0) {
+              const errorMessage = compileResult.errors.map(message => `  - ${message}`).join('\n');
+              errors.push(new Error(`Failed to compile ${module.resolvedPath}:\n${errorMessage}`));
+              continue;
+            }
+
+            modules.set(moduleId, compileResult.code);
+
+            if (compileResult.warnings.length > 0) {
+              warnings.push(
+                ...compileResult.warnings.map(
+                  warning => `Warning in ${module.resolvedPath}: ${warning}`
+                )
+              );
+            }
           } catch (error) {
             errors.push(new Error(`Failed to compile ${moduleId}: ${error}`));
           }
@@ -232,7 +259,19 @@ export class ModuleSystem {
     if (format !== 'commonjs' && options.force) {
       console.warn('Warning: ESM/UMD bundle formats are experimental; prefer commonjs.');
     }
-    const compilationResult = await this.compile(options.entryPoint, options.externals);
+    const compilationOverrides: Partial<CompilerOptions> = {};
+    if (options.minify !== undefined) {
+      compilationOverrides.minify = options.minify;
+    }
+    if (options.sourceMaps !== undefined) {
+      compilationOverrides.sourceMap = options.sourceMaps;
+    }
+
+    const compilationResult = await this.compile(
+      options.entryPoint,
+      options.externals,
+      compilationOverrides
+    );
 
     if (compilationResult.errors.length > 0) {
       throw new Error(
@@ -435,6 +474,36 @@ export class ModuleSystem {
     for (const loaded of loadedModules) {
       this.registry.register(loaded);
     }
+  }
+
+  private resolveCompilationOptions(overrides?: Partial<CompilerOptions>): CompilerOptions {
+    if (!overrides || Object.keys(overrides).length === 0) {
+      return { ...this.defaultCompilation };
+    }
+
+    return { ...this.defaultCompilation, ...overrides };
+  }
+
+  private toPipelineOptions(config: CompilerOptions): PipelineCompileOptions {
+    const options: PipelineCompileOptions = {};
+
+    if (config.target) {
+      options.target = config.target;
+    }
+    if (config.sourceMap !== undefined) {
+      options.sourceMap = config.sourceMap;
+    }
+    if (config.minify !== undefined) {
+      options.minify = config.minify;
+    }
+    if (config.noTypeCheck !== undefined) {
+      options.typeCheck = !config.noTypeCheck;
+    }
+    if (config.strict !== undefined) {
+      options.strict = config.strict;
+    }
+
+    return options;
   }
 
   private generateCommonJSBundle(result: CompilationResult, options: BundleOptions): string {

@@ -292,6 +292,35 @@ describe('Module System', () => {
       expect(bundle).toContain('require(');
     });
 
+    test('should surface type checking errors during compilation', async () => {
+      const typeErrorFile = path.join(tempDir, 'type-error.som');
+      fs.writeFileSync(typeErrorFile, 'тағйирёбанда value: рақам = "матн";');
+
+      const result = await moduleSystem.compile(typeErrorFile);
+
+      expect(result.modules.size).toBe(0);
+      expect(result.errors).not.toHaveLength(0);
+      expect(result.errors[0]?.message).toContain('Type error');
+    });
+
+    test('should respect compilation overrides that disable type checking', async () => {
+      const typeErrorFile = path.join(tempDir, 'type-disabled.som');
+      fs.writeFileSync(typeErrorFile, 'тағйирёбанда value: рақам = "матн";');
+
+      const relaxedSystem = new ModuleSystem({
+        resolution: { baseUrl: tempDir },
+        compilation: { noTypeCheck: true },
+      });
+
+      try {
+        const result = await relaxedSystem.compile(typeErrorFile);
+        expect(result.errors).toHaveLength(0);
+        expect(result.modules.size).toBeGreaterThan(0);
+      } finally {
+        await relaxedSystem.shutdown();
+      }
+    });
+
     test('should handle dynamic imports', async () => {
       const dynamicFile = path.join(tempDir, 'dynamic.som');
       const mainFile = path.join(tempDir, 'main.som');
