@@ -1,14 +1,14 @@
 /*
- * Copyright (c) 2025 LindenTech IT Consulting. All Rights Reserved.
+ * SomonScript CLI
+ * Copyright (c) 2025 LindenTech IT Consulting
  *
- * Original Creator: Bakhtier Gaibulloev
- *
- * This software is proprietary and confidential. Unauthorized copying, modification,
- * distribution, or use of this software is strictly prohibited. See LICENSE file for terms.
+ * Licensed under the MIT License. See the LICENSE file for details.
  */
 
+import { spawnSync } from 'child_process';
 import { Command } from 'commander';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { createRequire } from 'module';
 import type { Module as NodeModuleType } from 'module';
@@ -230,6 +230,15 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
   }
 }
 
+export const cliRuntime = {
+  executeCompiledFile(filePath: string): ReturnType<typeof spawnSync> {
+    return spawnSync(process.execPath, [filePath], {
+      stdio: 'inherit',
+      env: process.env,
+    });
+  },
+};
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -314,17 +323,50 @@ export function createProgram(): Command {
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions): void => {
+      let tempDir: string | null = null;
       try {
         const merged = mergeOptions(input, options);
         const result = compileFile(input, merged);
         if (result.errors.length > 0) return;
 
-        // eslint-disable-next-line no-eval
-        eval(result.code);
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-run-'));
+        const baseName = path.basename(input);
+        const jsFileName = baseName.match(/\.som$/i)
+          ? baseName.replace(/\.som$/i, '.js')
+          : `${baseName}.js`;
+        const tempFile = path.join(tempDir, jsFileName);
+        fs.writeFileSync(tempFile, result.code, 'utf8');
+
+        if (merged.sourceMap && result.sourceMap) {
+          fs.writeFileSync(`${tempFile}.map`, result.sourceMap, 'utf8');
+        }
+
+        const child = cliRuntime.executeCompiledFile(tempFile);
+
+        if (child.error) {
+          console.error('Failed to execute Node:', child.error.message ?? child.error);
+          process.exitCode = 1;
+        } else if (typeof child.status === 'number') {
+          process.exitCode = child.status;
+        } else if (typeof child.signal === 'string') {
+          console.error(`Process terminated with signal ${child.signal}`);
+          process.exitCode = 1;
+        }
       } catch (error) {
         console.error('Error:', error instanceof Error ? error.message : error);
         process.exitCode = 1;
         return;
+      } finally {
+        if (tempDir) {
+          try {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+          } catch (cleanupError) {
+            console.warn(
+              'Warning: unable to clean temporary files:',
+              cleanupError instanceof Error ? cleanupError.message : cleanupError
+            );
+          }
+        }
       }
     });
 
@@ -356,7 +398,7 @@ export function createProgram(): Command {
             dev: 'somon run src/main.som',
           },
           devDependencies: {
-            'somon-script': '^0.2.0',
+            [pkg.name]: `^${pkg.version}`,
           },
         };
 

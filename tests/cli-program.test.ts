@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { createProgram, compileFile } from '../src/cli/program';
+import * as cliProgram from '../src/cli/program';
+
+const { createProgram, compileFile } = cliProgram;
 
 /**
  * In-process CLI tests
@@ -94,10 +96,18 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'hello.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("Салом ҷаҳон!");');
 
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 0,
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
     program.parse(['run', inputFile], { from: 'user' });
 
-    expect(consoleLogSpy).toHaveBeenCalled();
-    expect(consoleLogSpy.mock.calls.some(c => String(c[0]).includes('Салом ҷаҳон'))).toBe(true);
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    const [tempFilePath] = executeSpy.mock.calls[0];
+    expect(tempFilePath).toMatch(/hello\.js$/);
+    expect(process.exitCode).toBe(0);
+
+    executeSpy.mockRestore();
   });
 
   test('init: should create new project structure (custom name)', () => {
