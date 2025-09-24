@@ -8,4 +8,11 @@ export type { LoadedModule, ModuleExports, ModuleLoadOptions } from './module-lo
 export { ModuleRegistry } from './module-registry';
 export type { ModuleMetadata, ModuleImports, DependencyNode } from './module-registry';
 export { ModuleSystem } from './module-system';
-export type { ModuleSystemOptions, CompilationResult, BundleOptions } from './module-system';
+export type {
+  ModuleSystemOptions,
+  CompilationResult,
+  BundleOptions,
+  ModuleSystemWatchOptions,
+  ModuleWatchEvent,
+  ModuleWatchEventType,
+} from './module-system';

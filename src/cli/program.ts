@@ -7,6 +7,7 @@
 
 import { spawnSync } from 'child_process';
 import { Command } from 'commander';
+import chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -273,8 +274,10 @@ export function createProgram(): Command {
     .option('-w, --watch', 'Recompile on file changes')
     .action((input: string, options: CompileOptions): void => {
       try {
-        const merged = mergeOptions(input, options);
+        let merged = mergeOptions(input, options);
+        const shouldWatch = !!(merged.watch || merged.compileOnSave);
         const compileOnce = (): void => {
+          merged = mergeOptions(input, options);
           const result = compileFile(input, merged);
           if (result.errors.length > 0) return;
 
@@ -300,13 +303,84 @@ export function createProgram(): Command {
 
         compileOnce();
 
-        if ((merged.watch || merged.compileOnSave) && process.env.NODE_ENV !== 'test') {
+        if (shouldWatch && process.env.NODE_ENV !== 'test') {
           console.log(`Watching '${input}' for changes...`);
-          fs.watch(input, { persistent: true }, () => {
-            console.log(`Recompiling '${input}'...`);
-            compileOnce();
+          const absoluteInput = path.resolve(input);
+          const watchTargets = new Set<string>([
+            absoluteInput,
+            path.resolve(path.dirname(absoluteInput), 'somon.config.json'),
+          ]);
+
+          const watcher = chokidar.watch(Array.from(watchTargets), {
+            persistent: true,
+            ignoreInitial: true,
+            awaitWriteFinish: {
+              stabilityThreshold: 150,
+              pollInterval: 20,
+            },
           });
-        } else if (merged.watch || merged.compileOnSave) {
+
+          let watcherClosed = false;
+
+          const handleFileEvent = (
+            eventType: 'add' | 'change' | 'unlink',
+            changedPath: string
+          ): void => {
+            const normalizedPath = path.resolve(changedPath);
+
+            if (normalizedPath === absoluteInput) {
+              if (eventType === 'unlink') {
+                console.warn(`Source file '${input}' was removed. Waiting for it to reappear...`);
+                return;
+              }
+              console.log(`Recompiling '${input}'...`);
+              compileOnce();
+              return;
+            }
+
+            if (eventType === 'unlink') {
+              console.warn(
+                `Configuration file '${path.basename(normalizedPath)}' was removed. Using previous options.`
+              );
+              return;
+            }
+
+            console.log(
+              `Configuration change detected in '${path.basename(normalizedPath)}'. Recompiling '${input}'...`
+            );
+            compileOnce();
+          };
+
+          watcher
+            .on('add', (changedPath: string) => handleFileEvent('add', changedPath))
+            .on('change', (changedPath: string) => handleFileEvent('change', changedPath))
+            .on('unlink', (changedPath: string) => handleFileEvent('unlink', changedPath))
+            .on('error', error => {
+              console.error('Watch error:', error instanceof Error ? error.message : String(error));
+            });
+
+          const cleanupWatcher = (): void => {
+            if (watcherClosed) return;
+            watcherClosed = true;
+            watcher.close().catch(error => {
+              console.error(
+                'Failed to close watcher:',
+                error instanceof Error ? error.message : String(error)
+              );
+            });
+          };
+
+          const registerSignalHandler = (signal: 'SIGINT' | 'SIGTERM'): void => {
+            process.once(signal, () => {
+              cleanupWatcher();
+              process.exit(process.exitCode ?? 0);
+            });
+          };
+
+          registerSignalHandler('SIGINT');
+          registerSignalHandler('SIGTERM');
+          process.once('exit', cleanupWatcher);
+        } else if (shouldWatch) {
           // In test environment, just log the message without actually watching
           console.log(`Watching '${input}' for changes...`);
         }

@@ -1,3 +1,38 @@
+jest.mock('chokidar', () => {
+  const watchMock = jest.fn(() => {
+    const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    const watcher = {
+      on: jest.fn(function (this: any, event: string, handler: (...args: any[]) => void) {
+        const handlers = listeners.get(event) ?? [];
+        handlers.push(handler);
+        listeners.set(event, handlers);
+        return this;
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+      emit(event: string, ...args: any[]) {
+        const handlers = listeners.get(event) ?? [];
+        for (const handler of handlers) {
+          handler(...args);
+        }
+        const allHandlers = listeners.get('all') ?? [];
+        for (const handler of allHandlers) {
+          handler(event, ...args);
+        }
+        return this;
+      },
+    };
+    return watcher;
+  });
+
+  const chokidarExport = Object.assign(watchMock, { watch: watchMock });
+
+  return {
+    __esModule: true,
+    default: chokidarExport,
+    watch: watchMock,
+  };
+});
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -202,5 +237,42 @@ describe('CLI Program (in-process)', () => {
     // Verify ES5 target was used (should use 'var' instead of 'const')
     const output = fs.readFileSync(outputFile, 'utf-8');
     expect(output.includes('console.log')).toBe(true);
+  });
+
+  test('compile: watch mode uses chokidar and recompiles on change', () => {
+    const chokidarModule = require('chokidar');
+    const watchMock = chokidarModule.watch as jest.Mock;
+    watchMock.mockClear();
+
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'watch.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("watch");');
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    try {
+      program.parse(['compile', inputFile, '--watch'], { from: 'user' });
+
+      expect(watchMock).toHaveBeenCalledTimes(1);
+      const [watchTargets, watchOptions] = watchMock.mock.calls[0];
+      expect(Array.isArray(watchTargets)).toBe(true);
+      expect(watchTargets).toContain(path.resolve(inputFile));
+      expect(watchOptions.ignoreInitial).toBe(true);
+
+      const watcherInstance = watchMock.mock.results[0].value;
+      expect(watcherInstance.on).toHaveBeenCalled();
+
+      watcherInstance.emit('change', path.resolve(inputFile));
+
+      const recompiles = consoleLogSpy.mock.calls.filter(call =>
+        String(call[0]).includes('Recompiling')
+      );
+      expect(recompiles.length).toBeGreaterThan(0);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      watchMock.mockReset();
+    }
   });
 });

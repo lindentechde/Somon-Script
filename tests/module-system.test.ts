@@ -1,3 +1,38 @@
+jest.mock('chokidar', () => {
+  const watchMock = jest.fn(() => {
+    const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    const watcher = {
+      on: jest.fn(function (this: any, event: string, handler: (...args: any[]) => void) {
+        const handlers = listeners.get(event) ?? [];
+        handlers.push(handler);
+        listeners.set(event, handlers);
+        return this;
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+      emit(event: string, ...args: any[]) {
+        const handlers = listeners.get(event) ?? [];
+        for (const handler of handlers) {
+          handler(...args);
+        }
+        const allHandlers = listeners.get('all') ?? [];
+        for (const handler of allHandlers) {
+          handler(event, ...args);
+        }
+        return this;
+      },
+    };
+    return watcher;
+  });
+
+  const chokidarExport = Object.assign(watchMock, { watch: watchMock });
+
+  return {
+    __esModule: true,
+    default: chokidarExport,
+    watch: watchMock,
+  };
+});
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -26,7 +61,13 @@ describe('Module System', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    try {
+      await moduleSystem.shutdown();
+    } catch (error) {
+      // Ignore shutdown errors in tests to avoid masking primary failures
+    }
+
     // Clean up temporary directory
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -361,6 +402,39 @@ describe('Module System', () => {
       await expect(
         moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as const, force: true })
       ).resolves.toContain('export');
+    });
+
+    test('should expose watcher API for entrypoints', async () => {
+      const chokidarModule = require('chokidar');
+      const watchMock = chokidarModule.watch as jest.Mock;
+      watchMock.mockClear();
+
+      const utilsFile = path.join(tempDir, 'watch-util.som');
+      const mainFile = path.join(tempDir, 'watch-main.som');
+      fs.writeFileSync(utilsFile, 'содир функсия add(a, b) { бозгашт a + b; }');
+      fs.writeFileSync(mainFile, 'ворид { add } аз "./watch-util"; чоп.сабт(add(1, 2));');
+
+      await moduleSystem.compile(mainFile);
+
+      const onChange = jest.fn();
+      const watcher = moduleSystem.watch(mainFile, { onChange });
+
+      expect(watchMock).toHaveBeenCalledTimes(1);
+      const [watchTargets, watchOptions] = watchMock.mock.calls[0];
+      expect(Array.isArray(watchTargets)).toBe(true);
+      expect(watchTargets).toEqual(expect.arrayContaining([path.resolve(mainFile)]));
+      expect(watchOptions.ignoreInitial).toBe(true);
+
+      const watcherInstance = watchMock.mock.results[0].value;
+      watcherInstance.emit('change', utilsFile);
+
+      expect(onChange).toHaveBeenCalledWith({
+        type: 'change',
+        filePath: path.resolve(utilsFile),
+      });
+
+      await moduleSystem.shutdown();
+      expect(watcher.close).toHaveBeenCalled();
     });
   });
 

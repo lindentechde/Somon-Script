@@ -1,3 +1,5 @@
+import chokidar from 'chokidar';
+import type { FSWatcher, WatchOptions } from 'chokidar';
 import * as path from 'path';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
@@ -9,6 +11,20 @@ import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics'
 import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
+
+export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
+
+export interface ModuleWatchEvent {
+  type: ModuleWatchEventType;
+  filePath: string;
+}
+
+export interface ModuleSystemWatchOptions {
+  onChange?: (_event: ModuleWatchEvent) => void;
+  includeNodeModules?: boolean;
+  additionalPaths?: string[];
+  chokidarOptions?: WatchOptions;
+}
 
 export interface ModuleSystemOptions {
   resolution?: ModuleResolutionOptions;
@@ -46,6 +62,7 @@ export class ModuleSystem {
   private readonly loader: ModuleLoader;
   private readonly registry: ModuleRegistry;
   private readonly codeGenerator: CodeGenerator;
+  private readonly activeWatchers = new Set<FSWatcher>();
 
   // Production systems
   private readonly metrics?: ModuleSystemMetrics;
@@ -305,6 +322,8 @@ export class ModuleSystem {
       this.logger.info('Shutting down ModuleSystem');
     }
 
+    await this.stopWatching();
+
     // Stop management server
     await this.stopManagementServer();
 
@@ -314,6 +333,101 @@ export class ModuleSystem {
     if (this.logger) {
       this.logger.info('ModuleSystem shutdown complete');
     }
+  }
+
+  watch(entryPoint: string, options: ModuleSystemWatchOptions = {}): FSWatcher {
+    const resolvedEntry = path.resolve(entryPoint);
+    const watchRoots = new Set<string>();
+    const addWatchTarget = (target: string): void => {
+      if (target && path.isAbsolute(target)) {
+        watchRoots.add(target);
+      }
+    };
+
+    addWatchTarget(resolvedEntry);
+    addWatchTarget(path.dirname(resolvedEntry));
+
+    for (const moduleMeta of this.registry.getAll()) {
+      addWatchTarget(moduleMeta.resolvedPath);
+      if (path.isAbsolute(moduleMeta.resolvedPath)) {
+        addWatchTarget(path.dirname(moduleMeta.resolvedPath));
+      }
+    }
+
+    for (const additional of options.additionalPaths ?? []) {
+      addWatchTarget(path.resolve(additional));
+    }
+
+    const watchConfig: WatchOptions = {
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 150,
+        pollInterval: 20,
+      },
+      ignored: options.includeNodeModules ? undefined : /node_modules/,
+      ...options.chokidarOptions,
+    };
+
+    const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
+
+    const supportedEvents: ModuleWatchEventType[] = [
+      'add',
+      'change',
+      'unlink',
+      'addDir',
+      'unlinkDir',
+    ];
+
+    watcher.on('all', (event, changedPath) => {
+      if (!options.onChange) {
+        return;
+      }
+
+      if (!supportedEvents.includes(event as ModuleWatchEventType)) {
+        return;
+      }
+
+      options.onChange({
+        type: event as ModuleWatchEventType,
+        filePath: path.resolve(changedPath),
+      });
+    });
+
+    watcher.on('error', error => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.logger) {
+        this.logger.error('ModuleSystem watch error', { error: message });
+      } else {
+        console.error('ModuleSystem watch error:', message);
+      }
+    });
+
+    watcher.on('close', () => {
+      this.activeWatchers.delete(watcher);
+    });
+
+    this.activeWatchers.add(watcher);
+    return watcher;
+  }
+
+  async stopWatching(): Promise<void> {
+    const watchers = Array.from(this.activeWatchers);
+    this.activeWatchers.clear();
+    await Promise.allSettled(
+      watchers.map(async watcher => {
+        try {
+          await watcher.close();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (this.logger) {
+            this.logger.warn('Failed to close module watcher', { error: message });
+          } else {
+            console.warn('Failed to close module watcher:', message);
+          }
+        }
+      })
+    );
   }
 
   private registerAllLoadedModules(): void {
@@ -636,15 +750,6 @@ ${commonjsBundle}
       stats.totalModules,
       100 * 1024 * 1024 // Default 100MB limit
     );
-  }
-
-  /**
-   * Watch for file changes and reload modules
-   */
-  watch(): void {
-    // This would implement file watching functionality
-    // For now, it's a placeholder
-    console.log('Module watching not yet implemented');
   }
 
   /**

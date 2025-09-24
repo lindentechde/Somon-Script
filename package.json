@@ -101,6 +101,7 @@
   "dependencies": {
     "@babel/core": "^7.28.4",
     "babel-preset-minify": "^0.5.2",
+    "chokidar": "^3.6.0",
     "commander": "^11.0.0",
     "source-map": "^0.7.6",
     "typescript": "^5.0.0"
