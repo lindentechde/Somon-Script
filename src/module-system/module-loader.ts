@@ -58,8 +58,8 @@ export class ModuleLoader {
   private currentMemoryUsage: number = 0;
 
   // Production systems
-  private readonly metrics: ModuleSystemMetrics;
-  private readonly circuitBreakers: CircuitBreakerManager;
+  private readonly metrics?: ModuleSystemMetrics;
+  private readonly circuitBreakers?: CircuitBreakerManager;
 
   constructor(
     resolver: ModuleResolver,
@@ -77,9 +77,9 @@ export class ModuleLoader {
       maxCacheMemory: options.maxCacheMemory ?? 100 * 1024 * 1024, // Default 100MB
     };
 
-    // Initialize production systems
-    this.metrics = metrics || new ModuleSystemMetrics();
-    this.circuitBreakers = circuitBreakers || new CircuitBreakerManager();
+    // Initialize production systems only when explicitly provided
+    this.metrics = metrics;
+    this.circuitBreakers = circuitBreakers;
 
     this.setExternals(options.externals);
   }
@@ -88,8 +88,8 @@ export class ModuleLoader {
    * Load a module and all its dependencies
    */
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
-    return this.metrics.recordAsync(this.metrics.loadLatency, async () => {
-      this.metrics.requestCount.increment();
+    const executeLoad = async (): Promise<LoadedModule> => {
+      this.metrics?.requestCount.increment();
 
       logger.debug('Loading module', { specifier, fromFile });
 
@@ -128,11 +128,17 @@ export class ModuleLoader {
         });
         return result;
       } catch (error) {
-        this.metrics.loadErrors.increment();
+        this.metrics?.loadErrors.increment();
         logger.error('Module load failed', error as Error, { moduleId, specifier });
         throw error;
       }
-    });
+    };
+
+    if (this.metrics) {
+      return this.metrics.recordAsync(this.metrics.loadLatency, executeLoad);
+    }
+
+    return executeLoad();
   }
 
   /**
@@ -169,6 +175,10 @@ export class ModuleLoader {
     specifier: string,
     externalMatch: string
   ): Promise<LoadedModule> {
+    if (!this.circuitBreakers) {
+      return this.getOrCreateExternalModule(specifier, externalMatch);
+    }
+
     return this.circuitBreakers.executeWithRetry(
       `external:${externalMatch}`,
       async () => {

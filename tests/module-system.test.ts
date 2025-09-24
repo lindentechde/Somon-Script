@@ -36,6 +36,7 @@ jest.mock('chokidar', () => {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import packageJson from '../package.json';
 import { ModuleResolver, ModuleLoader, ModuleRegistry, ModuleSystem } from '../src/module-system';
 
 describe('Module System', () => {
@@ -133,6 +134,12 @@ describe('Module System', () => {
   });
 
   describe('ModuleLoader', () => {
+    test('does not allocate production subsystems by default', () => {
+      const defaultLoader = new ModuleLoader(resolver);
+      expect((defaultLoader as any).metrics).toBeUndefined();
+      expect((defaultLoader as any).circuitBreakers).toBeUndefined();
+    });
+
     test('should load module with dependencies', () => {
       const mainFile = path.join(tempDir, 'main.som');
       const utilsFile = path.join(tempDir, 'utils.som');
@@ -177,6 +184,23 @@ describe('Module System', () => {
       expect(() => {
         loader.loadSync('./main', tempDir);
       }).toThrow();
+    });
+  });
+
+  describe('production features', () => {
+    test('reports neutral health when metrics disabled', async () => {
+      const health = await moduleSystem.getHealth();
+
+      expect(health.status).toBe('healthy');
+      expect(health.version).toBe(packageJson.version);
+      expect(health.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'metrics',
+            status: 'warn',
+          }),
+        ])
+      );
     });
   });
 

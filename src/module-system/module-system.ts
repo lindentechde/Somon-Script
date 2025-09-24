@@ -10,6 +10,7 @@ import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics'
 import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
+import { version as packageVersion } from '../../package.json';
 import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
@@ -805,14 +806,24 @@ ${commonjsBundle}
    * Get system health status
    */
   async getHealth(): Promise<SystemHealth> {
-    if (!this.metrics)
+    if (!this.metrics) {
+      const timestamp = Date.now();
       return {
-        status: 'unhealthy',
+        status: 'healthy',
         uptime: process.uptime(),
-        version: '0.3.16',
-        timestamp: Date.now(),
-        checks: [],
+        version: packageVersion,
+        timestamp,
+        checks: [
+          {
+            name: 'metrics',
+            status: 'warn',
+            message: 'Metrics collection disabled; reporting runtime defaults only.',
+            duration: 0,
+            timestamp,
+          },
+        ],
       };
+    }
 
     const stats = this.registry.getStatistics();
     return await this.metrics.performHealthChecks(
