@@ -419,7 +419,7 @@ export class ModuleSystem {
       'unlinkDir',
     ];
 
-    watcher.on('all', (event, changedPath) => {
+    watcher.on('all', (event: string, changedPath: string) => {
       if (!options.onChange) {
         return;
       }
@@ -434,7 +434,7 @@ export class ModuleSystem {
       });
     });
 
-    watcher.on('error', error => {
+    watcher.on('error', (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       if (this.logger) {
         this.logger.error('ModuleSystem watch error', { error: message });
@@ -515,13 +515,26 @@ export class ModuleSystem {
     );
     const externalModuleIds = new Set<string>();
 
-    // Create module ID mapping: convert absolute module IDs to relative keys for bundle
+    if (!path.isAbsolute(result.entryPoint)) {
+      throw new Error('Entry point must be an absolute path for bundling.');
+    }
+    const entryDir = path.dirname(result.entryPoint);
+    const normalizeKey = (absolutePath: string): string => {
+      const relativePath = path.relative(entryDir, absolutePath);
+      const normalized = relativePath.split(path.sep).join('/');
+      if (normalized.length === 0) {
+        return path.basename(absolutePath);
+      }
+      return normalized;
+    };
+
+    // Create module ID mapping: convert absolute module IDs to stable keys for the bundle
     // Note: moduleId should always be absolute path (standardized by ModuleLoader.getModuleId)
     for (const [moduleId] of result.modules) {
       if (!path.isAbsolute(moduleId)) {
         throw new Error(`Module ID should be absolute path, got: ${moduleId}`);
       }
-      const key = path.relative(process.cwd(), moduleId);
+      const key = normalizeKey(moduleId);
       moduleIdMapping.set(moduleId, key);
     }
 
@@ -652,6 +665,11 @@ export class ModuleSystem {
       processedModules.set(moduleId, processedCode);
     }
 
+    const entryKey = moduleIdMapping.get(result.entryPoint);
+    if (!entryKey) {
+      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
+    }
+
     for (const [moduleId, processedCode] of processedModules) {
       if (externalModuleIds.has(moduleId)) {
         continue;
@@ -693,7 +711,7 @@ ${moduleMap.join(',\n')}
   }
   
   // Start with entry point and expose its exports
-  var entryModule = _require('${path.relative(process.cwd(), result.entryPoint)}');
+  var entryModule = _require('${entryKey}');
   
   // Expose entry point exports as bundle exports (for Node.js)
   if (typeof module !== 'undefined' && module.exports) {
@@ -710,10 +728,19 @@ ${moduleMap.join(',\n')}
 
   private generateESMBundle(result: CompilationResult, options: BundleOptions): string {
     const modules: string[] = [];
+    if (!path.isAbsolute(result.entryPoint)) {
+      throw new Error('Entry point must be an absolute path for bundling.');
+    }
+    const entryDir = path.dirname(result.entryPoint);
+    const describeModule = (absolutePath: string): string => {
+      const relativePath = path.relative(entryDir, absolutePath);
+      const normalized = relativePath.split(path.sep).join('/');
+      return normalized.length === 0 ? path.basename(absolutePath) : normalized;
+    };
 
     for (const [moduleId, code] of result.modules) {
       modules.push(`// Experimental ESM bundle: linking is not resolved`);
-      modules.push(`// Module: ${path.relative(process.cwd(), moduleId)}`);
+      modules.push(`// Module: ${describeModule(moduleId)}`);
       modules.push(code);
       modules.push('');
     }

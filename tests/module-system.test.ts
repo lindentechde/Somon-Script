@@ -440,6 +440,39 @@ describe('Module System', () => {
       expect(umdBundle).toContain('typeof exports');
     });
 
+    test('should stabilise CommonJS bundle IDs relative to entry directory', async () => {
+      const srcDir = path.join(tempDir, 'src');
+      const libDir = path.join(tempDir, 'lib');
+      fs.mkdirSync(srcDir, { recursive: true });
+      fs.mkdirSync(libDir, { recursive: true });
+
+      const helperFile = path.join(libDir, 'helper.som');
+      const mainFile = path.join(srcDir, 'main.som');
+
+      fs.writeFileSync(helperFile, 'содир функсия helper() { бозгашт 1; }');
+      fs.writeFileSync(mainFile, 'ворид { helper } аз "../lib/helper";\nчоп.сабт(helper());');
+
+      const bundleFromProjectRoot = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+      });
+
+      const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/');
+      try {
+        const bundleWithMockedCwd = await moduleSystem.bundle({
+          entryPoint: mainFile,
+          format: 'commonjs',
+        });
+
+        expect(bundleWithMockedCwd).toEqual(bundleFromProjectRoot);
+        expect(bundleWithMockedCwd).toContain("'main.som'");
+        expect(bundleWithMockedCwd).toContain("'../lib/helper.som'");
+        expect(bundleWithMockedCwd).not.toContain(tempDir);
+      } finally {
+        cwdSpy.mockRestore();
+      }
+    });
+
     test('should require force for non-commonjs formats', async () => {
       const moduleFile = path.join(tempDir, 'm.som');
       const mainFile = path.join(tempDir, 'main.som');

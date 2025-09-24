@@ -401,14 +401,14 @@ export function createProgram(): Command {
             .on('add', (changedPath: string) => handleFileEvent('add', changedPath))
             .on('change', (changedPath: string) => handleFileEvent('change', changedPath))
             .on('unlink', (changedPath: string) => handleFileEvent('unlink', changedPath))
-            .on('error', error => {
+            .on('error', (error: unknown) => {
               console.error('Watch error:', error instanceof Error ? error.message : String(error));
             });
 
           const cleanupWatcher = (): void => {
             if (watcherClosed) return;
             watcherClosed = true;
-            watcher.close().catch(error => {
+            watcher.close().catch((error: unknown) => {
               console.error(
                 'Failed to close watcher:',
                 error instanceof Error ? error.message : String(error)
