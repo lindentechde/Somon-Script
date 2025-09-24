@@ -48,7 +48,35 @@ const compiledConfigModuleId = '../config';
 const sourceConfigModuleId = '../../src/config.ts';
 
 const { compile } = loadCompiler();
-const { loadConfig } = loadConfigModule();
+const { loadConfig, ConfigError } = loadConfigModule();
+
+type ConfigErrorInstance = InstanceType<typeof ConfigError>;
+
+function isConfigError(error: unknown): error is ConfigErrorInstance {
+  return error instanceof ConfigError;
+}
+
+function logConfigError(error: ConfigErrorInstance): void {
+  console.error('Configuration error:');
+  console.error(`  ${error.message}`);
+  if (error.details.length > 0) {
+    for (const detail of error.details) {
+      console.error(`  ${detail.path}: ${detail.message}`);
+    }
+  }
+}
+
+function handleCliFailure(error: unknown, fallbackPrefix: string): void {
+  if (isConfigError(error)) {
+    logConfigError(error);
+  } else {
+    console.error(fallbackPrefix, error instanceof Error ? error.message : error);
+  }
+
+  if (!process.exitCode || process.exitCode === 0) {
+    process.exitCode = 1;
+  }
+}
 
 type BufferEncoding =
   | 'ascii'
@@ -88,8 +116,7 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
 
     await performBundling(moduleSystem, bundleOptions, input);
   } catch (error) {
-    console.error('Bundle error:', error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+    handleCliFailure(error, 'Bundle error:');
   }
 }
 
@@ -274,12 +301,26 @@ export function createProgram(): Command {
     .option('-w, --watch', 'Recompile on file changes')
     .action((input: string, options: CompileOptions): void => {
       try {
-        let merged = mergeOptions(input, options);
-        const shouldWatch = !!(merged.watch || merged.compileOnSave);
-        const compileOnce = (): void => {
+        let merged: CompileOptions;
+        try {
           merged = mergeOptions(input, options);
+        } catch (error) {
+          handleCliFailure(error, 'Error:');
+          return;
+        }
+
+        const shouldWatch = !!(merged.watch || merged.compileOnSave);
+
+        const compileOnce = (): boolean => {
+          try {
+            merged = mergeOptions(input, options);
+          } catch (error) {
+            handleCliFailure(error, 'Error:');
+            return false;
+          }
+
           const result = compileFile(input, merged);
-          if (result.errors.length > 0) return;
+          if (result.errors.length > 0) return false;
 
           const baseDir = path.dirname(path.resolve(input));
           const outputFile =
@@ -299,9 +340,14 @@ export function createProgram(): Command {
             fs.writeFileSync(sourceMapFile, result.sourceMap);
             console.log(`Generated source map: '${sourceMapFile}'`);
           }
+
+          return true;
         };
 
-        compileOnce();
+        const initialSuccess = compileOnce();
+        if (!initialSuccess && !shouldWatch) {
+          return;
+        }
 
         if (shouldWatch && process.env.NODE_ENV !== 'test') {
           console.log(`Watching '${input}' for changes...`);
@@ -385,8 +431,7 @@ export function createProgram(): Command {
           console.log(`Watching '${input}' for changes...`);
         }
       } catch (error) {
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exitCode = 1;
+        handleCliFailure(error, 'Error:');
         return;
       }
     });
@@ -438,8 +483,7 @@ export function createProgram(): Command {
           process.exitCode = 1;
         }
       } catch (error) {
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exitCode = 1;
+        handleCliFailure(error, 'Error:');
         return;
       } finally {
         if (tempDir) {

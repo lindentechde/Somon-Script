@@ -19,6 +19,16 @@ export interface SomonConfig {
   bundle?: BundleConfig;
 }
 
+export class ConfigError extends Error {
+  public readonly details: ConfigValidationError[];
+
+  constructor(message: string, details: ConfigValidationError[] = []) {
+    super(message);
+    this.name = 'ConfigError';
+    this.details = details;
+  }
+}
+
 export interface ConfigValidationError {
   path: string;
   message: string;
@@ -373,28 +383,28 @@ function validateConfig(config: unknown): ConfigValidationError[] {
 }
 
 function loadConfigFromFile(configPath: string): SomonConfig {
+  let fileContents: string;
   try {
-    const json = fs.readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(json);
-
-    // Validate the configuration
-    const validationErrors = validateConfig(config);
-    if (validationErrors.length > 0) {
-      console.warn(`Warning: Invalid configuration in ${configPath}:`);
-      for (const error of validationErrors) {
-        console.warn(`  ${error.path}: ${error.message}`);
-      }
-      // Return empty config on validation errors to use defaults
-      return {};
-    }
-
-    return config as SomonConfig;
+    fileContents = fs.readFileSync(configPath, 'utf-8');
   } catch (error) {
-    console.warn(
-      `Warning: Failed to parse config file ${configPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-    return {};
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Failed to read config file ${configPath}: ${reason}`);
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fileContents);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Failed to parse config file ${configPath}: ${reason}`);
+  }
+
+  const validationErrors = validateConfig(parsed);
+  if (validationErrors.length > 0) {
+    throw new ConfigError(`Invalid configuration in ${configPath}`, validationErrors);
+  }
+
+  return parsed as SomonConfig;
 }
 
 export function loadConfig(startPath: string): SomonConfig {

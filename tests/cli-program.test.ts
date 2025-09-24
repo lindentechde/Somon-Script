@@ -239,6 +239,26 @@ describe('CLI Program (in-process)', () => {
     expect(output.includes('console.log')).toBe(true);
   });
 
+  test('compile: reports configuration validation errors', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'invalid-config.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("invalid");');
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { target: 'es1999' } }, null, 2)
+    );
+
+    program.parse(['compile', inputFile], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+    const errorMessages = consoleErrorSpy.mock.calls.map(call => String(call[0]));
+    expect(errorMessages).toContain('Configuration error:');
+    expect(errorMessages.some(message => message.includes('Invalid configuration in'))).toBe(true);
+    const outputFile = path.join(tempDir, 'invalid-config.js');
+    expect(fs.existsSync(outputFile)).toBe(false);
+  });
+
   test('compile: watch mode uses chokidar and recompiles on change', () => {
     const chokidarModule = require('chokidar');
     const watchMock = chokidarModule.watch as jest.Mock;
