@@ -230,9 +230,17 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
   }
 }
 
+function resolveForwardedArgv(command: Command, input: string): string[] {
+  const parentArgs = command.parent?.args ?? [];
+  return parentArgs.length > 0 ? [...parentArgs] : [command.name(), input];
+}
+
 export const cliRuntime = {
-  executeCompiledFile(filePath: string): ReturnType<typeof spawnSync> {
-    return spawnSync(process.execPath, [filePath], {
+  executeCompiledFile(
+    filePath: string,
+    forwardedArgv: string[] = []
+  ): ReturnType<typeof spawnSync> {
+    return spawnSync(process.execPath, [filePath, ...forwardedArgv], {
       stdio: 'inherit',
       env: process.env,
     });
@@ -322,7 +330,7 @@ export function createProgram(): Command {
     .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
-    .action((input: string, options: CompileOptions): void => {
+    .action((input: string, options: CompileOptions, command: Command): void => {
       let tempDir: string | null = null;
       try {
         const merged = mergeOptions(input, options);
@@ -341,7 +349,10 @@ export function createProgram(): Command {
           fs.writeFileSync(`${tempFile}.map`, result.sourceMap, 'utf8');
         }
 
-        const child = cliRuntime.executeCompiledFile(tempFile);
+        const child = cliRuntime.executeCompiledFile(
+          tempFile,
+          resolveForwardedArgv(command, input)
+        );
 
         if (child.error) {
           console.error('Failed to execute Node:', child.error.message ?? child.error);

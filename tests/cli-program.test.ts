@@ -100,11 +100,12 @@ describe('CLI Program (in-process)', () => {
       status: 0,
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile], { from: 'user' });
+    program.parse(['run', inputFile, '--strict', 'input.txt'], { from: 'user' });
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const [tempFilePath] = executeSpy.mock.calls[0];
+    const [tempFilePath, forwardedArgv] = executeSpy.mock.calls[0];
     expect(tempFilePath).toMatch(/hello\.js$/);
+    expect(forwardedArgv).toEqual(['run', inputFile, '--strict', 'input.txt']);
     expect(process.exitCode).toBe(0);
 
     executeSpy.mockRestore();
