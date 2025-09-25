@@ -33,6 +33,9 @@ jest.mock('chokidar', () => {
   };
 });
 
+const chokidarModule = require('chokidar') as { watch: jest.Mock };
+const watchMock = chokidarModule.watch;
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -471,6 +474,33 @@ describe('Module System', () => {
       }
     });
 
+    test('should fail fast when minify preset is unavailable during bundling', async () => {
+      jest.resetModules();
+      jest.doMock(
+        'babel-preset-minify',
+        () => {
+          throw new Error('module not found');
+        },
+        { virtual: true }
+      );
+
+      const { ModuleSystem: IsolatedModuleSystem } = await import('../src/module-system');
+      const isolatedModuleSystem = new IsolatedModuleSystem({
+        resolution: { baseUrl: tempDir },
+      });
+
+      const entryPath = path.join(tempDir, 'minify-missing.som');
+      fs.writeFileSync(entryPath, 'чоп.сабт("Салом");');
+
+      await expect(
+        isolatedModuleSystem.bundle({ entryPoint: entryPath, format: 'commonjs', minify: true })
+      ).rejects.toThrow(/Minification requires the optional dependency 'babel-preset-minify'/);
+
+      await isolatedModuleSystem.shutdown();
+      jest.dontMock('babel-preset-minify');
+      jest.resetModules();
+    });
+
     test('should rewrite template literal require specifiers without interpolation', async () => {
       const entryPath = path.join(tempDir, 'template-entry.som');
       const dependencyPath = path.join(tempDir, 'dep.som');
@@ -550,8 +580,6 @@ describe('Module System', () => {
     });
 
     test('should expose watcher API for entrypoints', async () => {
-      const chokidarModule = require('chokidar');
-      const watchMock = chokidarModule.watch as jest.Mock;
       watchMock.mockClear();
 
       const utilsFile = path.join(tempDir, 'watch-util.som');

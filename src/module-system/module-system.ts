@@ -756,8 +756,9 @@ ${moduleMap.join(',\n')}
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       presetModule = require('babel-preset-minify');
     } catch {
-      // Fallback: conservative whitespace trim for simple cases
-      return code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
+      throw new Error(
+        "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable minified bundles."
+      );
     }
     const presetItems: PluginItem[] = [];
     if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {

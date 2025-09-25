@@ -185,6 +185,39 @@ describe('Compiler', () => {
     expect(result.sourceMap).toBeDefined();
   });
 
+  test('should fail fast when minify preset is unavailable', async () => {
+    jest.resetModules();
+
+    await new Promise<void>((resolve, reject) => {
+      jest.isolateModules(() => {
+        jest.doMock('babel-preset-minify', () => {
+          throw new Error('module not found');
+        });
+
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const isolated = require('../src/compiler') as typeof import('../src/compiler');
+          const result = isolated.compile('тағйирёбанда а = 1;', { minify: true });
+          expect(result.code).toBe('');
+          expect(result.errors).toEqual(
+            expect.arrayContaining([
+              expect.stringMatching(
+                /Minification requires the optional dependency 'babel-preset-minify'/
+              ),
+            ])
+          );
+          resolve();
+        } catch (error) {
+          reject(error);
+        } finally {
+          jest.dontMock('babel-preset-minify');
+        }
+      });
+    });
+
+    jest.resetModules();
+  });
+
   test('should transpile to ES5', () => {
     const source = 'собит а = 1;';
     const result = compile(source, { target: 'es5' });
