@@ -321,8 +321,26 @@ describe('Module System', () => {
         format: 'commonjs',
       });
 
-      expect(bundle).toContain('function(module, exports, require)');
-      expect(bundle).toContain('require(');
+      expect(bundle.code).toContain('function(module, exports, require)');
+      expect(bundle.code).toContain('require(');
+    });
+
+    test('should emit source maps when requested', async () => {
+      const depFile = path.join(tempDir, 'dep.som');
+      const mainFile = path.join(tempDir, 'main.som');
+
+      fs.writeFileSync(depFile, 'содир функсия value(): рақам { бозгашт 42; }');
+      fs.writeFileSync(mainFile, 'ворид { value } аз "./dep";\nчоп.сабт(value());');
+
+      const bundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+        sourceMaps: true,
+      });
+
+      expect(bundle.map).toBeDefined();
+      const parsed = JSON.parse(bundle.map ?? '{}');
+      expect(parsed.sources).toEqual(expect.arrayContaining([depFile, mainFile]));
     });
 
     test('should surface type checking errors during compilation', async () => {
@@ -372,8 +390,8 @@ describe('Module System', () => {
       const result = await moduleSystem.compile(mainFile);
       expect(result.errors).toHaveLength(0);
 
-      const compiledCode = result.modules.get(result.entryPoint);
-      expect(compiledCode).toContain('import("./dynamic.js")');
+      const compiledModule = result.modules.get(result.entryPoint);
+      expect(compiledModule?.code).toContain('import("./dynamic.js")');
     });
 
     test('should validate module system integrity', async () => {
@@ -430,7 +448,7 @@ describe('Module System', () => {
         entryPoint: mainFile,
         format: 'commonjs',
       });
-      expect(cjsBundle).toContain('module.exports');
+      expect(cjsBundle.code).toContain('module.exports');
 
       await expect(
         moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as any })
@@ -465,10 +483,11 @@ describe('Module System', () => {
           format: 'commonjs',
         });
 
-        expect(bundleWithMockedCwd).toEqual(bundleFromProjectRoot);
-        expect(bundleWithMockedCwd).toContain("'main.som'");
-        expect(bundleWithMockedCwd).toContain("'../lib/helper.som'");
-        expect(bundleWithMockedCwd).not.toContain(tempDir);
+        expect(bundleWithMockedCwd.code).toEqual(bundleFromProjectRoot.code);
+        expect(bundleWithMockedCwd.map).toEqual(bundleFromProjectRoot.map);
+        expect(bundleWithMockedCwd.code).toContain("'main.som'");
+        expect(bundleWithMockedCwd.code).toContain("'../lib/helper.som'");
+        expect(bundleWithMockedCwd.code).not.toContain(tempDir);
       } finally {
         cwdSpy.mockRestore();
       }
@@ -509,8 +528,11 @@ describe('Module System', () => {
 
       const compileResult: CompilationResult = {
         modules: new Map([
-          [entryPath, ['const dep = require(`./dep.som`);', 'module.exports = dep;'].join('\n')],
-          [dependencyPath, 'module.exports = { value: 42 };'],
+          [
+            entryPath,
+            { code: ['const dep = require(`./dep.som`);', 'module.exports = dep;'].join('\n') },
+          ],
+          [dependencyPath, { code: 'module.exports = { value: 42 };' }],
         ]),
         entryPoint: entryPath,
         dependencies: [entryPath, dependencyPath],
@@ -522,7 +544,7 @@ describe('Module System', () => {
 
       try {
         const bundle = await moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' });
-        expect(bundle).toContain("require('dep.som')");
+        expect(bundle.code).toContain("require('dep.som')");
         expect(compileSpy).toHaveBeenCalled();
       } finally {
         compileSpy.mockRestore();
@@ -535,7 +557,7 @@ describe('Module System', () => {
 
       const compileResult: CompilationResult = {
         modules: new Map([
-          [entryPath, ["const name = 'dep';", 'require(`./${name}.som`);'].join('\n')],
+          [entryPath, { code: ["const name = 'dep';", 'require(`./${name}.som`);'].join('\n') }],
         ]),
         entryPoint: entryPath,
         dependencies: [entryPath],
@@ -560,7 +582,10 @@ describe('Module System', () => {
 
       const compileResult: CompilationResult = {
         modules: new Map([
-          [entryPath, ["const moduleName = './dep.som';", 'require(moduleName);'].join('\n')],
+          [
+            entryPath,
+            { code: ["const moduleName = './dep.som';", 'require(moduleName);'].join('\n') },
+          ],
         ]),
         entryPoint: entryPath,
         dependencies: [entryPath],

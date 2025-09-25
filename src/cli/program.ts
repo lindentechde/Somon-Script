@@ -164,7 +164,16 @@ async function performBundling(
   const outputPath = getBundleOutputPath(bundleOptions, input);
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, bundle);
+
+  let outputCode = bundle.code;
+  if (bundle.map) {
+    const mapPath = `${outputPath}.map`;
+    fs.writeFileSync(mapPath, bundle.map, 'utf8');
+    outputCode = `${outputCode}\n//# sourceMappingURL=${path.basename(mapPath)}`;
+    console.log(`🗺️ Source map created: ${mapPath}`);
+  }
+
+  fs.writeFileSync(outputPath, outputCode, 'utf8');
 
   console.log(`✅ Bundle created: ${outputPath}`);
 

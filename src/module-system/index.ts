@@ -10,8 +10,10 @@ export type { ModuleMetadata, ModuleImports, DependencyNode } from './module-reg
 export { ModuleSystem } from './module-system';
 export type {
   ModuleSystemOptions,
+  CompiledModule,
   CompilationResult,
   BundleOptions,
+  BundleOutput,
   ModuleSystemWatchOptions,
   ModuleWatchEvent,
   ModuleWatchEventType,
