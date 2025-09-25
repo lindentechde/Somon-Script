@@ -1,14 +1,35 @@
+import chokidar from 'chokidar';
+import type { FSWatcher, WatchOptions } from 'chokidar';
 import * as path from 'path';
+import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
-import { CodeGenerator } from '../codegen';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics';
 import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
+import { version as packageVersion } from '../../package.json';
+import {
+  compile as compileSource,
+  type CompileOptions as PipelineCompileOptions,
+} from '../compiler';
+
+export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
+
+export interface ModuleWatchEvent {
+  type: ModuleWatchEventType;
+  filePath: string;
+}
+
+export interface ModuleSystemWatchOptions {
+  onChange?: (_event: ModuleWatchEvent) => void;
+  includeNodeModules?: boolean;
+  additionalPaths?: string[];
+  chokidarOptions?: WatchOptions;
+}
 
 export interface ModuleSystemOptions {
   resolution?: ModuleResolutionOptions;
@@ -22,8 +43,13 @@ export interface ModuleSystemOptions {
   managementPort?: number;
 }
 
+export interface CompiledModule {
+  code: string;
+  map?: RawSourceMap;
+}
+
 export interface CompilationResult {
-  modules: Map<string, string>;
+  modules: Map<string, CompiledModule>;
   entryPoint: string;
   dependencies: string[];
   errors: Error[];
@@ -33,19 +59,30 @@ export interface CompilationResult {
 export interface BundleOptions {
   entryPoint: string;
   outputPath?: string;
-  format?: 'commonjs' | 'esm' | 'umd';
+  format?: 'commonjs';
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
-  // Require explicit confirmation to use experimental formats
-  force?: boolean;
 }
+
+export interface BundleOutput {
+  code: string;
+  map?: string;
+}
+
+type RequireRewriteContext = {
+  moduleIdMapping: Map<string, string>;
+  externals: Set<string>;
+  externalModuleIds: Set<string>;
+  entryPoint: string;
+};
 
 export class ModuleSystem {
   private readonly resolver: ModuleResolver;
   private readonly loader: ModuleLoader;
   private readonly registry: ModuleRegistry;
-  private readonly codeGenerator: CodeGenerator;
+  private readonly activeWatchers = new Set<FSWatcher>();
+  private readonly defaultCompilation: CompilerOptions;
 
   // Production systems
   private readonly metrics?: ModuleSystemMetrics;
@@ -89,7 +126,7 @@ export class ModuleSystem {
     );
 
     this.registry = new ModuleRegistry();
-    this.codeGenerator = new CodeGenerator();
+    this.defaultCompilation = options.compilation ?? {};
 
     if (this.logger) {
       this.logger.info('ModuleSystem initialized with production features', {
@@ -135,10 +172,14 @@ export class ModuleSystem {
   /**
    * Compile a module and all its dependencies
    */
-  async compile(entryPoint: string, externals?: string[]): Promise<CompilationResult> {
+  async compile(
+    entryPoint: string,
+    externals?: string[],
+    overrideCompilation?: Partial<CompilerOptions>
+  ): Promise<CompilationResult> {
     const errors: Error[] = [];
     const warnings: string[] = [];
-    const modules = new Map<string, string>();
+    const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
     if (externals !== undefined) {
@@ -169,12 +210,34 @@ export class ModuleSystem {
       }
 
       // Compile each module
+      const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
+
       for (const moduleId of compilationOrder) {
         const module = this.loader.getModule(moduleId);
         if (module?.resolvedPath.endsWith('.som')) {
           try {
-            const compiledCode = this.codeGenerator.generate(module.ast);
-            modules.set(moduleId, compiledCode);
+            const compileResult = compileSource(
+              module.source,
+              this.toPipelineOptions(compilationConfig)
+            );
+
+            if (compileResult.errors.length > 0) {
+              const errorMessage = compileResult.errors.map(message => `  - ${message}`).join('\n');
+              errors.push(new Error(`Failed to compile ${module.resolvedPath}:\n${errorMessage}`));
+              continue;
+            }
+
+            const parsedMap = this.parseModuleSourceMap(module, compileResult.sourceMap, warnings);
+
+            modules.set(moduleId, { code: compileResult.code, map: parsedMap });
+
+            if (compileResult.warnings.length > 0) {
+              warnings.push(
+                ...compileResult.warnings.map(
+                  warning => `Warning in ${module.resolvedPath}: ${warning}`
+                )
+              );
+            }
           } catch (error) {
             errors.push(new Error(`Failed to compile ${moduleId}: ${error}`));
           }
@@ -205,17 +268,26 @@ export class ModuleSystem {
   /**
    * Bundle modules into a single file
    */
-  async bundle(options: BundleOptions): Promise<string> {
+  async bundle(options: BundleOptions): Promise<BundleOutput> {
     const format = options.format ?? 'commonjs';
-    if (format !== 'commonjs' && !options.force) {
+    if (format !== 'commonjs') {
       throw new Error(
-        'ESM/UMD bundle formats are experimental. Re-run with force: true (or --force).'
+        `Only the 'commonjs' bundle format is currently supported. Received '${format}'.`
       );
     }
-    if (format !== 'commonjs' && options.force) {
-      console.warn('Warning: ESM/UMD bundle formats are experimental; prefer commonjs.');
+    const compilationOverrides: Partial<CompilerOptions> = {};
+    if (options.minify !== undefined) {
+      compilationOverrides.minify = options.minify;
     }
-    const compilationResult = await this.compile(options.entryPoint, options.externals);
+    if (options.sourceMaps !== undefined) {
+      compilationOverrides.sourceMap = options.sourceMaps;
+    }
+
+    const compilationResult = await this.compile(
+      options.entryPoint,
+      options.externals,
+      compilationOverrides
+    );
 
     if (compilationResult.errors.length > 0) {
       throw new Error(
@@ -224,16 +296,7 @@ export class ModuleSystem {
     }
 
     // Generate bundle based on format
-    switch (format) {
-      case 'commonjs':
-        return this.generateCommonJSBundle(compilationResult, options);
-      case 'esm':
-        return this.generateESMBundle(compilationResult, options);
-      case 'umd':
-        return this.generateUMDBundle(compilationResult, options);
-      default:
-        throw new Error(`Unsupported bundle format: ${options.format}`);
-    }
+    return await this.generateCommonJSBundle(compilationResult, options);
   }
 
   /**
@@ -305,6 +368,8 @@ export class ModuleSystem {
       this.logger.info('Shutting down ModuleSystem');
     }
 
+    await this.stopWatching();
+
     // Stop management server
     await this.stopManagementServer();
 
@@ -316,6 +381,101 @@ export class ModuleSystem {
     }
   }
 
+  watch(entryPoint: string, options: ModuleSystemWatchOptions = {}): FSWatcher {
+    const resolvedEntry = path.resolve(entryPoint);
+    const watchRoots = new Set<string>();
+    const addWatchTarget = (target: string): void => {
+      if (target && path.isAbsolute(target)) {
+        watchRoots.add(target);
+      }
+    };
+
+    addWatchTarget(resolvedEntry);
+    addWatchTarget(path.dirname(resolvedEntry));
+
+    for (const moduleMeta of this.registry.getAll()) {
+      addWatchTarget(moduleMeta.resolvedPath);
+      if (path.isAbsolute(moduleMeta.resolvedPath)) {
+        addWatchTarget(path.dirname(moduleMeta.resolvedPath));
+      }
+    }
+
+    for (const additional of options.additionalPaths ?? []) {
+      addWatchTarget(path.resolve(additional));
+    }
+
+    const watchConfig: WatchOptions = {
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 150,
+        pollInterval: 20,
+      },
+      ignored: options.includeNodeModules ? undefined : /node_modules/,
+      ...options.chokidarOptions,
+    };
+
+    const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
+
+    const supportedEvents: ModuleWatchEventType[] = [
+      'add',
+      'change',
+      'unlink',
+      'addDir',
+      'unlinkDir',
+    ];
+
+    watcher.on('all', (event: string, changedPath: string) => {
+      if (!options.onChange) {
+        return;
+      }
+
+      if (!supportedEvents.includes(event as ModuleWatchEventType)) {
+        return;
+      }
+
+      options.onChange({
+        type: event as ModuleWatchEventType,
+        filePath: path.resolve(changedPath),
+      });
+    });
+
+    watcher.on('error', (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.logger) {
+        this.logger.error('ModuleSystem watch error', { error: message });
+      } else {
+        console.error('ModuleSystem watch error:', message);
+      }
+    });
+
+    watcher.on('close', () => {
+      this.activeWatchers.delete(watcher);
+    });
+
+    this.activeWatchers.add(watcher);
+    return watcher;
+  }
+
+  async stopWatching(): Promise<void> {
+    const watchers = Array.from(this.activeWatchers);
+    this.activeWatchers.clear();
+    await Promise.allSettled(
+      watchers.map(async watcher => {
+        try {
+          await watcher.close();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (this.logger) {
+            this.logger.warn('Failed to close module watcher', { error: message });
+          } else {
+            console.warn('Failed to close module watcher:', message);
+          }
+        }
+      })
+    );
+  }
+
   private registerAllLoadedModules(): void {
     const loadedModules = this.loader.getAllModules();
     for (const loaded of loadedModules) {
@@ -323,266 +483,477 @@ export class ModuleSystem {
     }
   }
 
-  private generateCommonJSBundle(result: CompilationResult, options: BundleOptions): string {
-    const moduleMap: string[] = [];
+  private resolveCompilationOptions(overrides?: Partial<CompilerOptions>): CompilerOptions {
+    if (!overrides || Object.keys(overrides).length === 0) {
+      return { ...this.defaultCompilation };
+    }
+
+    return { ...this.defaultCompilation, ...overrides };
+  }
+
+  private toPipelineOptions(config: CompilerOptions): PipelineCompileOptions {
+    const options: PipelineCompileOptions = {};
+
+    if (config.target) {
+      options.target = config.target;
+    }
+    if (config.sourceMap !== undefined) {
+      options.sourceMap = config.sourceMap;
+    }
+    if (config.minify !== undefined) {
+      options.minify = config.minify;
+    }
+    if (config.noTypeCheck !== undefined) {
+      options.typeCheck = !config.noTypeCheck;
+    }
+    if (config.strict !== undefined) {
+      options.strict = config.strict;
+    }
+
+    return options;
+  }
+
+  // The bundler assembly needs multiple guards and sequencing steps; suppress complexity warnings for maintainability.
+  // eslint-disable-next-line complexity
+  private async generateCommonJSBundle(
+    result: CompilationResult,
+    options: BundleOptions
+  ): Promise<BundleOutput> {
     const moduleIdMapping = new Map<string, string>();
     const externals = new Set(
       (options.externals ?? []).map(ext => ext.trim()).filter(ext => ext.length > 0)
     );
     const externalModuleIds = new Set<string>();
 
-    // Create module ID mapping: convert absolute module IDs to relative keys for bundle
-    // Note: moduleId should always be absolute path (standardized by ModuleLoader.getModuleId)
+    if (!path.isAbsolute(result.entryPoint)) {
+      throw new Error('Entry point must be an absolute path for bundling.');
+    }
+    const entryDir = path.dirname(result.entryPoint);
+    const normalizeKey = (absolutePath: string): string => {
+      const relativePath = path.relative(entryDir, absolutePath);
+      const normalized = relativePath.split(path.sep).join('/');
+      if (normalized.length === 0) {
+        return path.basename(absolutePath);
+      }
+      return normalized;
+    };
+
     for (const [moduleId] of result.modules) {
       if (!path.isAbsolute(moduleId)) {
         throw new Error(`Module ID should be absolute path, got: ${moduleId}`);
       }
-      const key = path.relative(process.cwd(), moduleId);
-      moduleIdMapping.set(moduleId, key);
+      if (!moduleIdMapping.has(moduleId)) {
+        moduleIdMapping.set(moduleId, normalizeKey(moduleId));
+      }
     }
 
-    const buildExternalCandidates = (raw: string): string[] => {
-      const variants = new Set<string>();
-      variants.add(raw);
-      if (/\.js$/i.test(raw)) {
-        const withoutExt = raw.replace(/\.js$/i, '');
-        variants.add(withoutExt);
-        variants.add(`${withoutExt}.som`);
-      } else {
-        variants.add(`${raw}.js`);
-      }
-      if (/\.som$/i.test(raw)) {
-        const withoutExt = raw.replace(/\.som$/i, '');
-        variants.add(withoutExt);
-        variants.add(`${withoutExt}.js`);
-      } else {
-        variants.add(`${raw}.som`);
-      }
-      return Array.from(variants);
-    };
-
-    const matchesExternal = (raw: string): boolean => {
-      if (externals.size === 0) return false;
-      for (const candidate of buildExternalCandidates(raw)) {
-        if (externals.has(candidate)) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    const markExternalModule = (ownerModuleId: string, raw: string): void => {
-      for (const candidate of buildExternalCandidates(raw)) {
-        try {
-          const resolved = this.resolver.resolve(candidate, ownerModuleId);
-          externalModuleIds.add(resolved.resolvedPath);
-          return;
-        } catch {
-          // Ignore failures; we only care about candidates that resolve
-        }
-      }
-    };
-
-    // Helper to rewrite require calls to mapped IDs - using safer pattern matching
-    const rewriteRequires = (ownerModuleId: string, code: string): string => {
-      // Validate input to prevent ReDoS attacks
-      if (typeof code !== 'string') {
-        throw new Error('Code input must be a string');
-      }
-      if (code.length > 10 * 1024 * 1024) {
-        // 10MB limit
-        throw new Error('Code input too large for require rewriting');
-      }
-
-      // More restrictive regex patterns to prevent ReDoS
-      const singleQuotePattern = /require\('([^'\n\r]{1,500})'\)/g;
-      const doubleQuotePattern = /require\("([^"\n\r]{1,500})"\)/g;
-
-      const processMatch = (match: string, spec: string): string => {
-        // Validate specifier format
-        if (!spec || spec.length === 0 || spec.length > 500) {
-          return match; // Keep original if invalid
-        }
-
-        // Check for potential injection attempts
-        if (spec.includes('..') && spec.split('..').length > 3) {
-          return match; // Suspicious path traversal
-        }
-
-        if (matchesExternal(spec)) {
-          markExternalModule(ownerModuleId, spec);
-          return match;
-        }
-
-        const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
-          try {
-            const resolved = this.resolver.resolve(s, ownerModuleId);
-            const mapped = moduleIdMapping.get(resolved.resolvedPath);
-            if (!mapped) {
-              return null;
-            }
-            if (externalModuleIds.has(resolved.resolvedPath)) {
-              return null;
-            }
-            return { key: mapped, resolvedPath: resolved.resolvedPath };
-          } catch {
-            return null;
-          }
-        };
-
-        // 1) Try as-is
-        let resolved = tryResolveToKey(spec);
-        // 2) If it looks like a compiled relative import and failed, try .som fallback
-        if (!resolved && /^(\.\.?\/).+\.js$/i.test(spec)) {
-          const fallbackSpec = spec.replace(/\.js$/i, '.som');
-          if (matchesExternal(fallbackSpec)) {
-            markExternalModule(ownerModuleId, fallbackSpec);
-            return match;
-          }
-          resolved = tryResolveToKey(fallbackSpec);
-        }
-        if (!resolved) {
-          return match;
-        }
-
-        // Sanitize the key to prevent injection
-        const sanitizedKey = resolved.key.replace(/['"\\]/g, '');
-        return match.includes("'") ? `require('${sanitizedKey}')` : `require("${sanitizedKey}")`;
-      };
-
-      // Process single quotes first, then double quotes
-      let result = code.replace(singleQuotePattern, (match, spec) => processMatch(match, spec));
-      result = result.replace(doubleQuotePattern, (match, spec) => processMatch(match, spec));
-
-      return result;
-    };
-
-    // Pre-mark explicitly configured externals relative to the entry point
     for (const ext of externals) {
-      markExternalModule(result.entryPoint, ext);
+      this.markExternalModule(result.entryPoint, ext, externalModuleIds, result.entryPoint);
     }
 
-    const processedModules = new Map<string, string>();
-    for (const [moduleId, code] of result.modules) {
-      const processedCode = rewriteRequires(moduleId, code);
-      processedModules.set(moduleId, processedCode);
+    const processedModules = this.prepareModulesForBundle(
+      result,
+      moduleIdMapping,
+      externals,
+      externalModuleIds
+    );
+
+    const entryKey = moduleIdMapping.get(result.entryPoint);
+    if (!entryKey) {
+      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
     }
 
-    for (const [moduleId, processedCode] of processedModules) {
-      if (externalModuleIds.has(moduleId)) {
+    const append = (builder: { code: string; line: number }, segment: string): void => {
+      builder.code += segment;
+      const matches = segment.match(/\n/g);
+      if (matches) {
+        builder.line += matches.length;
+      }
+    };
+
+    const bundleBuilder = { code: '', line: 1 };
+    append(bundleBuilder, "(function() {\n  'use strict';\n\n  var modules = {\n");
+
+    const generator = options.sourceMaps
+      ? new SourceMapGenerator({
+          file: path.basename(options.outputPath ?? this.deriveBundleFilename(result.entryPoint)),
+        })
+      : null;
+
+    let firstModule = true;
+    for (const module of processedModules) {
+      if (externalModuleIds.has(module.id)) {
         continue;
       }
-      const key = moduleIdMapping.get(moduleId)!;
-      moduleMap.push(`  '${key}': function(module, exports, require) {\n${processedCode}\n  }`);
-    }
-
-    // Generate bundle
-    const bundle = `
-(function() {
-  'use strict';
-  
-  var modules = {
-${moduleMap.join(',\n')}
-  };
-  
-  var cache = {};
-  var __externalRequire = typeof module !== 'undefined' && module.require
-    ? module.require.bind(module)
-    : typeof require === 'function'
-      ? require
-      : null;
-  
-  function _require(id) {
-    if (cache[id]) return cache[id].exports;
-
-    if (!modules[id]) {
-      if (__externalRequire) {
-        return __externalRequire(id);
+      if (!firstModule) {
+        append(bundleBuilder, ',\n');
+      } else {
+        firstModule = false;
       }
-      throw new Error("Module '" + id + "' not found in bundle and no external require available.");
+
+      append(bundleBuilder, `  '${module.key}': function(module, exports, require) {\n`);
+      const moduleStartLine = bundleBuilder.line;
+
+      append(bundleBuilder, module.code);
+
+      if (generator && module.map) {
+        const moduleMap = module.map;
+        await SourceMapConsumer.with(moduleMap, null, consumer => {
+          consumer.eachMapping(mapping => {
+            if (mapping.originalLine == null || mapping.originalColumn == null) {
+              return;
+            }
+            generator.addMapping({
+              generated: {
+                line: moduleStartLine + (mapping.generatedLine - 1),
+                column: mapping.generatedColumn,
+              },
+              original: {
+                line: mapping.originalLine,
+                column: mapping.originalColumn,
+              },
+              source: mapping.source,
+              name: mapping.name ?? undefined,
+            });
+          });
+          if (moduleMap.sources) {
+            moduleMap.sources.forEach((source, index) => {
+              const content = moduleMap.sourcesContent?.[index];
+              if (content !== undefined) {
+                generator.setSourceContent(source, content);
+              }
+            });
+          }
+        });
+      }
+
+      append(bundleBuilder, '\n  }');
     }
 
-    var module = cache[id] = { exports: {} };
-    modules[id](module, module.exports, _require);
+    append(bundleBuilder, '\n  };\n\n');
+    append(
+      bundleBuilder,
+      '  var cache = {};\n' +
+        "  var __externalRequire = typeof module !== 'undefined' && module.require\n" +
+        '    ? module.require.bind(module)\n' +
+        "    : typeof require === 'function'\n" +
+        '      ? require\n' +
+        '      : null;\n\n'
+    );
+    append(
+      bundleBuilder,
+      '  function _require(id) {\n' +
+        '    if (cache[id]) return cache[id].exports;\n\n' +
+        '    if (!modules[id]) {\n' +
+        '      if (__externalRequire) {\n' +
+        '        return __externalRequire(id);\n' +
+        '      }\n' +
+        '      throw new Error("Module \'" + id + "\' not found in bundle and no external require available.");\n' +
+        '    }\n\n' +
+        '    var module = cache[id] = { exports: {} };\n' +
+        '    modules[id](module, module.exports, _require);\n\n' +
+        '    return module.exports;\n' +
+        '  }\n\n'
+    );
+    append(
+      bundleBuilder,
+      `  // Start with entry point and expose its exports\n  var entryModule = _require('${entryKey}');\n\n`
+    );
+    append(
+      bundleBuilder,
+      '  // Expose entry point exports as bundle exports (for Node.js)\n' +
+        "  if (typeof module !== 'undefined' && module.exports) {\n" +
+        '    module.exports = entryModule;\n' +
+        '  }\n\n'
+    );
+    append(
+      bundleBuilder,
+      '  // Return entry point exports (for other environments)\n' + '  return entryModule;\n})();'
+    );
 
-    return module.exports;
-  }
-  
-  // Start with entry point and expose its exports
-  var entryModule = _require('${path.relative(process.cwd(), result.entryPoint)}');
-  
-  // Expose entry point exports as bundle exports (for Node.js)
-  if (typeof module !== 'undefined' && module.exports) {
-    module.exports = entryModule;
-  }
-  
-  // Return entry point exports (for other environments)
-  return entryModule;
-})();
-`;
-
-    return options.minify ? this.minify(bundle) : bundle;
-  }
-
-  private generateESMBundle(result: CompilationResult, options: BundleOptions): string {
-    const modules: string[] = [];
-
-    for (const [moduleId, code] of result.modules) {
-      modules.push(`// Experimental ESM bundle: linking is not resolved`);
-      modules.push(`// Module: ${path.relative(process.cwd(), moduleId)}`);
-      modules.push(code);
-      modules.push('');
+    let rawMap: RawSourceMap | undefined;
+    if (generator) {
+      rawMap = JSON.parse(generator.toString()) as RawSourceMap;
     }
 
-    const bundle = modules.join('\n');
-    return options.minify ? this.minify(bundle) : bundle;
+    if (options.minify) {
+      const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
+      bundleBuilder.code = minified.code;
+      rawMap = minified.map;
+    }
+
+    return {
+      code: bundleBuilder.code,
+      map: rawMap ? JSON.stringify(rawMap) : undefined,
+    };
   }
 
-  private generateUMDBundle(result: CompilationResult, options: BundleOptions): string {
-    const commonjsBundle = this.generateCommonJSBundle(result, options);
-
-    const umdWrapper = `
-/* Experimental UMD bundle: internal linking is simplified */
-(function (root, factory) {
-  if (typeof exports === 'object' && typeof module !== 'undefined') {
-    // CommonJS
-    factory(exports);
-  } else if (typeof define === 'function' && define.amd) {
-    // AMD
-    define(['exports'], factory);
-  } else {
-    // Browser globals
-    factory((root.SomonScript = {}));
+  private buildExternalCandidates(raw: string, entryPoint: string): string[] {
+    const candidates = new Set<string>();
+    candidates.add(raw);
+    if (raw.startsWith('./') || raw.startsWith('../')) {
+      const absolute = path.resolve(path.dirname(entryPoint), raw);
+      candidates.add(absolute);
+    }
+    const withoutExt = raw.replace(/\.(js|som)$/i, '');
+    if (withoutExt !== raw) {
+      candidates.add(withoutExt);
+      candidates.add(`${withoutExt}.som`);
+      candidates.add(`${withoutExt}.js`);
+    }
+    if (raw.includes('/')) {
+      const segments = raw.split('/');
+      for (let i = segments.length; i > 1; i--) {
+        candidates.add(segments.slice(0, i).join('/') + '/*');
+      }
+    }
+    const variants = new Set<string>();
+    for (const candidate of candidates) {
+      variants.add(candidate);
+      if (candidate.endsWith('/*')) {
+        variants.add(candidate.slice(0, -2));
+      }
+    }
+    if (/^(?:\.|\.\.)\//.test(raw)) {
+      variants.add(raw);
+      variants.add(`${raw}.som`);
+      variants.add(`${raw}.js`);
+    } else if (!raw.endsWith('.som') && !raw.endsWith('.js')) {
+      variants.add(`${raw}.som`);
+      variants.add(`${raw}.js`);
+      variants.add(`${raw}/index.som`);
+      variants.add(`${raw}/index.js`);
+    }
+    return Array.from(variants);
   }
-}(typeof self !== 'undefined' ? self : this, function (exports) {
-${commonjsBundle}
-}));
-`;
 
-    return options.minify ? this.minify(umdWrapper) : umdWrapper;
+  private matchesExternal(raw: string, externals: Set<string>, entryPoint: string): boolean {
+    if (externals.size === 0) return false;
+    for (const candidate of this.buildExternalCandidates(raw, entryPoint)) {
+      if (externals.has(candidate)) {
+        return true;
+      }
+    }
+    return false;
   }
 
-  private minify(code: string): string {
+  private markExternalModule(
+    ownerModuleId: string,
+    raw: string,
+    externalModuleIds: Set<string>,
+    entryPoint: string
+  ): void {
+    for (const candidate of this.buildExternalCandidates(raw, entryPoint)) {
+      try {
+        const resolved = this.resolver.resolve(candidate, ownerModuleId);
+        externalModuleIds.add(resolved.resolvedPath);
+        return;
+      } catch {
+        // Ignore failures; we only care about candidates that resolve
+      }
+    }
+  }
+
+  private prepareModulesForBundle(
+    result: CompilationResult,
+    moduleIdMapping: Map<string, string>,
+    externals: Set<string>,
+    externalModuleIds: Set<string>
+  ): Array<{ id: string; key: string; code: string; map?: RawSourceMap }> {
+    const modules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }> = [];
+    const context: RequireRewriteContext = {
+      moduleIdMapping,
+      externals,
+      externalModuleIds,
+      entryPoint: result.entryPoint,
+    };
+
+    for (const [moduleId, moduleData] of result.modules) {
+      const processedCode = this.rewriteRequiresForModule(moduleId, moduleData.code, context);
+      const key = moduleIdMapping.get(moduleId);
+      if (!key) {
+        continue;
+      }
+      modules.push({ id: moduleId, key, code: processedCode, map: moduleData.map });
+    }
+
+    return modules;
+  }
+
+  private rewriteRequiresForModule(
+    ownerModuleId: string,
+    code: string,
+    context: RequireRewriteContext
+  ): string {
+    if (typeof code !== 'string') {
+      throw new Error('Code input must be a string');
+    }
+    if (code.length > 10 * 1024 * 1024) {
+      throw new Error('Code input too large for require rewriting');
+    }
+
+    const normalizedOwner = path.isAbsolute(ownerModuleId)
+      ? ownerModuleId
+      : path.resolve(ownerModuleId);
+
+    const dynamicTemplatePattern = /require\s*\(\s*`[^`]*\$\{[^`]*`\s*\)/;
+    if (dynamicTemplatePattern.test(code)) {
+      throw new Error(
+        `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
+      );
+    }
+
+    const dynamicRequirePattern = /require\s*\(\s*(?!['"`])/;
+    if (dynamicRequirePattern.test(code)) {
+      throw new Error(`Dynamic require expressions are not supported in ${normalizedOwner}.`);
+    }
+
+    const singleQuotePattern = /require\s*\(\s*'([^'\n\r]{1,500})'\s*\)/g;
+    const doubleQuotePattern = /require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
+    const templatePattern = /require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
+
+    const processMatch = (
+      match: string,
+      spec: string,
+      quote: 'single' | 'double' | 'template'
+    ): string => {
+      if (!spec || spec.length === 0 || spec.length > 500) {
+        return match;
+      }
+
+      if (spec.includes('..') && spec.split('..').length > 3) {
+        return match;
+      }
+
+      if (this.matchesExternal(spec, context.externals, context.entryPoint)) {
+        this.markExternalModule(ownerModuleId, spec, context.externalModuleIds, context.entryPoint);
+        return match;
+      }
+
+      const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
+        try {
+          const resolved = this.resolver.resolve(s, ownerModuleId);
+          const mapped = context.moduleIdMapping.get(resolved.resolvedPath);
+          if (!mapped) {
+            return null;
+          }
+          if (context.externalModuleIds.has(resolved.resolvedPath)) {
+            return null;
+          }
+          return { key: mapped, resolvedPath: resolved.resolvedPath };
+        } catch {
+          return null;
+        }
+      };
+
+      let resolved = tryResolveToKey(spec);
+      if (!resolved && /^(\.\.?\/).+\.js$/i.test(spec)) {
+        const fallbackSpec = spec.replace(/\.js$/i, '.som');
+        if (this.matchesExternal(fallbackSpec, context.externals, context.entryPoint)) {
+          this.markExternalModule(
+            ownerModuleId,
+            fallbackSpec,
+            context.externalModuleIds,
+            context.entryPoint
+          );
+          return match;
+        }
+        resolved = tryResolveToKey(fallbackSpec);
+      }
+      if (!resolved) {
+        return match;
+      }
+
+      const sanitizedKey = resolved.key.replace(/['"`\\]/g, '');
+      if (quote === 'double') {
+        return `require("${sanitizedKey}")`;
+      }
+      return `require('${sanitizedKey}')`;
+    };
+
+    let result = code.replace(singleQuotePattern, (match, spec) =>
+      processMatch(match, spec, 'single')
+    );
+    result = result.replace(doubleQuotePattern, (match, spec) =>
+      processMatch(match, spec, 'double')
+    );
+    result = result.replace(templatePattern, (match, spec) => {
+      if (spec.includes('${')) {
+        throw new Error(
+          `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
+        );
+      }
+      return processMatch(match, spec, 'template');
+    });
+
+    return result;
+  }
+
+  private parseModuleSourceMap(
+    module: LoadedModule,
+    rawMap: string | undefined,
+    warnings: string[]
+  ): RawSourceMap | undefined {
+    if (!rawMap) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(rawMap) as RawSourceMap;
+      parsed.file = module.resolvedPath;
+      parsed.sources =
+        parsed.sources && parsed.sources.length > 0
+          ? parsed.sources.map(() => module.resolvedPath)
+          : [module.resolvedPath];
+      if (!parsed.sourcesContent || parsed.sourcesContent.length === 0) {
+        parsed.sourcesContent = [module.source];
+      }
+      return parsed;
+    } catch (mapError) {
+      const message = mapError instanceof Error ? mapError.message : String(mapError);
+      warnings.push(`Warning in ${module.resolvedPath}: Failed to parse source map: ${message}`);
+      return undefined;
+    }
+  }
+
+  private deriveBundleFilename(entryPoint: string): string {
+    if (entryPoint.toLowerCase().endsWith('.som')) {
+      return `${path.basename(entryPoint, '.som')}.bundle.js`;
+    }
+    return `${path.basename(entryPoint)}.bundle.js`;
+  }
+
+  private minify(
+    code: string,
+    map: RawSourceMap | undefined,
+    sourceMaps: boolean
+  ): { code: string; map?: RawSourceMap } {
     // Lazy-load preset to avoid runtime hard dependency
     let presetModule: unknown = null;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       presetModule = require('babel-preset-minify');
     } catch {
-      // Fallback: conservative whitespace trim for simple cases
-      return code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
+      throw new Error(
+        "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable minified bundles."
+      );
     }
     const presetItems: PluginItem[] = [];
     if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
       presetItems.push(presetModule as PluginItem);
     }
     const out = transformSync(code, {
-      sourceMaps: false,
+      sourceMaps,
+      inputSourceMap: map ? { ...map, file: map.file ?? '' } : undefined,
       presets: presetItems,
       comments: false,
       compact: true,
     });
-    return out?.code && out.code.length > 0 ? out.code : code;
+
+    const nextCode = out?.code && out.code.length > 0 ? out.code : code;
+    const nextMap = sourceMaps && out?.map ? (out.map as RawSourceMap) : map;
+
+    return { code: nextCode, map: nextMap };
   }
 
   /**
@@ -622,29 +993,30 @@ ${commonjsBundle}
    * Get system health status
    */
   async getHealth(): Promise<SystemHealth> {
-    if (!this.metrics)
+    if (!this.metrics) {
+      const timestamp = Date.now();
       return {
-        status: 'unhealthy',
+        status: 'healthy',
         uptime: process.uptime(),
-        version: '0.3.16',
-        timestamp: Date.now(),
-        checks: [],
+        version: packageVersion,
+        timestamp,
+        checks: [
+          {
+            name: 'metrics',
+            status: 'warn',
+            message: 'Metrics collection disabled; reporting runtime defaults only.',
+            duration: 0,
+            timestamp,
+          },
+        ],
       };
+    }
 
     const stats = this.registry.getStatistics();
     return await this.metrics.performHealthChecks(
       stats.totalModules,
       100 * 1024 * 1024 // Default 100MB limit
     );
-  }
-
-  /**
-   * Watch for file changes and reload modules
-   */
-  watch(): void {
-    // This would implement file watching functionality
-    // For now, it's a placeholder
-    console.log('Module watching not yet implemented');
   }
 
   /**

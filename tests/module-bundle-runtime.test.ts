@@ -36,7 +36,7 @@ describe('ModuleSystem Bundle Runtime', () => {
 
     const logs: string[] = [];
     const context = vm.createContext({ console: { log: (msg: string) => logs.push(String(msg)) } });
-    vm.runInContext(bundle, context);
+    vm.runInContext(bundle.code, context);
 
     expect(logs).toContain('OK');
   });
@@ -59,7 +59,7 @@ describe('ModuleSystem Bundle Runtime', () => {
       externals: ['fs'],
     });
 
-    expect(bundle).toContain('require("fs")');
+    expect(bundle.code).toContain('require("fs")');
 
     const logs: string[] = [];
     const nodeRequire = createRequire(__filename);
@@ -69,7 +69,7 @@ describe('ModuleSystem Bundle Runtime', () => {
       module: { exports: {}, require: nodeRequire },
     });
 
-    vm.runInContext(bundle, context);
+    vm.runInContext(bundle.code, context);
 
     expect(logs).toContain('exists');
   });

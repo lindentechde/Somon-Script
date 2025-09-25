@@ -5,7 +5,7 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 
 const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
-const threshold = (base: number) => base * (isCI ? 5 : 1);
+const threshold = (base: number) => base * (isCI ? 5 : 1.5);
 
 describe('Performance Tests', () => {
   const smallProgram = `

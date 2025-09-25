@@ -16,7 +16,7 @@ registration, validation, and bundling.
 ## Resolver
 
 ```ts
-import { ModuleResolver } from 'somon-script';
+import { ModuleResolver } from '@lindentech/somon-script';
 const resolver = new ModuleResolver({
   baseUrl: process.cwd(),
   extensions: ['.som', '.js', '.json'],
@@ -36,7 +36,7 @@ Notes:
 ## Loader
 
 ```ts
-import { ModuleLoader } from 'somon-script';
+import { ModuleLoader } from '@lindentech/somon-script';
 const loader = new ModuleLoader(resolver, {
   circularDependencyStrategy: 'warn',
 });
@@ -54,7 +54,7 @@ Behavior:
 ## Registry
 
 ```ts
-import { ModuleRegistry } from 'somon-script';
+import { ModuleRegistry } from '@lindentech/somon-script';
 const registry = new ModuleRegistry();
 registry.register(mod);
 const order = registry.getTopologicalSort();
@@ -71,7 +71,7 @@ Behavior:
 ## System (High-Level API)
 
 ```ts
-import { ModuleSystem } from 'somon-script';
+import { ModuleSystem } from '@lindentech/somon-script';
 const ms = new ModuleSystem({ resolution: { baseUrl: '/project/src' } });
 await ms.loadModule('./app', '/project/src');
 const validation = ms.validate(); // checks cycles and missing deps
@@ -89,9 +89,7 @@ Compilation:
 Bundling:
 
 - CommonJS: produces a self-contained module map + simple loader, then executes
-  the entry.
-- ESM/UMD: experimental (concatenated output, not a full linker); prefer
-  `commonjs` for execution.
+  the entry (currently the only supported bundle target).
 - Internal require rewrite maps `require("./x")` or compiled `require("./x.js")`
   to the correct module map entry (`.js` is mapped back to `.som` internally
   when needed).

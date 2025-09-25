@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import packageJson from '../package.json';
 
 // Mock the compile function
 const mockCompile = jest.fn();
@@ -20,7 +21,7 @@ mockFs.existsSync.mockImplementation((filePath: string) => {
 
 mockFs.readFileSync.mockImplementation((filePath: string) => {
   if (typeof filePath === 'string' && filePath.endsWith('package.json')) {
-    return JSON.stringify({ name: 'somon-script', version: '0.3.19' });
+    return JSON.stringify({ name: packageJson.name, version: packageJson.version });
   }
   return '';
 });

@@ -17,7 +17,7 @@ The project now uses **semantic-release** to automatically:
 
 ### 1. NPM Registry (Primary)
 
-- **URL**: https://www.npmjs.com/package/somon-script
+- **URL**: https://www.npmjs.com/package/@lindentech/somon-script
 - **Installation**: `npm install -g @lindentech/somon-script`
 - **Automatic**: Published on every release
 
@@ -194,13 +194,13 @@ npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
 
 ```bash
 # Install specific version
-npm install somon-script@1.2.3
+npm install @lindentech/somon-script@1.2.3
 
 # Install beta version
-npm install somon-script@beta
+npm install @lindentech/somon-script@beta
 
 # Install development version
-npm install somon-script@dev
+npm install @lindentech/somon-script@dev
 ```
 
 ## Environment Setup Requirements
@@ -267,7 +267,7 @@ Required secrets in GitHub repository settings:
 ## Monitoring Releases
 
 - **GitHub Releases**: https://github.com/lindentechde/Somon-Script/releases
-- **NPM Package**: https://www.npmjs.com/package/somon-script
+- **NPM Package**: https://www.npmjs.com/package/@lindentech/somon-script
 - **JSR Package**: https://jsr.io/@lindentechde/somon-script
 - **GitHub Actions**: Repository → Actions tab
 - **Changelog**: Auto-generated `CHANGELOG.md` file
