@@ -123,7 +123,7 @@ SomonScript code.
 mkdir my-somon-project
 cd my-somon-project
 npm init -y
-npm install somon-script --save-dev
+npm install @lindentech/somon-script --save-dev
 
 # Create basic files
 echo 'чоп.сабт("Салом, Ҷаҳон!");' > main.som

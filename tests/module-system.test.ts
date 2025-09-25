@@ -1,7 +1,49 @@
+jest.mock('chokidar', () => {
+  const watchMock = jest.fn(() => {
+    const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    const watcher = {
+      on: jest.fn(function (this: any, event: string, handler: (...args: any[]) => void) {
+        const handlers = listeners.get(event) ?? [];
+        handlers.push(handler);
+        listeners.set(event, handlers);
+        return this;
+      }),
+      close: jest.fn().mockResolvedValue(undefined),
+      emit(event: string, ...args: any[]) {
+        const handlers = listeners.get(event) ?? [];
+        for (const handler of handlers) {
+          handler(...args);
+        }
+        const allHandlers = listeners.get('all') ?? [];
+        for (const handler of allHandlers) {
+          handler(event, ...args);
+        }
+        return this;
+      },
+    };
+    return watcher;
+  });
+
+  const chokidarExport = Object.assign(watchMock, { watch: watchMock });
+
+  return {
+    __esModule: true,
+    default: chokidarExport,
+    watch: watchMock,
+  };
+});
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ModuleResolver, ModuleLoader, ModuleRegistry, ModuleSystem } from '../src/module-system';
+import packageJson from '../package.json';
+import {
+  ModuleResolver,
+  ModuleLoader,
+  ModuleRegistry,
+  ModuleSystem,
+  type CompilationResult,
+} from '../src/module-system';
 
 describe('Module System', () => {
   let tempDir: string;
@@ -26,7 +68,13 @@ describe('Module System', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    try {
+      await moduleSystem.shutdown();
+    } catch (error) {
+      // Ignore shutdown errors in tests to avoid masking primary failures
+    }
+
     // Clean up temporary directory
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
@@ -92,6 +140,12 @@ describe('Module System', () => {
   });
 
   describe('ModuleLoader', () => {
+    test('does not allocate production subsystems by default', () => {
+      const defaultLoader = new ModuleLoader(resolver);
+      expect((defaultLoader as any).metrics).toBeUndefined();
+      expect((defaultLoader as any).circuitBreakers).toBeUndefined();
+    });
+
     test('should load module with dependencies', () => {
       const mainFile = path.join(tempDir, 'main.som');
       const utilsFile = path.join(tempDir, 'utils.som');
@@ -136,6 +190,23 @@ describe('Module System', () => {
       expect(() => {
         loader.loadSync('./main', tempDir);
       }).toThrow();
+    });
+  });
+
+  describe('production features', () => {
+    test('reports neutral health when metrics disabled', async () => {
+      const health = await moduleSystem.getHealth();
+
+      expect(health.status).toBe('healthy');
+      expect(health.version).toBe(packageJson.version);
+      expect(health.checks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'metrics',
+            status: 'warn',
+          }),
+        ])
+      );
     });
   });
 
@@ -251,6 +322,35 @@ describe('Module System', () => {
       expect(bundle).toContain('require(');
     });
 
+    test('should surface type checking errors during compilation', async () => {
+      const typeErrorFile = path.join(tempDir, 'type-error.som');
+      fs.writeFileSync(typeErrorFile, 'тағйирёбанда value: рақам = "матн";');
+
+      const result = await moduleSystem.compile(typeErrorFile);
+
+      expect(result.modules.size).toBe(0);
+      expect(result.errors).not.toHaveLength(0);
+      expect(result.errors[0]?.message).toContain('Type error');
+    });
+
+    test('should respect compilation overrides that disable type checking', async () => {
+      const typeErrorFile = path.join(tempDir, 'type-disabled.som');
+      fs.writeFileSync(typeErrorFile, 'тағйирёбанда value: рақам = "матн";');
+
+      const relaxedSystem = new ModuleSystem({
+        resolution: { baseUrl: tempDir },
+        compilation: { noTypeCheck: true },
+      });
+
+      try {
+        const result = await relaxedSystem.compile(typeErrorFile);
+        expect(result.errors).toHaveLength(0);
+        expect(result.modules.size).toBeGreaterThan(0);
+      } finally {
+        await relaxedSystem.shutdown();
+      }
+    });
+
     test('should handle dynamic imports', async () => {
       const dynamicFile = path.join(tempDir, 'dynamic.som');
       const mainFile = path.join(tempDir, 'main.som');
@@ -315,7 +415,7 @@ describe('Module System', () => {
       expect(appDeps).toBeDefined();
     });
 
-    test('should generate different bundle formats (requires force)', async () => {
+    test('should generate commonjs bundle and reject unsupported formats', async () => {
       const moduleFile = path.join(tempDir, 'module.som');
       const mainFile = path.join(tempDir, 'main.som');
 
@@ -329,38 +429,157 @@ describe('Module System', () => {
       });
       expect(cjsBundle).toContain('module.exports');
 
-      // Test ESM bundle
-      const esmBundle = await moduleSystem.bundle({
-        entryPoint: mainFile,
-        format: 'esm',
-        force: true,
-      });
-      expect(esmBundle).toContain('export');
+      await expect(
+        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as any })
+      ).rejects.toThrow(/commonjs/i);
 
-      // Test UMD bundle
-      const umdBundle = await moduleSystem.bundle({
-        entryPoint: mainFile,
-        format: 'umd',
-        force: true,
-      });
-      expect(umdBundle).toContain('typeof exports');
+      await expect(
+        moduleSystem.bundle({ entryPoint: mainFile, format: 'umd' as any })
+      ).rejects.toThrow(/commonjs/i);
     });
 
-    test('should require force for non-commonjs formats', async () => {
-      const moduleFile = path.join(tempDir, 'm.som');
-      const mainFile = path.join(tempDir, 'main.som');
-      fs.writeFileSync(moduleFile, 'содир функсия f() { бозгашт 1; }');
-      fs.writeFileSync(mainFile, 'ворид { f } аз "./m"; чоп.сабт(f());');
+    test('should stabilise CommonJS bundle IDs relative to entry directory', async () => {
+      const srcDir = path.join(tempDir, 'src');
+      const libDir = path.join(tempDir, 'lib');
+      fs.mkdirSync(srcDir, { recursive: true });
+      fs.mkdirSync(libDir, { recursive: true });
 
-      // Expect bundle to throw when format is esm without force
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as const })
-      ).rejects.toThrow(/experimental/i);
+      const helperFile = path.join(libDir, 'helper.som');
+      const mainFile = path.join(srcDir, 'main.som');
 
-      // Should succeed when force is true
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as const, force: true })
-      ).resolves.toContain('export');
+      fs.writeFileSync(helperFile, 'содир функсия helper() { бозгашт 1; }');
+      fs.writeFileSync(mainFile, 'ворид { helper } аз "../lib/helper";\nчоп.сабт(helper());');
+
+      const bundleFromProjectRoot = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+      });
+
+      const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/');
+      try {
+        const bundleWithMockedCwd = await moduleSystem.bundle({
+          entryPoint: mainFile,
+          format: 'commonjs',
+        });
+
+        expect(bundleWithMockedCwd).toEqual(bundleFromProjectRoot);
+        expect(bundleWithMockedCwd).toContain("'main.som'");
+        expect(bundleWithMockedCwd).toContain("'../lib/helper.som'");
+        expect(bundleWithMockedCwd).not.toContain(tempDir);
+      } finally {
+        cwdSpy.mockRestore();
+      }
+    });
+
+    test('should rewrite template literal require specifiers without interpolation', async () => {
+      const entryPath = path.join(tempDir, 'template-entry.som');
+      const dependencyPath = path.join(tempDir, 'dep.som');
+      fs.writeFileSync(entryPath, '');
+      fs.writeFileSync(dependencyPath, '');
+
+      const compileResult: CompilationResult = {
+        modules: new Map([
+          [entryPath, ['const dep = require(`./dep.som`);', 'module.exports = dep;'].join('\n')],
+          [dependencyPath, 'module.exports = { value: 42 };'],
+        ]),
+        entryPoint: entryPath,
+        dependencies: [entryPath, dependencyPath],
+        errors: [],
+        warnings: [],
+      };
+
+      const compileSpy = jest.spyOn(moduleSystem, 'compile').mockResolvedValue(compileResult);
+
+      try {
+        const bundle = await moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' });
+        expect(bundle).toContain("require('dep.som')");
+        expect(compileSpy).toHaveBeenCalled();
+      } finally {
+        compileSpy.mockRestore();
+      }
+    });
+
+    test('should reject template literal require expressions with interpolation', async () => {
+      const entryPath = path.join(tempDir, 'dynamic-template.som');
+      fs.writeFileSync(entryPath, '');
+
+      const compileResult: CompilationResult = {
+        modules: new Map([
+          [entryPath, ["const name = 'dep';", 'require(`./${name}.som`);'].join('\n')],
+        ]),
+        entryPoint: entryPath,
+        dependencies: [entryPath],
+        errors: [],
+        warnings: [],
+      };
+
+      const compileSpy = jest.spyOn(moduleSystem, 'compile').mockResolvedValue(compileResult);
+
+      try {
+        await expect(
+          moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' })
+        ).rejects.toThrow('Dynamic template literal require expressions are not supported');
+      } finally {
+        compileSpy.mockRestore();
+      }
+    });
+
+    test('should reject non-literal require expressions', async () => {
+      const entryPath = path.join(tempDir, 'dynamic-require.som');
+      fs.writeFileSync(entryPath, '');
+
+      const compileResult: CompilationResult = {
+        modules: new Map([
+          [entryPath, ["const moduleName = './dep.som';", 'require(moduleName);'].join('\n')],
+        ]),
+        entryPoint: entryPath,
+        dependencies: [entryPath],
+        errors: [],
+        warnings: [],
+      };
+
+      const compileSpy = jest.spyOn(moduleSystem, 'compile').mockResolvedValue(compileResult);
+
+      try {
+        await expect(
+          moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' })
+        ).rejects.toThrow('Dynamic require expressions are not supported');
+      } finally {
+        compileSpy.mockRestore();
+      }
+    });
+
+    test('should expose watcher API for entrypoints', async () => {
+      const chokidarModule = require('chokidar');
+      const watchMock = chokidarModule.watch as jest.Mock;
+      watchMock.mockClear();
+
+      const utilsFile = path.join(tempDir, 'watch-util.som');
+      const mainFile = path.join(tempDir, 'watch-main.som');
+      fs.writeFileSync(utilsFile, 'содир функсия add(a, b) { бозгашт a + b; }');
+      fs.writeFileSync(mainFile, 'ворид { add } аз "./watch-util"; чоп.сабт(add(1, 2));');
+
+      await moduleSystem.compile(mainFile);
+
+      const onChange = jest.fn();
+      const watcher = moduleSystem.watch(mainFile, { onChange });
+
+      expect(watchMock).toHaveBeenCalledTimes(1);
+      const [watchTargets, watchOptions] = watchMock.mock.calls[0];
+      expect(Array.isArray(watchTargets)).toBe(true);
+      expect(watchTargets).toEqual(expect.arrayContaining([path.resolve(mainFile)]));
+      expect(watchOptions.ignoreInitial).toBe(true);
+
+      const watcherInstance = watchMock.mock.results[0].value;
+      watcherInstance.emit('change', utilsFile);
+
+      expect(onChange).toHaveBeenCalledWith({
+        type: 'change',
+        filePath: path.resolve(utilsFile),
+      });
+
+      await moduleSystem.shutdown();
+      expect(watcher.close).toHaveBeenCalled();
     });
   });
 

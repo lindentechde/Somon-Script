@@ -1,98 +1,41 @@
-# Ownership and Contributors
+# Authors and Maintainers
 
-## Main Owner and Rights Holder
+SomonScript is a community-friendly project stewarded by LindenTech IT
+Consulting and originally created by Bakhtier Gaibulloev. The project is now
+open for collaborative improvement under the MIT License.
 
-**LindenTech IT Consulting**
+## Core Steward
 
-- **Role**: Primary Owner, Publisher, Rights Holder
-- **Website**: [lindentech.de](https://lindentech.de)
-- **Email**: info@lindentech.de
-- **Rights and Responsibilities**:
-  - Owns all intellectual property rights to SomonScript
-  - Controls licensing, distribution, and commercial use
-  - Maintains full authority over project direction and development
-  - Provides professional infrastructure and enterprise support
-  - Manages community, documentation, and ecosystem development
-  - Ensures long-term project sustainability and governance
+**LindenTech IT Consulting**  
+Website: [lindentech.de](https://lindentech.de)  
+Contact: info@lindentech.de
 
-## Original Creator and Language Author
+Responsibilities:
 
-**Bakhtier Gaibulloev**
+- Project governance and long-term roadmap
+- Release management and infrastructure
+- Community support and documentation coordination
 
-- **Role**: Original Creator, Language Author, Lead Developer
-- **Email**: bakhtier.gaibulloev@gmail.com
-- **LinkedIn**: [gbakhtier](https://www.linkedin.com/in/gbakhtier/)
-- **Original Contributions**:
-  - Conceptualized and designed the SomonScript programming language
-  - Developed the complete language specification and syntax
-  - Implemented the core compiler infrastructure (lexer, parser, type checker,
-    code generator)
-  - Created the Tajik Cyrillic keyword mapping system
-  - Designed the module system architecture
-  - Authored initial documentation and examples
-  - Established the foundational vision for inclusive programming
+## Original Creator
 
-## Ownership Structure
+**Bakhtier Gaibulloev**  
+Email: bakhtier.gaibulloev@gmail.com  
+LinkedIn: [gbakhtier](https://www.linkedin.com/in/gbakhtier/)
 
-**LindenTech IT Consulting** is the primary owner of SomonScript with full
-rights to:
+Bakhtier designed the SomonScript language, built the first compiler pipeline,
+and authored the initial documentation and examples.
 
-- Modify, enhance, and extend the language
-- Control licensing terms and usage permissions
-- Manage commercial partnerships and distributions
-- Direct the project's technical and strategic roadmap
-- Authorize or restrict derivative works and forks
+## Community Contributions
 
-**Bakhtier Gaibulloev** is credited as the original creator who conceptualized
-and initially developed SomonScript, with LindenTech acquiring full ownership
-rights to continue and commercialize the project.
+We gratefully acknowledge everyone who files issues, improves documentation, or
+submits pull requests. Contributors are credited automatically through the
+project's Git history.
 
-## Recognition
+If you would like to be listed here explicitly, open a pull request adding your
+name under this section.
 
-SomonScript is owned by LindenTech IT Consulting and was originally created by
-Bakhtier Gaibulloev. LindenTech maintains exclusive rights to the language, its
-implementations, and related intellectual property, while acknowledging
-Bakhtier's foundational contribution as the original language designer and
-architect.
+## Licensing Note
 
-## Usage and Community Participation
-
-SomonScript operates under a proprietary license that permits free use while
-maintaining strict control over the codebase. Based on the licensing terms:
-
-### What You Can Do:
-
-- **Use SomonScript** for personal, educational, and commercial projects
-- **Distribute compiled output** from SomonScript programs
-- **Share usage experiences** and provide feedback through official channels
-- **Report bugs** and suggest improvements via GitHub Issues
-- **Request features** that align with the project roadmap
-- **Participate in community discussions** about SomonScript usage and best
-  practices
-
-### What Is Prohibited:
-
-- **Modifying** the SomonScript source code or creating derivative works
-- **Forking** or redistributing the SomonScript codebase
-- **Contributing code changes** or pull requests to the repository
-- **Creating competing** programming languages based on SomonScript
-- **Reverse engineering** or attempting to alter the compiler
-
-### Community Engagement:
-
-While direct code contributions are not accepted due to the proprietary license,
-the community can engage through:
-
-- Bug reports and feature requests
-- Documentation improvements (subject to approval)
-- Usage examples and tutorials
-- Community support and knowledge sharing
-
-For questions, suggestions, or business inquiries, please contact LindenTech IT
-Consulting at: **info@lindentech.de**
-
----
-
-_This file documents the ownership structure and community participation
-guidelines for SomonScript. For complete licensing terms, see
-[LICENSE](LICENSE)._
+All contributions are accepted under the terms of the [MIT License](LICENSE). By
+contributing, you affirm that you have the right to submit the work and agree
+that it can be distributed under those terms.
