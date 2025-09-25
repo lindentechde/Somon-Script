@@ -138,9 +138,11 @@ describe('CLI Program (in-process)', () => {
     program.parse(['run', inputFile, '--strict', 'input.txt'], { from: 'user' });
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
-    const [tempFilePath, forwardedArgv] = executeSpy.mock.calls[0];
-    expect(tempFilePath).toMatch(/hello\.js$/);
+    const [tempFilePath, forwardedArgv, spawnOptions] = executeSpy.mock.calls[0];
+    expect(tempFilePath).toContain(path.dirname(inputFile));
+    expect(tempFilePath).toMatch(/hello\.somon-run-[^.]+\.js$/);
     expect(forwardedArgv).toEqual(['run', inputFile, '--strict', 'input.txt']);
+    expect(spawnOptions).toMatchObject({ cwd: path.dirname(inputFile) });
     expect(process.exitCode).toBe(0);
 
     executeSpy.mockRestore();

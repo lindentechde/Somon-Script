@@ -9,7 +9,6 @@ import { spawnSync } from 'child_process';
 import { Command } from 'commander';
 import chokidar from 'chokidar';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { createRequire } from 'module';
 import type { Module as NodeModuleType } from 'module';
@@ -259,14 +258,28 @@ function resolveForwardedArgv(command: Command, input: string): string[] {
   return parentArgs.length > 0 ? [...parentArgs] : [command.name(), input];
 }
 
+function createRunOutputPath(input: string, sourceDir: string): string {
+  const baseName = path.basename(input);
+  const withoutExtension = baseName.includes('.') ? baseName.replace(/\.[^.]+$/, '') : baseName;
+  const safeBase = withoutExtension || 'somon-script';
+  const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  return path.join(sourceDir, `${safeBase}.somon-run-${uniqueSuffix}.js`);
+}
+
+interface ExecuteOptions {
+  cwd?: string;
+}
+
 export const cliRuntime = {
   executeCompiledFile(
     filePath: string,
-    forwardedArgv: string[] = []
+    forwardedArgv: string[] = [],
+    options: ExecuteOptions = {}
   ): ReturnType<typeof spawnSync> {
     return spawnSync(process.execPath, [filePath, ...forwardedArgv], {
       stdio: 'inherit',
       env: process.env,
+      cwd: options.cwd,
     });
   },
 };
@@ -446,27 +459,27 @@ export function createProgram(): Command {
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .action((input: string, options: CompileOptions, command: Command): void => {
-      let tempDir: string | null = null;
+      const cleanupTargets: string[] = [];
       try {
         const merged = mergeOptions(input, options);
         const result = compileFile(input, merged);
         if (result.errors.length > 0) return;
 
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-run-'));
-        const baseName = path.basename(input);
-        const jsFileName = baseName.match(/\.som$/i)
-          ? baseName.replace(/\.som$/i, '.js')
-          : `${baseName}.js`;
-        const tempFile = path.join(tempDir, jsFileName);
-        fs.writeFileSync(tempFile, result.code, 'utf8');
+        const sourceDir = path.dirname(path.resolve(input));
+        const compiledFilePath = createRunOutputPath(input, sourceDir);
+        fs.writeFileSync(compiledFilePath, result.code, 'utf8');
+        cleanupTargets.push(compiledFilePath);
 
         if (merged.sourceMap && result.sourceMap) {
-          fs.writeFileSync(`${tempFile}.map`, result.sourceMap, 'utf8');
+          const mapPath = `${compiledFilePath}.map`;
+          fs.writeFileSync(mapPath, result.sourceMap, 'utf8');
+          cleanupTargets.push(mapPath);
         }
 
         const child = cliRuntime.executeCompiledFile(
-          tempFile,
-          resolveForwardedArgv(command, input)
+          compiledFilePath,
+          resolveForwardedArgv(command, input),
+          { cwd: sourceDir }
         );
 
         if (child.error) {
@@ -482,9 +495,9 @@ export function createProgram(): Command {
         handleCliFailure(error, 'Error:');
         return;
       } finally {
-        if (tempDir) {
+        for (const target of cleanupTargets) {
           try {
-            fs.rmSync(tempDir, { recursive: true, force: true });
+            fs.rmSync(target, { force: true });
           } catch (cleanupError) {
             console.warn(
               'Warning: unable to clean temporary files:',
