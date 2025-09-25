@@ -74,4 +74,23 @@ describe('somon.config.json loader/validation', () => {
     expect(cfg.bundle?.format).toBe('commonjs');
     expect(cfg.bundle?.externals).toEqual(['fs']);
   });
+
+  test('rejects unsupported bundle format', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ bundle: { format: 'esm' } }, null, 2)
+    );
+
+    expect(() => loadConfig(tempDir)).toThrow(ConfigError);
+
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      if (error instanceof ConfigError) {
+        expect(error.details.some(detail => detail.path === 'bundle.format')).toBe(true);
+        expect(error.details.some(detail => /commonjs/.test(detail.message))).toBe(true);
+      }
+    }
+  });
 });

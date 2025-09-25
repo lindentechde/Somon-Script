@@ -126,11 +126,10 @@ export interface ModuleSystemConfig {
 }
 
 export interface BundleConfig {
-  format?: 'commonjs' | 'esm' | 'umd';
+  format?: 'commonjs';
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
-  force?: boolean;
   output?: string;
 }
 
@@ -307,8 +306,13 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 }
 
 function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
-  if (format !== undefined && !['commonjs', 'esm', 'umd'].includes(format as string)) {
-    return [{ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' }];
+  if (format !== undefined && format !== 'commonjs') {
+    return [
+      {
+        path: `${basePath}.format`,
+        message: "SomonScript currently supports only the 'commonjs' bundle format",
+      },
+    ];
   }
   return [];
 }
@@ -324,9 +328,6 @@ function validateBundleBooleanProps(
   }
   if (obj.sourceMaps !== undefined && typeof obj.sourceMaps !== 'boolean') {
     errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
-  }
-  if (obj.force !== undefined && typeof obj.force !== 'boolean') {
-    errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
   }
 
   return errors;

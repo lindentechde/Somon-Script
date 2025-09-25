@@ -53,12 +53,10 @@ export interface CompilationResult {
 export interface BundleOptions {
   entryPoint: string;
   outputPath?: string;
-  format?: 'commonjs' | 'esm' | 'umd';
+  format?: 'commonjs';
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
-  // Require explicit confirmation to use experimental formats
-  force?: boolean;
 }
 
 export class ModuleSystem {
@@ -252,13 +250,10 @@ export class ModuleSystem {
    */
   async bundle(options: BundleOptions): Promise<string> {
     const format = options.format ?? 'commonjs';
-    if (format !== 'commonjs' && !options.force) {
+    if (format !== 'commonjs') {
       throw new Error(
-        'ESM/UMD bundle formats are experimental. Re-run with force: true (or --force).'
+        `Only the 'commonjs' bundle format is currently supported. Received '${format}'.`
       );
-    }
-    if (format !== 'commonjs' && options.force) {
-      console.warn('Warning: ESM/UMD bundle formats are experimental; prefer commonjs.');
     }
     const compilationOverrides: Partial<CompilerOptions> = {};
     if (options.minify !== undefined) {
@@ -281,16 +276,7 @@ export class ModuleSystem {
     }
 
     // Generate bundle based on format
-    switch (format) {
-      case 'commonjs':
-        return this.generateCommonJSBundle(compilationResult, options);
-      case 'esm':
-        return this.generateESMBundle(compilationResult, options);
-      case 'umd':
-        return this.generateUMDBundle(compilationResult, options);
-      default:
-        throw new Error(`Unsupported bundle format: ${options.format}`);
-    }
+    return this.generateCommonJSBundle(compilationResult, options);
   }
 
   /**
@@ -724,53 +710,6 @@ ${moduleMap.join(',\n')}
 `;
 
     return options.minify ? this.minify(bundle) : bundle;
-  }
-
-  private generateESMBundle(result: CompilationResult, options: BundleOptions): string {
-    const modules: string[] = [];
-    if (!path.isAbsolute(result.entryPoint)) {
-      throw new Error('Entry point must be an absolute path for bundling.');
-    }
-    const entryDir = path.dirname(result.entryPoint);
-    const describeModule = (absolutePath: string): string => {
-      const relativePath = path.relative(entryDir, absolutePath);
-      const normalized = relativePath.split(path.sep).join('/');
-      return normalized.length === 0 ? path.basename(absolutePath) : normalized;
-    };
-
-    for (const [moduleId, code] of result.modules) {
-      modules.push(`// Experimental ESM bundle: linking is not resolved`);
-      modules.push(`// Module: ${describeModule(moduleId)}`);
-      modules.push(code);
-      modules.push('');
-    }
-
-    const bundle = modules.join('\n');
-    return options.minify ? this.minify(bundle) : bundle;
-  }
-
-  private generateUMDBundle(result: CompilationResult, options: BundleOptions): string {
-    const commonjsBundle = this.generateCommonJSBundle(result, options);
-
-    const umdWrapper = `
-/* Experimental UMD bundle: internal linking is simplified */
-(function (root, factory) {
-  if (typeof exports === 'object' && typeof module !== 'undefined') {
-    // CommonJS
-    factory(exports);
-  } else if (typeof define === 'function' && define.amd) {
-    // AMD
-    define(['exports'], factory);
-  } else {
-    // Browser globals
-    factory((root.SomonScript = {}));
-  }
-}(typeof self !== 'undefined' ? self : this, function (exports) {
-${commonjsBundle}
-}));
-`;
-
-    return options.minify ? this.minify(umdWrapper) : umdWrapper;
   }
 
   private minify(code: string): string {

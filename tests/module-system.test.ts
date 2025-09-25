@@ -409,7 +409,7 @@ describe('Module System', () => {
       expect(appDeps).toBeDefined();
     });
 
-    test('should generate different bundle formats (requires force)', async () => {
+    test('should generate commonjs bundle and reject unsupported formats', async () => {
       const moduleFile = path.join(tempDir, 'module.som');
       const mainFile = path.join(tempDir, 'main.som');
 
@@ -423,21 +423,13 @@ describe('Module System', () => {
       });
       expect(cjsBundle).toContain('module.exports');
 
-      // Test ESM bundle
-      const esmBundle = await moduleSystem.bundle({
-        entryPoint: mainFile,
-        format: 'esm',
-        force: true,
-      });
-      expect(esmBundle).toContain('export');
+      await expect(
+        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as any })
+      ).rejects.toThrow(/commonjs/i);
 
-      // Test UMD bundle
-      const umdBundle = await moduleSystem.bundle({
-        entryPoint: mainFile,
-        format: 'umd',
-        force: true,
-      });
-      expect(umdBundle).toContain('typeof exports');
+      await expect(
+        moduleSystem.bundle({ entryPoint: mainFile, format: 'umd' as any })
+      ).rejects.toThrow(/commonjs/i);
     });
 
     test('should stabilise CommonJS bundle IDs relative to entry directory', async () => {
@@ -471,23 +463,6 @@ describe('Module System', () => {
       } finally {
         cwdSpy.mockRestore();
       }
-    });
-
-    test('should require force for non-commonjs formats', async () => {
-      const moduleFile = path.join(tempDir, 'm.som');
-      const mainFile = path.join(tempDir, 'main.som');
-      fs.writeFileSync(moduleFile, 'содир функсия f() { бозгашт 1; }');
-      fs.writeFileSync(mainFile, 'ворид { f } аз "./m"; чоп.сабт(f());');
-
-      // Expect bundle to throw when format is esm without force
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as const })
-      ).rejects.toThrow(/experimental/i);
-
-      // Should succeed when force is true
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as const, force: true })
-      ).resolves.toContain('export');
     });
 
     test('should expose watcher API for entrypoints', async () => {

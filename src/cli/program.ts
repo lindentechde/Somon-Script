@@ -97,7 +97,6 @@ interface BundleOptions {
   minify?: boolean;
   sourceMap?: boolean;
   externals?: string;
-  force?: boolean;
 }
 
 async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
@@ -107,12 +106,6 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
     const moduleSystem = await createModuleSystem(baseDir, config);
 
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
-
-    if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
-      console.error('ESM/UMD bundle formats are experimental. Re-run with --force to proceed.');
-      process.exitCode = 1;
-      return;
-    }
 
     await performBundling(moduleSystem, bundleOptions, input);
   } catch (error) {
@@ -143,14 +136,22 @@ function createBundleOptions(
   config: SomonConfig,
   _baseDir: string
 ): ModuleBundleOptions {
+  const formatValue = options.format ?? config.bundle?.format ?? 'commonjs';
+  const requestedFormat = typeof formatValue === 'string' ? formatValue.toLowerCase() : 'commonjs';
+
+  if (requestedFormat !== 'commonjs') {
+    throw new Error(
+      `SomonScript currently supports only the 'commonjs' bundle format. Received '${requestedFormat}'.`
+    );
+  }
+
   return {
     entryPoint: path.resolve(input),
     outputPath: options.output ?? config.bundle?.output,
-    format: (options.format ?? config.bundle?.format ?? 'commonjs') as 'commonjs' | 'esm' | 'umd',
+    format: 'commonjs',
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
     externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
-    force: options.force ?? config.bundle?.force,
   };
 }
 
@@ -160,11 +161,6 @@ async function performBundling(
   input: string
 ): Promise<void> {
   console.log(`📦 Bundling ${input}...`);
-
-  if (bundleOptions.format !== 'commonjs') {
-    console.warn('Warning: ESM/UMD formats are experimental; prefer commonjs for execution.');
-  }
-
   const bundle = await moduleSystem.bundle(bundleOptions);
   const outputPath = getBundleOutputPath(bundleOptions, input);
 
@@ -589,11 +585,10 @@ export function createProgram(): Command {
     .usage('[input] [options]')
     .argument('<input>', 'Entry point file')
     .option('-o, --output <file>', 'Output file path')
-    .option('-f, --format <format>', 'Bundle format (commonjs, esm, umd)', 'commonjs')
+    .option('-f, --format <format>', "Bundle format (only 'commonjs' is supported)", 'commonjs')
     .option('--minify', 'Minify the output')
     .option('--source-map', 'Generate source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
-    .option('--force', 'Allow experimental formats (esm/umd)')
     .action(async (input: string, options: BundleOptions) => {
       await executeBundleCommand(input, options);
     });

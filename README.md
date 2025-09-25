@@ -209,19 +209,10 @@ somon run hello.som
 
 ### Bundling (Module System)
 
-- CommonJS bundle is recommended for execution. ESM and UMD outputs are
-  experimental.
+- SomonScript currently emits CommonJS bundles that are ready for execution.
 
 ```sh
-somon bundle src/main.som --format commonjs -o dist/bundle.js
-```
-
-Other formats are available, but meant for inspection rather than direct
-execution:
-
-```sh
-somon bundle src/main.som --format esm
-somon bundle src/main.som --format umd
+somon bundle src/main.som -o dist/bundle.js
 ```
 
 The bundler rewrites internal `require()` calls to a module map. When compiling
@@ -265,8 +256,8 @@ applications:
   `.js` mapping
 - 🔗 **Dependency Management** - Automatic dependency graph construction and
   circular dependency detection
-- 📦 **Bundling Support** - Multiple output formats (CommonJS, ESM, UMD) with
-  minification
+- 📦 **Bundling Support** - CommonJS bundles with optional minification and
+  source maps
 - ⚡ **Performance Optimized** - Module caching and efficient compilation order
 - 🛠️ **CLI Integration** - Built-in commands for bundling, analysis, and
   dependency resolution
@@ -275,7 +266,7 @@ applications:
 
 ```bash
 # Bundle modules into a single file
-somon bundle src/main.som -o dist/app.js --format esm --minify
+somon bundle src/main.som -o dist/app.js --minify
 
 # Analyze module dependencies
 somon module-info src/main.som --graph --stats --circular

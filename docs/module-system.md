@@ -89,9 +89,7 @@ Compilation:
 Bundling:
 
 - CommonJS: produces a self-contained module map + simple loader, then executes
-  the entry.
-- ESM/UMD: experimental (concatenated output, not a full linker); prefer
-  `commonjs` for execution.
+  the entry (currently the only supported bundle target).
 - Internal require rewrite maps `require("./x")` or compiled `require("./x.js")`
   to the correct module map entry (`.js` is mapped back to `.som` internally
   when needed).
