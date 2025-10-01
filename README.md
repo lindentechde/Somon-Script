@@ -220,6 +220,17 @@ SomonScript sources, relative imports may appear as `.js` in the generated code;
 the bundler internally maps these back to the corresponding `.som` modules when
 necessary.
 
+Enable debugger-friendly builds with:
+
+```sh
+somon bundle src/main.som -o dist/bundle.js --source-map
+```
+
+Source maps now reference modules relative to the entry directory to avoid
+leaking absolute paths. Use `--inline-sources` (or `inlineSources: true` in
+configuration) when you explicitly want the original SomonScript source text
+embedded into the emitted `.map` file.
+
 ## Documentation
 
 - Module System guide: `docs/module-system.md`

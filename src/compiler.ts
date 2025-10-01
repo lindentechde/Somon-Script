@@ -165,6 +165,12 @@ function minifyCode(
   // Lazy-load minify preset to avoid hard dependency at runtime
   let presetModule: unknown = null;
   try {
+    try {
+      const resolvedPreset = require.resolve('babel-preset-minify');
+      delete require.cache[resolvedPreset];
+    } catch {
+      // ignore - module is either not installed or already absent from the cache
+    }
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     presetModule = require('babel-preset-minify');
   } catch {

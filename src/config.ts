@@ -129,6 +129,7 @@ export interface BundleConfig {
   format?: 'commonjs';
   minify?: boolean;
   sourceMaps?: boolean;
+  inlineSources?: boolean;
   externals?: string[];
   output?: string;
 }
@@ -328,6 +329,9 @@ function validateBundleBooleanProps(
   }
   if (obj.sourceMaps !== undefined && typeof obj.sourceMaps !== 'boolean') {
     errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
+  }
+  if (obj.inlineSources !== undefined && typeof obj.inlineSources !== 'boolean') {
+    errors.push({ path: `${basePath}.inlineSources`, message: 'must be a boolean' });
   }
 
   return errors;

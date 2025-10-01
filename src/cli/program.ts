@@ -96,6 +96,7 @@ interface BundleOptions {
   minify?: boolean;
   sourceMap?: boolean;
   externals?: string;
+  inlineSources?: boolean;
 }
 
 async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
@@ -150,6 +151,7 @@ function createBundleOptions(
     format: 'commonjs',
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+    inlineSources: options.inlineSources ?? config.bundle?.inlineSources,
     externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
   };
 }
@@ -610,6 +612,7 @@ export function createProgram(): Command {
     .option('-f, --format <format>', "Bundle format (only 'commonjs' is supported)", 'commonjs')
     .option('--minify', 'Minify the output')
     .option('--source-map', 'Generate source maps')
+    .option('--inline-sources', 'Inline original sources into emitted source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
     .action(async (input: string, options: BundleOptions) => {
       await executeBundleCommand(input, options);

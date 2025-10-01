@@ -93,6 +93,10 @@ Bundling:
 - Internal require rewrite maps `require("./x")` or compiled `require("./x.js")`
   to the correct module map entry (`.js` is mapped back to `.som` internally
   when needed).
+- Source maps emitted from bundles use module IDs relative to the entry
+  directory so build paths remain private. Opt in to embedding original
+  SomonScript text by setting `inlineSources: true` (or `--inline-sources` in
+  the CLI) when generating bundles.
 
 ## Dynamic Imports
 

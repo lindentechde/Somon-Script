@@ -340,7 +340,40 @@ describe('Module System', () => {
 
       expect(bundle.map).toBeDefined();
       const parsed = JSON.parse(bundle.map ?? '{}');
-      expect(parsed.sources).toEqual(expect.arrayContaining([depFile, mainFile]));
+      expect(parsed.sources).toBeDefined();
+      expect(parsed.sources).toEqual(expect.arrayContaining(['dep.som', 'main.som']));
+      expect(Array.isArray(parsed.sources)).toBe(true);
+      if (Array.isArray(parsed.sources)) {
+        for (const source of parsed.sources) {
+          expect(typeof source === 'string' && !path.isAbsolute(source)).toBe(true);
+        }
+      }
+      expect(parsed.sourcesContent).toBeUndefined();
+    });
+
+    test('should inline original sources when requested explicitly', async () => {
+      const depFile = path.join(tempDir, 'dep-inline.som');
+      const mainFile = path.join(tempDir, 'main-inline.som');
+
+      fs.writeFileSync(depFile, 'содир функсия value(): рақам { бозгашт 7; }');
+      fs.writeFileSync(mainFile, 'ворид { value } аз "./dep-inline";\nчоп.сабт("value", value());');
+
+      const bundle = await moduleSystem.bundle({
+        entryPoint: mainFile,
+        format: 'commonjs',
+        sourceMaps: true,
+        inlineSources: true,
+      });
+
+      expect(bundle.map).toBeDefined();
+      const parsed = JSON.parse(bundle.map ?? '{}');
+      expect(parsed.sources).toEqual(expect.arrayContaining(['dep-inline.som', 'main-inline.som']));
+      expect(parsed.sourcesContent).toBeDefined();
+      expect(Array.isArray(parsed.sourcesContent)).toBe(true);
+      if (Array.isArray(parsed.sourcesContent)) {
+        expect(parsed.sourcesContent.length).toBeGreaterThan(0);
+        expect(parsed.sourcesContent.some(content => typeof content === 'string')).toBe(true);
+      }
     });
 
     test('should surface type checking errors during compilation', async () => {

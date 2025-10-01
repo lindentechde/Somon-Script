@@ -63,6 +63,7 @@ export interface BundleOptions {
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
+  inlineSources?: boolean;
 }
 
 export interface BundleOutput {
@@ -580,6 +581,8 @@ export class ModuleSystem {
         })
       : null;
 
+    const inlinedSources = new Set<string>();
+
     let firstModule = true;
     for (const module of processedModules) {
       if (externalModuleIds.has(module.id)) {
@@ -612,17 +615,16 @@ export class ModuleSystem {
                 line: mapping.originalLine,
                 column: mapping.originalColumn,
               },
-              source: mapping.source,
+              source: module.key,
               name: mapping.name ?? undefined,
             });
           });
-          if (moduleMap.sources) {
-            moduleMap.sources.forEach((source, index) => {
-              const content = moduleMap.sourcesContent?.[index];
-              if (content !== undefined) {
-                generator.setSourceContent(source, content);
-              }
-            });
+          if (options.inlineSources && !inlinedSources.has(module.key)) {
+            const content = moduleMap.sourcesContent?.find(item => typeof item === 'string');
+            if (content !== undefined) {
+              generator.setSourceContent(module.key, content);
+              inlinedSources.add(module.key);
+            }
           }
         });
       }
