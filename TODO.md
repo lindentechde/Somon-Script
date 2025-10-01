@@ -7,10 +7,13 @@ Production-Ready
 
 ### Resource Management & Cleanup
 
-- [ ] **Audit watcher cleanup in ModuleSystem**
-  - Verify `activeWatchers` cleanup on errors
-  - Test cleanup when compilation fails
-  - Ensure watchers are stopped on module system shutdown
+- [x] **Audit watcher cleanup in ModuleSystem** ✅
+  - ✅ Verified `activeWatchers` cleanup on errors
+  - ✅ Added cleanup when compilation fails
+  - ✅ Ensured watchers are stopped on module system shutdown
+  - ✅ Added timeout protection (5s for watchers, 30s for shutdown)
+  - ✅ Enhanced error handling with automatic cleanup on watcher errors
+  - ✅ Created comprehensive test suite (tests/module-watcher-lifecycle.test.ts)
   - Location: `src/module-system/module-system.ts`
 
 - [ ] **Circuit breaker lifecycle management**

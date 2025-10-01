@@ -254,6 +254,17 @@ export class ModuleSystem {
       };
     } catch (error) {
       errors.push(error as Error);
+
+      // Clean up any active watchers on compilation failure
+      if (this.activeWatchers.size > 0) {
+        if (this.logger) {
+          this.logger.warn('Compilation failed, cleaning up active watchers', {
+            watcherCount: this.activeWatchers.size,
+          });
+        }
+        await this.stopWatching();
+      }
+
       return {
         modules,
         entryPoint: '',
@@ -363,22 +374,67 @@ export class ModuleSystem {
 
   /**
    * Gracefully shutdown the module system
+   * - Stops all file watchers
+   * - Stops management server
+   * - Clears all caches
+   * - Times out after 30 seconds to prevent hanging
    */
   async shutdown(): Promise<void> {
     if (this.logger) {
       this.logger.info('Shutting down ModuleSystem');
     }
 
-    await this.stopWatching();
+    const shutdownPromise = (async () => {
+      // Stop watchers first (most likely to hang)
+      try {
+        await this.stopWatching();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (this.logger) {
+          this.logger.error('Error stopping watchers during shutdown', { error: message });
+        }
+      }
 
-    // Stop management server
-    await this.stopManagementServer();
+      // Stop management server
+      try {
+        await this.stopManagementServer();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (this.logger) {
+          this.logger.error('Error stopping management server during shutdown', {
+            error: message,
+          });
+        }
+      }
 
-    // Clear caches
-    this.clearCache();
+      // Clear caches (synchronous, should not fail)
+      try {
+        this.clearCache();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (this.logger) {
+          this.logger.error('Error clearing caches during shutdown', { error: message });
+        }
+      }
+    })();
 
-    if (this.logger) {
-      this.logger.info('ModuleSystem shutdown complete');
+    // Enforce 30-second shutdown timeout
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      setTimeout(() => reject(new Error('Shutdown timeout after 30 seconds')), 30000);
+    });
+
+    try {
+      await Promise.race([shutdownPromise, timeoutPromise]);
+
+      if (this.logger) {
+        this.logger.info('ModuleSystem shutdown complete');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.logger) {
+        this.logger.error('Shutdown failed or timed out', { error: message });
+      }
+      throw error;
     }
   }
 
@@ -448,6 +504,15 @@ export class ModuleSystem {
       } else {
         console.error('ModuleSystem watch error:', message);
       }
+
+      // Remove failed watcher from tracking and attempt cleanup
+      this.activeWatchers.delete(watcher);
+      watcher.close().catch(closeError => {
+        const closeMessage = closeError instanceof Error ? closeError.message : String(closeError);
+        if (this.logger) {
+          this.logger.warn('Failed to close errored watcher', { error: closeMessage });
+        }
+      });
     });
 
     watcher.on('close', () => {
@@ -459,22 +524,42 @@ export class ModuleSystem {
   }
 
   async stopWatching(): Promise<void> {
+    if (this.activeWatchers.size === 0) {
+      return;
+    }
+
+    if (this.logger) {
+      this.logger.info('Stopping all watchers', { count: this.activeWatchers.size });
+    }
+
     const watchers = Array.from(this.activeWatchers);
     this.activeWatchers.clear();
-    await Promise.allSettled(
-      watchers.map(async watcher => {
-        try {
-          await watcher.close();
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (this.logger) {
-            this.logger.warn('Failed to close module watcher', { error: message });
-          } else {
-            console.warn('Failed to close module watcher:', message);
-          }
+
+    // Create promises with timeout to prevent hanging
+    const closePromises = watchers.map(async watcher => {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Watcher close timeout after 5s')), 5000);
+      });
+
+      const closePromise = watcher.close();
+
+      try {
+        await Promise.race([closePromise, timeoutPromise]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (this.logger) {
+          this.logger.warn('Failed to close module watcher', { error: message });
+        } else {
+          console.warn('Failed to close module watcher:', message);
         }
-      })
-    );
+      }
+    });
+
+    await Promise.allSettled(closePromises);
+
+    if (this.logger) {
+      this.logger.info('All watchers stopped');
+    }
   }
 
   private registerAllLoadedModules(): void {
