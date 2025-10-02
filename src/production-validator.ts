@@ -56,11 +56,11 @@ export class ProductionValidator {
     const version = process.versions.node;
     const major = parseInt(version.split('.')[0], 10);
 
-    if (major !== 20 && major !== 22) {
+    if (major !== 20 && major !== 22 && major !== 23 && major !== 24) {
       this.errors.push({
         category: 'environment',
-        message: `Invalid Node.js version: ${version}. Production requires Node.js 20.x or 22.x`,
-        details: { current: version, required: ['20.x', '22.x'] },
+        message: `Invalid Node.js version: ${version}. Production requires Node.js 20.x, 22.x, 23.x, or 24.x`,
+        details: { current: version, required: ['20.x', '22.x', '23.x', '24.x'] },
       });
     }
   }
@@ -69,6 +69,11 @@ export class ProductionValidator {
     const dir = path.dirname(outputPath);
 
     try {
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
       // Try to create a test file
       const testFile = path.join(dir, `.somon-write-test-${Date.now()}`);
       fs.writeFileSync(testFile, 'test');
@@ -105,16 +110,17 @@ export class ProductionValidator {
 
   private validateSystemResources(): void {
     const memoryUsage = process.memoryUsage();
-    const availableMemory = memoryUsage.heapTotal - memoryUsage.heapUsed;
-    const minRequiredMemory = 100 * 1024 * 1024; // 100MB minimum
+    // Check total heap size instead of available (Node can grow heap dynamically)
+    const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
+    const minRequiredHeap = 50; // 50MB minimum heap total
 
-    if (availableMemory < minRequiredMemory) {
+    if (heapTotalMB < minRequiredHeap) {
       this.errors.push({
         category: 'environment',
         message: 'Insufficient memory available',
         details: {
-          available: `${Math.round(availableMemory / 1024 / 1024)}MB`,
-          required: '100MB minimum',
+          heapTotal: `${heapTotalMB}MB`,
+          required: `${minRequiredHeap}MB minimum`,
         },
       });
     }

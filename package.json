@@ -8,7 +8,7 @@
     "somon": "dist/cli.js"
   },
   "engines": {
-    "node": "^20.0.0 || ^22.0.0"
+    "node": "^20.0.0 || ^22.0.0 || ^23.0.0 || ^24.0.0"
   },
   "scripts": {
     "build": "npm run clean && npx tsc",
@@ -23,6 +23,7 @@
     "test:performance": "jest --testPathPattern='performance\\.test\\.ts'",
     "test:cross-platform": "jest --testPathPattern='cross-platform\\.test\\.ts'",
     "test:error-handling": "jest --testPathPattern='error-handling\\.test\\.ts'",
+    "test:all-versions": "./scripts/test-all-node-versions.sh",
     "lint": "eslint src tests --ext .ts",
     "lint:check": "eslint src tests --ext .ts",
     "lint:fix": "eslint src tests --ext .ts --fix",

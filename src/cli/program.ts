@@ -77,6 +77,54 @@ function handleCliFailure(error: unknown, fallbackPrefix: string): void {
   }
 }
 
+/**
+ * Check if a directory is writable
+ * @param outputPath - Path to check for write permissions
+ * @returns true if writable, false otherwise
+ */
+function canWrite(outputPath: string): boolean {
+  try {
+    const dir = path.isAbsolute(outputPath)
+      ? path.dirname(outputPath)
+      : path.dirname(path.resolve(outputPath));
+
+    // Ensure directory exists or can be created
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Try to create a test file to verify write permissions
+    const testFile = path.join(dir, `.somon-write-test-${Date.now()}-${process.pid}`);
+    fs.writeFileSync(testFile, '');
+    fs.unlinkSync(testFile);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Validate production environment requirements
+ * Implements AGENTS.md principle: "Fail fast, fail clearly"
+ *
+ * @param outputPath - Output path to validate write permissions
+ * @throws {Error} Immediately on any validation failure with clear message
+ */
+function validateProductionEnvironment(outputPath: string): void {
+  // Check Node.js version
+  const nodeVersion = process.versions.node;
+  if (!nodeVersion.match(/^(20|22|23|24)\./)) {
+    throw new Error(`Node.js 20.x or 22.x or 23.x or 24.x required, got ${nodeVersion}`);
+  }
+
+  // Check write permissions
+  if (!canWrite(outputPath)) {
+    throw new Error(`No write permission: ${outputPath}`);
+  }
+
+  // Fail immediately on any validation error
+}
+
 type BufferEncoding =
   | 'ascii'
   | 'utf8'
@@ -97,12 +145,26 @@ interface BundleOptions {
   sourceMap?: boolean;
   externals?: string;
   inlineSources?: boolean;
+  production?: boolean;
 }
 
 async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
   try {
     const baseDir = path.dirname(path.resolve(input));
     const config = loadConfig(baseDir);
+
+    // Validate production environment if --production flag is set
+    if (options.production || process.env.NODE_ENV === 'production') {
+      const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
+
+      try {
+        validateProductionEnvironment(outputPath);
+      } catch (error) {
+        handleCliFailure(error, 'Production validation failed:');
+        throw error; // Re-throw to exit bundle command
+      }
+    }
+
     const moduleSystem = await createModuleSystem(baseDir, config);
 
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
@@ -204,6 +266,7 @@ export interface CompileOptions {
   outDir?: string;
   watch?: boolean;
   compileOnSave?: boolean;
+  production?: boolean;
 }
 
 function mergeOptions(input: string, options: CompileOptions): CompileOptions {
@@ -319,6 +382,7 @@ export function createProgram(): Command {
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .option('-w, --watch', 'Recompile on file changes')
+    .option('--production', 'Enable production mode with strict validation')
     .action((input: string, options: CompileOptions): void => {
       try {
         let merged: CompileOptions;
@@ -327,6 +391,26 @@ export function createProgram(): Command {
         } catch (error) {
           handleCliFailure(error, 'Error:');
           return;
+        }
+
+        // Validate production environment if --production flag is set
+        if (merged.production || process.env.NODE_ENV === 'production') {
+          const baseDir = path.dirname(path.resolve(input));
+          const outputFile =
+            merged.output ||
+            (merged.outDir
+              ? path.join(
+                  path.resolve(baseDir, merged.outDir),
+                  path.basename(input).replace(/\.som$/, '.js')
+                )
+              : input.replace(/\.som$/, '.js'));
+
+          try {
+            validateProductionEnvironment(outputFile);
+          } catch (error) {
+            handleCliFailure(error, 'Production validation failed:');
+            return;
+          }
         }
 
         const shouldWatch = !!(merged.watch || merged.compileOnSave);
@@ -469,10 +553,25 @@ export function createProgram(): Command {
     .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
+    .option('--production', 'Enable production mode with strict validation')
     .action((input: string, options: CompileOptions, command: Command): void => {
       const cleanupTargets: string[] = [];
       try {
         const merged = mergeOptions(input, options);
+
+        // Validate production environment if --production flag is set
+        if (merged.production || process.env.NODE_ENV === 'production') {
+          const sourceDir = path.dirname(path.resolve(input));
+          const compiledFilePath = createRunOutputPath(input, sourceDir);
+
+          try {
+            validateProductionEnvironment(compiledFilePath);
+          } catch (error) {
+            handleCliFailure(error, 'Production validation failed:');
+            return;
+          }
+        }
+
         const result = compileFile(input, merged);
         if (result.errors.length > 0) return;
 
@@ -614,6 +713,7 @@ export function createProgram(): Command {
     .option('--source-map', 'Generate source maps')
     .option('--inline-sources', 'Inline original sources into emitted source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
+    .option('--production', 'Enable production mode with strict validation')
     .action(async (input: string, options: BundleOptions) => {
       await executeBundleCommand(input, options);
     });
