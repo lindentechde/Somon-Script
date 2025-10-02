@@ -16,6 +16,7 @@ import type { Module as NodeModuleType } from 'module';
 import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
+import { ProductionValidator } from '../production-validator';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
   let currentDir = __dirname;
@@ -78,51 +79,19 @@ function handleCliFailure(error: unknown, fallbackPrefix: string): void {
 }
 
 /**
- * Check if a directory is writable
- * @param outputPath - Path to check for write permissions
- * @returns true if writable, false otherwise
- */
-function canWrite(outputPath: string): boolean {
-  try {
-    const dir = path.isAbsolute(outputPath)
-      ? path.dirname(outputPath)
-      : path.dirname(path.resolve(outputPath));
-
-    // Ensure directory exists or can be created
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    // Try to create a test file to verify write permissions
-    const testFile = path.join(dir, `.somon-write-test-${Date.now()}-${process.pid}`);
-    fs.writeFileSync(testFile, '');
-    fs.unlinkSync(testFile);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
  * Validate production environment requirements
  * Implements AGENTS.md principle: "Fail fast, fail clearly"
  *
  * @param outputPath - Output path to validate write permissions
- * @throws {Error} Immediately on any validation failure with clear message
+ * @param requiredPaths - Optional array of required input paths
  */
-function validateProductionEnvironment(outputPath: string): void {
-  // Check Node.js version
-  const nodeVersion = process.versions.node;
-  if (!nodeVersion.match(/^(20|22|23|24)\./)) {
-    throw new Error(`Node.js 20.x or 22.x or 23.x or 24.x required, got ${nodeVersion}`);
-  }
-
-  // Check write permissions
-  if (!canWrite(outputPath)) {
-    throw new Error(`No write permission: ${outputPath}`);
-  }
-
-  // Fail immediately on any validation error
+function validateProductionEnvironment(outputPath: string, requiredPaths?: string[]): void {
+  const validator = new ProductionValidator();
+  validator.validate({
+    isProduction: true,
+    outputPath,
+    requiredPaths,
+  });
 }
 
 type BufferEncoding =
@@ -153,19 +122,21 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
     const baseDir = path.dirname(path.resolve(input));
     const config = loadConfig(baseDir);
 
+    const isProduction = options.production || process.env.NODE_ENV === 'production';
+
     // Validate production environment if --production flag is set
-    if (options.production || process.env.NODE_ENV === 'production') {
+    if (isProduction) {
       const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
 
       try {
-        validateProductionEnvironment(outputPath);
+        validateProductionEnvironment(outputPath, [input]);
       } catch (error) {
         handleCliFailure(error, 'Production validation failed:');
         throw error; // Re-throw to exit bundle command
       }
     }
 
-    const moduleSystem = await createModuleSystem(baseDir, config);
+    const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
 
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
 
@@ -175,7 +146,7 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
   }
 }
 
-async function createModuleSystem(baseDir: string, config: SomonConfig) {
+async function createModuleSystem(baseDir: string, config: SomonConfig, isProduction = false) {
   const { ModuleSystem } = await import('../module-system');
   return new ModuleSystem({
     resolution: {
@@ -189,6 +160,12 @@ async function createModuleSystem(baseDir: string, config: SomonConfig) {
         }
       : undefined,
     compilation: config.moduleSystem?.compilation,
+    // Enforce production features when in production mode
+    metrics: isProduction || config.moduleSystem?.metrics,
+    circuitBreakers: isProduction || config.moduleSystem?.circuitBreakers,
+    logger: isProduction || config.moduleSystem?.logger,
+    managementServer: isProduction || config.moduleSystem?.managementServer,
+    managementPort: config.moduleSystem?.managementPort,
   });
 }
 
@@ -406,7 +383,7 @@ export function createProgram(): Command {
               : input.replace(/\.som$/, '.js'));
 
           try {
-            validateProductionEnvironment(outputFile);
+            validateProductionEnvironment(outputFile, [input]);
           } catch (error) {
             handleCliFailure(error, 'Production validation failed:');
             return;
@@ -565,7 +542,7 @@ export function createProgram(): Command {
           const compiledFilePath = createRunOutputPath(input, sourceDir);
 
           try {
-            validateProductionEnvironment(compiledFilePath);
+            validateProductionEnvironment(compiledFilePath, [input]);
           } catch (error) {
             handleCliFailure(error, 'Production validation failed:');
             return;

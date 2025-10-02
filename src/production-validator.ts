@@ -110,17 +110,20 @@ export class ProductionValidator {
 
   private validateSystemResources(): void {
     const memoryUsage = process.memoryUsage();
-    // Check total heap size instead of available (Node can grow heap dynamically)
-    const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
-    const minRequiredHeap = 50; // 50MB minimum heap total
+    // Check heap used instead of total (Node can grow heap dynamically)
+    const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+    const minRequiredHeap = 10; // 10MB minimum heap used (reasonable for startup)
 
-    if (heapTotalMB < minRequiredHeap) {
+    if (heapUsedMB < minRequiredHeap && memoryUsage.heapTotal < 20 * 1024 * 1024) {
+      // Only fail if both heap used is tiny AND heap total is < 20MB
+      // This catches truly constrained environments
       this.errors.push({
         category: 'environment',
         message: 'Insufficient memory available',
         details: {
-          heapTotal: `${heapTotalMB}MB`,
-          required: `${minRequiredHeap}MB minimum`,
+          heapUsed: `${heapUsedMB}MB`,
+          heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+          required: `${minRequiredHeap}MB+ heap, 20MB+ total`,
         },
       });
     }

@@ -123,6 +123,12 @@ export interface ModuleSystemConfig {
   };
   // Optional: delegate to compiler options used during module compilation if needed
   compilation?: CompilerOptions;
+  // Production features
+  metrics?: boolean;
+  circuitBreakers?: boolean;
+  logger?: boolean;
+  managementServer?: boolean;
+  managementPort?: number;
 }
 
 export interface BundleConfig {
@@ -160,7 +166,16 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
 
 function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
-  const knownTop = ['resolution', 'loading', 'compilation'];
+  const knownTop = [
+    'resolution',
+    'loading',
+    'compilation',
+    'metrics',
+    'circuitBreakers',
+    'logger',
+    'managementServer',
+    'managementPort',
+  ];
 
   for (const key of Object.keys(config)) {
     if (!knownTop.includes(key)) {
