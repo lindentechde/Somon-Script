@@ -30,6 +30,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
     // Always cleanup watchers and temp files
     try {
       await moduleSystem.shutdown();
+      // Give chokidar extra time to release all handles
+      // persistent: true watchers can hold the process open briefly
+      await new Promise(resolve => setTimeout(resolve, 50));
     } catch (error) {
       // Ignore shutdown errors in tests
     }
@@ -47,7 +50,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      const watcher = moduleSystem.watch(testFile);
+      const watcher = moduleSystem.watch(testFile, {
+        chokidarOptions: { persistent: false },
+      });
       expect(watcher).toBeDefined();
 
       // @ts-expect-error - accessing private property for testing
@@ -58,18 +63,44 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      const watcher = moduleSystem.watch(testFile);
+      const watcher = moduleSystem.watch(testFile, {
+        chokidarOptions: { persistent: false },
+      });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(1);
 
-      await watcher.close();
+      // Verify watcher is functional by checking it's ready
+      await new Promise<void>(resolve => {
+        watcher.once('ready', () => resolve());
+        // Fallback timeout if already ready
+        setTimeout(() => resolve(), 100);
+      });
 
-      // Give it a moment for the close event to fire
+      // Close the watcher and verify it completes
+      const closePromise = watcher.close();
+      expect(closePromise).toBeInstanceOf(Promise);
+      await closePromise;
+
+      // Give chokidar time to fully clean up internal handles
+      // Note: chokidar.close() can resolve before all internal cleanup completes
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      // Watcher should be removed from tracking after close() completes
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(0);
+
+      // Verify watcher is actually closed by checking it doesn't emit events
+      const changeDetected = { value: false };
+      watcher.on('all', () => {
+        changeDetected.value = true;
+      });
+
+      // Modify file and wait - closed watcher should not emit events
+      fs.writeFileSync(testFile, 'тағйирёбанда x = 10;');
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      expect(changeDetected.value).toBe(false);
     });
 
     it('should cleanup all watchers on stopWatching()', async () => {
@@ -79,8 +110,8 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       fs.writeFileSync(testFile1, 'тағйирёбанда x = 1;');
       fs.writeFileSync(testFile2, 'тағйирёбанда y = 2;');
 
-      moduleSystem.watch(testFile1);
-      moduleSystem.watch(testFile2);
+      moduleSystem.watch(testFile1, { chokidarOptions: { persistent: false } });
+      moduleSystem.watch(testFile2, { chokidarOptions: { persistent: false } });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(2);
@@ -95,7 +126,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      moduleSystem.watch(testFile);
+      moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(1);
@@ -113,7 +144,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       // Write invalid SomonScript code
       fs.writeFileSync(testFile, 'this is not valid somonscript!!!');
 
-      moduleSystem.watch(testFile);
+      moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(1);
@@ -144,7 +175,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      moduleSystem.watch(testFile);
+      moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
 
       await moduleSystem.stopWatching();
       // @ts-expect-error - accessing private property for testing
@@ -160,7 +191,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      const watcher = moduleSystem.watch(testFile);
+      const watcher = moduleSystem.watch(testFile, {
+        chokidarOptions: { persistent: false },
+      });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(1);
@@ -183,7 +216,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
         const testFile = path.join(tempDir, `test${i}.som`);
         fs.writeFileSync(testFile, `тағйирёбанда x${i} = ${i};`);
 
-        moduleSystem.watch(testFile);
+        moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
       }
 
       // @ts-expect-error - accessing private property for testing
@@ -199,7 +232,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
         const testFile = path.join(tempDir, `new${i}.som`);
         fs.writeFileSync(testFile, `тағйирёбанда y${i} = ${i};`);
 
-        moduleSystem.watch(testFile);
+        moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
       }
 
       // @ts-expect-error - accessing private property for testing
@@ -218,8 +251,10 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       fs.writeFileSync(testFile1, 'тағйирёбанда x = 1;');
       fs.writeFileSync(testFile2, 'тағйирёбанда y = 2;');
 
-      const watcher1 = moduleSystem.watch(testFile1);
-      moduleSystem.watch(testFile2);
+      const watcher1 = moduleSystem.watch(testFile1, {
+        chokidarOptions: { persistent: false },
+      });
+      moduleSystem.watch(testFile2, { chokidarOptions: { persistent: false } });
 
       // Mock a failing close on one watcher
       const originalClose = watcher1.close.bind(watcher1);
@@ -245,7 +280,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'valid.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x: рақам = 42;');
 
-      moduleSystem.watch(testFile);
+      moduleSystem.watch(testFile, { chokidarOptions: { persistent: false } });
 
       // @ts-expect-error - accessing private property for testing
       expect(moduleSystem.activeWatchers.size).toBe(1);
@@ -270,6 +305,8 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
         onChange: event => {
           changes.push(event.type);
         },
+        // Note: persistent must be true to detect file changes reliably
+        chokidarOptions: { persistent: true },
       });
 
       // Give watcher time to initialize
@@ -285,6 +322,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       expect(changes).toContain('change');
 
       await watcher.close();
+
+      // Give persistent watcher extra time to fully close
+      await new Promise(resolve => setTimeout(resolve, 50));
     });
   });
 
@@ -294,7 +334,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
 
       // Should not throw
       expect(() => {
-        moduleSystem.watch(nonExistent);
+        moduleSystem.watch(nonExistent, { chokidarOptions: { persistent: false } });
       }).not.toThrow();
 
       // @ts-expect-error - accessing private property for testing
@@ -305,8 +345,12 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      const watcher1 = moduleSystem.watch(testFile);
-      const watcher2 = moduleSystem.watch(testFile);
+      const watcher1 = moduleSystem.watch(testFile, {
+        chokidarOptions: { persistent: false },
+      });
+      const watcher2 = moduleSystem.watch(testFile, {
+        chokidarOptions: { persistent: false },
+      });
 
       // Both watchers should be tracked
       // @ts-expect-error - accessing private property for testing
@@ -326,7 +370,7 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
       const testFile = path.join(tempDir, 'test.som');
       fs.writeFileSync(testFile, 'тағйирёбанда x = 5;');
 
-      msWithServer.watch(testFile);
+      msWithServer.watch(testFile, { chokidarOptions: { persistent: false } });
 
       // Start management server
       await msWithServer.startManagementServer(0); // Port 0 = random available port
