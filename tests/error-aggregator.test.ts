@@ -27,6 +27,7 @@ describe('CompilationErrorAggregator', () => {
         code: 'SYNTAX_ERROR',
         message: 'Expected semicolon',
         severity: 'error',
+        category: 'syntax',
       };
 
       aggregator.collect(error);
@@ -41,6 +42,7 @@ describe('CompilationErrorAggregator', () => {
         code: 'ERROR',
         message: 'Error message',
         severity: 'error',
+        category: 'unknown',
       };
 
       const warning: CompilationError = {
@@ -48,6 +50,7 @@ describe('CompilationErrorAggregator', () => {
         code: 'WARNING',
         message: 'Warning message',
         severity: 'warning',
+        category: 'unknown',
       };
 
       aggregator.collect(error);
@@ -65,6 +68,7 @@ describe('CompilationErrorAggregator', () => {
           code: 'ERROR',
           message: `Error ${i}`,
           severity: 'error',
+          category: 'unknown',
         });
       }
 
@@ -79,6 +83,7 @@ describe('CompilationErrorAggregator', () => {
           code: 'ERROR',
           message: `Error ${i}`,
           severity: 'error',
+          category: 'unknown',
         });
       }
 
@@ -93,6 +98,7 @@ describe('CompilationErrorAggregator', () => {
           code: 'WARNING',
           message: `Warning ${i}`,
           severity: 'warning',
+          category: 'unknown',
         });
       }
 
@@ -109,6 +115,7 @@ describe('CompilationErrorAggregator', () => {
         code: 'SYNTAX_ERROR',
         message: 'Expected semicolon',
         severity: 'error',
+        category: 'syntax',
       });
 
       aggregator.collect({
@@ -117,12 +124,15 @@ describe('CompilationErrorAggregator', () => {
         code: 'TYPE_MISMATCH',
         message: 'Type mismatch',
         severity: 'error',
+        category: 'type',
       });
 
       aggregator.reportAll();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('\n📋 COMPILATION SUMMARY\n');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Found 2 error(s)'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('COMPILATION ERROR REPORT')
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Errors: 2'));
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('file1.som'));
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('file2.som'));
     });
@@ -133,11 +143,12 @@ describe('CompilationErrorAggregator', () => {
         code: 'UNUSED_VAR',
         message: 'Unused variable',
         severity: 'warning',
+        category: 'unknown',
       });
 
       aggregator.reportAll();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('1 warning(s)'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Warnings: 1'));
     });
 
     test('should include suggestions when available', () => {
@@ -309,6 +320,7 @@ describe('CompilationErrorAggregator', () => {
         code: 'ERROR1',
         message: 'Error 1',
         severity: 'error',
+        category: 'unknown',
       });
 
       aggregator.collect({
@@ -316,13 +328,14 @@ describe('CompilationErrorAggregator', () => {
         code: 'ERROR2',
         message: 'Error 2',
         severity: 'error',
+        category: 'unknown',
       });
 
       expect(() => {
         aggregator.failFast();
       }).toThrow('Mocked exit with code 1');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Found 2 error(s)'));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Errors: 2'));
 
       exitSpy.mockRestore();
     });
