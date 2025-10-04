@@ -99,6 +99,9 @@ export class ModuleSystem {
   private readonly operationTimeout: number;
 
   constructor(options: ModuleSystemOptions = {}) {
+    // Validate configuration upfront before initializing components
+    this.validateConfiguration(options);
+
     this.resolver = new ModuleResolver(options.resolution);
     this.operationTimeout = options.operationTimeout ?? 120000; // Default 2 minutes
 
@@ -165,6 +168,159 @@ export class ModuleSystem {
         resourceLimiter: !!this.resourceLimiter,
         operationTimeout: this.operationTimeout,
       });
+    }
+  }
+
+  /**
+   * Validate ModuleSystem configuration options upfront.
+   * Fail fast with clear error messages for invalid configurations.
+   */
+  private validateConfiguration(options: ModuleSystemOptions): void {
+    const errors: string[] = [];
+
+    this.validateManagementServer(options, errors);
+    this.validateManagementPort(options, errors);
+    this.validateOperationTimeout(options, errors);
+    this.validateResourceLimits(options, errors);
+    this.validateLoaderOptions(options, errors);
+
+    if (errors.length > 0) {
+      throw new Error(
+        `ModuleSystem configuration validation failed:\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
+      );
+    }
+  }
+
+  private validateManagementServer(options: ModuleSystemOptions, errors: string[]): void {
+    if (options.managementServer) {
+      if (!options.metrics) {
+        errors.push('managementServer requires metrics to be enabled. Set options.metrics = true.');
+      }
+      if (!options.circuitBreakers) {
+        errors.push(
+          'managementServer requires circuitBreakers to be enabled. Set options.circuitBreakers = true.'
+        );
+      }
+    }
+  }
+
+  private validateManagementPort(options: ModuleSystemOptions, errors: string[]): void {
+    if (options.managementPort !== undefined) {
+      if (
+        !Number.isInteger(options.managementPort) ||
+        options.managementPort < 1 ||
+        options.managementPort > 65535
+      ) {
+        errors.push(
+          `managementPort must be an integer between 1 and 65535, got: ${options.managementPort}`
+        );
+      }
+    }
+  }
+
+  private validateOperationTimeout(options: ModuleSystemOptions, errors: string[]): void {
+    if (options.operationTimeout !== undefined) {
+      if (
+        !Number.isInteger(options.operationTimeout) ||
+        options.operationTimeout < 1000 ||
+        options.operationTimeout > 600000
+      ) {
+        errors.push(
+          `operationTimeout must be between 1000ms (1s) and 600000ms (10min), got: ${options.operationTimeout}ms`
+        );
+      }
+    }
+  }
+
+  private validateResourceLimits(options: ModuleSystemOptions, errors: string[]): void {
+    if (!options.resourceLimits) return;
+
+    const limits = options.resourceLimits;
+
+    if (limits.maxMemoryBytes !== undefined) {
+      if (!Number.isInteger(limits.maxMemoryBytes) || limits.maxMemoryBytes < 1024 * 1024) {
+        errors.push(
+          `resourceLimits.maxMemoryBytes must be at least 1MB (1048576 bytes), got: ${limits.maxMemoryBytes}`
+        );
+      }
+    }
+
+    if (limits.maxFileHandles !== undefined) {
+      if (!Number.isInteger(limits.maxFileHandles) || limits.maxFileHandles < 1) {
+        errors.push(
+          `resourceLimits.maxFileHandles must be a positive integer, got: ${limits.maxFileHandles}`
+        );
+      }
+    }
+
+    if (limits.maxCachedModules !== undefined) {
+      if (!Number.isInteger(limits.maxCachedModules) || limits.maxCachedModules < 1) {
+        errors.push(
+          `resourceLimits.maxCachedModules must be a positive integer, got: ${limits.maxCachedModules}`
+        );
+      }
+    }
+
+    if (limits.checkInterval !== undefined) {
+      if (
+        !Number.isInteger(limits.checkInterval) ||
+        limits.checkInterval < 100 ||
+        limits.checkInterval > 60000
+      ) {
+        errors.push(
+          `resourceLimits.checkInterval must be between 100ms and 60000ms, got: ${limits.checkInterval}ms`
+        );
+      }
+    }
+  }
+
+  private validateLoaderOptions(options: ModuleSystemOptions, errors: string[]): void {
+    if (!options.loading) return;
+
+    const loading = options.loading;
+
+    if (loading.circularDependencyStrategy !== undefined) {
+      const validStrategies = ['error', 'warn', 'ignore'];
+      if (!validStrategies.includes(loading.circularDependencyStrategy)) {
+        errors.push(
+          `loading.circularDependencyStrategy must be one of: ${validStrategies.join(', ')}, got: ${loading.circularDependencyStrategy}`
+        );
+      }
+    }
+
+    if (loading.maxCacheSize !== undefined) {
+      if (!Number.isInteger(loading.maxCacheSize) || loading.maxCacheSize < 1) {
+        errors.push(
+          `loading.maxCacheSize must be a positive integer, got: ${loading.maxCacheSize}`
+        );
+      }
+    }
+
+    if (loading.maxCacheMemory !== undefined) {
+      if (!Number.isInteger(loading.maxCacheMemory) || loading.maxCacheMemory < 1024) {
+        errors.push(
+          `loading.maxCacheMemory must be at least 1KB (1024 bytes), got: ${loading.maxCacheMemory}`
+        );
+      }
+    }
+
+    if (loading.encoding !== undefined) {
+      const validEncodings = [
+        'ascii',
+        'utf8',
+        'utf-8',
+        'utf16le',
+        'ucs2',
+        'ucs-2',
+        'base64',
+        'base64url',
+        'latin1',
+        'binary',
+        'hex',
+      ];
+      if (!validEncodings.includes(loading.encoding)) {
+        errors.push(`loading.encoding must be a valid encoding, got: ${loading.encoding}`);
+      }
     }
   }
 
