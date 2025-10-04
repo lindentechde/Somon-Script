@@ -21,6 +21,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
     // Create temporary directory for test files
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-watcher-test-'));
     moduleSystem = new ModuleSystem({
+      resolution: {
+        baseUrl: tempDir,
+      },
       logger: false, // Disable logging for tests
       metrics: false,
     });
@@ -361,6 +364,9 @@ describe('ModuleSystem - Watcher Lifecycle', () => {
 
     it('should cleanup on shutdown even with management server enabled', async () => {
       const msWithServer = new ModuleSystem({
+        resolution: {
+          baseUrl: tempDir,
+        },
         logger: true,
         metrics: true,
         circuitBreakers: true,

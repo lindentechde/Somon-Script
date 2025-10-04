@@ -46,8 +46,8 @@ export async function withTimeout<T>(promise: Promise<T>, options: TimeoutOption
 export class TimeoutError extends Error {
   constructor(
     message: string,
-    public readonly _timeout: number,
-    public readonly _operation?: string
+    public readonly timeout: number, // eslint-disable-line no-unused-vars
+    public readonly operation?: string // eslint-disable-line no-unused-vars
   ) {
     super(message);
     this.name = 'TimeoutError';

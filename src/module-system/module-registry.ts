@@ -234,16 +234,32 @@ export class ModuleRegistry {
   }
 
   private updateDependencyGraph(moduleId: string, dependencies: string[]): void {
+    // Resolve raw dependency specifiers to module IDs
+    const module = this.modules.get(moduleId);
+    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+
+    const resolvedDeps: string[] = [];
+    for (const dep of dependencies) {
+      // Try to resolve the raw specifier to a module ID
+      const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
+      if (resolvedDepId) {
+        resolvedDeps.push(resolvedDepId);
+      } else {
+        // Keep raw specifier if we can't resolve it yet
+        resolvedDeps.push(dep);
+      }
+    }
+
     // Create or update node
     let node = this.dependencyGraph.get(moduleId);
     if (node) {
       // Update existing node
-      node.dependencies = [...dependencies];
+      node.dependencies = resolvedDeps;
     } else {
       // Create new node
       node = {
         id: moduleId,
-        dependencies: [...dependencies],
+        dependencies: resolvedDeps,
         dependents: [],
         level: 0,
       };
@@ -251,8 +267,7 @@ export class ModuleRegistry {
     }
 
     // Update dependents for dependencies
-    // Dependencies are already resolved to module IDs by the ModuleLoader
-    for (const depId of dependencies) {
+    for (const depId of resolvedDeps) {
       // Ensure dependency node exists
       if (!this.dependencyGraph.has(depId)) {
         this.dependencyGraph.set(depId, {
@@ -377,12 +392,53 @@ export class ModuleRegistry {
   }
 
   // Get resolved dependencies for a given module ID
-  // Dependencies are already resolved to module IDs by ModuleLoader
   private getResolvedDependencies(moduleId: string): string[] {
     const node = this.dependencyGraph.get(moduleId);
     if (!node) return [];
 
-    // Filter to only include dependencies that are registered in the graph
-    return node.dependencies.filter(depId => this.dependencyGraph.has(depId));
+    const module = this.modules.get(moduleId);
+    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+
+    const resolved: string[] = [];
+    for (const dep of node.dependencies) {
+      // Try to resolve if it's a raw specifier
+      if (!path.isAbsolute(dep) && !dep.startsWith('external:')) {
+        const resolvedId = this.resolveSpecifierToModuleId(dep, moduleDir);
+        if (resolvedId && this.dependencyGraph.has(resolvedId)) {
+          resolved.push(resolvedId);
+        }
+      } else if (this.dependencyGraph.has(dep)) {
+        // Already resolved
+        resolved.push(dep);
+      }
+    }
+
+    return resolved;
+  }
+
+  // Resolve a raw specifier to a module ID
+  private resolveSpecifierToModuleId(specifier: string, fromDir: string): string | null {
+    // If it's already an absolute path or external module, return as-is
+    if (path.isAbsolute(specifier) || specifier.startsWith('external:')) {
+      return specifier;
+    }
+
+    // For relative paths, try to find the matching module
+    const possiblePaths = [
+      path.resolve(fromDir, specifier),
+      path.resolve(fromDir, specifier + '.som'),
+      path.resolve(fromDir, specifier + '.js'),
+      path.resolve(fromDir, specifier, 'index.som'),
+      path.resolve(fromDir, specifier, 'index.js'),
+    ];
+
+    // Find a registered module that matches one of the possible paths
+    for (const mod of this.modules.values()) {
+      if (possiblePaths.includes(mod.resolvedPath)) {
+        return mod.id;
+      }
+    }
+
+    return null;
   }
 }
