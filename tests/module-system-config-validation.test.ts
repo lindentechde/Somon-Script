@@ -335,6 +335,319 @@ describe('ModuleSystem Configuration Validation', () => {
     });
   });
 
+  describe('Resolution Options Validation', () => {
+    it('should reject non-string baseUrl', () => {
+      expect(() => {
+        new ModuleSystem({
+          resolution: {
+            baseUrl: 123 as any,
+          },
+        });
+      }).toThrow(/resolution.baseUrl must be a string/);
+    });
+
+    it('should reject invalid paths object', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            paths: 'invalid' as any,
+          },
+        });
+      }).toThrow(/resolution.paths must be an object/);
+    });
+
+    it('should reject paths with non-array values', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            paths: {
+              '@app/*': 'invalid' as any,
+            },
+          },
+        });
+      }).toThrow(/resolution.paths\['@app\/\*'\] must be an array of strings/);
+    });
+
+    it('should reject paths with non-string array elements', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            paths: {
+              '@app/*': ['src/*', 123 as any],
+            },
+          },
+        });
+      }).toThrow(/resolution.paths\['@app\/\*'\] must contain only strings/);
+    });
+
+    it('should reject non-array extensions', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            extensions: 'invalid' as any,
+          },
+        });
+      }).toThrow(/resolution.extensions must be an array of strings/);
+    });
+
+    it('should reject extensions with non-string elements', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            extensions: ['.som', 123 as any],
+          },
+        });
+      }).toThrow(/resolution.extensions must contain only strings/);
+    });
+
+    it('should reject empty extensions array', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            extensions: [],
+          },
+        });
+      }).toThrow(/resolution.extensions must not be empty/);
+    });
+
+    it('should reject extensions without leading dot', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            extensions: ['.som', 'js', 'ts'],
+          },
+        });
+      }).toThrow(/resolution.extensions must start with a dot, invalid: js, ts/);
+    });
+
+    it('should reject non-array moduleDirectories', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            moduleDirectories: 'invalid' as any,
+          },
+        });
+      }).toThrow(/resolution.moduleDirectories must be an array of strings/);
+    });
+
+    it('should reject moduleDirectories with non-string elements', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            moduleDirectories: ['node_modules', 123 as any],
+          },
+        });
+      }).toThrow(/resolution.moduleDirectories must contain only strings/);
+    });
+
+    it('should reject empty moduleDirectories array', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            moduleDirectories: [],
+          },
+        });
+      }).toThrow(/resolution.moduleDirectories must not be empty/);
+    });
+
+    it('should reject non-boolean allowJs', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            allowJs: 'true' as any,
+          },
+        });
+      }).toThrow(/resolution.allowJs must be a boolean/);
+    });
+
+    it('should reject non-boolean resolveJsonModule', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          resolution: {
+            ...validBaseConfig.resolution,
+            resolveJsonModule: 'true' as any,
+          },
+        });
+      }).toThrow(/resolution.resolveJsonModule must be a boolean/);
+    });
+
+    it('should accept valid resolution options', () => {
+      expect(() => {
+        new ModuleSystem({
+          resolution: {
+            baseUrl: path.resolve(__dirname, '..'),
+            paths: {
+              '@app/*': ['src/*'],
+              '@lib/*': ['lib/*', 'node_modules/*'],
+            },
+            extensions: ['.som', '.js', '.json'],
+            moduleDirectories: ['node_modules', 'custom_modules'],
+            allowJs: true,
+            resolveJsonModule: true,
+          },
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe('Compilation Options Validation', () => {
+    it('should reject invalid target', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            target: 'es2022' as any,
+          },
+        });
+      }).toThrow(/compilation.target must be one of: es5, es2015, es2020, esnext/);
+    });
+
+    it('should reject non-boolean sourceMap', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            sourceMap: 'true' as any,
+          },
+        });
+      }).toThrow(/compilation.sourceMap must be a boolean/);
+    });
+
+    it('should reject non-boolean minify', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            minify: 'true' as any,
+          },
+        });
+      }).toThrow(/compilation.minify must be a boolean/);
+    });
+
+    it('should reject non-boolean noTypeCheck', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            noTypeCheck: 1 as any,
+          },
+        });
+      }).toThrow(/compilation.noTypeCheck must be a boolean/);
+    });
+
+    it('should reject non-boolean strict', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            strict: 'yes' as any,
+          },
+        });
+      }).toThrow(/compilation.strict must be a boolean/);
+    });
+
+    it('should reject non-boolean watch', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            watch: 1 as any,
+          },
+        });
+      }).toThrow(/compilation.watch must be a boolean/);
+    });
+
+    it('should reject non-boolean compileOnSave', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            compileOnSave: 1 as any,
+          },
+        });
+      }).toThrow(/compilation.compileOnSave must be a boolean/);
+    });
+
+    it('should reject non-string output', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            output: 123 as any,
+          },
+        });
+      }).toThrow(/compilation.output must be a string/);
+    });
+
+    it('should reject non-string outDir', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            outDir: 123 as any,
+          },
+        });
+      }).toThrow(/compilation.outDir must be a string/);
+    });
+
+    it('should accept all valid targets', () => {
+      const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
+
+      for (const target of validTargets) {
+        expect(() => {
+          new ModuleSystem({
+            ...validBaseConfig,
+            compilation: {
+              target: target as any,
+            },
+          });
+        }).not.toThrow();
+      }
+    });
+
+    it('should accept valid compilation options', () => {
+      expect(() => {
+        new ModuleSystem({
+          ...validBaseConfig,
+          compilation: {
+            target: 'es2020',
+            sourceMap: true,
+            minify: true,
+            noTypeCheck: false,
+            strict: true,
+            watch: false,
+            compileOnSave: true,
+            output: 'dist/bundle.js',
+            outDir: 'dist',
+          },
+        });
+      }).not.toThrow();
+    });
+  });
+
   describe('Error Aggregation', () => {
     it('should report multiple validation errors together', () => {
       expect(() => {

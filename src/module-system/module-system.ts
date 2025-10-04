@@ -52,11 +52,20 @@ export interface CompiledModule {
   map?: RawSourceMap;
 }
 
+export interface CompilationError {
+  message: string;
+  filePath: string;
+  line?: number;
+  column?: number;
+  suggestion?: string;
+  originalError?: Error;
+}
+
 export interface CompilationResult {
   modules: Map<string, CompiledModule>;
   entryPoint: string;
   dependencies: string[];
-  errors: Error[];
+  errors: CompilationError[];
   warnings: string[];
 }
 
@@ -172,22 +181,231 @@ export class ModuleSystem {
   }
 
   /**
+   * Provide helpful suggestions for common compilation errors.
+   */
+  private getSuggestionForError(errorMessage: string, _filePath: string): string | undefined {
+    const lowerMessage = errorMessage.toLowerCase();
+
+    // Common syntax errors
+    if (lowerMessage.includes('unexpected token')) {
+      return 'Check for missing or extra brackets, parentheses, or semicolons';
+    }
+    if (lowerMessage.includes('unexpected end of input')) {
+      return 'You may have unclosed brackets, parentheses, or string literals';
+    }
+
+    // Import/module errors
+    if (lowerMessage.includes('cannot find module') || lowerMessage.includes('module not found')) {
+      return 'Verify the module path is correct and the file exists. Check for typos in the import path';
+    }
+    if (lowerMessage.includes('circular dependency')) {
+      return 'Refactor your code to remove circular dependencies between modules';
+    }
+
+    // Type errors
+    if (lowerMessage.includes('type') && lowerMessage.includes('mismatch')) {
+      return 'Check that the types of your variables and function parameters are compatible';
+    }
+
+    // Variable errors
+    if (lowerMessage.includes('is not defined') || lowerMessage.includes('undefined')) {
+      return 'Make sure the variable is declared before use. Check for typos in variable names';
+    }
+
+    // Scope errors
+    if (lowerMessage.includes('already declared') || lowerMessage.includes('redeclared')) {
+      return 'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration';
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Create a structured compilation error with context and suggestions.
+   */
+  private createCompilationError(
+    message: string,
+    filePath: string,
+    originalError?: Error
+  ): CompilationError {
+    // Try to extract line and column from error message
+    const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
+    const line = lineColMatch ? parseInt(lineColMatch[1], 10) : undefined;
+    const column = lineColMatch && lineColMatch[2] ? parseInt(lineColMatch[2], 10) : undefined;
+
+    return {
+      message,
+      filePath,
+      line,
+      column,
+      suggestion: this.getSuggestionForError(message, filePath),
+      originalError,
+    };
+  }
+
+  /**
    * Validate ModuleSystem configuration options upfront.
    * Fail fast with clear error messages for invalid configurations.
    */
   private validateConfiguration(options: ModuleSystemOptions): void {
     const errors: string[] = [];
 
+    this.validateResolutionOptions(options, errors);
+    this.validateLoaderOptions(options, errors);
+    this.validateCompilationOptions(options, errors);
     this.validateManagementServer(options, errors);
     this.validateManagementPort(options, errors);
     this.validateOperationTimeout(options, errors);
     this.validateResourceLimits(options, errors);
-    this.validateLoaderOptions(options, errors);
 
     if (errors.length > 0) {
       throw new Error(
         `ModuleSystem configuration validation failed:\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
       );
+    }
+  }
+
+  private validateResolutionOptions(options: ModuleSystemOptions, errors: string[]): void {
+    if (!options.resolution) return;
+
+    const resolution = options.resolution;
+
+    this.validateResolutionBaseUrl(resolution, errors);
+    this.validateResolutionPaths(resolution, errors);
+    this.validateResolutionExtensions(resolution, errors);
+    this.validateResolutionModuleDirectories(resolution, errors);
+    this.validateResolutionBooleanFlags(resolution, errors);
+  }
+
+  private validateResolutionBaseUrl(resolution: ModuleResolutionOptions, errors: string[]): void {
+    // baseUrl is required for ModuleResolver (enforced in ModuleResolver constructor)
+    // We validate it here to provide early feedback
+    if (resolution.baseUrl !== undefined && typeof resolution.baseUrl !== 'string') {
+      errors.push('resolution.baseUrl must be a string');
+    }
+  }
+
+  private validateResolutionPaths(resolution: ModuleResolutionOptions, errors: string[]): void {
+    if (resolution.paths === undefined) return;
+
+    if (typeof resolution.paths !== 'object' || resolution.paths === null) {
+      errors.push('resolution.paths must be an object mapping strings to string arrays');
+      return;
+    }
+
+    for (const [key, value] of Object.entries(resolution.paths)) {
+      if (!Array.isArray(value)) {
+        errors.push(`resolution.paths['${key}'] must be an array of strings`);
+      } else if (!value.every(v => typeof v === 'string')) {
+        errors.push(`resolution.paths['${key}'] must contain only strings`);
+      }
+    }
+  }
+
+  private validateResolutionExtensions(
+    resolution: ModuleResolutionOptions,
+    errors: string[]
+  ): void {
+    if (resolution.extensions === undefined) return;
+
+    if (!Array.isArray(resolution.extensions)) {
+      errors.push('resolution.extensions must be an array of strings');
+      return;
+    }
+
+    if (!resolution.extensions.every(ext => typeof ext === 'string')) {
+      errors.push('resolution.extensions must contain only strings');
+      return;
+    }
+
+    if (resolution.extensions.length === 0) {
+      errors.push('resolution.extensions must not be empty');
+      return;
+    }
+
+    // Validate that extensions start with a dot
+    const invalidExtensions = resolution.extensions.filter(ext => !ext.startsWith('.'));
+    if (invalidExtensions.length > 0) {
+      errors.push(
+        `resolution.extensions must start with a dot, invalid: ${invalidExtensions.join(', ')}`
+      );
+    }
+  }
+
+  private validateResolutionModuleDirectories(
+    resolution: ModuleResolutionOptions,
+    errors: string[]
+  ): void {
+    if (resolution.moduleDirectories === undefined) return;
+
+    if (!Array.isArray(resolution.moduleDirectories)) {
+      errors.push('resolution.moduleDirectories must be an array of strings');
+      return;
+    }
+
+    if (!resolution.moduleDirectories.every(dir => typeof dir === 'string')) {
+      errors.push('resolution.moduleDirectories must contain only strings');
+      return;
+    }
+
+    if (resolution.moduleDirectories.length === 0) {
+      errors.push('resolution.moduleDirectories must not be empty');
+    }
+  }
+
+  private validateResolutionBooleanFlags(
+    resolution: ModuleResolutionOptions,
+    errors: string[]
+  ): void {
+    if (resolution.allowJs !== undefined && typeof resolution.allowJs !== 'boolean') {
+      errors.push('resolution.allowJs must be a boolean');
+    }
+
+    if (
+      resolution.resolveJsonModule !== undefined &&
+      typeof resolution.resolveJsonModule !== 'boolean'
+    ) {
+      errors.push('resolution.resolveJsonModule must be a boolean');
+    }
+  }
+
+  private validateCompilationOptions(options: ModuleSystemOptions, errors: string[]): void {
+    if (!options.compilation) return;
+
+    const compilation = options.compilation;
+
+    // Validate target
+    if (compilation.target !== undefined) {
+      const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
+      if (!validTargets.includes(compilation.target)) {
+        errors.push(
+          `compilation.target must be one of: ${validTargets.join(', ')}, got: ${compilation.target}`
+        );
+      }
+    }
+
+    // Validate boolean options
+    const booleanOptions: (keyof CompilerOptions)[] = [
+      'sourceMap',
+      'minify',
+      'noTypeCheck',
+      'strict',
+      'watch',
+      'compileOnSave',
+    ];
+    for (const option of booleanOptions) {
+      if (compilation[option] !== undefined && typeof compilation[option] !== 'boolean') {
+        errors.push(`compilation.${option} must be a boolean`);
+      }
+    }
+
+    // Validate string options
+    if (compilation.output !== undefined && typeof compilation.output !== 'string') {
+      errors.push('compilation.output must be a string');
+    }
+
+    if (compilation.outDir !== undefined && typeof compilation.outDir !== 'string') {
+      errors.push('compilation.outDir must be a string');
     }
   }
 
@@ -374,13 +592,15 @@ export class ModuleSystem {
 
   /**
    * Compile a module and all its dependencies
+   * The compile method has necessary complexity for comprehensive error handling
    */
+  // eslint-disable-next-line complexity, max-depth
   async compile(
     entryPoint: string,
     externals?: string[],
     overrideCompilation?: Partial<CompilerOptions>
   ): Promise<CompilationResult> {
-    const errors: Error[] = [];
+    const errors: CompilationError[] = [];
     const warnings: string[] = [];
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
@@ -412,7 +632,7 @@ export class ModuleSystem {
         );
       }
 
-      // Compile each module
+      // Compile each module - collect ALL errors before returning
       const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
 
       for (const moduleId of compilationOrder) {
@@ -424,9 +644,23 @@ export class ModuleSystem {
               this.toPipelineOptions(compilationConfig)
             );
 
+            // Collect all compilation errors with context and suggestions
             if (compileResult.errors.length > 0) {
-              const errorMessage = compileResult.errors.map(message => `  - ${message}`).join('\n');
-              errors.push(new Error(`Failed to compile ${module.resolvedPath}:\n${errorMessage}`));
+              for (const errorMsg of compileResult.errors) {
+                const error = this.createCompilationError(errorMsg, module.resolvedPath);
+                errors.push(error);
+
+                if (this.logger) {
+                  this.logger.error('Module compilation error', {
+                    file: error.filePath,
+                    line: error.line,
+                    column: error.column,
+                    message: error.message,
+                    suggestion: error.suggestion,
+                  });
+                }
+              }
+              // Continue to next module - collect all errors
               continue;
             }
 
@@ -442,7 +676,21 @@ export class ModuleSystem {
               );
             }
           } catch (error) {
-            errors.push(new Error(`Failed to compile ${moduleId}: ${error}`));
+            // Handle unexpected compilation errors
+            const compilationError = this.createCompilationError(
+              `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+              module.resolvedPath,
+              error instanceof Error ? error : undefined
+            );
+            errors.push(compilationError);
+
+            if (this.logger) {
+              this.logger.error('Unexpected compilation error', {
+                file: compilationError.filePath,
+                message: compilationError.message,
+                suggestion: compilationError.suggestion,
+              });
+            }
           }
         }
       }
@@ -455,7 +703,21 @@ export class ModuleSystem {
         warnings,
       };
     } catch (error) {
-      errors.push(error as Error);
+      // Handle entry point loading errors
+      const loadError = this.createCompilationError(
+        `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`,
+        entryPoint,
+        error instanceof Error ? error : undefined
+      );
+      errors.push(loadError);
+
+      if (this.logger) {
+        this.logger.error('Entry point loading failed', {
+          file: loadError.filePath,
+          message: loadError.message,
+          suggestion: loadError.suggestion,
+        });
+      }
 
       // Clean up any active watchers on compilation failure
       if (this.activeWatchers.size > 0) {
@@ -503,14 +765,70 @@ export class ModuleSystem {
       compilationOverrides
     );
 
+    // Fail fast on compilation errors with detailed reporting
     if (compilationResult.errors.length > 0) {
-      throw new Error(
-        `Compilation failed: ${compilationResult.errors.map(e => e.message).join(', ')}`
-      );
+      const errorDetails = compilationResult.errors
+        .map((error, index) => {
+          let detail = `  ${index + 1}. ${error.filePath}`;
+          if (error.line !== undefined) {
+            detail += `:${error.line}`;
+            if (error.column !== undefined) {
+              detail += `:${error.column}`;
+            }
+          }
+          detail += `\n     ${error.message}`;
+          if (error.suggestion) {
+            detail += `\n     💡 Suggestion: ${error.suggestion}`;
+          }
+          return detail;
+        })
+        .join('\n\n');
+
+      const warningInfo =
+        compilationResult.warnings.length > 0
+          ? `\n\nWarnings (${compilationResult.warnings.length}):\n${compilationResult.warnings.map((w, i) => `  ${i + 1}. ${w}`).join('\n')}`
+          : '';
+
+      const errorMessage = `Bundle process failed with ${compilationResult.errors.length} error(s):\n\n${errorDetails}${warningInfo}`;
+
+      if (this.logger) {
+        this.logger.error('Bundle compilation failed', {
+          entryPoint: options.entryPoint,
+          errorCount: compilationResult.errors.length,
+          warningCount: compilationResult.warnings.length,
+          errors: compilationResult.errors,
+        });
+      }
+
+      // Stop bundling immediately - no partial bundles on errors
+      throw new Error(errorMessage);
+    }
+
+    // Log warnings even if compilation succeeded
+    if (compilationResult.warnings.length > 0 && this.logger) {
+      this.logger.warn('Bundle compilation succeeded with warnings', {
+        warningCount: compilationResult.warnings.length,
+        warnings: compilationResult.warnings,
+      });
     }
 
     // Generate bundle based on format
-    return await this.generateCommonJSBundle(compilationResult, options);
+    try {
+      return await this.generateCommonJSBundle(compilationResult, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (this.logger) {
+        this.logger.error('Bundle generation failed', {
+          entryPoint: options.entryPoint,
+          format: options.format,
+          error: message,
+        });
+      }
+
+      // Fail fast on bundle generation errors
+      throw new Error(`Failed to generate bundle: ${message}`);
+    }
   }
 
   /**
@@ -1044,18 +1362,71 @@ export class ModuleSystem {
 
     let rawMap: RawSourceMap | undefined;
     if (generator) {
-      rawMap = JSON.parse(generator.toString()) as RawSourceMap;
+      try {
+        rawMap = JSON.parse(generator.toString()) as RawSourceMap;
+        // Validate generated source map before using it
+        this.validateSourceMap(rawMap, 'bundle generation');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (this.logger) {
+          this.logger.error('Failed to generate bundle source map', {
+            entryPoint: result.entryPoint,
+            error: message,
+          });
+        }
+
+        // Fail fast on source map generation errors when source maps are explicitly requested
+        throw new Error(`Source map generation failed: ${message}`);
+      }
     }
 
     if (options.minify) {
-      const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
-      bundleBuilder.code = minified.code;
-      rawMap = minified.map;
+      try {
+        const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
+        bundleBuilder.code = minified.code;
+        rawMap = minified.map;
+
+        // Validate minified source map if present
+        if (rawMap && options.sourceMaps) {
+          this.validateSourceMap(rawMap, 'minification');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (this.logger) {
+          this.logger.error('Minification failed', {
+            entryPoint: result.entryPoint,
+            error: message,
+          });
+        }
+
+        throw new Error(`Minification failed: ${message}`);
+      }
+    }
+
+    // Final validation and serialization of source map
+    let serializedMap: string | undefined;
+    if (rawMap) {
+      try {
+        serializedMap = JSON.stringify(rawMap);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        if (this.logger) {
+          this.logger.error('Failed to serialize source map', {
+            entryPoint: result.entryPoint,
+            error: message,
+          });
+        }
+
+        throw new Error(`Failed to serialize source map: ${message}`);
+      }
     }
 
     return {
       code: bundleBuilder.code,
-      map: rawMap ? JSON.stringify(rawMap) : undefined,
+      map: serializedMap,
     };
   }
 
@@ -1260,6 +1631,27 @@ export class ModuleSystem {
     return result;
   }
 
+  /**
+   * Validate source map structure and required fields.
+   * Fails fast with clear error messages for invalid maps.
+   */
+  private validateSourceMap(map: RawSourceMap, context: string): void {
+    if (!map.version) {
+      throw new Error(`Invalid source map in ${context}: missing 'version' field`);
+    }
+    if (map.version !== 3) {
+      throw new Error(
+        `Invalid source map in ${context}: unsupported version ${map.version} (only version 3 is supported)`
+      );
+    }
+    if (!Array.isArray(map.sources)) {
+      throw new Error(`Invalid source map in ${context}: 'sources' must be an array`);
+    }
+    if (typeof map.mappings !== 'string') {
+      throw new Error(`Invalid source map in ${context}: 'mappings' must be a string`);
+    }
+  }
+
   private parseModuleSourceMap(
     module: LoadedModule,
     rawMap: string | undefined,
@@ -1271,6 +1663,10 @@ export class ModuleSystem {
 
     try {
       const parsed = JSON.parse(rawMap) as RawSourceMap;
+
+      // Validate source map structure before using it
+      this.validateSourceMap(parsed, module.resolvedPath);
+
       parsed.file = module.resolvedPath;
       parsed.sources =
         parsed.sources && parsed.sources.length > 0
@@ -1282,6 +1678,16 @@ export class ModuleSystem {
       return parsed;
     } catch (mapError) {
       const message = mapError instanceof Error ? mapError.message : String(mapError);
+
+      if (this.logger) {
+        this.logger.error('Source map parsing failed', {
+          module: module.resolvedPath,
+          error: message,
+        });
+      }
+
+      // Add to warnings for now - compilation can continue without source maps
+      // In strict production mode, this could be upgraded to fail-fast
       warnings.push(`Warning in ${module.resolvedPath}: Failed to parse source map: ${message}`);
       return undefined;
     }
