@@ -25,8 +25,10 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 ### Release Channels
 
 - **Stable**: Recommended for production use
-- **Beta**: Preview of upcoming features (`npm install somon-script@beta`)
-- **Alpha**: Early development builds (`npm install somon-script@alpha`)
+- **Beta**: Preview of upcoming features
+  (`npm install @lindentech/somon-script@beta`)
+- **Alpha**: Early development builds
+  (`npm install @lindentech/somon-script@alpha`)
 
 ## Migration Strategy
 
@@ -58,7 +60,7 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
    npm install -g @lindentech/somon-script@latest
 
    # For project installation
-   npm update somon-script
+   npm update @lindentech/somon-script
    ```
 
 2. **Run Migration Tool**

@@ -1,13 +1,13 @@
 /*
- * Copyright (c) 2025 LindenTech IT Consulting. All Rights Reserved.
+ * SomonScript CLI
+ * Copyright (c) 2025 LindenTech IT Consulting
  *
- * Original Creator: Bakhtier Gaibulloev
- *
- * This software is proprietary and confidential. Unauthorized copying, modification,
- * distribution, or use of this software is strictly prohibited. See LICENSE file for terms.
+ * Licensed under the MIT License. See the LICENSE file for details.
  */
 
+import { spawnSync } from 'child_process';
 import { Command } from 'commander';
+import chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
@@ -16,6 +16,7 @@ import type { Module as NodeModuleType } from 'module';
 import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
+import { ProductionValidator } from '../production-validator';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
   let currentDir = __dirname;
@@ -47,7 +48,51 @@ const compiledConfigModuleId = '../config';
 const sourceConfigModuleId = '../../src/config.ts';
 
 const { compile } = loadCompiler();
-const { loadConfig } = loadConfigModule();
+const { loadConfig, ConfigError } = loadConfigModule();
+
+type ConfigErrorInstance = InstanceType<typeof ConfigError>;
+
+function isConfigError(error: unknown): error is ConfigErrorInstance {
+  return error instanceof ConfigError;
+}
+
+function logConfigError(error: ConfigErrorInstance): void {
+  console.error('Configuration error:');
+  console.error(`  ${error.message}`);
+  if (error.details.length > 0) {
+    for (const detail of error.details) {
+      console.error(`  ${detail.path}: ${detail.message}`);
+    }
+  }
+}
+
+function handleCliFailure(error: unknown, fallbackPrefix: string): void {
+  if (isConfigError(error)) {
+    logConfigError(error);
+  } else {
+    console.error(fallbackPrefix, error instanceof Error ? error.message : error);
+  }
+
+  if (!process.exitCode || process.exitCode === 0) {
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Validate production environment requirements
+ * Implements AGENTS.md principle: "Fail fast, fail clearly"
+ *
+ * @param outputPath - Output path to validate write permissions
+ * @param requiredPaths - Optional array of required input paths
+ */
+function validateProductionEnvironment(outputPath: string, requiredPaths?: string[]): void {
+  const validator = new ProductionValidator();
+  validator.validate({
+    isProduction: true,
+    outputPath,
+    requiredPaths,
+  });
+}
 
 type BufferEncoding =
   | 'ascii'
@@ -68,31 +113,45 @@ interface BundleOptions {
   minify?: boolean;
   sourceMap?: boolean;
   externals?: string;
-  force?: boolean;
+  inlineSources?: boolean;
+  production?: boolean;
 }
 
 async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
   try {
     const baseDir = path.dirname(path.resolve(input));
     const config = loadConfig(baseDir);
-    const moduleSystem = await createModuleSystem(baseDir, config);
+
+    const isProduction = options.production || process.env.NODE_ENV === 'production';
+
+    // Validate production environment if --production flag is set
+    if (isProduction) {
+      const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
+
+      try {
+        validateProductionEnvironment(outputPath, [input]);
+      } catch (error) {
+        handleCliFailure(error, 'Production validation failed:');
+        throw error; // Re-throw to exit bundle command
+      }
+    }
+
+    const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
+
+    // Install signal handlers for graceful shutdown in production
+    if (isProduction) {
+      await installSignalHandlers(moduleSystem);
+    }
 
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
 
-    if (bundleOptions.format !== 'commonjs' && !bundleOptions.force) {
-      console.error('ESM/UMD bundle formats are experimental. Re-run with --force to proceed.');
-      process.exitCode = 1;
-      return;
-    }
-
     await performBundling(moduleSystem, bundleOptions, input);
   } catch (error) {
-    console.error('Bundle error:', error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+    handleCliFailure(error, 'Bundle error:');
   }
 }
 
-async function createModuleSystem(baseDir: string, config: SomonConfig) {
+async function createModuleSystem(baseDir: string, config: SomonConfig, isProduction = false) {
   const { ModuleSystem } = await import('../module-system');
   return new ModuleSystem({
     resolution: {
@@ -106,7 +165,43 @@ async function createModuleSystem(baseDir: string, config: SomonConfig) {
         }
       : undefined,
     compilation: config.moduleSystem?.compilation,
+    // Enforce production features when in production mode
+    metrics: isProduction || config.moduleSystem?.metrics,
+    circuitBreakers: isProduction || config.moduleSystem?.circuitBreakers,
+    logger: isProduction || config.moduleSystem?.logger,
+    managementServer: isProduction || config.moduleSystem?.managementServer,
+    managementPort: config.moduleSystem?.managementPort,
+    // Production resource limits and timeouts
+    resourceLimits: isProduction
+      ? {
+          maxMemoryBytes: config.moduleSystem?.resourceLimits?.maxMemoryBytes,
+          maxFileHandles: config.moduleSystem?.resourceLimits?.maxFileHandles ?? 1000,
+          maxCachedModules: config.moduleSystem?.resourceLimits?.maxCachedModules ?? 10000,
+          checkInterval: config.moduleSystem?.resourceLimits?.checkInterval ?? 5000,
+        }
+      : config.moduleSystem?.resourceLimits,
+    operationTimeout: isProduction
+      ? (config.moduleSystem?.operationTimeout ?? 120000)
+      : config.moduleSystem?.operationTimeout,
   });
+}
+
+/**
+ * Install signal handlers for graceful shutdown
+ * Ensures proper cleanup on SIGTERM, SIGINT, SIGHUP
+ */
+async function installSignalHandlers(moduleSystem: ModuleSystem): Promise<void> {
+  const { SignalHandler } = await import('../module-system');
+  const signalHandler = new SignalHandler({
+    shutdownTimeout: 30000,
+  });
+
+  // Register module system shutdown
+  signalHandler.register(async () => {
+    await moduleSystem.shutdown();
+  });
+
+  signalHandler.install();
 }
 
 function createBundleOptions(
@@ -115,14 +210,23 @@ function createBundleOptions(
   config: SomonConfig,
   _baseDir: string
 ): ModuleBundleOptions {
+  const formatValue = options.format ?? config.bundle?.format ?? 'commonjs';
+  const requestedFormat = typeof formatValue === 'string' ? formatValue.toLowerCase() : 'commonjs';
+
+  if (requestedFormat !== 'commonjs') {
+    throw new Error(
+      `SomonScript currently supports only the 'commonjs' bundle format. Received '${requestedFormat}'.`
+    );
+  }
+
   return {
     entryPoint: path.resolve(input),
     outputPath: options.output ?? config.bundle?.output,
-    format: (options.format ?? config.bundle?.format ?? 'commonjs') as 'commonjs' | 'esm' | 'umd',
+    format: 'commonjs',
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+    inlineSources: options.inlineSources ?? config.bundle?.inlineSources,
     externals: options.externals ? options.externals.split(',') : config.bundle?.externals,
-    force: options.force ?? config.bundle?.force,
   };
 }
 
@@ -132,16 +236,20 @@ async function performBundling(
   input: string
 ): Promise<void> {
   console.log(`📦 Bundling ${input}...`);
-
-  if (bundleOptions.format !== 'commonjs') {
-    console.warn('Warning: ESM/UMD formats are experimental; prefer commonjs for execution.');
-  }
-
   const bundle = await moduleSystem.bundle(bundleOptions);
   const outputPath = getBundleOutputPath(bundleOptions, input);
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, bundle);
+
+  let outputCode = bundle.code;
+  if (bundle.map) {
+    const mapPath = `${outputPath}.map`;
+    fs.writeFileSync(mapPath, bundle.map, 'utf8');
+    outputCode = `${outputCode}\n//# sourceMappingURL=${path.basename(mapPath)}`;
+    console.log(`🗺️ Source map created: ${mapPath}`);
+  }
+
+  fs.writeFileSync(outputPath, outputCode, 'utf8');
 
   console.log(`✅ Bundle created: ${outputPath}`);
 
@@ -170,6 +278,7 @@ export interface CompileOptions {
   outDir?: string;
   watch?: boolean;
   compileOnSave?: boolean;
+  production?: boolean;
 }
 
 function mergeOptions(input: string, options: CompileOptions): CompileOptions {
@@ -230,6 +339,37 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
   }
 }
 
+function resolveForwardedArgv(command: Command, input: string): string[] {
+  const parentArgs = command.parent?.args ?? [];
+  return parentArgs.length > 0 ? [...parentArgs] : [command.name(), input];
+}
+
+function createRunOutputPath(input: string, sourceDir: string): string {
+  const baseName = path.basename(input);
+  const withoutExtension = baseName.includes('.') ? baseName.replace(/\.[^.]+$/, '') : baseName;
+  const safeBase = withoutExtension || 'somon-script';
+  const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  return path.join(sourceDir, `${safeBase}.somon-run-${uniqueSuffix}.js`);
+}
+
+interface ExecuteOptions {
+  cwd?: string;
+}
+
+export const cliRuntime = {
+  executeCompiledFile(
+    filePath: string,
+    forwardedArgv: string[] = [],
+    options: ExecuteOptions = {}
+  ): ReturnType<typeof spawnSync> {
+    return spawnSync(process.execPath, [filePath, ...forwardedArgv], {
+      stdio: 'inherit',
+      env: process.env,
+      cwd: options.cwd,
+    });
+  },
+};
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -254,12 +394,49 @@ export function createProgram(): Command {
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .option('-w, --watch', 'Recompile on file changes')
+    .option('--production', 'Enable production mode with strict validation')
     .action((input: string, options: CompileOptions): void => {
       try {
-        const merged = mergeOptions(input, options);
-        const compileOnce = (): void => {
+        let merged: CompileOptions;
+        try {
+          merged = mergeOptions(input, options);
+        } catch (error) {
+          handleCliFailure(error, 'Error:');
+          return;
+        }
+
+        // Validate production environment if --production flag is set
+        if (merged.production || process.env.NODE_ENV === 'production') {
+          const baseDir = path.dirname(path.resolve(input));
+          const outputFile =
+            merged.output ||
+            (merged.outDir
+              ? path.join(
+                  path.resolve(baseDir, merged.outDir),
+                  path.basename(input).replace(/\.som$/, '.js')
+                )
+              : input.replace(/\.som$/, '.js'));
+
+          try {
+            validateProductionEnvironment(outputFile, [input]);
+          } catch (error) {
+            handleCliFailure(error, 'Production validation failed:');
+            return;
+          }
+        }
+
+        const shouldWatch = !!(merged.watch || merged.compileOnSave);
+
+        const compileOnce = (): boolean => {
+          try {
+            merged = mergeOptions(input, options);
+          } catch (error) {
+            handleCliFailure(error, 'Error:');
+            return false;
+          }
+
           const result = compileFile(input, merged);
-          if (result.errors.length > 0) return;
+          if (result.errors.length > 0) return false;
 
           const baseDir = path.dirname(path.resolve(input));
           const outputFile =
@@ -279,23 +456,112 @@ export function createProgram(): Command {
             fs.writeFileSync(sourceMapFile, result.sourceMap);
             console.log(`Generated source map: '${sourceMapFile}'`);
           }
+
+          return true;
         };
 
-        compileOnce();
+        const initialSuccess = compileOnce();
+        if (!initialSuccess && !shouldWatch) {
+          return;
+        }
 
-        if ((merged.watch || merged.compileOnSave) && process.env.NODE_ENV !== 'test') {
+        if (shouldWatch && process.env.NODE_ENV !== 'test') {
           console.log(`Watching '${input}' for changes...`);
-          fs.watch(input, { persistent: true }, () => {
-            console.log(`Recompiling '${input}'...`);
-            compileOnce();
+          const absoluteInput = path.resolve(input);
+          const watchTargets = new Set<string>([
+            absoluteInput,
+            path.resolve(path.dirname(absoluteInput), 'somon.config.json'),
+          ]);
+
+          const watcher = chokidar.watch(Array.from(watchTargets), {
+            persistent: true,
+            ignoreInitial: true,
+            awaitWriteFinish: {
+              stabilityThreshold: 150,
+              pollInterval: 20,
+            },
           });
-        } else if (merged.watch || merged.compileOnSave) {
+
+          let watcherClosed = false;
+
+          // Install signal handlers for graceful shutdown in watch mode
+          const gracefulShutdown = async (signal: string) => {
+            if (!watcherClosed) {
+              console.log(`\nReceived ${signal}, stopping watcher...`);
+              watcherClosed = true;
+              await watcher.close();
+              process.exit(0);
+            }
+          };
+
+          process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+          process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+          process.on('SIGHUP', () => void gracefulShutdown('SIGHUP'));
+
+          const handleFileEvent = (
+            eventType: 'add' | 'change' | 'unlink',
+            changedPath: string
+          ): void => {
+            const normalizedPath = path.resolve(changedPath);
+
+            if (normalizedPath === absoluteInput) {
+              if (eventType === 'unlink') {
+                console.warn(`Source file '${input}' was removed. Waiting for it to reappear...`);
+                return;
+              }
+              console.log(`Recompiling '${input}'...`);
+              compileOnce();
+              return;
+            }
+
+            if (eventType === 'unlink') {
+              console.warn(
+                `Configuration file '${path.basename(normalizedPath)}' was removed. Using previous options.`
+              );
+              return;
+            }
+
+            console.log(
+              `Configuration change detected in '${path.basename(normalizedPath)}'. Recompiling '${input}'...`
+            );
+            compileOnce();
+          };
+
+          watcher
+            .on('add', (changedPath: string) => handleFileEvent('add', changedPath))
+            .on('change', (changedPath: string) => handleFileEvent('change', changedPath))
+            .on('unlink', (changedPath: string) => handleFileEvent('unlink', changedPath))
+            .on('error', (error: unknown) => {
+              console.error('Watch error:', error instanceof Error ? error.message : String(error));
+            });
+
+          const cleanupWatcher = (): void => {
+            if (watcherClosed) return;
+            watcherClosed = true;
+            watcher.close().catch((error: unknown) => {
+              console.error(
+                'Failed to close watcher:',
+                error instanceof Error ? error.message : String(error)
+              );
+            });
+          };
+
+          const registerSignalHandler = (signal: 'SIGINT' | 'SIGTERM'): void => {
+            process.once(signal, () => {
+              cleanupWatcher();
+              process.exit(process.exitCode ?? 0);
+            });
+          };
+
+          registerSignalHandler('SIGINT');
+          registerSignalHandler('SIGTERM');
+          process.once('exit', cleanupWatcher);
+        } else if (shouldWatch) {
           // In test environment, just log the message without actually watching
           console.log(`Watching '${input}' for changes...`);
         }
       } catch (error) {
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exitCode = 1;
+        handleCliFailure(error, 'Error:');
         return;
       }
     });
@@ -313,18 +579,68 @@ export function createProgram(): Command {
     .option('--no-minify', 'Disable minification')
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
-    .action((input: string, options: CompileOptions): void => {
+    .option('--production', 'Enable production mode with strict validation')
+    .action((input: string, options: CompileOptions, command: Command): void => {
+      const cleanupTargets: string[] = [];
       try {
         const merged = mergeOptions(input, options);
+
+        // Validate production environment if --production flag is set
+        if (merged.production || process.env.NODE_ENV === 'production') {
+          const sourceDir = path.dirname(path.resolve(input));
+          const compiledFilePath = createRunOutputPath(input, sourceDir);
+
+          try {
+            validateProductionEnvironment(compiledFilePath, [input]);
+          } catch (error) {
+            handleCliFailure(error, 'Production validation failed:');
+            return;
+          }
+        }
+
         const result = compileFile(input, merged);
         if (result.errors.length > 0) return;
 
-        // eslint-disable-next-line no-eval
-        eval(result.code);
+        const sourceDir = path.dirname(path.resolve(input));
+        const compiledFilePath = createRunOutputPath(input, sourceDir);
+        fs.writeFileSync(compiledFilePath, result.code, 'utf8');
+        cleanupTargets.push(compiledFilePath);
+
+        if (merged.sourceMap && result.sourceMap) {
+          const mapPath = `${compiledFilePath}.map`;
+          fs.writeFileSync(mapPath, result.sourceMap, 'utf8');
+          cleanupTargets.push(mapPath);
+        }
+
+        const child = cliRuntime.executeCompiledFile(
+          compiledFilePath,
+          resolveForwardedArgv(command, input),
+          { cwd: sourceDir }
+        );
+
+        if (child.error) {
+          console.error('Failed to execute Node:', child.error.message ?? child.error);
+          process.exitCode = 1;
+        } else if (typeof child.status === 'number') {
+          process.exitCode = child.status;
+        } else if (typeof child.signal === 'string') {
+          console.error(`Process terminated with signal ${child.signal}`);
+          process.exitCode = 1;
+        }
       } catch (error) {
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exitCode = 1;
+        handleCliFailure(error, 'Error:');
         return;
+      } finally {
+        for (const target of cleanupTargets) {
+          try {
+            fs.rmSync(target, { force: true });
+          } catch (cleanupError) {
+            console.warn(
+              'Warning: unable to clean temporary files:',
+              cleanupError instanceof Error ? cleanupError.message : cleanupError
+            );
+          }
+        }
       }
     });
 
@@ -356,7 +672,7 @@ export function createProgram(): Command {
             dev: 'somon run src/main.som',
           },
           devDependencies: {
-            'somon-script': '^0.2.0',
+            [pkg.name]: `^${pkg.version}`,
           },
         };
 
@@ -418,11 +734,12 @@ export function createProgram(): Command {
     .usage('[input] [options]')
     .argument('<input>', 'Entry point file')
     .option('-o, --output <file>', 'Output file path')
-    .option('-f, --format <format>', 'Bundle format (commonjs, esm, umd)', 'commonjs')
+    .option('-f, --format <format>', "Bundle format (only 'commonjs' is supported)", 'commonjs')
     .option('--minify', 'Minify the output')
     .option('--source-map', 'Generate source maps')
+    .option('--inline-sources', 'Inline original sources into emitted source maps')
     .option('--externals <modules>', 'External modules (comma-separated)')
-    .option('--force', 'Allow experimental formats (esm/umd)')
+    .option('--production', 'Enable production mode with strict validation')
     .action(async (input: string, options: BundleOptions) => {
       await executeBundleCommand(input, options);
     });
@@ -440,16 +757,13 @@ export function createProgram(): Command {
     .action(
       async (input: string, options: { graph?: boolean; stats?: boolean; circular?: boolean }) => {
         try {
-          const { ModuleSystem } = await import('../module-system');
-
-          const moduleSystem = new ModuleSystem({
-            resolution: {
-              baseUrl: path.dirname(path.resolve(input)),
-            },
-          });
+          const baseDir = path.dirname(path.resolve(input));
+          const config = loadConfig(baseDir);
+          const moduleSystem = await createModuleSystem(baseDir, config, false);
 
           console.log(`🔍 Analyzing ${input}...`);
-          await moduleSystem.loadModule(path.resolve(input), process.cwd());
+          const resolvedInput = path.resolve(input);
+          await moduleSystem.loadModule(resolvedInput, path.dirname(resolvedInput));
 
           if (options.stats) {
             const stats = moduleSystem.getStatistics();

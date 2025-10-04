@@ -19,6 +19,16 @@ export interface SomonConfig {
   bundle?: BundleConfig;
 }
 
+export class ConfigError extends Error {
+  public readonly details: ConfigValidationError[];
+
+  constructor(message: string, details: ConfigValidationError[] = []) {
+    super(message);
+    this.name = 'ConfigError';
+    this.details = details;
+  }
+}
+
 export interface ConfigValidationError {
   path: string;
   message: string;
@@ -113,14 +123,28 @@ export interface ModuleSystemConfig {
   };
   // Optional: delegate to compiler options used during module compilation if needed
   compilation?: CompilerOptions;
+  // Production features
+  metrics?: boolean;
+  circuitBreakers?: boolean;
+  logger?: boolean;
+  managementServer?: boolean;
+  managementPort?: number;
+  // Production resource management
+  resourceLimits?: {
+    maxMemoryBytes?: number;
+    maxFileHandles?: number;
+    maxCachedModules?: number;
+    checkInterval?: number;
+  };
+  operationTimeout?: number;
 }
 
 export interface BundleConfig {
-  format?: 'commonjs' | 'esm' | 'umd';
+  format?: 'commonjs';
   minify?: boolean;
   sourceMaps?: boolean;
+  inlineSources?: boolean;
   externals?: string[];
-  force?: boolean;
   output?: string;
 }
 
@@ -150,7 +174,16 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
 
 function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
-  const knownTop = ['resolution', 'loading', 'compilation'];
+  const knownTop = [
+    'resolution',
+    'loading',
+    'compilation',
+    'metrics',
+    'circuitBreakers',
+    'logger',
+    'managementServer',
+    'managementPort',
+  ];
 
   for (const key of Object.keys(config)) {
     if (!knownTop.includes(key)) {
@@ -297,8 +330,13 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 }
 
 function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
-  if (format !== undefined && !['commonjs', 'esm', 'umd'].includes(format as string)) {
-    return [{ path: `${basePath}.format`, message: 'must be one of: commonjs, esm, umd' }];
+  if (format !== undefined && format !== 'commonjs') {
+    return [
+      {
+        path: `${basePath}.format`,
+        message: "SomonScript currently supports only the 'commonjs' bundle format",
+      },
+    ];
   }
   return [];
 }
@@ -315,8 +353,8 @@ function validateBundleBooleanProps(
   if (obj.sourceMaps !== undefined && typeof obj.sourceMaps !== 'boolean') {
     errors.push({ path: `${basePath}.sourceMaps`, message: 'must be a boolean' });
   }
-  if (obj.force !== undefined && typeof obj.force !== 'boolean') {
-    errors.push({ path: `${basePath}.force`, message: 'must be a boolean' });
+  if (obj.inlineSources !== undefined && typeof obj.inlineSources !== 'boolean') {
+    errors.push({ path: `${basePath}.inlineSources`, message: 'must be a boolean' });
   }
 
   return errors;
@@ -373,28 +411,28 @@ function validateConfig(config: unknown): ConfigValidationError[] {
 }
 
 function loadConfigFromFile(configPath: string): SomonConfig {
+  let fileContents: string;
   try {
-    const json = fs.readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(json);
-
-    // Validate the configuration
-    const validationErrors = validateConfig(config);
-    if (validationErrors.length > 0) {
-      console.warn(`Warning: Invalid configuration in ${configPath}:`);
-      for (const error of validationErrors) {
-        console.warn(`  ${error.path}: ${error.message}`);
-      }
-      // Return empty config on validation errors to use defaults
-      return {};
-    }
-
-    return config as SomonConfig;
+    fileContents = fs.readFileSync(configPath, 'utf-8');
   } catch (error) {
-    console.warn(
-      `Warning: Failed to parse config file ${configPath}: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-    return {};
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Failed to read config file ${configPath}: ${reason}`);
   }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fileContents);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ConfigError(`Failed to parse config file ${configPath}: ${reason}`);
+  }
+
+  const validationErrors = validateConfig(parsed);
+  if (validationErrors.length > 0) {
+    throw new ConfigError(`Invalid configuration in ${configPath}`, validationErrors);
+  }
+
+  return parsed as SomonConfig;
 }
 
 export function loadConfig(startPath: string): SomonConfig {

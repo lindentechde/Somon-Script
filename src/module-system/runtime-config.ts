@@ -183,6 +183,9 @@ export class ManagementServer {
   private readonly circuitBreakers: CircuitBreakerManager;
   private readonly configManager: RuntimeConfigManager;
   private readonly logger = LoggerFactory.getLogger('management-server');
+  private readonly activeConnections = new Set<{ destroy: () => void }>();
+  private isShuttingDown = false;
+  private readonly SHUTDOWN_TIMEOUT_MS = 30000; // 30 seconds
 
   constructor(
     metrics: ModuleSystemMetrics,
@@ -201,6 +204,15 @@ export class ManagementServer {
     return new Promise((resolve, reject) => {
       this.server = http.createServer(this.handleRequest.bind(this));
 
+      // Track socket connections
+      this.server.on('connection', socket => {
+        this.activeConnections.add(socket);
+
+        socket.on('close', () => {
+          this.activeConnections.delete(socket);
+        });
+      });
+
       this.server.on('error', error => {
         this.logger.error('Management server error', error);
         reject(error);
@@ -217,22 +229,95 @@ export class ManagementServer {
   }
 
   /**
-   * Stop the management server
+   * Stop the management server with graceful shutdown
    */
-  stop(): Promise<void> {
-    return new Promise(resolve => {
-      if (this.server) {
-        this.server.close(() => {
-          this.logger.info('Management server stopped');
-          resolve();
-        });
-      } else {
-        resolve();
-      }
+  async stop(): Promise<void> {
+    if (!this.server || this.isShuttingDown) {
+      return;
+    }
+
+    this.logger.info('Initiating graceful shutdown', {
+      activeConnections: this.activeConnections.size,
     });
+
+    // Mark as shutting down to reject new requests
+    this.isShuttingDown = true;
+
+    // Stop accepting new connections
+    await new Promise<void>((resolve, reject) => {
+      this.server!.close(err => {
+        if (err) {
+          this.logger.warn('Error closing server', { error: err.message });
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    // Wait for active connections to drain with timeout
+    const startTime = Date.now();
+    const drainPromise = this.drainConnections();
+    const timeoutPromise = new Promise<void>(resolve => {
+      setTimeout(() => {
+        if (this.activeConnections.size > 0) {
+          this.logger.warn('Shutdown timeout reached, forcing connection closure', {
+            remainingConnections: this.activeConnections.size,
+            elapsed: Date.now() - startTime,
+          });
+          this.forceCloseConnections();
+        }
+        resolve();
+      }, this.SHUTDOWN_TIMEOUT_MS);
+    });
+
+    try {
+      await Promise.race([drainPromise, timeoutPromise]);
+      this.logger.info('Management server stopped gracefully', {
+        elapsed: Date.now() - startTime,
+      });
+    } catch (error) {
+      this.logger.error('Error during shutdown', error as Error);
+      // Force close any remaining connections
+      this.forceCloseConnections();
+      throw error;
+    }
+  }
+
+  /**
+   * Wait for all active connections to finish
+   */
+  private async drainConnections(): Promise<void> {
+    const checkInterval = 100; // Check every 100ms
+
+    while (this.activeConnections.size > 0) {
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+  }
+
+  /**
+   * Force close all active connections
+   */
+  private forceCloseConnections(): void {
+    for (const connection of this.activeConnections) {
+      try {
+        connection.destroy();
+      } catch (error) {
+        this.logger.warn('Error destroying connection', {
+          error: (error as Error).message,
+        });
+      }
+    }
+    this.activeConnections.clear();
   }
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    // Reject new requests during shutdown
+    if (this.isShuttingDown) {
+      this.sendErrorResponse(res, 503, 'Server is shutting down');
+      return;
+    }
+
     const parsedUrl = url.parse(req.url || '', true);
     const pathname = parsedUrl.pathname || '';
     const method = req.method || 'GET';

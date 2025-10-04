@@ -1,6 +1,11 @@
 /**
  * Circuit breaker implementation for handling external module failures
  * Prevents cascading failures and provides graceful degradation
+ *
+ * Resource Management:
+ * - Tracks all active timers for proper cleanup
+ * - Provides shutdown() method to cancel in-flight operations
+ * - Prevents timer leaks in retry operations
  */
 
 export interface CircuitBreakerOptions {
@@ -37,6 +42,9 @@ export class CircuitBreaker {
   private state: CircuitBreakerState;
   private readonly options: Required<CircuitBreakerOptions>;
   private readonly failureTimes: number[] = [];
+  private readonly activeTimers = new Set<ReturnType<typeof setTimeout>>();
+  private readonly pendingRejects = new Set<(_reason: Error) => void>();
+  private isShuttingDown = false;
 
   constructor(options: Partial<CircuitBreakerOptions> = {}) {
     this.options = {
@@ -63,6 +71,10 @@ export class CircuitBreaker {
    * Execute an operation with circuit breaker protection
    */
   async execute<T>(operation: () => Promise<T>, fallback?: () => Promise<T>): Promise<T> {
+    if (this.isShuttingDown) {
+      throw new Error('Circuit breaker is shutting down');
+    }
+
     this.state.totalRequests++;
 
     if (this.isOpen()) {
@@ -86,11 +98,16 @@ export class CircuitBreaker {
   /**
    * Execute with retry logic
    */
+  // eslint-disable-next-line complexity
   async executeWithRetry<T>(
     operation: () => Promise<T>,
     retryOptions: Partial<RetryOptions> = {},
     fallback?: () => Promise<T>
   ): Promise<T> {
+    if (this.isShuttingDown) {
+      throw new Error('Circuit breaker is shutting down');
+    }
+
     const options: RetryOptions = {
       maxRetries: retryOptions.maxRetries ?? 3,
       initialDelay: retryOptions.initialDelay ?? 1000,
@@ -102,10 +119,19 @@ export class CircuitBreaker {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
+      if (this.isShuttingDown) {
+        throw new Error('Circuit breaker is shutting down');
+      }
+
       try {
         return await this.execute(operation, fallback);
       } catch (error) {
         lastError = error as Error;
+
+        // If shutting down, fail immediately
+        if (this.isShuttingDown) {
+          throw new Error('Circuit breaker is shutting down');
+        }
 
         if (attempt === options.maxRetries) {
           break; // No more retries
@@ -123,6 +149,7 @@ export class CircuitBreaker {
           delay *= 0.5 + Math.random() * 0.5;
         }
 
+        // Sleep was interrupted by shutdown if error is thrown
         await this.sleep(delay);
       }
     }
@@ -234,7 +261,23 @@ export class CircuitBreaker {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve, reject) => {
+      if (this.isShuttingDown) {
+        reject(new Error('Circuit breaker is shutting down'));
+        return;
+      }
+
+      // Track this reject function so we can call it on shutdown
+      this.pendingRejects.add(reject);
+
+      const timer = setTimeout(() => {
+        this.activeTimers.delete(timer);
+        this.pendingRejects.delete(reject);
+        resolve();
+      }, ms);
+
+      this.activeTimers.add(timer);
+    });
   }
 
   /**
@@ -299,6 +342,41 @@ export class CircuitBreaker {
       nextRetry:
         this.state.state === 'open' ? new Date(this.state.nextRetryTime).toISOString() : undefined,
     };
+  }
+
+  /**
+   * Shutdown the circuit breaker and cleanup all resources
+   * - Cancels all active timers
+   * - Rejects in-flight sleep operations
+   * - Prevents new operations from starting
+   */
+  shutdown(): void {
+    // Already shut down, nothing to do
+    if (this.isShuttingDown) {
+      return;
+    }
+
+    this.isShuttingDown = true;
+
+    // Reject all pending sleep promises
+    const shutdownError = new Error('Circuit breaker is shutting down');
+    for (const reject of this.pendingRejects) {
+      reject(shutdownError);
+    }
+    this.pendingRejects.clear();
+
+    // Clear all active timers
+    for (const timer of this.activeTimers) {
+      clearTimeout(timer);
+    }
+    this.activeTimers.clear();
+  }
+
+  /**
+   * Check if circuit breaker is shut down
+   */
+  isShutdown(): boolean {
+    return this.isShuttingDown;
   }
 }
 
@@ -413,5 +491,30 @@ export class CircuitBreakerManager {
       healthyBreakers: healthyCount,
       openBreakers: openCount,
     };
+  }
+
+  /**
+   * Shutdown all circuit breakers and cleanup resources
+   * - Calls shutdown() on all managed circuit breakers
+   * - Clears the breaker map
+   * - Prevents resource leaks from active timers
+   */
+  shutdown(): void {
+    for (const breaker of this.breakers.values()) {
+      breaker.shutdown();
+    }
+    this.breakers.clear();
+  }
+
+  /**
+   * Get count of active timers across all breakers (for monitoring)
+   */
+  getActiveTimerCount(): number {
+    let count = 0;
+    for (const breaker of this.breakers.values()) {
+      // @ts-expect-error - accessing private property for monitoring
+      count += breaker.activeTimers.size;
+    }
+    return count;
   }
 }

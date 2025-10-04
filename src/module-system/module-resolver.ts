@@ -21,8 +21,14 @@ export class ModuleResolver {
   private options: Required<ModuleResolutionOptions>;
 
   constructor(options: ModuleResolutionOptions = {}) {
+    if (!options.baseUrl) {
+      throw new Error(
+        'ModuleResolver requires explicit baseUrl - process.cwd() is not allowed in production. ' +
+          'Pass the base directory explicitly to ensure deterministic module resolution.'
+      );
+    }
     this.options = {
-      baseUrl: options.baseUrl || process.cwd(),
+      baseUrl: options.baseUrl,
       paths: options.paths || {},
       extensions: options.extensions || ['.som', '.js', '.json'],
       moduleDirectories: options.moduleDirectories || ['node_modules'],

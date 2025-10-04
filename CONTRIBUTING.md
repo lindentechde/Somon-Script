@@ -1,70 +1,46 @@
-# Community Participation
+# Contributing to SomonScript
 
-Thanks for your interest in SomonScript!
+Thanks for your interest in improving SomonScript! We welcome issues, pull
+requests, documentation updates, and example contributions from the community.
 
-**Important:** SomonScript operates under a proprietary license. Please read the
-[LICENSE](LICENSE) and [AUTHORS.md](AUTHORS.md) files to understand permitted
-uses and restrictions.
+## 🧾 License and Contributor Terms
 
-## 🚫 What Is Not Permitted
+SomonScript is released under the [MIT License](LICENSE). By submitting a
+contribution, you agree that it will be licensed under the same terms. Please do
+not include third-party code or assets unless they are also compatible with the
+MIT License and you have permission to share them.
 
-Due to our proprietary license, the following activities are **prohibited**:
+## 🛠️ How to Contribute
 
-- **Forking** or redistributing the SomonScript codebase
-- **Modifying** the SomonScript source code or creating derivative works
-- **Contributing code changes** or pull requests to the repository
-- **Creating competing** programming languages based on SomonScript
-- **Reverse engineering** or attempting to alter the compiler
+1. Fork the repository and create a feature branch.
+2. Make your changes following the project style and type-safety guidelines.
+3. Add or update tests and documentation as needed.
+4. Run the project checks locally (see below).
+5. Submit a pull request that explains your changes and the motivation behind
+   them.
 
-## ✅ How You Can Participate
+If you are unsure whether a change is wanted, feel free to open a discussion or
+issue first so we can collaborate on the direction.
 
-While direct code contributions are not accepted, you can engage with the
-SomonScript community through:
+## ✅ Project Standards
 
-### **Bug Reports & Feature Requests**
+We use automated checks to keep the codebase healthy:
 
-- 🐛 **Report bugs** via
-  [GitHub Issues](https://github.com/lindentechde/Somon-Script/issues)
-- 💡 **Suggest improvements** that align with the project roadmap
-- 📋 **Request features** through issue discussions
+- `npm run lint`
+- `npm test`
+- `npm run audit:examples`
 
-### **Community Support**
+Pull requests should pass all three commands. Conventional Commits are expected
+for commit messages, and new code should match the existing ESLint and Prettier
+configuration. Production source files (`src/`) should avoid `any` types; prefer
+explicit typing or type guards instead.
 
-- 💬 **Share usage experiences** and provide feedback
-- 🤝 **Help other users** with questions and best practices
-- 📚 **Create tutorials** and usage examples (subject to approval)
-- 🗣️ **Participate in discussions** about SomonScript usage
+## 📣 Community Expectations
 
-### **Documentation & Examples**
+We strive to foster a respectful, inclusive environment. Treat other community
+members with empathy and patience, and assume good intent during discussions.
 
-- 📖 **Suggest documentation improvements** (subject to approval)
-- 🎯 **Share usage examples** and tutorials
-- 🌍 **Contribute translations** of documentation
+## 📫 Questions or Support
 
-## 📞 Contact
-
-For questions, suggestions, or business inquiries, please contact: **LindenTech
-IT Consulting** at **info@lindentech.de**
-
-## 📋 Development Standards (Internal Use)
-
-_The following information is provided for transparency about our internal
-development standards:_
-
-### Type Safety Policy
-
-- Production source (`src/`) must not use `as any` or explicit `any` types
-- Tests (`tests/`) may use `any` sparingly for constructing test scenarios
-- Prefer type guards over `any` where practical
-
-### Code Quality
-
-- All code must pass `npm run lint`
-- Test suite must pass: `npm test`
-- Examples must be validated: `npm run audit:examples`
-- Follow Conventional Commits for commit messages
-
----
-
-_For complete licensing terms and ownership information, see [LICENSE](LICENSE)
-and [AUTHORS.md](AUTHORS.md)._
+If you run into trouble or need clarification, open a GitHub issue or reach us
+at **info@lindentech.de**. We are happy to help!

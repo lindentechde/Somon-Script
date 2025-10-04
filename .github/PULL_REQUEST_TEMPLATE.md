@@ -1,40 +1,82 @@
-# ⚠️ Pull Requests Not Accepted
+# 🎉 Pull Request
 
-## Proprietary Software Notice
+## Description
 
-**SomonScript is proprietary software** owned by LindenTech IT Consulting.
+<!-- Provide a clear and concise description of your changes -->
 
-### 🚫 **Code Contributions Are Not Permitted**
+## Type of Change
 
-This repository **does not accept pull requests** due to our proprietary license
-terms. The following activities are prohibited:
+<!-- Please check the relevant option(s) -->
 
-- ❌ **Forking** or redistributing the SomonScript codebase
-- ❌ **Modifying** the SomonScript source code or creating derivative works
-- ❌ **Contributing code changes** or pull requests to the repository
-- ❌ **Creating competing** programming languages based on SomonScript
+- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
+- [ ] ✨ New feature (non-breaking change which adds functionality)
+- [ ] 💥 Breaking change (fix or feature that would cause existing functionality
+      to not work as expected)
+- [ ] 📚 Documentation update
+- [ ] 🔧 Configuration/build changes
+- [ ] ✅ Test improvements
+- [ ] ♻️ Code refactoring (no functional changes)
 
-### ✅ **How to Report Issues Instead**
+## Related Issue
 
-If you've encountered a bug or have a feature suggestion, please:
+<!-- Link to the issue this PR addresses, if applicable -->
 
-1. **🐛 Report bugs** via
-   [GitHub Issues](https://github.com/lindentechde/Somon-Script/issues)
-2. **💡 Request features** through issue discussions
-3. **📞 Contact us** at **info@lindentech.de** for business inquiries
+Fixes #(issue number)
 
-### 📋 **Legal Information**
+## Changes Made
 
-- **License:** Proprietary (see [LICENSE](../LICENSE) file)
-- **Owner:** LindenTech IT Consulting
-- **Contact:** info@lindentech.de
+<!-- List the specific changes you made -->
 
-For complete licensing terms and permitted uses, please review:
+-
+-
+-
 
-- [LICENSE](../LICENSE) - Complete legal terms
-- [AUTHORS.md](../AUTHORS.md) - Ownership and participation guidelines
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Community engagement guidelines
+## Testing
+
+<!-- Describe how you tested your changes -->
+
+- [ ] All existing tests pass (`npm test`)
+- [ ] Added new tests for the changes
+- [ ] Tested manually with examples
+- [ ] Linting passes (`npm run lint`)
+- [ ] Type checking passes (`npm run type-check`)
+
+## Checklist
+
+<!-- Please check all applicable items -->
+
+- [ ] My code follows the project's code style guidelines
+- [ ] I have performed a self-review of my own code
+- [ ] I have commented my code, particularly in hard-to-understand areas
+- [ ] I have made corresponding changes to the documentation
+- [ ] My changes generate no new warnings or errors
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] Any dependent changes have been merged and published
+
+## Additional Context
+
+<!-- Add any other context, screenshots, or information about the PR here -->
 
 ---
 
-**Thank you for your understanding and interest in SomonScript!**
+## 📋 License Information
+
+**SomonScript** is open source software licensed under the **MIT License**.
+
+- **License:** MIT (see [LICENSE](../LICENSE) file)
+- **Copyright:** © 2025 LindenTech IT Consulting
+- **Contact:** info@lindentech.de
+
+By submitting this pull request, you agree that your contributions will be
+licensed under the MIT License.
+
+For contribution guidelines, please review:
+
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Community engagement and contribution
+  guidelines
+- [AUTHORS.md](../AUTHORS.md) - Project ownership and contributors
+
+---
+
+**Thank you for contributing to SomonScript! 🚀**

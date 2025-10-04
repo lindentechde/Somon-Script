@@ -378,9 +378,11 @@ somon run <file> [options]
 
 # Module operations
 somon bundle <entry> [options]
-  --format         Output format (commonjs, esm, umd)
+  --format         Output format (only 'commonjs' is supported)
   --output, -o     Bundle output path
   --minify         Minify bundle
+  --source-map     Generate source maps
+  --inline-sources Inline original sources into emitted source maps
 
 # Information
 somon --version    Show version

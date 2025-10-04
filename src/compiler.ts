@@ -165,12 +165,18 @@ function minifyCode(
   // Lazy-load minify preset to avoid hard dependency at runtime
   let presetModule: unknown = null;
   try {
+    try {
+      const resolvedPreset = require.resolve('babel-preset-minify');
+      delete require.cache[resolvedPreset];
+    } catch {
+      // ignore - module is either not installed or already absent from the cache
+    }
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     presetModule = require('babel-preset-minify');
   } catch {
-    // Preset not available; apply a conservative whitespace trim as fallback
-    const basic = code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
-    return { code: basic, map };
+    throw new Error(
+      "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable --minify."
+    );
   }
   // Safely coerce the dynamically required preset into a PluginItem if possible.
   // babel-preset-minify exports either a function or an object acceptable as a preset.

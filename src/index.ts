@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2025 LindenTech IT Consulting. All Rights Reserved.
+ * SomonScript
+ * Copyright (c) 2025 LindenTech IT Consulting
  *
- * Original Creator: Bakhtier Gaibulloev
- *
- * This software is proprietary and confidential. Unauthorized copying, modification,
- * distribution, or use of this software is strictly prohibited. See LICENSE file for terms.
+ * Licensed under the MIT License. See the LICENSE file for details.
  */
 
 /**

@@ -10,11 +10,11 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Test Coverage](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
 [![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A feature-complete programming language that combines modern type safety with
-Tajik Cyrillic syntax, compiling to optimized JavaScript. Currently in beta with
-excellent test coverage and comprehensive language features.
+Tajik Cyrillic syntax, compiling to optimized JavaScript. Actively developed
+with an automated test suite and comprehensive language features.
 
 ## 🗣️ **Other Languages**
 
@@ -76,13 +76,18 @@ Advanced static analysis system with TypeScript-level safety features:
 - Generic type parameters
 - Conditional type expressions
 
-### ⚡ **Development Status**
+### ⚡ **Development Snapshot**
 
-- **100% Example Success Rate** - All 39 examples compile and run without errors
-- **98% Test Coverage** - Comprehensive test suite with 326+ test cases
-- **Zero Linting Errors** - Maintained codebase following industry standards
-- **Modern Architecture** - Built with clean architecture design patterns
-- **Beta Quality** - Ready for evaluation and non-critical projects
+- **Automated example audit** – `npm run audit:examples` validates the reference
+  programs on every release.
+- **Extensive test suite** – 300+ tests cover lexing, parsing, type checking,
+  and the CLI. Coverage reports are generated in CI and shared on request.
+- **Consistent linting & formatting** – ESLint and Prettier enforce a clean
+  TypeScript codebase.
+- **Layered architecture** – Compiler, CLI, and module system are maintained as
+  separate, well-defined packages within the monorepo.
+- **Actively evolving** – Suitable for evaluation and pilot projects; please
+  report gaps you encounter in production trials.
 
 ### 🚀 **Developer Experience**
 
@@ -97,7 +102,7 @@ somon run hello.som
 
 ## 🎯 Language Features
 
-### **Core Language** ✅ 100% Complete
+### **Core Language Highlights**
 
 ```som
 // Variables with type inference
@@ -110,7 +115,7 @@ somon run hello.som
 }
 ```
 
-### **Object-Oriented Programming** ✅ 100% Complete
+### **Object-Oriented Programming Toolkit**
 
 ```som
 // Classes with inheritance and polymorphism
@@ -133,7 +138,7 @@ somon run hello.som
 }
 ```
 
-### **Advanced Type System** ✅ 100% Complete
+### **Advanced Type System Features**
 
 ```som
 // Union types for flexible APIs
@@ -159,7 +164,7 @@ somon run hello.som
 тағйирёбанда координата: [рақам, рақам, сатр] = [41.2, 69.1, "Душанбе"];
 ```
 
-### **Modern JavaScript Features** ✅ 100% Complete
+### **Modern JavaScript Interop**
 
 ```som
 // Template literals with interpolation
@@ -204,19 +209,10 @@ somon run hello.som
 
 ### Bundling (Module System)
 
-- CommonJS bundle is recommended for execution. ESM and UMD outputs are
-  experimental.
+- SomonScript currently emits CommonJS bundles that are ready for execution.
 
 ```sh
-somon bundle src/main.som --format commonjs -o dist/bundle.js
-```
-
-Other formats are available, but meant for inspection rather than direct
-execution:
-
-```sh
-somon bundle src/main.som --format esm
-somon bundle src/main.som --format umd
+somon bundle src/main.som -o dist/bundle.js
 ```
 
 The bundler rewrites internal `require()` calls to a module map. When compiling
@@ -224,11 +220,22 @@ SomonScript sources, relative imports may appear as `.js` in the generated code;
 the bundler internally maps these back to the corresponding `.som` modules when
 necessary.
 
+Enable debugger-friendly builds with:
+
+```sh
+somon bundle src/main.som -o dist/bundle.js --source-map
+```
+
+Source maps now reference modules relative to the entry directory to avoid
+leaking absolute paths. Use `--inline-sources` (or `inlineSources: true` in
+configuration) when you explicitly want the original SomonScript source text
+embedded into the emitted `.map` file.
+
 ## Documentation
 
 - Module System guide: `docs/module-system.md`
 
-### **Production-Ready Module System** ✅ 100% Complete
+### **Module System Overview**
 
 SomonScript features a comprehensive module system designed for large-scale
 applications:
@@ -260,8 +267,8 @@ applications:
   `.js` mapping
 - 🔗 **Dependency Management** - Automatic dependency graph construction and
   circular dependency detection
-- 📦 **Bundling Support** - Multiple output formats (CommonJS, ESM, UMD) with
-  minification
+- 📦 **Bundling Support** - CommonJS bundles with optional minification and
+  source maps
 - ⚡ **Performance Optimized** - Module caching and efficient compilation order
 - 🛠️ **CLI Integration** - Built-in commands for bundling, analysis, and
   dependency resolution
@@ -270,7 +277,7 @@ applications:
 
 ```bash
 # Bundle modules into a single file
-somon bundle src/main.som -o dist/app.js --format esm --minify
+somon bundle src/main.som -o dist/app.js --minify
 
 # Analyze module dependencies
 somon module-info src/main.som --graph --stats --circular
@@ -281,15 +288,16 @@ somon resolve "./utils" --from src/main.som
 
 ---
 
-## 📊 Quality Metrics
+## 📊 Quality Checks
 
-| Metric                   | Status       | Details                                             |
-| ------------------------ | ------------ | --------------------------------------------------- |
-| **Example Success Rate** | 100% (32/32) | All provided examples compile and execute perfectly |
-| **Test Coverage**        | 98%+         | 326 test cases covering all compiler phases         |
-| **Linting Errors**       | 0            | Clean, maintainable TypeScript codebase             |
-| **Performance**          | Excellent    | Handles large programs efficiently                  |
-| **Type Safety**          | Advanced     | Union, intersection, tuple, and conditional types   |
+The project ships with automated checks that you can run locally:
+
+| Check                    | Command                  | Purpose                                             |
+| ------------------------ | ------------------------ | --------------------------------------------------- |
+| **Example audit**        | `npm run audit:examples` | Ensures reference programs continue to compile/run  |
+| **Test suite**           | `npm test`               | Exercises compiler, CLI, and runtime behaviour      |
+| **Linting & formatting** | `npm run lint`           | Verifies TypeScript style and static analysis rules |
+| **TypeScript build**     | `npm run build`          | Compiles sources to JavaScript before publishing    |
 
 ---
 
@@ -520,12 +528,10 @@ releases:
 
 ## 📄 License
 
-**Proprietary License** - see [LICENSE](LICENSE) file for details.
-
-SomonScript is proprietary software owned by LindenTech IT Consulting. Usage is
-permitted under the terms specified in the license agreement for personal,
-educational, and commercial purposes, but modification and redistribution of
-source code is prohibited.
+SomonScript is distributed under the **MIT License**. See the [LICENSE](LICENSE)
+file for the full text. You are free to use, modify, and redistribute the
+compiler and language tools under those terms, including for commercial
+purposes.
 
 ---
 
