@@ -138,6 +138,11 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
 
     const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
 
+    // Install signal handlers for graceful shutdown in production
+    if (isProduction) {
+      await installSignalHandlers(moduleSystem);
+    }
+
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
 
     await performBundling(moduleSystem, bundleOptions, input);
@@ -166,7 +171,37 @@ async function createModuleSystem(baseDir: string, config: SomonConfig, isProduc
     logger: isProduction || config.moduleSystem?.logger,
     managementServer: isProduction || config.moduleSystem?.managementServer,
     managementPort: config.moduleSystem?.managementPort,
+    // Production resource limits and timeouts
+    resourceLimits: isProduction
+      ? {
+          maxMemoryBytes: config.moduleSystem?.resourceLimits?.maxMemoryBytes,
+          maxFileHandles: config.moduleSystem?.resourceLimits?.maxFileHandles ?? 1000,
+          maxCachedModules: config.moduleSystem?.resourceLimits?.maxCachedModules ?? 10000,
+          checkInterval: config.moduleSystem?.resourceLimits?.checkInterval ?? 5000,
+        }
+      : config.moduleSystem?.resourceLimits,
+    operationTimeout: isProduction
+      ? (config.moduleSystem?.operationTimeout ?? 120000)
+      : config.moduleSystem?.operationTimeout,
   });
+}
+
+/**
+ * Install signal handlers for graceful shutdown
+ * Ensures proper cleanup on SIGTERM, SIGINT, SIGHUP
+ */
+async function installSignalHandlers(moduleSystem: ModuleSystem): Promise<void> {
+  const { SignalHandler } = await import('../module-system');
+  const signalHandler = new SignalHandler({
+    shutdownTimeout: 30000,
+  });
+
+  // Register module system shutdown
+  signalHandler.register(async () => {
+    await moduleSystem.shutdown();
+  });
+
+  signalHandler.install();
 }
 
 function createBundleOptions(
@@ -449,6 +484,20 @@ export function createProgram(): Command {
 
           let watcherClosed = false;
 
+          // Install signal handlers for graceful shutdown in watch mode
+          const gracefulShutdown = async (signal: string) => {
+            if (!watcherClosed) {
+              console.log(`\nReceived ${signal}, stopping watcher...`);
+              watcherClosed = true;
+              await watcher.close();
+              process.exit(0);
+            }
+          };
+
+          process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
+          process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
+          process.on('SIGHUP', () => void gracefulShutdown('SIGHUP'));
+
           const handleFileEvent = (
             eventType: 'add' | 'change' | 'unlink',
             changedPath: string
@@ -708,16 +757,13 @@ export function createProgram(): Command {
     .action(
       async (input: string, options: { graph?: boolean; stats?: boolean; circular?: boolean }) => {
         try {
-          const { ModuleSystem } = await import('../module-system');
-
-          const moduleSystem = new ModuleSystem({
-            resolution: {
-              baseUrl: path.dirname(path.resolve(input)),
-            },
-          });
+          const baseDir = path.dirname(path.resolve(input));
+          const config = loadConfig(baseDir);
+          const moduleSystem = await createModuleSystem(baseDir, config, false);
 
           console.log(`🔍 Analyzing ${input}...`);
-          await moduleSystem.loadModule(path.resolve(input), process.cwd());
+          const resolvedInput = path.resolve(input);
+          await moduleSystem.loadModule(resolvedInput, path.dirname(resolvedInput));
 
           if (options.stats) {
             const stats = moduleSystem.getStatistics();

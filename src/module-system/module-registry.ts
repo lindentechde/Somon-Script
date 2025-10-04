@@ -1,7 +1,6 @@
 import * as path from 'path';
 import { LoadedModule, ModuleExports } from './module-loader';
 import { Program, ImportDeclaration } from '../types';
-import { ModuleResolver } from './module-resolver';
 
 export interface ModuleMetadata {
   id: string;
@@ -37,7 +36,6 @@ export type DependencyTreeNode =
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleMetadata>();
   private readonly dependencyGraph = new Map<string, DependencyNode>();
-  private readonly resolver = new ModuleResolver();
 
   /**
    * Register a loaded module
@@ -252,23 +250,21 @@ export class ModuleRegistry {
       this.dependencyGraph.set(moduleId, node);
     }
 
-    // Update dependents for dependencies (resolve specifiers to module IDs when possible)
-    for (const dep of dependencies) {
-      try {
-        const resolved = this.resolver.resolve(dep, moduleId);
-        // Ensure dependency node exists
-        if (!this.dependencyGraph.has(resolved.resolvedPath)) {
-          this.dependencyGraph.set(resolved.resolvedPath, {
-            id: resolved.resolvedPath,
-            dependencies: [],
-            dependents: [],
-            level: 0,
-          });
-        }
-        const depNode = this.dependencyGraph.get(resolved.resolvedPath)!;
-        if (!depNode.dependents.includes(moduleId)) depNode.dependents.push(moduleId);
-      } catch {
-        // Ignore unresolved here; validation will report them
+    // Update dependents for dependencies
+    // Dependencies are already resolved to module IDs by the ModuleLoader
+    for (const depId of dependencies) {
+      // Ensure dependency node exists
+      if (!this.dependencyGraph.has(depId)) {
+        this.dependencyGraph.set(depId, {
+          id: depId,
+          dependencies: [],
+          dependents: [],
+          level: 0,
+        });
+      }
+      const depNode = this.dependencyGraph.get(depId)!;
+      if (!depNode.dependents.includes(moduleId)) {
+        depNode.dependents.push(moduleId);
       }
     }
 
@@ -380,23 +376,13 @@ export class ModuleRegistry {
     }
   }
 
-  // Resolve specifier dependencies for a given module ID to registered module IDs
+  // Get resolved dependencies for a given module ID
+  // Dependencies are already resolved to module IDs by ModuleLoader
   private getResolvedDependencies(moduleId: string): string[] {
     const node = this.dependencyGraph.get(moduleId);
     if (!node) return [];
 
-    const deps: string[] = [];
-    for (const depSpec of node.dependencies) {
-      try {
-        const resolved = this.resolver.resolve(depSpec, moduleId);
-        const depId = resolved.resolvedPath;
-        if (this.dependencyGraph.has(depId)) {
-          deps.push(depId);
-        }
-      } catch {
-        // Unresolvable dependency will be caught by validation; ignore for traversal
-      }
-    }
-    return deps;
+    // Filter to only include dependencies that are registered in the graph
+    return node.dependencies.filter(depId => this.dependencyGraph.has(depId));
   }
 }

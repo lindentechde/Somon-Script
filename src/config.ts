@@ -129,6 +129,14 @@ export interface ModuleSystemConfig {
   logger?: boolean;
   managementServer?: boolean;
   managementPort?: number;
+  // Production resource management
+  resourceLimits?: {
+    maxMemoryBytes?: number;
+    maxFileHandles?: number;
+    maxCachedModules?: number;
+    checkInterval?: number;
+  };
+  operationTimeout?: number;
 }
 
 export interface BundleConfig {

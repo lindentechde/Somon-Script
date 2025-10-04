@@ -12,6 +12,8 @@ import { CircuitBreakerManager } from './circuit-breaker';
 import { Logger } from './logger';
 import { RuntimeConfigManager, ManagementServer } from './runtime-config';
 import { version as packageVersion } from '../../package.json';
+import { ResourceLimiter, ResourceLimits } from './resource-limiter';
+import { withTimeout } from './async-timeout';
 import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
@@ -41,6 +43,8 @@ export interface ModuleSystemOptions {
   logger?: boolean;
   managementServer?: boolean;
   managementPort?: number;
+  resourceLimits?: ResourceLimits;
+  operationTimeout?: number; // Default timeout for async operations in ms
 }
 
 export interface CompiledModule {
@@ -91,9 +95,12 @@ export class ModuleSystem {
   private readonly logger?: Logger;
   private readonly configManager?: RuntimeConfigManager;
   private readonly managementServer?: ManagementServer;
+  private readonly resourceLimiter?: ResourceLimiter;
+  private readonly operationTimeout: number;
 
   constructor(options: ModuleSystemOptions = {}) {
     this.resolver = new ModuleResolver(options.resolution);
+    this.operationTimeout = options.operationTimeout ?? 120000; // Default 2 minutes
 
     // Initialize production systems if requested
     if (options.metrics) {
@@ -106,6 +113,27 @@ export class ModuleSystem {
 
     if (options.logger) {
       this.logger = new Logger('ModuleSystem');
+    }
+
+    if (options.resourceLimits) {
+      this.resourceLimiter = new ResourceLimiter(options.resourceLimits);
+      this.resourceLimiter.onWarning((usage, limit) => {
+        if (this.logger) {
+          this.logger.warn('Resource limit warning', { usage, limit });
+        } else {
+          console.warn(`Resource warning: ${limit} at ${JSON.stringify(usage)}`);
+        }
+      });
+      this.resourceLimiter.start();
+
+      if (this.logger) {
+        this.logger.info('Resource limiter started', {
+          maxMemoryBytes: options.resourceLimits.maxMemoryBytes,
+          maxFileHandles: options.resourceLimits.maxFileHandles,
+          maxCachedModules: options.resourceLimits.maxCachedModules,
+          checkInterval: options.resourceLimits.checkInterval,
+        });
+      }
     }
 
     if (options.managementServer && this.metrics && this.circuitBreakers) {
@@ -134,6 +162,8 @@ export class ModuleSystem {
         metrics: !!this.metrics,
         circuitBreakers: !!this.circuitBreakers,
         managementServer: !!this.managementServer,
+        resourceLimiter: !!this.resourceLimiter,
+        operationTimeout: this.operationTimeout,
       });
     }
   }
@@ -142,8 +172,24 @@ export class ModuleSystem {
    * Load a module and all its dependencies
    */
   async loadModule(specifier: string, fromFile: string): Promise<LoadedModule> {
+    // Check resource limits before loading
+    if (this.resourceLimiter && !this.resourceLimiter.canLoadModule()) {
+      throw new Error('Module cache limit reached - cannot load more modules');
+    }
+
     try {
-      const module = await this.loader.load(specifier, fromFile);
+      const loadPromise = this.loader.load(specifier, fromFile);
+
+      // Apply timeout protection
+      const module = await withTimeout(loadPromise, {
+        timeout: this.operationTimeout,
+        operation: `loadModule(${specifier})`,
+      });
+
+      if (this.resourceLimiter) {
+        this.resourceLimiter.incrementModules();
+      }
+
       this.registerAllLoadedModules();
       return module;
     } catch (error) {
@@ -360,6 +406,11 @@ export class ModuleSystem {
   clearCache(): void {
     this.loader.clearCache();
     this.registry.clear();
+
+    // Update resource limiter
+    if (this.resourceLimiter) {
+      this.resourceLimiter.setModuleCount(0);
+    }
   }
 
   /**
@@ -374,6 +425,7 @@ export class ModuleSystem {
 
   /**
    * Gracefully shutdown the module system
+   * - Stops resource limiter
    * - Stops all file watchers
    * - Stops management server
    * - Clears all caches
@@ -384,8 +436,27 @@ export class ModuleSystem {
       this.logger.info('Shutting down ModuleSystem');
     }
 
+    // The shutdown sequence handles multiple systems with error isolation; complexity is necessary for robustness
+    // eslint-disable-next-line complexity
     const shutdownPromise = (async () => {
-      // Stop watchers first (most likely to hang)
+      // Stop resource limiter first
+      try {
+        if (this.resourceLimiter) {
+          this.resourceLimiter.stop();
+          if (this.logger) {
+            this.logger.info('Resource limiter stopped');
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (this.logger) {
+          this.logger.error('Error stopping resource limiter during shutdown', {
+            error: message,
+          });
+        }
+      }
+
+      // Stop watchers (most likely to hang)
       try {
         await this.stopWatching();
       } catch (error) {
@@ -1126,10 +1197,12 @@ export class ModuleSystem {
     if (!this.metrics) return null;
 
     const stats = this.registry.getStatistics();
+    const resourceUsage = this.resourceLimiter?.getUsage();
+
     return this.metrics.getStats(
       stats.totalModules,
-      0, // Current memory usage - would need to be implemented in ModuleLoader
-      100 * 1024 * 1024 // Default 100MB limit
+      resourceUsage?.memoryUsed ?? 0,
+      resourceUsage?.memoryLimit ?? 100 * 1024 * 1024
     );
   }
 
