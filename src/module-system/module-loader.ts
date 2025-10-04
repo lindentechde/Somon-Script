@@ -329,12 +329,17 @@ export class ModuleLoader {
 
   private handleCircularDependency(moduleId: string, module?: LoadedModule): LoadedModule {
     const message = `Circular dependency detected: ${moduleId}`;
+    const chain = Array.from(this.loadingStack);
 
     switch (this.options.circularDependencyStrategy) {
       case 'error':
         throw new Error(message);
       case 'warn':
-        console.warn(`Warning: ${message}`);
+        logger.warn('Circular dependency detected', {
+          moduleId,
+          chain,
+          message,
+        });
         break;
       case 'ignore':
         break;
@@ -387,7 +392,12 @@ export class ModuleLoader {
         // Basic security validation - prevent obvious path traversal attacks
         const normalizedSpec = specifier.trim();
         if (normalizedSpec.includes('\\') || normalizedSpec.split('..').length > 5) {
-          console.warn(`Suspicious import specifier detected and skipped: ${specifier}`);
+          logger.warn('Suspicious import specifier detected and skipped', {
+            specifier,
+            normalizedSpec,
+            hasBackslash: normalizedSpec.includes('\\'),
+            dotDotCount: normalizedSpec.split('..').length - 1,
+          });
           continue;
         }
 

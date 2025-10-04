@@ -240,7 +240,23 @@ export class Logger {
     error?: Error | Record<string, unknown>,
     metadata?: Record<string, unknown>
   ): void {
-    this.error(message, error, metadata);
+    let errorData: Record<string, unknown> = {};
+    let metaData = metadata || {};
+
+    if (error instanceof Error) {
+      errorData = {
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: this.config.includeStack ? error.stack : undefined,
+          code: (error as Error & { code?: string }).code,
+        },
+      };
+    } else if (error && typeof error === 'object') {
+      metaData = { ...error, ...metaData };
+    }
+
+    this.log('fatal', message, { ...errorData, ...metaData });
     // In production, this might trigger alerts or shutdown procedures
   }
 
