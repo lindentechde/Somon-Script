@@ -192,29 +192,41 @@ describe('Production Environment Validation', () => {
         encoding: 'utf8',
       });
 
-      const output = result.stdout;
+      const output = result.stdout + result.stderr;
       expect(output).toMatch(/--production/);
     });
 
     test('run command should accept --production flag', () => {
       const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+
+      // Ensure CLI is built before running tests
+      if (!fs.existsSync(cliPath)) {
+        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
+      }
+
       const result = spawnSync('node', [cliPath, 'run', '--help'], {
         cwd: testDir,
         encoding: 'utf8',
       });
 
-      const output = result.stdout;
+      const output = result.stdout + result.stderr;
       expect(output).toMatch(/--production/);
     });
 
     test('bundle command should accept --production flag', () => {
       const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+
+      // Ensure CLI is built before running tests
+      if (!fs.existsSync(cliPath)) {
+        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
+      }
+
       const result = spawnSync('node', [cliPath, 'bundle', '--help'], {
         cwd: testDir,
         encoding: 'utf8',
       });
 
-      const output = result.stdout;
+      const output = result.stdout + result.stderr;
       expect(output).toMatch(/--production/);
     });
   });
@@ -228,16 +240,25 @@ describe('Production Environment Validation', () => {
       const major = parseInt(nodeVersion.split('.')[0], 10);
 
       if (major === 20 || major === 22 || major === 23 || major === 24) {
-        const result = spawnSync(
-          'node',
-          [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', testFile],
-          {
-            cwd: testDir,
-            env: { ...process.env, NODE_ENV: 'production' },
-          }
-        );
+        const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+
+        if (!fs.existsSync(cliPath)) {
+          throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
+        }
+
+        const result = spawnSync('node', [cliPath, 'compile', testFile], {
+          cwd: testDir,
+          env: { ...process.env, NODE_ENV: 'production' },
+          encoding: 'utf8',
+        });
 
         // Should succeed with valid environment
+        if (result.status !== 0) {
+          const errorOutput = result.stderr + result.stdout;
+          throw new Error(
+            `Expected compilation to succeed but got status ${result.status}.\nOutput: ${errorOutput}`
+          );
+        }
         expect(result.status).toBe(0);
       } else {
         expect(true).toBe(true);
@@ -248,16 +269,25 @@ describe('Production Environment Validation', () => {
       const testFile = path.join(testDir, 'test.som');
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
-      const result = spawnSync(
-        'node',
-        [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', testFile],
-        {
-          cwd: testDir,
-          env: { ...process.env, NODE_ENV: 'development' },
-        }
-      );
+      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+
+      if (!fs.existsSync(cliPath)) {
+        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
+      }
+
+      const result = spawnSync('node', [cliPath, 'compile', testFile], {
+        cwd: testDir,
+        env: { ...process.env, NODE_ENV: 'development' },
+        encoding: 'utf8',
+      });
 
       // Should succeed without validation even on invalid Node version
+      if (result.status !== 0) {
+        const errorOutput = result.stderr + result.stdout;
+        throw new Error(
+          `Expected compilation to succeed but got status ${result.status}.\nOutput: ${errorOutput}`
+        );
+      }
       expect(result.status).toBe(0);
     });
   });
