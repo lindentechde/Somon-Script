@@ -180,41 +180,41 @@ describe('Production Environment Validation', () => {
       const testFile = path.join(testDir, 'test.som');
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
-      const result = spawnSync(
-        'node',
-        [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', '--help'],
-        {
-          cwd: testDir,
-        }
-      );
+      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
 
-      const output = result.stdout.toString();
+      // Ensure CLI is built before running tests
+      if (!fs.existsSync(cliPath)) {
+        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
+      }
+
+      const result = spawnSync('node', [cliPath, 'compile', '--help'], {
+        cwd: testDir,
+        encoding: 'utf8',
+      });
+
+      const output = result.stdout;
       expect(output).toMatch(/--production/);
     });
 
     test('run command should accept --production flag', () => {
-      const result = spawnSync(
-        'node',
-        [path.join(__dirname, '..', 'dist', 'cli.js'), 'run', '--help'],
-        {
-          cwd: testDir,
-        }
-      );
+      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+      const result = spawnSync('node', [cliPath, 'run', '--help'], {
+        cwd: testDir,
+        encoding: 'utf8',
+      });
 
-      const output = result.stdout.toString();
+      const output = result.stdout;
       expect(output).toMatch(/--production/);
     });
 
     test('bundle command should accept --production flag', () => {
-      const result = spawnSync(
-        'node',
-        [path.join(__dirname, '..', 'dist', 'cli.js'), 'bundle', '--help'],
-        {
-          cwd: testDir,
-        }
-      );
+      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+      const result = spawnSync('node', [cliPath, 'bundle', '--help'], {
+        cwd: testDir,
+        encoding: 'utf8',
+      });
 
-      const output = result.stdout.toString();
+      const output = result.stdout;
       expect(output).toMatch(/--production/);
     });
   });

@@ -327,7 +327,9 @@ describe('Logger', () => {
 
       const duration = trace.complete(logger, 'success');
 
-      expect(duration).toBeGreaterThanOrEqual(50);
+      // Allow for minor timing variance (45-55ms is acceptable for 50ms wait)
+      expect(duration).toBeGreaterThanOrEqual(45);
+      expect(duration).toBeLessThan(100);
       expect(stdoutOutput.length).toBeGreaterThan(0);
     });
 

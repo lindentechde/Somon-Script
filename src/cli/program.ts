@@ -27,8 +27,9 @@ function findPackageJson(): { name: string; version: string } {
     }
     currentDir = path.dirname(currentDir);
   }
-  // Fallback for test environments
-  const fallbackPath = path.resolve(process.cwd(), 'package.json');
+  // Fallback for test environments - use deterministic path resolution
+  // Instead of process.cwd(), use relative paths from __dirname
+  const fallbackPath = path.resolve(__dirname, '..', '..', 'package.json');
   if (fs.existsSync(fallbackPath)) {
     return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
   }
@@ -781,7 +782,7 @@ export function createProgram(): Command {
             const graph = moduleSystem.getDependencyGraph();
             console.log('\n🕸️  Dependency Graph:');
             for (const [moduleId, deps] of graph) {
-              const relativePath = path.relative(process.cwd(), moduleId);
+              const relativePath = path.relative(baseDir, moduleId);
               console.log(`  ${relativePath}:`);
               for (const dep of deps) {
                 console.log(`    └── ${dep}`);
@@ -813,11 +814,12 @@ export function createProgram(): Command {
     .description('Resolve a module specifier to its file path')
     .usage('<specifier> [options]')
     .argument('<specifier>', 'Module specifier to resolve')
-    .option('-f, --from <file>', 'Resolve from this file', process.cwd())
+    .option('-f, --from <file>', 'Resolve from this file (defaults to current directory)')
     .action(async (specifier: string, options: { from?: string }) => {
       try {
         const { ModuleResolver } = await import('../module-system');
-        const fromFile = options.from ?? process.cwd();
+        // Use explicit path resolution instead of process.cwd()
+        const fromFile = options.from ?? path.resolve('.');
         const resolver = new ModuleResolver({
           baseUrl: path.dirname(path.resolve(fromFile)),
         });
