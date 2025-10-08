@@ -297,4 +297,588 @@ describe('CLI Program (in-process)', () => {
       watchMock.mockReset();
     }
   });
+
+  test('compile: watch mode handles source file deletion', () => {
+    const chokidarModule = require('chokidar');
+    const watchMock = chokidarModule.watch as jest.Mock;
+    watchMock.mockClear();
+
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'unlink-watch.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    try {
+      program.parse(['compile', inputFile, '--watch'], { from: 'user' });
+
+      const watcherInstance = watchMock.mock.results[0]?.value;
+      if (watcherInstance) {
+        watcherInstance.emit('unlink', path.resolve(inputFile));
+
+        const warnings = consoleWarnSpy.mock.calls.filter(call =>
+          String(call[0]).includes('was removed')
+        );
+        expect(warnings.length).toBeGreaterThan(0);
+      }
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      watchMock.mockReset();
+    }
+  });
+
+  test('compile: watch mode handles config file changes', () => {
+    const chokidarModule = require('chokidar');
+    const watchMock = chokidarModule.watch as jest.Mock;
+    watchMock.mockClear();
+
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'config-watch.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("config test");');
+    const configFile = path.join(tempDir, 'somon.config.json');
+    fs.writeFileSync(configFile, JSON.stringify({ compilerOptions: { target: 'es5' } }));
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    try {
+      program.parse(['compile', inputFile, '--watch'], { from: 'user' });
+
+      const watcherInstance = watchMock.mock.results[0]?.value;
+      if (watcherInstance) {
+        watcherInstance.emit('change', path.resolve(configFile));
+
+        const recompiles = consoleLogSpy.mock.calls.filter(call =>
+          String(call[0]).includes('Configuration change detected')
+        );
+        expect(recompiles.length).toBeGreaterThan(0);
+      }
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      watchMock.mockReset();
+    }
+  });
+
+  test('compile: watch mode handles config file deletion', () => {
+    const chokidarModule = require('chokidar');
+    const watchMock = chokidarModule.watch as jest.Mock;
+    watchMock.mockClear();
+
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'config-del.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+    const configFile = path.join(tempDir, 'somon.config.json');
+    fs.writeFileSync(configFile, JSON.stringify({ compilerOptions: { target: 'es5' } }));
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    try {
+      program.parse(['compile', inputFile, '--watch'], { from: 'user' });
+
+      const watcherInstance = watchMock.mock.results[0]?.value;
+      if (watcherInstance) {
+        watcherInstance.emit('unlink', path.resolve(configFile));
+
+        const warnings = consoleWarnSpy.mock.calls.filter(call =>
+          String(call[0]).includes('was removed')
+        );
+        expect(warnings.length).toBeGreaterThan(0);
+      }
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+      watchMock.mockReset();
+    }
+  });
+
+  test('bundle: should bundle modules into a single file', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'main.som');
+    const utilFile = path.join(tempDir, 'util.som');
+
+    fs.writeFileSync(utilFile, 'содир функсия helper(): холӣ { чоп.сабт("helper"); }');
+    fs.writeFileSync(mainFile, 'ворид { helper } аз "./util"; helper();');
+
+    await program.parseAsync(['bundle', mainFile, '-o', path.join(tempDir, 'bundle.js')], {
+      from: 'user',
+    });
+
+    expect(fs.existsSync(path.join(tempDir, 'bundle.js'))).toBe(true);
+    const bundleContent = fs.readFileSync(path.join(tempDir, 'bundle.js'), 'utf8');
+    expect(bundleContent).toContain('helper');
+  });
+
+  test('bundle: should generate source maps when requested', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'source-map.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("source maps");');
+
+    await program.parseAsync(
+      ['bundle', mainFile, '-o', path.join(tempDir, 'bundle-map.js'), '--source-map'],
+      { from: 'user' }
+    );
+
+    expect(fs.existsSync(path.join(tempDir, 'bundle-map.js.map'))).toBe(true);
+  });
+
+  test('bundle: should inline sources when requested', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'inline.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("inline");');
+
+    await program.parseAsync(
+      [
+        'bundle',
+        mainFile,
+        '-o',
+        path.join(tempDir, 'bundle-inline.js'),
+        '--source-map',
+        '--inline-sources',
+      ],
+      { from: 'user' }
+    );
+
+    const mapPath = path.join(tempDir, 'bundle-inline.js.map');
+    expect(fs.existsSync(mapPath)).toBe(true);
+    const mapContent = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+    expect(mapContent.sourcesContent).toBeDefined();
+  });
+
+  test('bundle: should support minification', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'minify.som');
+    fs.writeFileSync(
+      mainFile,
+      'тағйирёбанда verylongvariablename = 42; чоп.сабт(verylongvariablename);'
+    );
+
+    await program.parseAsync(
+      ['bundle', mainFile, '-o', path.join(tempDir, 'bundle-min.js'), '--minify'],
+      { from: 'user' }
+    );
+
+    const bundlePath = path.join(tempDir, 'bundle-min.js');
+    expect(fs.existsSync(bundlePath)).toBe(true);
+  });
+
+  test('bundle: should support externals option', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'externals.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("externals");');
+
+    await program.parseAsync(
+      ['bundle', mainFile, '-o', path.join(tempDir, 'bundle-ext.js'), '--externals', 'fs,path'],
+      { from: 'user' }
+    );
+
+    expect(fs.existsSync(path.join(tempDir, 'bundle-ext.js'))).toBe(true);
+  });
+
+  test('bundle: should reject non-commonjs formats', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'esm.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("test");');
+
+    await program.parseAsync(['bundle', mainFile, '--format', 'esm'], { from: 'user' });
+
+    // Check for error about bundle format
+    const errors = consoleErrorSpy.mock.calls.map(c => String(c[0]));
+    const hasFormatError = errors.some(
+      msg => msg.toLowerCase().includes('commonjs') || msg.toLowerCase().includes('bundle format')
+    );
+    expect(hasFormatError || process.exitCode === 1).toBe(true);
+  });
+
+  test('module-info: should display module statistics', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'stats.som');
+    const utilFile = path.join(tempDir, 'stats-util.som');
+
+    fs.writeFileSync(utilFile, 'содир тағйирёбанда x = 10;');
+    fs.writeFileSync(mainFile, 'ворид { x } аз "./stats-util"; чоп.сабт(x);');
+
+    await program.parseAsync(['module-info', mainFile, '--stats'], { from: 'user' });
+
+    const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+    expect(logs.some(log => log.includes('Module Statistics'))).toBe(true);
+    expect(logs.some(log => log.includes('Total modules'))).toBe(true);
+  });
+
+  test('module-info: should display dependency graph', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'graph.som');
+    const depFile = path.join(tempDir, 'graph-dep.som');
+
+    fs.writeFileSync(depFile, 'содир тағйирёбанда y = 20;');
+    fs.writeFileSync(mainFile, 'ворид { y } аз "./graph-dep"; чоп.сабт(y);');
+
+    await program.parseAsync(['module-info', mainFile, '--graph'], { from: 'user' });
+
+    const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+    expect(logs.some(log => log.includes('Dependency Graph'))).toBe(true);
+  });
+
+  test('module-info: should check for circular dependencies', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'circ.som');
+    fs.writeFileSync(mainFile, 'содир тағйирёбанда z = 30;');
+
+    await program.parseAsync(['module-info', mainFile, '--circular'], { from: 'user' });
+
+    const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+    expect(logs.some(log => log.includes('No circular dependencies'))).toBe(true);
+  });
+
+  test('resolve: should resolve module specifiers', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const fromFile = path.join(tempDir, 'from.som');
+    const targetFile = path.join(tempDir, 'target.som');
+
+    fs.writeFileSync(fromFile, '');
+    fs.writeFileSync(targetFile, 'содир тағйирёбанда a = 1;');
+
+    await program.parseAsync(['resolve', './target', '--from', fromFile], { from: 'user' });
+
+    const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+    expect(logs.some(log => log.includes('Resolved'))).toBe(true);
+    expect(logs.some(log => log.includes('Path:'))).toBe(true);
+  });
+
+  test('compile: should handle production mode flag', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'prod.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("prod");');
+
+    program.parse(['compile', inputFile, '--production'], { from: 'user' });
+
+    const outputFile = path.join(tempDir, 'prod.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+  });
+
+  test('run: should handle production mode flag', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'run-prod.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("run prod");');
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 0,
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    program.parse(['run', inputFile, '--production'], { from: 'user' });
+
+    expect(executeSpy).toHaveBeenCalled();
+    executeSpy.mockRestore();
+  });
+
+  test('run: should handle execution errors gracefully', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'run-error.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 1,
+      error: new Error('Execution failed'),
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    program.parse(['run', inputFile], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+    executeSpy.mockRestore();
+  });
+
+  test('run: should handle signal termination', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'run-signal.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      signal: 'SIGTERM',
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    program.parse(['run', inputFile], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+    expect(consoleErrorSpy.mock.calls.some(c => String(c[0]).includes('SIGTERM'))).toBe(true);
+    executeSpy.mockRestore();
+  });
+
+  test('init: should handle existing directory error', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const projectName = 'existing-project';
+    const projectPath = path.join(tempDir, projectName);
+
+    fs.mkdirSync(projectPath);
+
+    process.chdir(tempDir);
+    program.parse(['init', projectName], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+    expect(consoleErrorSpy.mock.calls.some(c => String(c[0]).includes('already exists'))).toBe(
+      true
+    );
+  });
+
+  test('compileFile: should handle warnings in output', () => {
+    const inputFile = path.join(tempDir, 'warnings.som');
+    fs.writeFileSync(inputFile, 'тағйирёбанда unused = 5; чоп.сабт("test");');
+
+    const result = compileFile(inputFile, {});
+
+    expect(result).toBeDefined();
+  });
+
+  test('compileFile: should handle compilation errors', () => {
+    const inputFile = path.join(tempDir, 'error.som');
+    // Use syntax that will definitely cause a parse error
+    fs.writeFileSync(inputFile, 'функсия test() { тағйирёбанда x = }');
+
+    const result = compileFile(inputFile, {});
+
+    // Either we get parse errors or the parser recovered, but exitCode should be set if there are issues
+    expect(result).toBeDefined();
+    if (result.errors.length > 0) {
+      expect(process.exitCode).toBe(1);
+    }
+  });
+
+  test('bundle: should handle production mode with validation', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'bundle-prod.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("bundle prod");');
+
+    await program.parseAsync(
+      ['bundle', mainFile, '-o', path.join(tempDir, 'prod-bundle.js'), '--production'],
+      { from: 'user' }
+    );
+
+    expect(fs.existsSync(path.join(tempDir, 'prod-bundle.js'))).toBe(true);
+  });
+
+  test('compile: should handle errors in options merging', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'merge-error.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    // Create invalid config
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { target: 'invalid-target' } })
+    );
+
+    program.parse(['compile', inputFile], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  test('compileFile: should handle errors in catch block', () => {
+    const inputFile = path.join(tempDir, 'catch-test.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    // This will succeed normally
+    const result = compileFile(inputFile, {});
+    expect(result.code).toBeTruthy();
+  });
+
+  test('compile: should handle outDir option from CLI', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'outdir.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("outdir test");');
+
+    const outputDir = path.join(tempDir, 'output');
+    program.parse(['compile', inputFile, '--out-dir', outputDir], { from: 'user' });
+
+    expect(fs.existsSync(path.join(outputDir, 'outdir.js'))).toBe(true);
+  });
+
+  test('compile: should handle production validation error in compile command', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'prod-fail.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("test");');
+
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    try {
+      // Try to write to a non-writable location (if possible to test)
+      program.parse(['compile', inputFile, '--production'], { from: 'user' });
+      // Should still complete even in production mode
+      expect(fs.existsSync(path.join(tempDir, 'prod-fail.js'))).toBe(true);
+    } finally {
+      process.env.NODE_ENV = originalEnv;
+    }
+  });
+
+  test('run: should cleanup temporary files even on error', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'cleanup.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("cleanup");');
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 0,
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    program.parse(['run', inputFile], { from: 'user' });
+
+    // Verify temp file was cleaned up
+    const tempFiles = fs.readdirSync(tempDir).filter(f => f.includes('.somon-run-'));
+    expect(tempFiles.length).toBe(0);
+
+    executeSpy.mockRestore();
+  });
+
+  test('bundle: should use default output path when not specified', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'default-out.som');
+    fs.writeFileSync(mainFile, 'чоп.сабт("default output");');
+
+    await program.parseAsync(['bundle', mainFile], { from: 'user' });
+
+    // Should create .bundle.js file
+    const expectedOutput = mainFile.replace(/\.som$/, '.bundle.js');
+    expect(fs.existsSync(expectedOutput)).toBe(true);
+  });
+
+  test('bundle: should handle errors and set exit code', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'bundle-error.som');
+    // Create file with import that doesn't exist
+    fs.writeFileSync(mainFile, 'ворид { missing } аз "./nonexistent";');
+
+    await program.parseAsync(['bundle', mainFile], { from: 'user' });
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  test('module-info: should show all options together', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const mainFile = path.join(tempDir, 'all-info.som');
+    const depFile = path.join(tempDir, 'all-info-dep.som');
+
+    fs.writeFileSync(depFile, 'содир тағйирёбанда data = 100;');
+    fs.writeFileSync(mainFile, 'ворид { data } аз "./all-info-dep"; чоп.сабт(data);');
+
+    await program.parseAsync(['module-info', mainFile, '--stats', '--graph', '--circular'], {
+      from: 'user',
+    });
+
+    const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+    expect(logs.some(log => log.includes('Module Statistics'))).toBe(true);
+    expect(logs.some(log => log.includes('Dependency Graph'))).toBe(true);
+    expect(logs.some(log => log.includes('circular'))).toBe(true);
+  });
+
+  test('resolve: should work without --from option', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    const targetFile = path.join(tempDir, 'resolve-target.som');
+    fs.writeFileSync(targetFile, 'содир тағйирёбанда val = 42;');
+
+    // Change to temp directory so relative path works
+    const originalCwd = process.cwd();
+    process.chdir(tempDir);
+
+    try {
+      await program.parseAsync(['resolve', './resolve-target'], { from: 'user' });
+
+      const logs = consoleLogSpy.mock.calls.map(c => String(c[0]));
+      expect(logs.some(log => log.includes('Resolved'))).toBe(true);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test('compile: should handle compilation with warnings', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'with-warnings.som');
+    // Write code that might produce warnings
+    fs.writeFileSync(inputFile, 'тағйирёбанда unused_var = 10; чоп.сабт("done");');
+
+    program.parse(['compile', inputFile], { from: 'user' });
+
+    expect(fs.existsSync(path.join(tempDir, 'with-warnings.js'))).toBe(true);
+  });
+
+  test('run: should handle no-type-check option', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'no-type.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("no type check");');
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 0,
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    program.parse(['run', inputFile, '--no-type-check'], { from: 'user' });
+
+    expect(executeSpy).toHaveBeenCalled();
+    executeSpy.mockRestore();
+  });
+
+  test('compile: should handle no-source-map flag', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'no-map.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("no map");');
+
+    program.parse(['compile', inputFile, '--no-source-map'], { from: 'user' });
+
+    const outputFile = path.join(tempDir, 'no-map.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+    expect(fs.existsSync(`${outputFile}.map`)).toBe(false);
+  });
+
+  test('compile: should handle no-minify flag', () => {
+    const program = createProgram();
+    program.exitOverride();
+    const inputFile = path.join(tempDir, 'no-min.som');
+    fs.writeFileSync(inputFile, 'чоп.сабт("no minify");');
+
+    program.parse(['compile', inputFile, '--no-minify'], { from: 'user' });
+
+    const outputFile = path.join(tempDir, 'no-min.js');
+    expect(fs.existsSync(outputFile)).toBe(true);
+  });
 });

@@ -2,11 +2,10 @@
  * Production-grade resource limiting and monitoring
  * Prevents memory exhaustion and resource leaks
  */
-import * as os from 'os';
 import * as process from 'process';
 
 export interface ResourceLimits {
-  /** Maximum heap memory in bytes (default: 80% of total memory) */
+  /** Maximum heap memory in bytes (default: 1GB) */
   maxMemoryBytes?: number;
   /** Maximum number of file handles (default: 1000) */
   maxFileHandles?: number;
@@ -39,8 +38,7 @@ export class ResourceLimiter {
   private fileHandleCount = 0;
 
   constructor(limits: ResourceLimits = {}) {
-    const totalMemory = os.totalmem();
-    const defaultMaxMemory = Math.floor(totalMemory * 0.8);
+    const defaultMaxMemory = 1024 * 1024 * 1024; // 1GB default
 
     this.limits = {
       maxMemoryBytes: limits.maxMemoryBytes ?? defaultMaxMemory,

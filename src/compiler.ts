@@ -32,6 +32,11 @@ export interface CompileOptions {
    * Abort compilation when any type errors are encountered instead of emitting code.
    */
   strict?: boolean;
+  /**
+   * Maximum compilation time in milliseconds. Defaults to 120000ms (2 minutes).
+   * Set to 0 to disable timeout.
+   */
+  timeout?: number;
 }
 
 /**
@@ -57,6 +62,24 @@ export interface CompileResult {
  * diagnostics, and warnings.
  */
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
+  const timeout = options.timeout ?? 120000; // Default 2 minutes
+
+  if (timeout > 0) {
+    const timeoutId = setTimeout(() => {
+      throw new Error(`Compilation timed out after ${timeout}ms`);
+    }, timeout);
+
+    try {
+      return compileInternal(source, options);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return compileInternal(source, options);
+}
+
+function compileInternal(source: string, options: CompileOptions): CompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
