@@ -480,43 +480,103 @@ export class CodeGenerator {
 
   private generateExportDeclaration(node: ExportDeclaration): string {
     if (node.declaration) {
-      const declaration = this.generateStatement(node.declaration);
-
-      // Extract the name from the declaration for CommonJS export
-      let exportName = '';
-      if (node.declaration.type === 'FunctionDeclaration') {
-        const funcDecl = node.declaration as FunctionDeclaration;
-        exportName = funcDecl.name.name;
-      } else if (node.declaration.type === 'VariableDeclaration') {
-        const varDecl = node.declaration as VariableDeclaration;
-        exportName = (varDecl.identifier as Identifier).name;
-      } else if (node.declaration.type === 'ClassDeclaration') {
-        const classDecl = node.declaration as ClassDeclaration;
-        exportName = classDecl.name.name;
-      }
-
-      // Generate CommonJS export
-      // For default exports, we need to be careful not to override named exports
-      const commonjsExport = node.default
-        ? `module.exports.default = ${exportName};`
-        : `module.exports.${exportName} = ${exportName};`;
-
-      return declaration + '\n' + this.indent(commonjsExport);
+      return this.generateExportWithDeclaration(node);
     }
 
-    // Handle export specifiers: export { Name1, Name2 };
     if (node.specifiers && node.specifiers.length > 0) {
-      const exports = node.specifiers
-        .map(spec => {
-          const exported = spec.exported.name;
-          const local = spec.local.name;
-          return this.indent(`module.exports.${exported} = ${local};`);
-        })
-        .join('\n');
-      return exports;
+      return this.generateExportWithSpecifiers(node);
+    }
+
+    if (node.source) {
+      return this.generateWildcardExport(node);
     }
 
     return '';
+  }
+
+  private generateExportWithDeclaration(node: ExportDeclaration): string {
+    const declaration = this.generateStatement(node.declaration!);
+    const exportName = this.extractExportName(node.declaration!);
+
+    // Type-only declarations don't generate runtime exports
+    if (!exportName) {
+      return declaration;
+    }
+
+    const commonjsExport = node.default
+      ? `module.exports.default = ${exportName};`
+      : `module.exports.${exportName} = ${exportName};`;
+
+    return declaration + '\n' + this.indent(commonjsExport);
+  }
+
+  private extractExportName(declaration: Statement): string {
+    if (declaration.type === 'FunctionDeclaration') {
+      return (declaration as FunctionDeclaration).name.name;
+    }
+    if (declaration.type === 'VariableDeclaration') {
+      return ((declaration as VariableDeclaration).identifier as Identifier).name;
+    }
+    if (declaration.type === 'ClassDeclaration') {
+      return (declaration as ClassDeclaration).name.name;
+    }
+    // Interfaces and TypeAlias don't generate runtime code
+    return '';
+  }
+
+  private generateExportWithSpecifiers(node: ExportDeclaration): string {
+    if (node.source) {
+      return this.generateReExportWithSpecifiers(node);
+    }
+    return this.generateDirectExportSpecifiers(node);
+  }
+
+  private generateReExportWithSpecifiers(node: ExportDeclaration): string {
+    const source = this.convertSourcePath(this.generateLiteral(node.source!));
+    const tmpVar = `__somon_reexport_${this.importCounter++}`;
+    const results: string[] = [];
+
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
+
+    for (const spec of node.specifiers!) {
+      const exported = spec.exported.name;
+      const local = spec.local.name;
+      results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
+    }
+
+    return results.join('\n');
+  }
+
+  private generateDirectExportSpecifiers(node: ExportDeclaration): string {
+    return node
+      .specifiers!.map(spec => {
+        const exported = spec.exported.name;
+        const local = spec.local.name;
+        return this.indent(`module.exports.${exported} = ${local};`);
+      })
+      .join('\n');
+  }
+
+  private generateWildcardExport(node: ExportDeclaration): string {
+    const source = this.convertSourcePath(this.generateLiteral(node.source!));
+    const tmpVar = `__somon_reexport_${this.importCounter++}`;
+    const results: string[] = [];
+
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
+    results.push(this.indent(`Object.keys(${tmpVar}).forEach(key => {`));
+    this.indentLevel++;
+    results.push(this.indent(`if (key !== 'default') module.exports[key] = ${tmpVar}[key];`));
+    this.indentLevel--;
+    results.push(this.indent(`});`));
+
+    return results.join('\n');
+  }
+
+  private convertSourcePath(source: string): string {
+    if (source.includes('.som')) {
+      return source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    }
+    return source;
   }
 
   private generateIdentifier(node: Identifier): string {

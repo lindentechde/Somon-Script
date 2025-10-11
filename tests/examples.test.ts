@@ -116,6 +116,29 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
       return match && parseInt(match[1]) >= 26 && parseInt(match[1]) <= 33;
     });
 
+    // Helper to validate feature-specific patterns
+    function validateExampleFeatures(fileName: string, code: string): void {
+      const validations = [
+        { match: ['switch', '26'], pattern: /switch|if/, desc: 'Switch/case' },
+        { match: ['abstract', '27'], pattern: /class|function/, desc: 'Abstract classes' },
+        { match: ['namespace', '28'], pattern: /var|const|let/, desc: 'Namespaces' },
+        { match: ['generic', '29'], pattern: /function|class/, desc: 'Generics' },
+        { match: ['built-in', '30'], pattern: /Object|Math|console/, desc: 'Built-in objects' },
+        { match: ['break-continue', '32'], pattern: /break|continue/, desc: 'Break/continue' },
+        { match: ['console', '33'], pattern: /console\./, desc: 'Console methods' },
+      ];
+
+      for (const validation of validations) {
+        if (validation.match.some(keyword => fileName.includes(keyword))) {
+          expect(code).toMatch(validation.pattern);
+          return;
+        }
+      }
+
+      // Default: just check that code exists
+      expect(code).toBeTruthy();
+    }
+
     test.each(newExamples)('should handle %s appropriately', exampleFile => {
       const filePath = path.join(examplesDir, exampleFile);
       const source = fs.readFileSync(filePath, 'utf-8');
@@ -134,32 +157,7 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
 
         // Check for specific features in each example
         const fileName = path.basename(exampleFile, '.som');
-
-        if (fileName.includes('switch') || fileName.includes('26')) {
-          // Switch/case example
-          expect(result.code).toMatch(/switch|if/);
-        } else if (fileName.includes('abstract') || fileName.includes('27')) {
-          // Abstract classes - pattern demonstration
-          expect(result.code).toMatch(/class|function/);
-        } else if (fileName.includes('namespace') || fileName.includes('28')) {
-          // Namespaces - module pattern
-          expect(result.code).toMatch(/var|const|let/);
-        } else if (fileName.includes('generic') || fileName.includes('29')) {
-          // Generics - pattern demonstration
-          expect(result.code).toMatch(/function|class/);
-        } else if (fileName.includes('built-in') || fileName.includes('30')) {
-          // Built-in objects
-          expect(result.code).toMatch(/Object|Math|console/);
-        } else if (fileName.includes('advanced-type') || fileName.includes('31')) {
-          // Advanced type features
-          expect(result.code).toBeTruthy();
-        } else if (fileName.includes('break-continue') || fileName.includes('32')) {
-          // Break and continue
-          expect(result.code).toMatch(/break|continue/);
-        } else if (fileName.includes('console') || fileName.includes('33')) {
-          // Console methods
-          expect(result.code).toMatch(/console\./);
-        }
+        validateExampleFeatures(fileName, result.code);
       }
     });
   });
@@ -180,11 +178,9 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
           if (source.includes('ворид')) {
             expect(result.code).toMatch(/require|import/);
           }
-          // NOTE: Export statements (содир) are not yet fully implemented in the parser
-          // So we skip the export check for now
-          // if (source.includes('содир')) {
-          //   expect(result.code).toMatch(/exports|export|module\.exports/);
-          // }
+          if (source.includes('содир')) {
+            expect(result.code).toMatch(/exports|export|module\.exports/);
+          }
         } else {
           // If there are errors, just check that we tried to compile
           expect(result.code).toBeDefined();

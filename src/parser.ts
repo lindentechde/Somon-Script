@@ -25,6 +25,7 @@ import {
   ImportNamespaceSpecifier,
   ImportExpression,
   ExportDeclaration,
+  ExportSpecifier,
   ArrayExpression,
   TypeAnnotation,
   TypeNode,
@@ -1283,8 +1284,8 @@ export class Parser {
   public exportDeclaration(): ExportDeclaration {
     const exportToken = this.previous();
 
+    // Handle: содир пешфарз <declaration>
     if (this.match(TokenType.ПЕШФАРЗ)) {
-      // Export default
       const declaration = this.statement();
       return {
         type: 'ExportDeclaration',
@@ -1293,17 +1294,126 @@ export class Parser {
         line: exportToken.line,
         column: exportToken.column,
       };
-    } else {
-      // Export named
-      const declaration = this.statement();
+    }
+
+    // Handle: содир { name1, name2 }
+    if (this.match(TokenType.LEFT_BRACE)) {
+      const specifiers = this.parseExportSpecifiers();
+      this.consume(TokenType.RIGHT_BRACE, "Expected '}' after export specifiers");
+
+      // Handle: содир { name1, name2 } аз "module"
+      let source: Literal | undefined;
+      if (this.match(TokenType.АЗ)) {
+        const sourceToken = this.consume(TokenType.STRING, 'Expected module path after аз');
+        source = {
+          type: 'Literal',
+          value: sourceToken.value,
+          raw: `"${sourceToken.value}"`,
+          line: sourceToken.line,
+          column: sourceToken.column,
+        };
+      }
+
+      this.consume(TokenType.SEMICOLON, "Expected ';' after export statement");
+
       return {
         type: 'ExportDeclaration',
-        declaration: declaration!,
+        specifiers,
+        source,
         default: false,
         line: exportToken.line,
         column: exportToken.column,
       };
     }
+
+    // Handle: содир * аз "module"
+    if (this.match(TokenType.MULTIPLY)) {
+      this.consume(TokenType.АЗ, "Expected 'аз' after '*'");
+      const sourceToken = this.consume(TokenType.STRING, 'Expected module path');
+      const source: Literal = {
+        type: 'Literal',
+        value: sourceToken.value,
+        raw: `"${sourceToken.value}"`,
+        line: sourceToken.line,
+        column: sourceToken.column,
+      };
+
+      this.consume(TokenType.SEMICOLON, "Expected ';' after export statement");
+
+      return {
+        type: 'ExportDeclaration',
+        specifiers: [],
+        source,
+        default: false,
+        line: exportToken.line,
+        column: exportToken.column,
+      };
+    }
+
+    // Handle: содир <declaration>
+    // This includes: функсия, синф, собит, тағйирёбанда, интерфейс, навъ
+    const declaration = this.statement();
+    return {
+      type: 'ExportDeclaration',
+      declaration: declaration!,
+      default: false,
+      line: exportToken.line,
+      column: exportToken.column,
+    };
+  }
+
+  private parseExportSpecifiers(): ExportSpecifier[] {
+    const specifiers: ExportSpecifier[] = [];
+
+    if (!this.check(TokenType.RIGHT_BRACE)) {
+      do {
+        let local: Token;
+        if (this.check(TokenType.IDENTIFIER)) {
+          local = this.advance();
+        } else if (this.matchBuiltinIdentifier()) {
+          local = this.previous();
+        } else {
+          throw new Error(
+            `Expected export name at line ${this.peek().line}, column ${this.peek().column}`
+          );
+        }
+
+        let exported = local;
+
+        // Handle 'чун' (as) alias: { localName чун exportedName }
+        if (this.match(TokenType.ЧУН)) {
+          if (this.check(TokenType.IDENTIFIER)) {
+            exported = this.advance();
+          } else if (this.matchBuiltinIdentifier()) {
+            exported = this.previous();
+          } else {
+            throw new Error(
+              `Expected export alias after 'чун' at line ${this.peek().line}, column ${this.peek().column}`
+            );
+          }
+        }
+
+        specifiers.push({
+          type: 'ExportSpecifier',
+          local: {
+            type: 'Identifier',
+            name: local.value,
+            line: local.line,
+            column: local.column,
+          },
+          exported: {
+            type: 'Identifier',
+            name: exported.value,
+            line: exported.line,
+            column: exported.column,
+          },
+          line: local.line,
+          column: local.column,
+        });
+      } while (this.match(TokenType.COMMA));
+    }
+
+    return specifiers;
   }
 
   private matchBuiltinIdentifier(): boolean {
