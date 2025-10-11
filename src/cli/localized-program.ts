@@ -9,9 +9,12 @@ import { Command } from 'commander';
 import { createProgram } from './program';
 import { i18n, t, type Language } from './i18n';
 
+// Type definition for action handlers
+type ActionHandler = (..._args: unknown[]) => void | Promise<void>;
+
 // Type definition for Command with action handler
 interface CommandWithHandler extends Command {
-  _actionHandler?: (..._args: unknown[]) => void | Promise<void>;
+  _actionHandler?: ActionHandler;
 }
 
 /**
@@ -63,8 +66,8 @@ export function createPureLocalizedProgram(): Command {
   const commands = baseProgram.commands;
 
   // Add only localized versions of commands
-  // eslint-disable-next-line complexity
-  commands.forEach(cmd => {
+  // Create a function to handle command localization
+  const localizeCommand = (cmd: Command): Command | null => {
     let localizedCmd: Command | null = null;
 
     switch (cmd.name()) {
@@ -87,7 +90,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.compile.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -107,7 +110,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.run.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -117,7 +120,7 @@ export function createPureLocalizedProgram(): Command {
           .argument('[name]', tr.commands.init.args.name, 'somon-project');
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -136,7 +139,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.bundle.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -151,7 +154,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--circular', tr.commands.moduleInfo.options.circular);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -163,7 +166,7 @@ export function createPureLocalizedProgram(): Command {
           .option('-f, --from <file>', tr.commands.resolve.options.from);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -176,7 +179,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--json', tr.commands.serve.options.json);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler);
+          if (handler) localizedCmd.action(handler as ActionHandler);
         }
         break;
 
@@ -190,6 +193,11 @@ export function createPureLocalizedProgram(): Command {
         localizedCmd = cmd;
     }
 
+    return localizedCmd;
+  };
+
+  commands.forEach(cmd => {
+    const localizedCmd = localizeCommand(cmd);
     if (localizedCmd) {
       program.addCommand(localizedCmd);
     }
