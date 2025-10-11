@@ -504,6 +504,18 @@ export class CodeGenerator {
       return declaration + '\n' + this.indent(commonjsExport);
     }
 
+    // Handle export specifiers: export { Name1, Name2 };
+    if (node.specifiers && node.specifiers.length > 0) {
+      const exports = node.specifiers
+        .map(spec => {
+          const exported = spec.exported.name;
+          const local = spec.local.name;
+          return this.indent(`module.exports.${exported} = ${local};`);
+        })
+        .join('\n');
+      return exports;
+    }
+
     return '';
   }
 
