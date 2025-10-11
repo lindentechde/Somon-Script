@@ -60,7 +60,8 @@ export class ResourceLimiter {
       this.checkLimits();
     }, this.limits.checkInterval);
 
-    // Don't prevent process exit
+    // Don't prevent process exit - critical for tests and production
+    // unref() allows Node to exit even if interval is active
     if (this.checkIntervalId.unref) {
       this.checkIntervalId.unref();
     }

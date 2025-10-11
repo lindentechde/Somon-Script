@@ -227,7 +227,13 @@ describe('Performance Regression Tests', () => {
     test('should handle union and intersection types efficiently', () => {
       const source = `
         навъ StringOrNumber = сатр | рақам;
-        навъ ComplexType = { a: рақам } & { b: сатр };
+        интерфейс TypeA {
+          a: рақам;
+        }
+        интерфейс TypeB {
+          b: сатр;
+        }
+        навъ ComplexType = TypeA & TypeB;
         навъ TupleType = [рақам, сатр, булӣ];
         
         тағйирёбанда value: StringOrNumber = 42;
