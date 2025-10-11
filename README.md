@@ -334,6 +334,86 @@ npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
 npm install @lindentech/somon-script --save-dev
 ```
 
+### CLI Multilingual Interface
+
+SomonScript CLI now supports **three languages**: English, Tajik, and Russian.
+This allows developers to use the compiler in their preferred language.
+
+#### Setting the Language
+
+```bash
+# Use Tajik interface
+somon --lang tj compile app.som
+
+# Use Russian interface
+somon --lang ru compile app.som
+
+# Use English interface (default)
+somon --lang en compile app.som
+```
+
+#### Automatic Language Detection
+
+The CLI automatically detects your system language from environment variables:
+
+```bash
+# Set preferred language via environment
+export SOMON_LANG=tj  # Tajik
+export SOMON_LANG=ru  # Russian
+export SOMON_LANG=en  # English
+
+# Or use system locale
+export LANG=tg_TJ.UTF-8  # Automatically uses Tajik
+export LANG=ru_RU.UTF-8  # Automatically uses Russian
+```
+
+#### Available Commands in Each Language
+
+<table>
+<tr><th>English</th><th>Tajik (Тоҷикӣ)</th><th>Russian (Русский)</th></tr>
+<tr>
+<td>
+
+```bash
+somon compile app.som
+somon run app.som
+somon init my-project
+somon bundle src/main.som
+somon module-info src/main.som
+somon resolve "./utils"
+somon serve --port 8080
+```
+
+</td>
+<td>
+
+```bash
+somon --lang tj компайл app.som
+somon --lang tj иҷро app.som
+somon --lang tj оғоз лоиҳаи-ман
+somon --lang tj баста src/main.som
+somon --lang tj маълумоти-модул src/main.som
+somon --lang tj ҳал "./utils"
+somon --lang tj хидмат --port 8080
+```
+
+</td>
+<td>
+
+```bash
+somon --lang ru компилировать app.som
+somon --lang ru запустить app.som
+somon --lang ru инициализация мой-проект
+somon --lang ru пакет src/main.som
+somon --lang ru информация-модуля src/main.som
+somon --lang ru разрешить "./utils"
+somon --lang ru сервер --port 8080
+```
+
+</td>
+</tr>
+</table>
+
 ### Your First Program
 
 ```bash

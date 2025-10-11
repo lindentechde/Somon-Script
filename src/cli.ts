@@ -1,15 +1,23 @@
 #!/usr/bin/env node
-/**
- * # SomonScript CLI Entry Point
+
+/*
+ * SomonScript CLI Entry Point with Localization Support
+ * Copyright (c) 2025 LindenTech IT Consulting
  *
- * Provides the `somon` executable that wraps the compiler with a rich command-line
- * experience. The CLI mirrors the behavior of the npm package and is primarily intended
- * for Node.js environments.
+ * Licensed under the MIT License. See the LICENSE file for details.
  */
 
-import { createProgram } from './cli/program';
+import { getLocalizedProgram } from './cli/localized-program';
+import { i18n } from './cli/i18n';
 
-const program = createProgram();
+// Detect language from arguments before creating program
+const langIndex = process.argv.indexOf('--lang');
+if (langIndex !== -1 && process.argv[langIndex + 1]) {
+  const lang = process.argv[langIndex + 1];
+  if (lang === 'tj' || lang === 'ru' || lang === 'en') {
+    i18n.setLanguage(lang as 'en' | 'tj' | 'ru');
+  }
+}
 
-// Parse command line arguments
-program.parse();
+const program = getLocalizedProgram();
+program.parse(process.argv);

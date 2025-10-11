@@ -17,6 +17,7 @@ import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
 import { ProductionValidator } from '../production-validator';
+import { i18n, t, type Language } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
   let currentDir = __dirname;
@@ -305,7 +306,7 @@ function mergeOptions(input: string, options: CompileOptions): CompileOptions {
 export function compileFile(input: string, options: CompileOptions): CompileResult {
   try {
     if (!fs.existsSync(input)) {
-      const message = `Error: File '${input}' not found`;
+      const message = t().commands.compile.messages.fileNotFound(input);
       console.error(message);
       process.exitCode = 1;
       return { code: '', errors: [message], warnings: [] };
@@ -321,13 +322,13 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
     });
 
     if (result.errors.length > 0) {
-      console.error('Compilation errors:');
+      console.error(t().commands.compile.messages.compilationErrors);
       result.errors.forEach(error => console.error(`  ${error}`));
       process.exitCode = 1;
     }
 
     if (result.warnings.length > 0) {
-      console.warn('Warnings:');
+      console.warn(t().commands.compile.messages.warnings);
       result.warnings.forEach(warning => console.warn(`  ${warning}`));
     }
 
@@ -374,28 +375,36 @@ export const cliRuntime = {
 export function createProgram(): Command {
   const program = new Command();
 
+  // Add global --lang option
   program
     .name('somon')
-    .description('SomonScript compiler - Compile Tajik Cyrillic code to JavaScript')
-    .version(pkg.version);
+    .description(t().commands.somon.description)
+    .version(pkg.version, '-V, --version', t().common.version)
+    .option('--lang <language>', 'Set interface language (en, tj, ru)', (value: string) => {
+      if (value === 'en' || value === 'tj' || value === 'ru') {
+        i18n.setLanguage(value as Language);
+      }
+      return value;
+    })
+    .helpOption('-h, --help', t().common.help);
 
   program
-    .command('compile')
-    .alias('c')
-    .description('Compile SomonScript files to JavaScript')
-    .usage('[input] [options]')
-    .argument('<input>', 'Input .som file')
-    .option('-o, --output <file>', 'Output file (default: same name with .js extension)')
-    .option('--out-dir <dir>', 'Output directory')
-    .option('--target <target>', 'Compilation target')
-    .option('--source-map', 'Generate source maps')
-    .option('--no-source-map', 'Disable source maps')
-    .option('--minify', 'Minify output')
-    .option('--no-minify', 'Disable minification')
-    .option('--no-type-check', 'Disable type checking')
-    .option('--strict', 'Enable strict type checking')
-    .option('-w, --watch', 'Recompile on file changes')
-    .option('--production', 'Enable production mode with strict validation')
+    .command(t().commands.compile.name)
+    .alias(t().commands.compile.alias)
+    .description(t().commands.compile.description)
+    .usage(t().commands.compile.usage)
+    .argument('<input>', t().commands.compile.args.input)
+    .option('-o, --output <file>', t().commands.compile.options.output)
+    .option('--out-dir <dir>', t().commands.compile.options.outDir)
+    .option('--target <target>', t().commands.compile.options.target)
+    .option('--source-map', t().commands.compile.options.sourceMap)
+    .option('--no-source-map', t().commands.compile.options.noSourceMap)
+    .option('--minify', t().commands.compile.options.minify)
+    .option('--no-minify', t().commands.compile.options.noMinify)
+    .option('--no-type-check', t().commands.compile.options.noTypeCheck)
+    .option('--strict', t().commands.compile.options.strict)
+    .option('-w, --watch', t().commands.compile.options.watch)
+    .option('--production', t().commands.compile.options.production)
     .action((input: string, options: CompileOptions): void => {
       try {
         let merged: CompileOptions;
@@ -450,12 +459,12 @@ export function createProgram(): Command {
               : input.replace(/\.som$/, '.js'));
           fs.mkdirSync(path.dirname(outputFile), { recursive: true });
           fs.writeFileSync(outputFile, result.code);
-          console.log(`Compiled '${input}' to '${outputFile}'`);
+          console.log(t().commands.compile.messages.compiled(input, outputFile));
 
           if (merged.sourceMap && result.sourceMap) {
             const sourceMapFile = `${outputFile}.map`;
             fs.writeFileSync(sourceMapFile, result.sourceMap);
-            console.log(`Generated source map: '${sourceMapFile}'`);
+            console.log(t().commands.compile.messages.sourceMapGenerated(sourceMapFile));
           }
 
           return true;
@@ -467,7 +476,7 @@ export function createProgram(): Command {
         }
 
         if (shouldWatch && process.env.NODE_ENV !== 'test') {
-          console.log(`Watching '${input}' for changes...`);
+          console.log(t().commands.compile.messages.watching(input));
           const absoluteInput = path.resolve(input);
           const watchTargets = new Set<string>([
             absoluteInput,
@@ -510,7 +519,7 @@ export function createProgram(): Command {
                 console.warn(`Source file '${input}' was removed. Waiting for it to reappear...`);
                 return;
               }
-              console.log(`Recompiling '${input}'...`);
+              console.log(t().commands.compile.messages.recompiling(input));
               compileOnce();
               return;
             }
@@ -522,9 +531,7 @@ export function createProgram(): Command {
               return;
             }
 
-            console.log(
-              `Configuration change detected in '${path.basename(normalizedPath)}'. Recompiling '${input}'...`
-            );
+            console.log(t().commands.compile.messages.configChanged(path.basename(normalizedPath)));
             compileOnce();
           };
 
