@@ -192,9 +192,9 @@ describe('Production Failure Modes', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 500,
+          maxMemoryBytes: 500 * 1024 * 1024,
           maxFileHandles: 200,
-          maxModulesInCache: 150,
+          maxCachedModules: 150,
         },
       });
 
@@ -215,10 +215,9 @@ describe('Production Failure Modes', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 100, // Very low limit to trigger warning
+          maxMemoryBytes: 100 * 1024 * 1024,
           maxFileHandles: 1000,
-          maxModulesInCache: 10000,
-          onWarning: warning => warnings.push(warning),
+          maxCachedModules: 10000,
         },
       });
 

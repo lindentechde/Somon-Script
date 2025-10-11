@@ -46,9 +46,9 @@ describe('Production Load Testing', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 500,
+          maxMemoryBytes: 500 * 1024 * 1024,
           maxFileHandles: 500,
-          maxModulesInCache: 500,
+          maxCachedModules: 500,
         },
       });
 
@@ -102,9 +102,9 @@ describe('Production Load Testing', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 1000,
+          maxMemoryBytes: 1000 * 1024 * 1024,
           maxFileHandles: 1000,
-          maxModulesInCache: 1000,
+          maxCachedModules: 1000,
         },
       });
 
@@ -131,14 +131,9 @@ describe('Production Load Testing', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 500,
+          maxMemoryBytes: 500 * 1024 * 1024,
           maxFileHandles: 500,
-          maxModulesInCache: 500,
-          onWarning: () => {
-            // Record memory usage when warning is triggered
-            const usage = process.memoryUsage();
-            memoryReadings.push(usage.heapUsed / 1024 / 1024);
-          },
+          maxCachedModules: 500,
         },
       });
 
@@ -293,9 +288,9 @@ describe('Production Load Testing', () => {
       moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
         resourceLimits: {
-          maxMemoryMB: 500,
+          maxMemoryBytes: 500 * 1024 * 1024,
           maxFileHandles: 500,
-          maxModulesInCache: 500,
+          maxCachedModules: 500,
         },
       });
 
