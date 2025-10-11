@@ -838,6 +838,22 @@ export function createProgram(): Command {
       }
     });
 
+  // Serve command for management server
+  program
+    .command('serve')
+    .description('Start the management server for health checks and metrics')
+    .option('-p, --port <port>', 'Port to listen on', '8080')
+    .option('-c, --config <file>', 'Path to configuration file')
+    .option('--production', 'Enable production mode with all safety features')
+    .option('--json', 'Use structured JSON logging')
+    .action(async _options => {
+      const { createServeCommand } = await import('./serve');
+      const serveCommand = createServeCommand();
+      await serveCommand.parseAsync([process.argv[0], process.argv[1], ...process.argv.slice(3)], {
+        from: 'user',
+      });
+    });
+
   return program;
 }
 

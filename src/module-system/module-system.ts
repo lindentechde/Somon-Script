@@ -637,61 +637,21 @@ export class ModuleSystem {
 
       for (const moduleId of compilationOrder) {
         const module = this.loader.getModule(moduleId);
-        if (module?.resolvedPath.endsWith('.som')) {
-          try {
-            const compileResult = compileSource(
-              module.source,
-              this.toPipelineOptions(compilationConfig)
-            );
+        if (!module?.resolvedPath.endsWith('.som')) {
+          continue;
+        }
 
-            // Collect all compilation errors with context and suggestions
-            if (compileResult.errors.length > 0) {
-              for (const errorMsg of compileResult.errors) {
-                const error = this.createCompilationError(errorMsg, module.resolvedPath);
-                errors.push(error);
+        const compilationResult = this.compileModule({
+          module,
+          moduleId,
+          compilationConfig,
+          modules,
+          errors,
+          warnings,
+        });
 
-                if (this.logger) {
-                  this.logger.error('Module compilation error', {
-                    file: error.filePath,
-                    line: error.line,
-                    column: error.column,
-                    message: error.message,
-                    suggestion: error.suggestion,
-                  });
-                }
-              }
-              // Continue to next module - collect all errors
-              continue;
-            }
-
-            const parsedMap = this.parseModuleSourceMap(module, compileResult.sourceMap, warnings);
-
-            modules.set(moduleId, { code: compileResult.code, map: parsedMap });
-
-            if (compileResult.warnings.length > 0) {
-              warnings.push(
-                ...compileResult.warnings.map(
-                  warning => `Warning in ${module.resolvedPath}: ${warning}`
-                )
-              );
-            }
-          } catch (error) {
-            // Handle unexpected compilation errors
-            const compilationError = this.createCompilationError(
-              `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
-              module.resolvedPath,
-              error instanceof Error ? error : undefined
-            );
-            errors.push(compilationError);
-
-            if (this.logger) {
-              this.logger.error('Unexpected compilation error', {
-                file: compilationError.filePath,
-                message: compilationError.message,
-                suggestion: compilationError.suggestion,
-              });
-            }
-          }
+        if (!compilationResult.success) {
+          continue; // Errors already collected, move to next module
         }
       }
 
@@ -1652,6 +1612,77 @@ export class ModuleSystem {
     }
   }
 
+  private compileModule(params: {
+    module: LoadedModule;
+    moduleId: string;
+    compilationConfig: CompilerOptions;
+    modules: Map<string, { code: string; map?: RawSourceMap }>;
+    errors: CompilationError[];
+    warnings: string[];
+  }): { success: boolean } {
+    const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
+    try {
+      const compileResult = compileSource(module.source, this.toPipelineOptions(compilationConfig));
+
+      // Handle compilation errors
+      if (compileResult.errors.length > 0) {
+        this.collectCompilationErrors(compileResult.errors, module.resolvedPath, errors);
+        return { success: false };
+      }
+
+      // Parse source map
+      const parsedMap = this.parseModuleSourceMap(module, compileResult.sourceMap, warnings);
+      modules.set(moduleId, { code: compileResult.code, map: parsedMap });
+
+      // Collect warnings
+      if (compileResult.warnings.length > 0) {
+        warnings.push(
+          ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      // Handle unexpected compilation errors
+      const compilationError = this.createCompilationError(
+        `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
+        module.resolvedPath,
+        error instanceof Error ? error : undefined
+      );
+      errors.push(compilationError);
+
+      if (this.logger) {
+        this.logger.error('Unexpected compilation error', {
+          file: compilationError.filePath,
+          message: compilationError.message,
+        });
+      }
+
+      return { success: false };
+    }
+  }
+
+  private collectCompilationErrors(
+    errorMessages: string[],
+    filePath: string,
+    errors: CompilationError[]
+  ): void {
+    for (const errorMsg of errorMessages) {
+      const error = this.createCompilationError(errorMsg, filePath);
+      errors.push(error);
+
+      if (this.logger) {
+        this.logger.error('Module compilation error', {
+          file: error.filePath,
+          line: error.line,
+          column: error.column,
+          message: error.message,
+          suggestion: error.suggestion,
+        });
+      }
+    }
+  }
+
   private parseModuleSourceMap(
     module: LoadedModule,
     rawMap: string | undefined,
@@ -1764,7 +1795,7 @@ export class ModuleSystem {
     return this.metrics.getStats(
       stats.totalModules,
       resourceUsage?.memoryUsed ?? 0,
-      resourceUsage?.memoryLimit ?? 100 * 1024 * 1024
+      resourceUsage?.memoryLimit ?? 1024 * 1024 * 1024
     );
   }
 
@@ -1794,7 +1825,7 @@ export class ModuleSystem {
     const stats = this.registry.getStatistics();
     return await this.metrics.performHealthChecks(
       stats.totalModules,
-      100 * 1024 * 1024 // Default 100MB limit
+      1024 * 1024 * 1024 // Default 1GB limit
     );
   }
 

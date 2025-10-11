@@ -7,6 +7,7 @@ import * as url from 'url';
 import { ModuleSystemMetrics } from './metrics';
 import { CircuitBreakerManager } from './circuit-breaker';
 import { LoggerFactory, LogLevel } from './logger';
+import { PrometheusExporter } from './prometheus-metrics';
 
 export interface RuntimeConfig {
   // Module system configuration
@@ -66,7 +67,7 @@ export class RuntimeConfigManager {
     this.config = {
       // Default configuration
       maxCacheSize: 1000,
-      maxCacheMemory: 100 * 1024 * 1024, // 100MB
+      maxCacheMemory: 512 * 1024 * 1024, // 512MB
       circularDependencyStrategy: 'warn',
       enableTracing: true,
       logLevel: 'info',
@@ -186,6 +187,7 @@ export class ManagementServer {
   private readonly activeConnections = new Set<{ destroy: () => void }>();
   private isShuttingDown = false;
   private readonly SHUTDOWN_TIMEOUT_MS = 30000; // 30 seconds
+  private readonly prometheusExporter = new PrometheusExporter();
 
   constructor(
     metrics: ModuleSystemMetrics,
@@ -346,6 +348,9 @@ export class ManagementServer {
         case '/metrics':
           await this.handleMetrics(req, res);
           break;
+        case '/metrics/prometheus':
+          await this.handlePrometheusMetrics(req, res);
+          break;
         case '/config':
           await this.handleConfig(req, res);
           break;
@@ -423,6 +428,22 @@ export class ManagementServer {
     const stats = this.metrics.getStats(0, 0, config.maxCacheMemory);
 
     this.sendJsonResponse(res, 200, stats);
+  }
+
+  private async handlePrometheusMetrics(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): Promise<void> {
+    const config = this.configManager.getConfig();
+    const stats = this.metrics.getStats(0, 0, config.maxCacheMemory);
+
+    const prometheusText = this.prometheusExporter.exportMetrics(stats, this.circuitBreakers);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; version=0.0.4',
+      'Content-Length': Buffer.byteLength(prometheusText),
+    });
+    res.end(prometheusText);
   }
 
   private async handleConfig(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {

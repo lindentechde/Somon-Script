@@ -74,7 +74,7 @@ export class ModuleLoader {
       circularDependencyStrategy: options.circularDependencyStrategy || 'warn',
       externals: options.externals ?? [],
       maxCacheSize: options.maxCacheSize ?? 1000, // Default 1000 modules
-      maxCacheMemory: options.maxCacheMemory ?? 100 * 1024 * 1024, // Default 100MB
+      maxCacheMemory: options.maxCacheMemory ?? 512 * 1024 * 1024, // Default 512MB
     };
 
     // Initialize production systems only when explicitly provided
