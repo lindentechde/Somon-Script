@@ -4,9 +4,12 @@
 
 ## Current Status: Production Ready ✅
 
-**Version:** 0.3.37 **Actual Readiness:** 92-95% **Language Features:** ✅
-Complete **Operational Readiness:** ✅ All systems implemented **Critical
-Blockers:** ✅ All resolved
+**Version:** 0.3.37  
+**Actual Readiness:** 92-95%  
+**Language Features:** ✅ Complete  
+**Operational Readiness:** ✅ All systems implemented  
+**Critical Blockers:** ✅ All resolved  
+**Last Updated:** January 2025
 
 ## Production Readiness Criteria
 
@@ -473,10 +476,261 @@ NODE_ENV=production somon compile app.som
 - `tests/resource-limiter.test.ts` - Resource limiter tests (15 tests)
 - `tests/async-timeout.test.ts` - Async timeout tests (14 tests)
 
+## 🚢 Deployment Checklist
+
+### Pre-Deployment
+
+- [ ] Validate Node.js version (20.x, 22.x, 23.x, 24.x)
+- [ ] Run production validation: `somon compile test.som --production`
+- [ ] Test all critical paths with production mode
+- [ ] Review resource limits in `somon.config.json`
+- [ ] Set up monitoring infrastructure (Prometheus/Grafana)
+- [ ] Configure log aggregation (ELK/CloudWatch)
+- [ ] Test graceful shutdown: `kill -TERM <pid>`
+- [ ] Verify health endpoints: `curl http://localhost:8080/health`
+
+### Deployment
+
+- [ ] Use `--production` flag or set `NODE_ENV=production`
+- [ ] Enable management server with specific port
+- [ ] Configure circuit breakers for external dependencies
+- [ ] Set appropriate memory limits (`NODE_OPTIONS`)
+- [ ] Configure log rotation
+- [ ] Set up reverse proxy with SSL/TLS
+- [ ] Enable firewall rules for management port
+- [ ] Document rollback procedure
+
+### Post-Deployment
+
+- [ ] Monitor initial memory usage
+- [ ] Check error rates in first hour
+- [ ] Verify circuit breaker behavior
+- [ ] Test health endpoints from load balancer
+- [ ] Review initial performance metrics
+- [ ] Confirm log aggregation working
+- [ ] Document any issues for runbook
+
+## 📊 Production Metrics Dashboard
+
+### Key Performance Indicators (KPIs)
+
+1. **Availability**
+   - Uptime percentage (target: 99.9%)
+   - Health check success rate
+   - Circuit breaker open frequency
+
+2. **Performance**
+   - Compilation latency (p50, p95, p99)
+   - Module loading time
+   - Bundle generation time
+   - Memory usage trend
+
+3. **Reliability**
+   - Error rate by category
+   - Failed compilation percentage
+   - Resource exhaustion events
+   - Graceful shutdown success rate
+
+4. **Capacity**
+   - Concurrent compilations
+   - Module cache hit rate
+   - Memory utilization
+   - File handle usage
+
+### Alert Thresholds
+
+```yaml
+alerts:
+  - name: HighErrorRate
+    condition: error_rate > 0.05
+    severity: warning
+
+  - name: MemoryPressure
+    condition: memory_usage > 0.8
+    severity: warning
+
+  - name: CircuitBreakerOpen
+    condition: circuit_breaker_state == "open"
+    severity: critical
+
+  - name: CompilationTimeout
+    condition: compilation_duration > 30s
+    severity: warning
+
+  - name: ServiceDown
+    condition: health_check_failed > 3
+    severity: critical
+```
+
+## 🔧 Troubleshooting Guide
+
+### Common Production Issues
+
+#### 1. High Memory Usage
+
+**Symptoms:** OOM kills, slow response times  
+**Diagnosis:** Check `/metrics` endpoint  
+**Resolution:**
+
+- Increase memory limits
+- Reduce cache size
+- Enable memory profiling
+- Check for memory leaks
+
+#### 2. Circuit Breaker Tripping
+
+**Symptoms:** Modules not loading, compilation failures  
+**Diagnosis:** Check `/circuit-breakers` endpoint  
+**Resolution:**
+
+- Identify failing dependencies
+- Check network connectivity
+- Increase timeout thresholds
+- Manual reset if needed
+
+#### 3. Compilation Timeouts
+
+**Symptoms:** Process hangs, no output  
+**Diagnosis:** Check logs for timeout errors  
+**Resolution:**
+
+- Increase compilation timeout
+- Check for circular dependencies
+- Reduce module complexity
+- Enable parallel processing
+
+#### 4. Resource Exhaustion
+
+**Symptoms:** EMFILE, ENOMEM errors  
+**Diagnosis:** Check resource limiter logs  
+**Resolution:**
+
+- Increase file handle limits
+- Reduce concurrent operations
+- Enable resource throttling
+- Restart with higher limits
+
+## 🎯 Production Best Practices
+
+### Configuration Management
+
+1. **Use Environment-Specific Configs**
+
+   ```bash
+   somon.config.production.json
+   somon.config.staging.json
+   somon.config.development.json
+   ```
+
+2. **Secure Sensitive Data**
+   - Never commit credentials
+   - Use environment variables for secrets
+   - Rotate API keys regularly
+   - Audit configuration access
+
+3. **Version Control Everything**
+   - Configuration files
+   - Deployment scripts
+   - Monitoring rules
+   - Runbook procedures
+
+### Operational Excellence
+
+1. **Monitoring First**
+   - Set up monitoring before deployment
+   - Define SLIs and SLOs
+   - Create actionable alerts
+   - Build comprehensive dashboards
+
+2. **Gradual Rollout**
+   - Deploy to staging first
+   - Use canary deployments
+   - Monitor key metrics during rollout
+   - Have rollback plan ready
+
+3. **Documentation**
+   - Keep runbooks updated
+   - Document known issues
+   - Maintain architecture diagrams
+   - Update troubleshooting guides
+
+4. **Regular Maintenance**
+   - Review and update dependencies
+   - Perform load testing quarterly
+   - Audit security configurations
+   - Clean up old logs and caches
+
+## 📈 Capacity Planning
+
+### Resource Requirements
+
+| Workload                  | Memory | CPU      | File Handles | Recommendation |
+| ------------------------- | ------ | -------- | ------------ | -------------- |
+| Small (<100 files)        | 512MB  | 0.5 core | 100          | Development    |
+| Medium (100-1000 files)   | 1GB    | 1 core   | 500          | Staging        |
+| Large (1000-5000 files)   | 2GB    | 2 cores  | 1000         | Production     |
+| Extra Large (5000+ files) | 4GB+   | 4+ cores | 2000+        | Enterprise     |
+
+### Scaling Strategies
+
+1. **Vertical Scaling**
+   - Increase memory for large projects
+   - Add CPU cores for parallel compilation
+   - Expand file handle limits
+
+2. **Horizontal Scaling**
+   - Use load balancer for multiple instances
+   - Implement shared cache (Redis)
+   - Distribute by project or team
+
+3. **Performance Optimization**
+   - Enable module caching
+   - Use incremental compilation
+   - Implement build caching
+   - Optimize dependency resolution
+
+## 🔐 Security Considerations
+
+### Production Security Checklist
+
+- [ ] Enable strict mode in production
+- [ ] Validate all input files
+- [ ] Restrict management endpoints to internal network
+- [ ] Use HTTPS for all endpoints
+- [ ] Implement rate limiting
+- [ ] Enable audit logging
+- [ ] Regular security updates
+- [ ] Vulnerability scanning
+- [ ] Penetration testing (annual)
+
+### Compliance Requirements
+
+- Log retention per policy
+- Data residency requirements
+- Encryption at rest and in transit
+- Access control and authentication
+- Regular security audits
+- Incident response procedures
+
+## 📝 Summary
+
+SomonScript is **production ready** with comprehensive operational features:
+
+✅ **Language completeness** - Full Tajik syntax support  
+✅ **Error handling** - Graceful degradation and recovery  
+✅ **Monitoring** - Health, metrics, and observability  
+✅ **Resource management** - Limits, timeouts, and cleanup  
+✅ **Production hardening** - Validation, circuit breakers, logging  
+✅ **Deployment support** - Docker, Kubernetes, systemd
+
+The system follows production best practices and is ready for real-world
+deployment.
+
 ## Remember
 
 **"Always examine implementation, never trust documentation alone."**
 
-The current implementation has good language features but lacks the operational
-excellence required for production systems. This checklist follows AGENTS.md
-principles to ensure true production readiness, not just feature completeness.
+This production readiness checklist follows AGENTS.md principles to ensure true
+operational excellence, not just feature completeness. The current
+implementation provides both language features AND the operational robustness
+required for production systems.

@@ -41,6 +41,12 @@ somon compile app.som                    # Compile to JavaScript
 somon run app.som                        # Compile and execute
 somon bundle src/main.som -o dist/app.js # Bundle modules
 somon module-info src/main.som --graph   # Analyze dependencies
+somon serve --port 8080                  # Start management server
+somon resolve "./utils" --from src/main.som # Resolve module paths
+
+# Production mode with all safety features
+somon compile app.som --production
+NODE_ENV=production somon run app.som
 ```
 
 ## Architecture
@@ -100,6 +106,41 @@ projects:
 modules internally, enabling seamless interop between compiled output and source
 modules.
 
+### Production Systems (`src/module-system/`)
+
+The module system includes comprehensive production features:
+
+- **CircuitBreakerManager** (`circuit-breaker.ts`) - Fault isolation
+  - Automatic failure detection and recovery
+  - Configurable thresholds and timeouts
+  - State tracking: closed → open → half-open
+
+- **PrometheusExporter** (`prometheus-metrics.ts`) - Metrics collection
+  - Standard Prometheus text format
+  - Module compilation metrics
+  - Cache hit/miss ratios
+  - Circuit breaker states
+  - Memory and CPU usage
+
+- **ManagementServer** (`runtime-config.ts`) - HTTP endpoints
+  - `/health` - Health status with detailed checks
+  - `/metrics` - Prometheus metrics endpoint
+  - `/ready` - Kubernetes readiness probe
+  - `/config` - Runtime configuration (GET/POST)
+  - Graceful shutdown with connection draining
+
+- **ResourceLimiter** (`resource-limiter.ts`) - Resource management
+  - Memory limits with automatic cleanup
+  - Module count limits
+  - Compilation timeouts
+  - Cache size management
+
+- **StructuredLogger** (`structured-logger.ts`) - Production logging
+  - JSON-formatted logs for aggregation
+  - Log levels: debug, info, warn, error
+  - Context preservation across operations
+  - Integration with monitoring systems
+
 ### Configuration System
 
 **File**: `somon.config.json` (auto-discovered up the directory tree)
@@ -109,7 +150,18 @@ modules.
   "compilerOptions": { "target": "es2020", "sourceMap": true },
   "moduleSystem": {
     "resolution": { "baseUrl": ".", "extensions": [".som", ".js"] },
-    "loading": { "circularDependencyStrategy": "warn" }
+    "loading": { "circularDependencyStrategy": "warn" },
+    "metrics": true,
+    "circuitBreakers": true,
+    "logger": true,
+    "managementServer": true,
+    "managementPort": 8080,
+    "resourceLimits": {
+      "maxMemory": 512,
+      "maxModules": 1000,
+      "maxCacheSize": 100,
+      "compilationTimeout": 5000
+    }
   },
   "bundle": { "format": "commonjs", "minify": false }
 }

@@ -55,22 +55,34 @@ Create `somon.config.json` in your project root:
     "strict": true,
     "noTypeCheck": false,
     "minify": true,
-    "timeout": 120000
+    "timeout": 120000,
+    "inlineSourceMap": false,
+    "preserveSymlinks": false
   },
   "moduleSystem": {
     "resolution": {
       "baseUrl": ".",
-      "extensions": [".som", ".js"]
+      "extensions": [".som", ".js"],
+      "paths": {},
+      "preserveSymlinks": false
     },
     "loading": {
       "circularDependencyStrategy": "error",
-      "externals": []
+      "externals": [],
+      "maxCacheSize": 100,
+      "parallelLoading": true,
+      "preloadModules": []
     },
     "metrics": true,
     "circuitBreakers": true,
+    "logger": true,
     "managementServer": true,
     "managementPort": 8080,
     "resourceLimits": {
+      "maxMemory": 1024,
+      "maxModules": 1000,
+      "maxCacheSize": 100,
+      "compilationTimeout": 5000,
       "maxMemoryBytes": 1073741824,
       "maxFileHandles": 1000,
       "maxCachedModules": 10000
@@ -79,7 +91,16 @@ Create `somon.config.json` in your project root:
   "bundle": {
     "format": "commonjs",
     "minify": true,
-    "sourceMaps": true
+    "sourceMaps": true,
+    "externals": [],
+    "outputPath": "./dist",
+    "inlineSources": false
+  },
+  "production": {
+    "enableAllSafetyFeatures": true,
+    "strictMode": true,
+    "errorRecovery": true,
+    "telemetry": false
   }
 }
 ```
@@ -93,6 +114,9 @@ export NODE_ENV=production
 # Logging
 export LOG_FORMAT=json
 export LOG_LEVEL=info
+export SOMON_LOG_FILE=/var/log/somon/app.log
+export SOMON_LOG_MAX_SIZE=10485760
+export SOMON_LOG_MAX_FILES=5
 
 # Memory limits
 export NODE_OPTIONS="--max-old-space-size=1024"
@@ -100,6 +124,18 @@ export NODE_OPTIONS="--max-old-space-size=1024"
 # Management server
 export SOMON_MANAGEMENT_PORT=8080
 export SOMON_METRICS_ENABLED=true
+export SOMON_CIRCUIT_BREAKERS_ENABLED=true
+export SOMON_RESOURCE_LIMITER_ENABLED=true
+
+# Performance tuning
+export UV_THREADPOOL_SIZE=8
+export SOMON_PARALLEL_COMPILATION=true
+export SOMON_MODULE_CACHE_SIZE=1000
+
+# Security
+export SOMON_STRICT_MODE=true
+export SOMON_VALIDATE_INPUTS=true
+export SOMON_MAX_AST_DEPTH=100
 ```
 
 ## Health Monitoring
@@ -372,6 +408,108 @@ chmod 750 /opt/somon-script
 chmod 640 /opt/somon-script/somon.config.json
 ```
 
+## Systemd Service
+
+### Service Configuration
+
+Create `/etc/systemd/system/somon-script.service`:
+
+```ini
+[Unit]
+Description=SomonScript Compiler Service
+Documentation=https://github.com/lindentechde/Somon-Script
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=somon
+Group=somon
+WorkingDirectory=/opt/somon-script
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="NODE_OPTIONS=--max-old-space-size=1024"
+Environment="LOG_FORMAT=json"
+Environment="LOG_LEVEL=info"
+
+# Start command
+ExecStart=/usr/bin/node /opt/somon-script/dist/cli/program.js serve --production --json --port 8080
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=512
+MemoryHigh=1G
+MemoryMax=1536M
+CPUQuota=80%
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/somon
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=somon-script
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Managing the Service
+
+```bash
+# Reload systemd configuration
+sudo systemctl daemon-reload
+
+# Start the service
+sudo systemctl start somon-script
+
+# Enable auto-start on boot
+sudo systemctl enable somon-script
+
+# Check status
+sudo systemctl status somon-script
+
+# View logs
+sudo journalctl -u somon-script -f
+
+# Restart service
+sudo systemctl restart somon-script
+
+# Stop service
+sudo systemctl stop somon-script
+```
+
+### Log Rotation
+
+Create `/etc/logrotate.d/somon-script`:
+
+```
+/var/log/somon/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 somon somon
+    sharedscripts
+    postrotate
+        systemctl reload somon-script > /dev/null 2>&1 || true
+    endscript
+}
+```
+
 ## Performance Tuning
 
 ### 1. Memory Configuration
@@ -517,34 +655,81 @@ node --heap-prof somon compile large-app.som
 
 ## Docker Deployment
 
-### Dockerfile
+### Multi-stage Dockerfile
 
 ```dockerfile
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the project
+RUN npm run build && \
+    npm run test:ci && \
+    npm prune --production
+
+# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Copy application
-COPY dist ./dist
-COPY somon.config.json ./
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
+# Copy built application from builder
+COPY --from=builder --chown=nodejs:nodejs /build/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /build/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /build/package*.json ./
+COPY --chown=nodejs:nodejs somon.config.json ./
+
+# Create log directory
+RUN mkdir -p /var/log/somon && \
+    chown -R nodejs:nodejs /var/log/somon
+
 USER nodejs
 
+# Expose management server port
 EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
-CMD ["node", "dist/cli.js", "serve", "--production", "--json"]
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/cli/program.js", "serve", "--production", "--json", "--port", "8080"]
+```
+
+### Docker Build and Run
+
+```bash
+# Build the image
+docker build -t somon-script:latest .
+
+# Run with resource limits
+docker run -d \
+  --name somon \
+  -p 8080:8080 \
+  --memory="1g" \
+  --memory-swap="1g" \
+  --cpu-shares=1024 \
+  --restart=unless-stopped \
+  -v $(pwd)/logs:/var/log/somon \
+  -v $(pwd)/app:/app/src:ro \
+  -e NODE_ENV=production \
+  -e LOG_LEVEL=info \
+  somon-script:latest
 ```
 
 ### Docker Compose

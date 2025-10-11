@@ -235,6 +235,19 @@ embedded into the emitted `.map` file.
 
 - Module System guide: `docs/module-system.md`
 
+### **Production Readiness**
+
+SomonScript is **production ready** with comprehensive operational features:
+
+- ✅ **Complete language implementation** - All Tajik syntax features working
+- ✅ **Error handling** - Graceful degradation and comprehensive error reporting
+- ✅ **Monitoring & observability** - Health checks, metrics, structured logging
+- ✅ **Resource management** - Memory limits, timeouts, graceful shutdown
+- ✅ **Fault tolerance** - Circuit breakers, error recovery, resource cleanup
+- ✅ **Deployment support** - Docker, Kubernetes, systemd, PM2
+
+📖 **Details**: [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)
+
 ### **Module System Overview**
 
 SomonScript features a comprehensive module system designed for large-scale
@@ -376,9 +389,25 @@ somon run app.som
 # Initialize new project
 somon init my-project
 
+# Start management server for monitoring
+somon serve --port 8080
+
 # Get help
 somon --help
 somon compile --help
+```
+
+### Module Management
+
+```bash
+# Bundle modules into single file
+somon bundle src/main.som -o dist/bundle.js --minify
+
+# Analyze module dependencies
+somon module-info src/main.som --graph --circular --stats
+
+# Resolve module paths
+somon resolve "./utils" --from src/main.som
 ```
 
 ---
@@ -408,6 +437,178 @@ Source Code (.som)
 - **Type Checker**: Advanced static analysis with inference
 - **Code Generator**: Produces clean, optimized JavaScript
 - **CLI**: Developer-friendly command-line interface
+- **Module System**: Production-grade module resolution and bundling
+- **Production Systems**: Circuit breakers, metrics, health checks
+
+---
+
+## 🔒 Production Features
+
+### **Enterprise-Grade Reliability**
+
+SomonScript includes comprehensive production features for enterprise
+deployment:
+
+#### **Operational Visibility**
+
+```bash
+# Start management server with health checks and metrics
+somon serve --port 8080
+
+# Access endpoints:
+curl http://localhost:8080/health  # Health status
+curl http://localhost:8080/metrics # Prometheus metrics
+curl http://localhost:8080/ready   # Readiness probe
+```
+
+#### **Production Mode**
+
+```bash
+# Enable all production features
+somon compile app.som --production
+somon bundle app.som --production
+
+# Or via environment
+NODE_ENV=production somon run app.som
+```
+
+Production mode enforces:
+
+- ✅ Circuit breakers for fault tolerance
+- ✅ Structured logging with levels
+- ✅ Resource limits and timeout protection
+- ✅ Prometheus metrics collection
+- ✅ Graceful shutdown handling
+- ✅ Memory and CPU monitoring
+
+#### **Circuit Breakers**
+
+Automatic fault isolation for resilient operations:
+
+```json
+{
+  "moduleSystem": {
+    "circuitBreakers": true,
+    "failureThreshold": 5,
+    "recoveryTimeout": 30000
+  }
+}
+```
+
+#### **Resource Management**
+
+```json
+{
+  "moduleSystem": {
+    "resourceLimits": {
+      "maxMemory": 512, // MB
+      "maxModules": 1000,
+      "maxCacheSize": 100, // MB
+      "compilationTimeout": 5000 // ms
+    }
+  }
+}
+```
+
+#### **Metrics & Monitoring**
+
+Built-in Prometheus metrics exporter:
+
+- Module compilation times
+- Cache hit/miss ratios
+- Circuit breaker states
+- Memory usage patterns
+- Error rates and types
+
+#### **Health Checks**
+
+```json
+// GET /health response
+{
+  "status": "healthy",
+  "version": "0.3.36",
+  "uptime": 3600,
+  "checks": [
+    { "name": "memory", "status": "pass" },
+    { "name": "cache", "status": "pass" },
+    { "name": "circuitBreakers", "status": "pass" }
+  ]
+}
+```
+
+---
+
+## 🚀 Production Deployment
+
+### **Production Mode**
+
+SomonScript includes comprehensive production features activated with the
+`--production` flag:
+
+```bash
+# Compile with production mode
+somon compile app.som --production
+
+# Run with production mode
+somon run app.som --production
+
+# Bundle with production mode
+somon bundle app.som --production
+
+# Or use environment variable
+NODE_ENV=production somon compile app.som
+```
+
+**Production mode automatically enables:**
+
+- ✅ Environment validation (Node version, permissions)
+- ✅ Circuit breakers for fault tolerance
+- ✅ Resource limits (memory, file handles)
+- ✅ Structured JSON logging
+- ✅ Metrics collection
+- ✅ Graceful shutdown handling
+
+### **Deployment Options**
+
+#### **Docker**
+
+```bash
+docker run -d \
+  --name somon \
+  -p 8080:8080 \
+  -e NODE_ENV=production \
+  somon-script:latest
+```
+
+#### **Kubernetes**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: somon-script
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: somon
+          image: somon-script:latest
+          env:
+            - name: NODE_ENV
+              value: production
+```
+
+#### **Systemd**
+
+```bash
+# Install service
+sudo cp somon-script.service /etc/systemd/system/
+sudo systemctl enable somon-script
+sudo systemctl start somon-script
+```
+
+📖 **Full deployment guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -415,8 +616,8 @@ Source Code (.som)
 
 ### Prerequisites
 
-- Node.js 20.x or 22.x (LTS)
-- npm or yarn
+- Node.js 20.x, 22.x, 23.x, or 24.x
+- npm 8.x or higher
 - TypeScript knowledge (for internal development)
 
 ### Setup
