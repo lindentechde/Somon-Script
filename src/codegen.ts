@@ -307,6 +307,11 @@ export class CodeGenerator {
 
   // eslint-disable-next-line complexity
   private generateExpression(node: Expression): string {
+    // Handle null or undefined node
+    if (!node) {
+      return '';
+    }
+
     // Use a more direct delegation approach
     const simpleExpressions = [
       'Identifier',
@@ -793,6 +798,10 @@ export class CodeGenerator {
       return this.indent(`${isAbstract}${isStatic}${methodName}(${params});`);
     } else {
       // Regular methods have a body
+      // Handle cases where body might be null or undefined
+      if (!node.value || !node.value.body) {
+        return this.indent(`${isStatic}${methodName}(${params}) {}`);
+      }
       const body = this.generateBlockStatement(node.value.body);
       return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
     }

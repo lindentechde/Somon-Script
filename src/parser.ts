@@ -533,7 +533,14 @@ export class Parser {
   private equality(): Expression {
     let expr = this.comparison();
 
-    while (this.match(TokenType.EQUAL, TokenType.NOT_EQUAL)) {
+    while (
+      this.match(
+        TokenType.EQUAL,
+        TokenType.NOT_EQUAL,
+        TokenType.STRICT_EQUAL,
+        TokenType.STRICT_NOT_EQUAL
+      )
+    ) {
       const operator = this.previous();
       const right = this.comparison();
       expr = {

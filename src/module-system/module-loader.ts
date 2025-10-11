@@ -56,6 +56,7 @@ export class ModuleLoader {
   private readonly options: Required<ModuleLoadOptions>;
   private externalSpecifiers: Set<string> = new Set();
   private currentMemoryUsage: number = 0;
+  private warnings: string[] = [];
 
   // Production systems
   private readonly metrics?: ModuleSystemMetrics;
@@ -334,13 +335,16 @@ export class ModuleLoader {
     switch (this.options.circularDependencyStrategy) {
       case 'error':
         throw new Error(message);
-      case 'warn':
+      case 'warn': {
+        const warningMessage = `${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`;
+        this.warnings.push(warningMessage);
         logger.warn('Circular dependency detected', {
           moduleId,
           chain,
           message,
         });
         break;
+      }
       case 'ignore':
         break;
     }
@@ -604,5 +608,19 @@ export class ModuleLoader {
 
   private getExternalModuleId(specifier: string): string {
     return `external:${specifier}`;
+  }
+
+  /**
+   * Get collected warnings
+   */
+  getWarnings(): string[] {
+    return [...this.warnings];
+  }
+
+  /**
+   * Clear collected warnings
+   */
+  clearWarnings(): void {
+    this.warnings = [];
   }
 }

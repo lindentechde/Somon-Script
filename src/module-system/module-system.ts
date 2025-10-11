@@ -615,6 +615,13 @@ export class ModuleSystem {
       // Load entry point and all dependencies
       const entryModule = await this.loader.load(entryPoint, path.dirname(entryPoint));
 
+      // Collect warnings from the loader (e.g., circular dependency warnings)
+      const loaderWarnings = this.loader.getWarnings();
+      if (loaderWarnings.length > 0) {
+        warnings.push(...loaderWarnings);
+        this.loader.clearWarnings(); // Clear warnings after collecting them
+      }
+
       // Register all loaded modules
       const allModules = this.loader.getAllModules();
       for (const module of allModules) {

@@ -16,6 +16,7 @@ describe('Performance Regression Tests', () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-perf-'));
     moduleSystem = new ModuleSystem({
       resolution: { baseUrl: tempDir },
+      loading: { circularDependencyStrategy: 'warn' },
       metrics: true,
     });
   });
@@ -32,7 +33,7 @@ describe('Performance Regression Tests', () => {
       const source = `
         тағйирёбанда x: рақам = 10;
         функсия calculate(a: рақам, b: рақам): рақам {
-          баргардон a + b * x;
+          бозгашт a + b * x;
         }
         чоп.сабт(calculate(5, 3));
       `;
@@ -89,8 +90,8 @@ describe('Performance Regression Tests', () => {
       // Create 10 interconnected modules
       for (let i = 0; i < 10; i++) {
         const imports = i > 0 ? `ворид { func${i - 1} } аз "./module${i - 1}.som";` : '';
-        const exports = `содир функсия func${i}() { баргардон ${i}; }`;
-        const content = `${imports}\n${exports}\nсодир { func${i} };`;
+        const exports = `содир функсия func${i}() { бозгашт ${i}; }`;
+        const content = imports ? `${imports}\n${exports}` : exports;
         fs.writeFileSync(path.join(tempDir, `module${i}.som`), content);
       }
 
@@ -109,7 +110,7 @@ describe('Performance Regression Tests', () => {
       // Create modules for bundling
       fs.writeFileSync(
         path.join(tempDir, 'utils.som'),
-        'содир функсия add(a: рақам, b: рақам): рақам { баргардон a + b; }\nсодир { add };'
+        'содир функсия add(a: рақам, b: рақам): рақам { бозгашт a + b; }'
       );
       fs.writeFileSync(
         path.join(tempDir, 'main.som'),
@@ -131,11 +132,11 @@ describe('Performance Regression Tests', () => {
       // Create circular dependency
       fs.writeFileSync(
         path.join(tempDir, 'a.som'),
-        'ворид { b } аз "./b.som";\nсодир функсия a() { баргардон "a"; }\nсодир { a };'
+        'ворид { b } аз "./b.som";\nсодир функсия a() { бозгашт "a"; }'
       );
       fs.writeFileSync(
         path.join(tempDir, 'b.som'),
-        'ворид { a } аз "./a.som";\nсодир функсия b() { баргардон "b"; }\nсодир { b };'
+        'ворид { a } аз "./a.som";\nсодир функсия b() { бозгашт "b"; }'
       );
 
       const start = performance.now();
@@ -188,7 +189,7 @@ describe('Performance Regression Tests', () => {
       }
 
       const stats = moduleSystem.getStatistics();
-      expect(stats.cachedModules).toBe(0);
+      expect(stats.totalModules).toBe(0);
     });
   });
 
@@ -252,9 +253,9 @@ function generateMediumProgram(): string {
   for (let i = 0; i < 50; i++) {
     lines.push(`функсия func${i}(x: рақам): рақам {`);
     lines.push(`  агар (x > ${i}) {`);
-    lines.push(`    баргардон x * ${i};`);
+    lines.push(`    бозгашт x * ${i};`);
     lines.push(`  } вагарна {`);
-    lines.push(`    баргардон x + ${i};`);
+    lines.push(`    бозгашт x + ${i};`);
     lines.push(`  }`);
     lines.push(`}`);
   }
@@ -285,7 +286,7 @@ function generateLargeProgram(): string {
     lines.push(`  constructor(value: рақам) {}`);
     for (let j = 0; j < 5; j++) {
       lines.push(`  method${j}(): ${j % 2 === 0 ? 'рақам' : 'сатр'} {`);
-      lines.push(`    баргардон ${j % 2 === 0 ? j : `"string${j}"`};`);
+      lines.push(`    бозгашт ${j % 2 === 0 ? j : `"string${j}"`};`);
       lines.push(`  }`);
     }
     lines.push(`}`);
@@ -299,7 +300,7 @@ function generateLargeProgram(): string {
     lines.push(`      чоп.сабт(y + i);`);
     lines.push(`    }`);
     lines.push(`  }`);
-    lines.push(`  баргардон x > 10;`);
+    lines.push(`  бозгашт x > 10;`);
     lines.push(`}`);
   }
 

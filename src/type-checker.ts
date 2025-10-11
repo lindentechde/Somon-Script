@@ -449,6 +449,31 @@ export class TypeChecker {
       return targetType;
     }
 
+    // If we have a target intersection type, infer the object and let type checking handle it
+    if (targetType && targetType.kind === 'intersection') {
+      // Infer object type from properties
+      const properties = new Map<string, PropertyType>();
+
+      if (objExpr.properties) {
+        for (const prop of objExpr.properties) {
+          if (prop.key && prop.value) {
+            const keyName =
+              prop.key.type === 'Identifier'
+                ? (prop.key as Identifier).name
+                : String((prop.key as Literal).value);
+            const valueType = this.inferExpressionType(prop.value);
+            properties.set(keyName, {
+              type: valueType,
+              optional: false,
+            });
+          }
+        }
+      }
+
+      // Return the object type - isAssignable will check if it matches the intersection
+      return { kind: 'object', properties: properties };
+    }
+
     // Otherwise, infer object type from properties
     const properties = new Map<string, PropertyType>();
 
@@ -523,6 +548,10 @@ export class TypeChecker {
       return true;
     }
 
+    if (this.isObjectAssignable(source, target)) {
+      return true;
+    }
+
     if (this.isClassAssignable(source, target)) {
       return true;
     }
@@ -588,6 +617,16 @@ export class TypeChecker {
       return false;
     }
     if (source.kind === 'interface' || source.kind === 'object') {
+      return this.isStructurallyCompatible(source, target);
+    }
+    return false;
+  }
+
+  private isObjectAssignable(source: Type, target: Type): boolean {
+    if (target.kind !== 'object') {
+      return false;
+    }
+    if (source.kind === 'object') {
       return this.isStructurallyCompatible(source, target);
     }
     return false;
