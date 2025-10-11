@@ -32,6 +32,7 @@ export enum TokenType {
   ВОРИД = 'ВОРИД', // import
   СОДИР = 'СОДИР', // export
   АЗ = 'АЗ', // from
+  ДАР = 'ДАР', // in
   ПЕШФАРЗ = 'ПЕШФАРЗ', // default
   ЧУН = 'ЧУН', // as
 

@@ -9,6 +9,8 @@ import {
   IfStatement,
   WhileStatement,
   ForStatement,
+  ForInStatement,
+  ForOfStatement,
   ExpressionStatement,
   Identifier,
   Literal,
@@ -16,6 +18,7 @@ import {
   UnaryExpression,
   UpdateExpression,
   CallExpression,
+  ArrowFunctionExpression,
   AssignmentExpression,
   MemberExpression,
   ImportDeclaration,
@@ -26,6 +29,7 @@ import {
   ObjectExpression,
   InterfaceDeclaration,
   TypeAlias,
+  NamespaceDeclaration,
   Parameter,
   TryStatement,
   ThrowStatement,
@@ -58,6 +62,18 @@ export class CodeGenerator {
     ['хато', 'error'],
     ['огоҳӣ', 'warn'],
     ['маълумот', 'info'],
+    ['ҷадвал', 'table'],
+    ['гурӯҳ', 'group'],
+    ['анҷомиГурӯҳ', 'groupEnd'],
+    ['гурӯҳиПечида', 'groupCollapsed'],
+    ['вақт', 'time'],
+    ['анҷомиВақт', 'timeEnd'],
+    ['шумор', 'count'],
+    ['сифриШумор', 'countReset'],
+    ['тасдиқ', 'assert'],
+    ['тоза', 'clear'],
+    ['феҳрист', 'dir'],
+    ['пайгирӣ', 'trace'],
 
     // Error handling
     ['Хато', 'Error'],
@@ -141,6 +157,10 @@ export class CodeGenerator {
         return this.generateWhileStatement(node as WhileStatement);
       case 'ForStatement':
         return this.generateForStatement(node as ForStatement);
+      case 'ForInStatement':
+        return this.generateForInStatement(node as ForInStatement);
+      case 'ForOfStatement':
+        return this.generateForOfStatement(node as ForOfStatement);
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -151,6 +171,8 @@ export class CodeGenerator {
         return this.generateInterfaceDeclaration(node as InterfaceDeclaration);
       case 'TypeAlias':
         return this.generateTypeAlias(node as TypeAlias);
+      case 'NamespaceDeclaration':
+        return this.generateNamespaceDeclaration(node as NamespaceDeclaration);
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
       case 'SwitchStatement':
@@ -271,6 +293,38 @@ export class CodeGenerator {
     return result;
   }
 
+  private generateForInStatement(node: ForInStatement): string {
+    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const right = this.generateExpression(node.right);
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${left} in ${right}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
+  private generateForOfStatement(node: ForOfStatement): string {
+    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const right = this.generateExpression(node.right);
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${left} of ${right}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
   private generateExpressionStatement(node: ExpressionStatement): string {
     const expr = node.expression;
 
@@ -339,7 +393,12 @@ export class CodeGenerator {
       return this.generateStructuralExpression(node);
     }
 
-    const specialExpressions = ['AwaitExpression', 'NewExpression', 'ImportExpression'];
+    const specialExpressions = [
+      'AwaitExpression',
+      'NewExpression',
+      'ImportExpression',
+      'ArrowFunctionExpression',
+    ];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
     }
@@ -411,8 +470,24 @@ export class CodeGenerator {
         return this.generateNewExpression(node as NewExpression);
       case 'ImportExpression':
         return this.generateImportExpression(node as ImportExpression);
+      case 'ArrowFunctionExpression':
+        return this.generateArrowFunctionExpression(node as ArrowFunctionExpression);
       default:
         return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
+    const params = node.params.map(p => p.name.name).join(', ');
+
+    if (node.body.type === 'BlockStatement') {
+      // Block body
+      const body = this.generateBlockStatement(node.body as BlockStatement);
+      return `(${params}) => ${body}`;
+    } else {
+      // Expression body
+      const body = this.generateExpression(node.body as Expression);
+      return `(${params}) => ${body}`;
     }
   }
 
@@ -695,7 +770,8 @@ export class CodeGenerator {
     if (node.object.type === 'Identifier') {
       const objectName = (node.object as Identifier).name;
       // Only map specific built-in objects, not user variables
-      const builtinObjects = ['чоп', 'математика', 'рӯйхат'];
+      // Note: These are used as built-in objects in the examples
+      const builtinObjects = ['чоп', 'объект', 'математика'];
       if (builtinObjects.includes(objectName)) {
         const mappedObject = this.builtinMappings.get(objectName);
         if (mappedObject) {
@@ -705,12 +781,16 @@ export class CodeGenerator {
       }
     }
 
-    // Apply built-in mappings for property names if the object was mapped OR for common array/string methods
+    // Apply built-in mappings for property names based on context
     if (!node.computed && node.property.type === 'Identifier') {
       const propertyName = (node.property as Identifier).name;
       const mappedProperty = this.builtinMappings.get(propertyName);
 
-      // Always map common array and string methods
+      // Map methods if:
+      // 1. The object was a mapped built-in (like чоп -> console)
+      // 2. The property is a common array/string method (but only if not on a known user namespace)
+
+      // Common array and string methods that should be mapped
       const commonMethods = [
         'пуш',
         'илова',
@@ -725,7 +805,15 @@ export class CodeGenerator {
         'буридан', // slice
       ];
 
-      if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {
+      // Check if this looks like a user-defined namespace/object
+      // (starts with uppercase Cyrillic letter, suggesting it's a namespace/class name)
+      const isUserDefinedObject =
+        node.object.type === 'Identifier' && /^[А-ЯЁ]/.test((node.object as Identifier).name);
+
+      if (
+        mappedProperty &&
+        (objectMapped || (!isUserDefinedObject && commonMethods.includes(propertyName)))
+      ) {
         property = mappedProperty;
       }
     }
@@ -813,6 +901,61 @@ export class CodeGenerator {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
     return this.indent(`// Type alias: ${name}`);
+  }
+
+  private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
+    // Generate namespace as an IIFE (Immediately Invoked Function Expression)
+    const name = this.generateIdentifier(node.name);
+    const exported = node.exported ? 'exports.' : '';
+
+    let result = this.indent(`${exported}${name} = (function() {\n`);
+    this.indentLevel++;
+    result += this.indent(`const ${name} = {};\n`);
+
+    // Generate namespace body
+    if (node.body && node.body.statements) {
+      for (const stmt of node.body.statements) {
+        const isExported = (stmt as Statement & { exported?: boolean }).exported;
+        if (isExported) {
+          // Export the member from namespace
+          const memberName = this.getMemberName(stmt);
+          if (memberName) {
+            const stmtCode = this.generateStatement(stmt);
+            result += stmtCode;
+            if (stmtCode.trim()) {
+              result += this.indent(`${name}.${memberName} = ${memberName};\n`);
+            }
+          }
+        } else {
+          result += this.generateStatement(stmt);
+        }
+      }
+    }
+
+    result += this.indent(`return ${name};\n`);
+    this.indentLevel--;
+    result += this.indent('})();\n');
+
+    return result;
+  }
+
+  private getMemberName(stmt: Statement): string | null {
+    switch (stmt.type) {
+      case 'FunctionDeclaration':
+        return (stmt as FunctionDeclaration).name.name;
+      case 'VariableDeclaration': {
+        const varDecl = stmt as VariableDeclaration;
+        if (varDecl.identifier && varDecl.identifier.type === 'Identifier') {
+          return varDecl.identifier.name;
+        }
+        break;
+      }
+      case 'ClassDeclaration':
+        return (stmt as ClassDeclaration).name.name;
+      case 'NamespaceDeclaration':
+        return (stmt as NamespaceDeclaration).name.name;
+    }
+    return null;
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {

@@ -9,6 +9,10 @@ export class DeclarationHandler {
   }
 
   parseStatement(): Statement | null {
+    if (this.parser.match(TokenType.НОМФАЗО)) {
+      return this.parser.namespaceDeclaration();
+    }
+
     if (this.parser.match(TokenType.ИНТЕРФЕЙС)) {
       return this.parser.interfaceDeclaration();
     }

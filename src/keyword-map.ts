@@ -23,6 +23,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['ворид', TokenType.ВОРИД],
   ['содир', TokenType.СОДИР],
   ['аз', TokenType.АЗ],
+  ['дар', TokenType.ДАР],
   ['пешфарз', TokenType.ПЕШФАРЗ],
   ['чун', TokenType.ЧУН],
 

@@ -70,6 +70,20 @@ export interface ForStatement extends Statement {
   body: Statement;
 }
 
+export interface ForInStatement extends Statement {
+  type: 'ForInStatement';
+  left: VariableDeclaration | Expression;
+  right: Expression;
+  body: Statement;
+}
+
+export interface ForOfStatement extends Statement {
+  type: 'ForOfStatement';
+  left: VariableDeclaration | Expression;
+  right: Expression;
+  body: Statement;
+}
+
 export interface ExpressionStatement extends Statement {
   type: 'ExpressionStatement';
   expression: Expression;
@@ -125,6 +139,13 @@ export interface CallExpression extends Expression {
   type: 'CallExpression';
   callee: Expression;
   arguments: Expression[];
+}
+
+export interface ArrowFunctionExpression extends Expression {
+  type: 'ArrowFunctionExpression';
+  params: Parameter[];
+  body: BlockStatement | Expression;
+  isAsync?: boolean;
 }
 
 export interface AssignmentExpression extends Expression {
@@ -245,6 +266,7 @@ export interface MethodDefinition extends ASTNode {
   value: FunctionExpression;
   kind: 'constructor' | 'method' | 'get' | 'set';
   static: boolean;
+  abstract?: boolean;
   accessibility?: 'public' | 'private' | 'protected';
 }
 
