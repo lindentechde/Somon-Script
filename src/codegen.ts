@@ -94,7 +94,7 @@ export class CodeGenerator {
     ['дарозии_сатр', 'length'],
     ['пайвастан', 'concat'],
     ['ҷойивазкунӣ', 'replace'],
-    ['ҷудокунӣ', 'split'],
+    ['ҷудокунӣ', 'join'], // Array join method (combines elements into string)
 
     // Object methods
     ['объект', 'Object'],
@@ -805,14 +805,23 @@ export class CodeGenerator {
         'буридан', // slice
       ];
 
-      // Check if this looks like a user-defined namespace/object
-      // (starts with uppercase Cyrillic letter, suggesting it's a namespace/class name)
-      const isUserDefinedObject =
-        node.object.type === 'Identifier' && /^[А-ЯЁ]/.test((node.object as Identifier).name);
+      // Map method names when:
+      // 1. The object was explicitly mapped (like чоп -> console), OR
+      // 2. It's a common method AND the object doesn't look like a user-defined class instance
+      //    (class instances typically start with lowercase in user code)
 
+      // Check if object looks like a user class instance (starts with lowercase and is long)
+      // We consider it a class instance if it's a multi-character identifier starting with lowercase
+      // This heuristic helps distinguish `рӯйхати_рақамҳо` (class instance) from `элементҳо` (array variable)
+      const looksLikeClassInstance =
+        node.object.type === 'Identifier' &&
+        /^[а-яё]/.test((node.object as Identifier).name) &&
+        (node.object as Identifier).name.includes('_'); // Class instances often have underscores
+
+      // Map if object was mapped, or if it's a common method on something that's likely an array/string
       if (
         mappedProperty &&
-        (objectMapped || (!isUserDefinedObject && commonMethods.includes(propertyName)))
+        (objectMapped || (!looksLikeClassInstance && commonMethods.includes(propertyName)))
       ) {
         property = mappedProperty;
       }
@@ -916,14 +925,41 @@ export class CodeGenerator {
     if (node.body && node.body.statements) {
       for (const stmt of node.body.statements) {
         const isExported = (stmt as Statement & { exported?: boolean }).exported;
+
+        // Skip interface declarations and type aliases - they don't generate runtime code
+        if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
+          result += this.generateStatement(stmt);
+          continue;
+        }
+
         if (isExported) {
-          // Export the member from namespace
           const memberName = this.getMemberName(stmt);
           if (memberName) {
-            const stmtCode = this.generateStatement(stmt);
-            result += stmtCode;
-            if (stmtCode.trim()) {
-              result += this.indent(`${name}.${memberName} = ${memberName};\n`);
+            if (stmt.type === 'NamespaceDeclaration') {
+              // For nested namespaces, generate them inline and assign directly
+              const nestedNs = stmt as NamespaceDeclaration;
+              // Remove the exported flag for nested generation
+              const originalExported = nestedNs.exported;
+              nestedNs.exported = false;
+              const nestedCode = this.generateStatement(nestedNs).trim();
+              nestedNs.exported = originalExported;
+
+              // Generate as a property of parent namespace
+              // Remove the initial assignment part from the nested code (e.g., "Дарунӣ = ")
+              const assignmentStart = nestedCode.indexOf('= (function()');
+              if (assignmentStart !== -1) {
+                const nestedIIFE = nestedCode.substring(assignmentStart + 2); // Skip "= "
+                result += this.indent(`${name}.${memberName} = ${nestedIIFE}`);
+              } else {
+                result += this.indent(`${name}.${memberName} = ${nestedCode}`);
+              }
+            } else {
+              // For functions, variables, classes
+              const stmtCode = this.generateStatement(stmt);
+              result += stmtCode;
+              if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
+                result += this.indent(`${name}.${memberName} = ${memberName};\n`);
+              }
             }
           }
         } else {
@@ -963,9 +999,7 @@ export class CodeGenerator {
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
       : '';
-    const abstractModifier = (node as ClassDeclaration & { abstract?: boolean }).abstract
-      ? 'abstract '
-      : '';
+    // Note: JavaScript doesn't support abstract classes, so we skip the abstract modifier
 
     let classBody = '';
 
@@ -991,26 +1025,24 @@ export class CodeGenerator {
       }
     }
 
-    return this.indent(`${abstractModifier}class ${className}${extendsClause} {${classBody}}`);
+    return this.indent(`class ${className}${extendsClause} {${classBody}}`);
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
     const methodName =
       node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
-    const isAbstract = (node as MethodDefinition & { abstract?: boolean }).abstract
-      ? 'abstract '
-      : '';
+    // Note: JavaScript doesn't support abstract methods, so we skip them entirely
 
     // Generate parameters
     const params = node.value.params
       ? node.value.params.map(param => this.generateIdentifier(param.name)).join(', ')
       : '';
 
-    // Generate method body or abstract signature
+    // Skip abstract methods - they don't exist in JavaScript
     if ((node as MethodDefinition & { abstract?: boolean }).abstract) {
-      // Abstract methods have no body
-      return this.indent(`${isAbstract}${isStatic}${methodName}(${params});`);
+      // Abstract methods should not generate any code in JavaScript
+      return '';
     } else {
       // Regular methods have a body
       // Handle cases where body might be null or undefined

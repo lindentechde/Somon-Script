@@ -12,7 +12,7 @@ export interface TypeNode extends ASTNode {
 
 export interface PrimitiveType extends TypeNode {
   type: 'PrimitiveType';
-  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат';
 }
 
 export interface ArrayType extends TypeNode {

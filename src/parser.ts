@@ -193,6 +193,9 @@ export class Parser {
       );
     }
 
+    // Skip generic type parameters if present (e.g., <T>, <T, U>)
+    this.skipGenericTypeArguments();
+
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
 
     // Skip any newlines after opening parenthesis
@@ -896,6 +899,9 @@ export class Parser {
       const newToken = this.previous();
       const callee = this.primary();
 
+      // Skip generic type parameters if present (e.g., new Class<T>(args))
+      this.skipGenericTypeArguments();
+
       // Check if there are arguments
       const args: Expression[] = [];
       if (this.match(TokenType.LEFT_PAREN)) {
@@ -924,6 +930,16 @@ export class Parser {
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      // Skip generic type parameters only for function calls (e.g., func<Type>(args))
+      // Only check when expr is an identifier (potential function name) and next is <
+      if (
+        expr.type === 'Identifier' &&
+        this.check(TokenType.LESS_THAN) &&
+        this.isLikelyGenericCall()
+      ) {
+        this.skipGenericTypeArguments();
+      }
+
       if (this.match(TokenType.LEFT_PAREN)) {
         expr = this.finishCall(expr);
       } else if (this.match(TokenType.DOT)) {
@@ -981,6 +997,102 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  private isLikelyGenericCall(): boolean {
+    // Check if the next tokens look like generic type arguments followed by a call
+    // e.g., <Type>(, <Type1, Type2>(
+    // Look ahead to see if we have the pattern: < type-like-tokens > (
+    const savedCurrent = this.current;
+
+    if (!this.match(TokenType.LESS_THAN)) {
+      this.current = savedCurrent;
+      return false;
+    }
+
+    // Check if next token is a type-like token
+    const isTypeLike =
+      this.check(TokenType.IDENTIFIER) ||
+      this.check(TokenType.САТР) ||
+      this.check(TokenType.РАҚАМ) ||
+      this.check(TokenType.МАНТИҚӢ) ||
+      this.check(TokenType.ХОЛӢ) ||
+      this.check(TokenType.БЕҚИМАТ);
+
+    if (!isTypeLike) {
+      this.current = savedCurrent;
+      return false;
+    }
+
+    // Skip ahead to find the closing > and check if ( follows
+    let depth = 1;
+    let foundClosing = false;
+    while (depth > 0 && !this.isAtEnd()) {
+      this.advance();
+      if (this.previous().type === TokenType.LESS_THAN) {
+        depth++;
+      } else if (this.previous().type === TokenType.GREATER_THAN) {
+        depth--;
+        if (depth === 0) {
+          foundClosing = true;
+        }
+      }
+    }
+
+    // Check if there's a ( after the >
+    const hasCallParen = foundClosing && this.check(TokenType.LEFT_PAREN);
+
+    // Reset position
+    this.current = savedCurrent;
+    return hasCallParen;
+  }
+
+  private skipGenericTypeArguments(): void {
+    if (!this.match(TokenType.LESS_THAN)) {
+      return;
+    }
+
+    let depth = 1;
+    let tokenCount = 0;
+    const maxTokens = 50; // Prevent infinite loops
+
+    while (depth > 0 && !this.isAtEnd() && tokenCount < maxTokens) {
+      const currentToken = this.peek();
+
+      // Early exit if we hit tokens that shouldn't be inside generics
+      if (
+        currentToken.type === TokenType.LEFT_BRACE ||
+        currentToken.type === TokenType.ФУНКСИЯ ||
+        currentToken.type === TokenType.СИНФ ||
+        currentToken.type === TokenType.SEMICOLON ||
+        currentToken.type === TokenType.EOF
+      ) {
+        // We've gone too far or hit EOF, this isn't a valid generic
+        // Reset by going back one token if we consumed the initial <
+        if (tokenCount === 0) {
+          this.current--; // Undo the initial match of <
+        }
+        return;
+      }
+
+      if (currentToken.type === TokenType.LESS_THAN) {
+        depth++;
+      } else if (currentToken.type === TokenType.GREATER_THAN) {
+        depth--;
+        if (depth === 0) {
+          this.advance(); // Consume the closing >
+          break;
+        }
+      }
+
+      this.advance();
+      tokenCount++;
+    }
+
+    // If we hit the token limit, something went wrong
+    if (tokenCount >= maxTokens) {
+      console.error(`Warning: Hit token limit while skipping generics at token ${this.current}`);
+    }
   }
 
   private finishCall(callee: Expression): CallExpression {
@@ -1085,6 +1197,9 @@ export class Parser {
     if (this.match(TokenType.НАВ)) {
       const token = this.previous();
       const callee = this.primary();
+
+      // Skip generic type parameters if present (e.g., new Class<T>(args))
+      this.skipGenericTypeArguments();
 
       this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав'");
       const args: Expression[] = [];
@@ -1352,6 +1467,10 @@ export class Parser {
   }
 
   private peek(): Token {
+    if (this.current >= this.tokens.length) {
+      // Return the last token (should be EOF) if we're past the end
+      return this.tokens[this.tokens.length - 1];
+    }
     return this.tokens[this.current];
   }
 
@@ -1361,7 +1480,16 @@ export class Parser {
   }
 
   private previous(): Token {
-    return this.tokens[this.current - 1];
+    const index = this.current - 1;
+    if (index < 0) {
+      // Return the first token if we're before the start
+      return this.tokens[0];
+    }
+    if (index >= this.tokens.length) {
+      // Return the last token if we're past the end
+      return this.tokens[this.tokens.length - 1];
+    }
+    return this.tokens[index];
   }
 
   public consume(type: TokenType, message: string): Token {
@@ -1671,6 +1799,7 @@ export class Parser {
       TokenType.ХАРИТА,
       TokenType.ФИЛТР,
       TokenType.КОФТАН,
+      TokenType.ГИРИФТАН, // Allow 'гирифтан' as identifier (common method name)
       TokenType.САТР_МЕТОДҲО,
       TokenType.ДАРОЗИИ_САТР,
       TokenType.ПАЙВАСТАН,
@@ -2039,13 +2168,21 @@ export class Parser {
   }
 
   private parsePrimitiveType(): TypeNode | undefined {
-    if (!this.match(TokenType.САТР, TokenType.РАҚАМ, TokenType.МАНТИҚӢ, TokenType.ХОЛӢ)) {
+    if (
+      !this.match(
+        TokenType.САТР,
+        TokenType.РАҚАМ,
+        TokenType.МАНТИҚӢ,
+        TokenType.ХОЛӢ,
+        TokenType.БЕҚИМАТ
+      )
+    ) {
       return undefined;
     }
     const token = this.previous();
     const primitiveType: PrimitiveType = {
       type: 'PrimitiveType',
-      name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ',
+      name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат',
       line: token.line,
       column: token.column,
     };
@@ -2069,9 +2206,28 @@ export class Parser {
       return undefined;
     }
     const nameToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
+
+    // Build the full name, handling qualified types like Foo.Bar
+    let fullName = nameToken.value;
+
+    // Handle qualified type names (e.g., Namespace.Type)
+    while (this.match(TokenType.DOT)) {
+      if (this.check(TokenType.IDENTIFIER)) {
+        const nextToken = this.advance();
+        fullName += '.' + nextToken.value;
+      } else if (this.matchBuiltinIdentifier()) {
+        const nextToken = this.previous();
+        fullName += '.' + nextToken.value;
+      } else {
+        // If we can't parse what comes after the dot, treat it as an error
+        this.errors.push(`Expected type name after '.' at line ${this.peek().line}`);
+        break;
+      }
+    }
+
     const name: Identifier = {
       type: 'Identifier',
-      name: nameToken.value,
+      name: fullName,
       line: nameToken.line,
       column: nameToken.column,
     };
@@ -2377,6 +2533,9 @@ export class Parser {
       );
     }
 
+    // Skip generic type parameters if present (e.g., <T>, <T, U>)
+    this.skipGenericTypeArguments();
+
     // Optional extends clause
     let superClassToken: Token | undefined = undefined;
     if (this.match(TokenType.МЕРОС)) {
@@ -2389,6 +2548,9 @@ export class Parser {
           `Expected superclass name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
         );
       }
+
+      // Skip generic type parameters if present (e.g., BaseClass<T>)
+      this.skipGenericTypeArguments();
     }
 
     // Optional implements clause
@@ -2404,13 +2566,22 @@ export class Parser {
             `Expected interface name in implements clause at line ${this.peek().line}, column ${this.peek().column}`
           );
         }
+
+        // Skip generic type parameters if present (e.g., Interface<T>)
+        this.skipGenericTypeArguments();
       } while (this.match(TokenType.COMMA));
     }
 
     // Class body
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after class declaration");
     const body = this.classBody();
-    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after class body");
+    // classBody() stops when it sees RIGHT_BRACE, so we need to consume it
+    if (this.check(TokenType.RIGHT_BRACE)) {
+      this.advance(); // Consume the closing brace
+    } else {
+      // If we're not at a closing brace, something went wrong
+      this.errors.push(`Expected '}' after class body at line ${this.peek().line}`);
+    }
 
     return {
       type: 'ClassDeclaration',
@@ -2462,22 +2633,32 @@ export class Parser {
           this.advance();
         }
       } catch (error) {
-        // If class member parsing fails, break out of the class context
-        // This prevents partial parsing from contaminating the rest of the program
+        // If class member parsing fails, log the error
         console.error(`Error parsing class member: ${error}`);
         // Try to recover by advancing to the next potential member or class end
+        // Break out if we encounter a new class or namespace declaration (but NOT функсия, as that can be a method)
         while (
           !this.check(TokenType.RIGHT_BRACE) &&
           !this.check(TokenType.ҶАМЪИЯТӢ) &&
           !this.check(TokenType.ХОСУСӢ) &&
+          !this.check(TokenType.МУҲОФИЗАТШУДА) &&
           !this.check(TokenType.КОНСТРУКТОР) &&
+          !this.check(TokenType.СИНФ) && // Break on nested class
+          !this.check(TokenType.МАВҲУМ) && // Break on abstract class
+          !this.check(TokenType.НОМФАЗО) && // Break on namespace
           !this.check(TokenType.IDENTIFIER) &&
           !this.isAtEnd()
         ) {
           this.advance();
         }
-        // Don't break - continue trying to parse the rest of the class
-        // The break was causing premature exit from class parsing
+        // If we hit a class or namespace keyword (not at class level), break out
+        if (
+          this.check(TokenType.СИНФ) ||
+          this.check(TokenType.МАВҲУМ) ||
+          this.check(TokenType.НОМФАЗО)
+        ) {
+          break;
+        }
       }
     }
 
@@ -2622,10 +2803,17 @@ export class Parser {
       returnType = this.typeAnnotation();
     }
 
-    let body = null;
+    let body: BlockStatement;
     if (isAbstract) {
       // Abstract methods end with semicolon, no body
       this.consume(TokenType.SEMICOLON, "Expected ';' after abstract method signature");
+      // Create an empty block statement for abstract methods
+      body = {
+        type: 'BlockStatement',
+        body: [],
+        line: nameToken.line,
+        column: nameToken.column,
+      };
     } else {
       // Regular methods have a body
       this.consume(TokenType.LEFT_BRACE, "Expected '{' after method signature");
@@ -2643,7 +2831,7 @@ export class Parser {
       value: {
         type: 'FunctionExpression',
         params: params,
-        body: body || this.blockStatement(),
+        body: body,
         returnType,
         line: nameToken.line,
         column: nameToken.column,
@@ -2703,6 +2891,9 @@ export class Parser {
     const typeToken = this.previous();
 
     const name = this.consume(TokenType.IDENTIFIER, 'Expected type alias name');
+
+    // Skip generic type parameters if present (e.g., <T>, <T, U>)
+    this.skipGenericTypeArguments();
 
     this.consume(TokenType.ASSIGN, "Expected '=' after type alias name");
 
