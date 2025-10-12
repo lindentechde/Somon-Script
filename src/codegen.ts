@@ -4,6 +4,7 @@ import {
   Expression,
   VariableDeclaration,
   FunctionDeclaration,
+  FunctionExpression,
   BlockStatement,
   ReturnStatement,
   IfStatement,
@@ -398,6 +399,7 @@ export class CodeGenerator {
       'NewExpression',
       'ImportExpression',
       'ArrowFunctionExpression',
+      'FunctionExpression',
     ];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
@@ -472,9 +474,28 @@ export class CodeGenerator {
         return this.generateImportExpression(node as ImportExpression);
       case 'ArrowFunctionExpression':
         return this.generateArrowFunctionExpression(node as ArrowFunctionExpression);
+      case 'FunctionExpression':
+        return this.generateFunctionExpression(node as FunctionExpression);
       default:
         return this.handleUnknownExpression(node);
     }
+  }
+
+  private generateFunctionExpression(node: FunctionExpression): string {
+    // Handle new Parameter type or legacy Identifier type
+    const params = node.params
+      .map(p => {
+        if ('name' in p && typeof p.name === 'object' && 'name' in p.name) {
+          return p.name.name;
+        } else if ('name' in p && typeof p.name === 'string') {
+          return p.name;
+        }
+        return '';
+      })
+      .join(', ');
+
+    const body = this.generateBlockStatement(node.body);
+    return `function(${params}) ${body}`;
   }
 
   private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
@@ -903,13 +924,13 @@ export class CodeGenerator {
     // They should NOT generate any executable code at all
     const name = this.generateIdentifier(node.name);
 
-    return this.indent(`// Interface: ${name}`);
+    return this.indent(`// Interface: ${name}\n`);
   }
 
   private generateTypeAlias(node: TypeAlias): string {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
-    return this.indent(`// Type alias: ${name}`);
+    return this.indent(`// Type alias: ${name}\n`);
   }
 
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
@@ -963,6 +984,10 @@ export class CodeGenerator {
     const stmtCode = this.generateStatement(stmt);
     let result = stmtCode;
     if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
+      // Ensure there's a newline before the assignment if stmtCode doesn't end with one
+      if (!stmtCode.endsWith('\n')) {
+        result += '\n';
+      }
       result += this.indent(`${namespaceName}.${memberName} = ${memberName};\n`);
     }
     return result;

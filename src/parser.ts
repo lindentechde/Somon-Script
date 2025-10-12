@@ -6,6 +6,7 @@ import {
   Expression,
   VariableDeclaration,
   FunctionDeclaration,
+  FunctionExpression,
   BlockStatement,
   ReturnStatement,
   IfStatement,
@@ -1081,10 +1082,30 @@ export class Parser {
   private finishCall(callee: Expression): CallExpression {
     const args: Expression[] = [];
 
+    // Skip any leading newlines after opening paren
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
+    }
+
     if (!this.check(TokenType.RIGHT_PAREN)) {
       do {
+        // Skip newlines before each argument
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
+
         args.push(this.expression());
+
+        // Skip newlines after each argument
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
       } while (this.match(TokenType.COMMA));
+    }
+
+    // Skip any trailing newlines before closing paren
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
     }
 
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
@@ -1217,6 +1238,39 @@ export class Parser {
         line: importToken.line,
         column: importToken.column,
       } as ImportExpression;
+    }
+
+    // Function expressions: функсия(params) { body }
+    if (this.match(TokenType.ФУНКСИЯ)) {
+      const funcToken = this.previous();
+      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
+
+      const params: Parameter[] = [];
+      if (!this.check(TokenType.RIGHT_PAREN)) {
+        do {
+          params.push(this.parseParameter());
+        } while (this.match(TokenType.COMMA));
+      }
+
+      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
+
+      // Optional return type annotation
+      let returnType: TypeAnnotation | undefined;
+      if (this.match(TokenType.COLON)) {
+        returnType = this.typeAnnotation();
+      }
+
+      this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
+      const body = this.blockStatement();
+
+      return {
+        type: 'FunctionExpression',
+        params,
+        body,
+        returnType,
+        line: funcToken.line,
+        column: funcToken.column,
+      } as FunctionExpression;
     }
 
     if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
@@ -1562,8 +1616,18 @@ export class Parser {
   private parseNamedImports(
     specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier>
   ): void {
+    // Skip any leading newlines after opening brace
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
+    }
+
     if (!this.check(TokenType.RIGHT_BRACE)) {
       do {
+        // Skip newlines before each import
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
+
         let imported: Token;
         if (this.check(TokenType.IDENTIFIER)) {
           imported = this.advance();
@@ -1606,7 +1670,17 @@ export class Parser {
           line: imported.line,
           column: imported.column,
         } as ImportSpecifier);
+
+        // Skip newlines after each import
+        while (this.match(TokenType.NEWLINE)) {
+          // consume newlines
+        }
       } while (this.match(TokenType.COMMA));
+    }
+
+    // Skip any trailing newlines before closing brace
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
     }
   }
 

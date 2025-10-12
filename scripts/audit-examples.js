@@ -26,37 +26,55 @@ examples.forEach((example, index) => {
   console.log(`[${index + 1}/${examples.length}] Testing ${example}...`);
 
   try {
-    // Try to compile the example
-    const compileCommand = `node dist/cli.js compile "${examplePath}" -o /tmp/test-${exampleName}.js`;
-    execSync(compileCommand, { stdio: 'pipe' });
+    // Use the same approach as 'somon run' - compile to source directory
+    const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const jsPath = path.join(examplesDir, `${exampleName}.somon-test-${uniqueSuffix}.js`);
 
-    // Check if it's a future implementation example
-    const content = fs.readFileSync(examplePath, 'utf-8');
-    if (content.includes('Future Implementation') || content.includes('planned for future')) {
-      results.partial.push({
-        name: example,
-        status: 'partial',
-        reason: 'Marked as future implementation',
-      });
-      console.log(`  ⚠️  Partial - Future implementation`);
-    } else {
-      // Try to run the compiled JavaScript
-      try {
-        const jsPath = `/tmp/test-${exampleName}.js`;
-        execSync(`node "${jsPath}"`, { stdio: 'pipe', timeout: 5000 });
-        results.working.push({
-          name: example,
-          status: 'working',
-          reason: 'Compiles and runs successfully',
-        });
-        console.log(`  ✅ Working`);
-      } catch (runError) {
+    try {
+      // Try to compile the example to the source directory
+      const compileCommand = `node dist/cli.js compile "${examplePath}" -o "${jsPath}"`;
+      execSync(compileCommand, { stdio: 'pipe' });
+
+      // Check if it's a future implementation example
+      const content = fs.readFileSync(examplePath, 'utf-8');
+      if (content.includes('Future Implementation') || content.includes('planned for future')) {
         results.partial.push({
           name: example,
           status: 'partial',
-          reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0],
+          reason: 'Marked as future implementation',
         });
-        console.log(`  ⚠️  Partial - Runtime error`);
+        console.log(`  ⚠️  Partial - Future implementation`);
+      } else {
+        // Try to run the compiled JavaScript with cwd set to examples directory
+        try {
+          execSync(`node "${path.basename(jsPath)}"`, {
+            stdio: 'pipe',
+            timeout: 5000,
+            cwd: examplesDir,
+          });
+          results.working.push({
+            name: example,
+            status: 'working',
+            reason: 'Compiles and runs successfully',
+          });
+          console.log(`  ✅ Working`);
+        } catch (runError) {
+          results.partial.push({
+            name: example,
+            status: 'partial',
+            reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0],
+          });
+          console.log(`  ⚠️  Partial - Runtime error`);
+        }
+      }
+    } finally {
+      // Clean up compiled file
+      try {
+        if (fs.existsSync(jsPath)) {
+          fs.unlinkSync(jsPath);
+        }
+      } catch (cleanupError) {
+        // Ignore cleanup errors
       }
     }
   } catch (compileError) {
