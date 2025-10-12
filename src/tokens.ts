@@ -60,7 +60,6 @@ export enum TokenType {
   ҶУДОКУНӢ = 'ҶУДОКУНӢ', // split
 
   // Object methods
-  ОБЪЕКТ = 'ОБЪЕКТ', // Object
   КАЛИДҲО = 'КАЛИДҲО', // keys
   ҚИМАТҲО = 'ҚИМАТҲО', // values
 

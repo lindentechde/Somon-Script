@@ -328,33 +328,32 @@ export class Parser {
 
   public forStatement(): ForStatement | ForInStatement | ForOfStatement {
     const forToken = this.previous();
-
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'барои'");
 
-    // Save current position to potentially backtrack
     const savedIndex = this.current;
+    const loopType = this.detectForLoopType();
 
-    // Look ahead to determine loop type without consuming tokens
+    if (loopType.isForOf || loopType.isForIn) {
+      return this.parseForOfOrForInLoop(forToken, loopType.isForOf);
+    }
+
+    this.current = savedIndex;
+    return this.parseTraditionalForLoop(forToken);
+  }
+
+  private detectForLoopType(): { isForOf: boolean; isForIn: boolean } {
     let lookaheadIndex = this.current;
     let isForOf = false;
     let isForIn = false;
 
-    // Check for variable declaration followed by 'аз' or 'дар'
     if (
       this.tokens[lookaheadIndex]?.type === TokenType.ТАҒЙИРЁБАНДА ||
       this.tokens[lookaheadIndex]?.type === TokenType.СОБИТ
     ) {
-      lookaheadIndex++; // skip var declaration keyword
-
-      // Check for identifier or type keywords that can be used as identifiers
+      lookaheadIndex++;
       const nextToken = this.tokens[lookaheadIndex];
-      if (
-        nextToken?.type === TokenType.IDENTIFIER ||
-        nextToken?.type === TokenType.РАҚАМ ||
-        nextToken?.type === TokenType.САТР ||
-        nextToken?.type === TokenType.МАНТИҚӢ
-      ) {
-        lookaheadIndex++; // skip identifier
+      if (this.isTypeKeywordOrIdentifier(nextToken?.type)) {
+        lookaheadIndex++;
         if (this.tokens[lookaheadIndex]?.type === TokenType.АЗ) {
           isForOf = true;
         } else if (this.tokens[lookaheadIndex]?.type === TokenType.ДАР) {
@@ -362,78 +361,66 @@ export class Parser {
         }
       }
     }
+    return { isForOf, isForIn };
+  }
 
-    // Parse based on detected loop type
-    if (isForOf || isForIn) {
-      // Parse for-of/for-in loop
-      const varToken = this.advance(); // consume ТАҒЙИРЁБАНДА or СОБИТ
-      const kind = varToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
+  private isTypeKeywordOrIdentifier(type: TokenType | undefined): boolean {
+    return (
+      type === TokenType.IDENTIFIER ||
+      type === TokenType.РАҚАМ ||
+      type === TokenType.САТР ||
+      type === TokenType.МАНТИҚӢ
+    );
+  }
 
-      // Accept type keywords as identifiers in for-of/for-in context
-      let nameToken: Token;
-      if (
-        this.check(TokenType.IDENTIFIER) ||
-        this.check(TokenType.РАҚАМ) ||
-        this.check(TokenType.САТР) ||
-        this.check(TokenType.МАНТИҚӢ)
-      ) {
-        nameToken = this.advance();
-      } else {
-        nameToken = this.consume(TokenType.IDENTIFIER, 'Expected variable name');
-      }
+  private parseForOfOrForInLoop(
+    forToken: Token,
+    isForOf: boolean
+  ): ForOfStatement | ForInStatement {
+    const varToken = this.advance();
+    const kind = varToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
-      const id: Identifier = {
-        type: 'Identifier',
-        name: nameToken.value,
-        line: nameToken.line,
-        column: nameToken.column,
-      };
+    const nameToken = this.isTypeKeywordOrIdentifier(this.peek().type)
+      ? this.advance()
+      : this.consume(TokenType.IDENTIFIER, 'Expected variable name');
 
-      // Consume 'аз' or 'дар'
-      if (isForOf) {
-        this.consume(TokenType.АЗ, "Expected 'аз' in for-of loop");
-      } else {
-        this.consume(TokenType.ДАР, "Expected 'дар' in for-in loop");
-      }
+    const id: Identifier = {
+      type: 'Identifier',
+      name: nameToken.value,
+      line: nameToken.line,
+      column: nameToken.column,
+    };
 
-      const right = this.expression();
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for-of/for-in clauses");
-      const body = this.statement()!;
-
-      const left: VariableDeclaration = {
-        type: 'VariableDeclaration',
-        kind,
-        identifier: id,
-        init: undefined,
-        line: id.line,
-        column: id.column,
-      };
-
-      if (isForOf) {
-        return {
-          type: 'ForOfStatement',
-          left,
-          right,
-          body,
-          line: forToken.line,
-          column: forToken.column,
-        };
-      } else {
-        return {
-          type: 'ForInStatement',
-          left,
-          right,
-          body,
-          line: forToken.line,
-          column: forToken.column,
-        };
-      }
+    if (isForOf) {
+      this.consume(TokenType.АЗ, "Expected 'аз' in for-of loop");
+    } else {
+      this.consume(TokenType.ДАР, "Expected 'дар' in for-in loop");
     }
 
-    // Parse traditional for loop
-    this.current = savedIndex;
+    const right = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for-of/for-in clauses");
+    const body = this.statement()!;
 
-    // Parse init (variable declaration)
+    const left: VariableDeclaration = {
+      type: 'VariableDeclaration',
+      kind,
+      identifier: id,
+      init: undefined,
+      line: id.line,
+      column: id.column,
+    };
+
+    return {
+      type: isForOf ? 'ForOfStatement' : 'ForInStatement',
+      left,
+      right,
+      body,
+      line: forToken.line,
+      column: forToken.column,
+    } as ForOfStatement | ForInStatement;
+  }
+
+  private parseTraditionalForLoop(forToken: Token): ForStatement {
     let init: VariableDeclaration | ExpressionStatement | null = null;
     if (this.match(TokenType.ТАҒЙИРЁБАНДА)) {
       init = this.variableDeclaration();
@@ -441,28 +428,24 @@ export class Parser {
       init = this.expressionStatement();
     }
 
-    // Consume semicolon after init (if not already consumed by variable declaration)
     if (init && init.type !== 'VariableDeclaration') {
       // ExpressionStatement already consumed the semicolon
     } else if (!init) {
       this.consume(TokenType.SEMICOLON, "Expected ';' after for loop initializer");
     }
 
-    // Parse test condition
     let test: Expression | null = null;
     if (!this.check(TokenType.SEMICOLON)) {
       test = this.expression();
     }
     this.consume(TokenType.SEMICOLON, "Expected ';' after for loop condition");
 
-    // Parse update expression
     let update: Expression | null = null;
     if (!this.check(TokenType.RIGHT_PAREN)) {
       update = this.expression();
     }
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for clauses");
 
-    // Parse body
     const body = this.statement()!;
 
     return {
@@ -1247,15 +1230,7 @@ export class Parser {
     }
 
     // Allow certain keywords to be used as identifiers in expression contexts
-    if (
-      this.match(
-        TokenType.НАВЪ,
-        TokenType.МАЪЛУМОТ,
-        TokenType.РӮЙХАТ,
-        TokenType.ОБЪЕКТ,
-        TokenType.БЕҚИМАТ
-      )
-    ) {
+    if (this.match(TokenType.НАВЪ, TokenType.МАЪЛУМОТ, TokenType.РӮЙХАТ, TokenType.БЕҚИМАТ)) {
       const token = this.previous();
       return {
         type: 'Identifier',
@@ -1805,7 +1780,6 @@ export class Parser {
       TokenType.ПАЙВАСТАН,
       TokenType.ҶОЙИВАЗКУНӢ,
       TokenType.ҶУДОКУНӢ,
-      TokenType.ОБЪЕКТ,
       TokenType.КАЛИДҲО,
       TokenType.ҚИМАТҲО,
       TokenType.МАТЕМАТИКА,
@@ -2024,13 +1998,7 @@ export class Parser {
     } else if (this.matchBuiltinIdentifier()) {
       paramName = this.previous();
     } else if (
-      this.match(
-        TokenType.НАВЪ,
-        TokenType.МАЪЛУМОТ,
-        TokenType.РӮЙХАТ,
-        TokenType.ОБЪЕКТ,
-        TokenType.БЕҚИМАТ
-      )
+      this.match(TokenType.НАВЪ, TokenType.МАЪЛУМОТ, TokenType.РӮЙХАТ, TokenType.БЕҚИМАТ)
     ) {
       // Allow common Tajik words as parameter names
       paramName = this.previous();
@@ -2615,48 +2583,19 @@ export class Parser {
     const members: (MethodDefinition | PropertyDefinition)[] = [];
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-      // Skip newlines
       if (this.match(TokenType.NEWLINE)) {
         continue;
       }
 
       try {
-        // Parse class member
         const member = this.classMember();
         if (member) {
           members.push(member);
         }
-
-        // After parsing a member, ensure we're positioned correctly for the next one
-        // Skip any trailing whitespace or newlines
-        while (this.check(TokenType.NEWLINE)) {
-          this.advance();
-        }
+        this.skipNewlines();
       } catch (error) {
-        // If class member parsing fails, log the error
         console.error(`Error parsing class member: ${error}`);
-        // Try to recover by advancing to the next potential member or class end
-        // Break out if we encounter a new class or namespace declaration (but NOT функсия, as that can be a method)
-        while (
-          !this.check(TokenType.RIGHT_BRACE) &&
-          !this.check(TokenType.ҶАМЪИЯТӢ) &&
-          !this.check(TokenType.ХОСУСӢ) &&
-          !this.check(TokenType.МУҲОФИЗАТШУДА) &&
-          !this.check(TokenType.КОНСТРУКТОР) &&
-          !this.check(TokenType.СИНФ) && // Break on nested class
-          !this.check(TokenType.МАВҲУМ) && // Break on abstract class
-          !this.check(TokenType.НОМФАЗО) && // Break on namespace
-          !this.check(TokenType.IDENTIFIER) &&
-          !this.isAtEnd()
-        ) {
-          this.advance();
-        }
-        // If we hit a class or namespace keyword (not at class level), break out
-        if (
-          this.check(TokenType.СИНФ) ||
-          this.check(TokenType.МАВҲУМ) ||
-          this.check(TokenType.НОМФАЗО)
-        ) {
+        if (this.recoverFromClassMemberError()) {
           break;
         }
       }
@@ -2668,6 +2607,40 @@ export class Parser {
       line: this.peek().line,
       column: this.peek().column,
     };
+  }
+
+  private skipNewlines(): void {
+    while (this.check(TokenType.NEWLINE)) {
+      this.advance();
+    }
+  }
+
+  private recoverFromClassMemberError(): boolean {
+    while (this.shouldContinueErrorRecovery()) {
+      this.advance();
+    }
+    return this.isAtClassOrNamespaceKeyword();
+  }
+
+  private shouldContinueErrorRecovery(): boolean {
+    return (
+      !this.check(TokenType.RIGHT_BRACE) &&
+      !this.check(TokenType.ҶАМЪИЯТӢ) &&
+      !this.check(TokenType.ХОСУСӢ) &&
+      !this.check(TokenType.МУҲОФИЗАТШУДА) &&
+      !this.check(TokenType.КОНСТРУКТОР) &&
+      !this.check(TokenType.СИНФ) &&
+      !this.check(TokenType.МАВҲУМ) &&
+      !this.check(TokenType.НОМФАЗО) &&
+      !this.check(TokenType.IDENTIFIER) &&
+      !this.isAtEnd()
+    );
+  }
+
+  private isAtClassOrNamespaceKeyword(): boolean {
+    return (
+      this.check(TokenType.СИНФ) || this.check(TokenType.МАВҲУМ) || this.check(TokenType.НОМФАЗО)
+    );
   }
 
   private classMember(): MethodDefinition | PropertyDefinition | undefined {
@@ -2917,63 +2890,22 @@ export class Parser {
 
   public namespaceDeclaration(): NamespaceDeclaration {
     const namespaceToken = this.previous();
-
     const name = this.consume(TokenType.IDENTIFIER, 'Expected namespace name');
-
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after namespace name");
 
     const statements: Statement[] = [];
 
-    // Parse namespace body
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-      // Skip newlines
       while (this.match(TokenType.NEWLINE)) {
-        // Skip
+        // Skip newlines
       }
 
       if (this.check(TokenType.RIGHT_BRACE)) {
         break;
       }
 
-      // Check for export modifier
       const isExported = this.match(TokenType.СОДИР);
-
-      let stmt: Statement | null = null;
-
-      // Parse various declarations that can be in a namespace
-      if (this.match(TokenType.НОМФАЗО)) {
-        // Nested namespace
-        const nestedNamespace = this.namespaceDeclaration();
-        if (isExported) {
-          nestedNamespace.exported = true;
-        }
-        stmt = nestedNamespace;
-      } else if (this.match(TokenType.ИНТЕРФЕЙС)) {
-        stmt = this.interfaceDeclaration();
-        if (isExported && stmt) {
-          (stmt as InterfaceDeclaration & { exported?: boolean }).exported = true;
-        }
-      } else if (this.match(TokenType.НАВЪ)) {
-        stmt = this.typeAlias();
-        if (isExported && stmt) {
-          (stmt as TypeAlias & { exported?: boolean }).exported = true;
-        }
-      } else if (this.match(TokenType.СИНФ)) {
-        stmt = this.classDeclaration();
-        if (isExported && stmt) {
-          (stmt as ClassDeclaration & { exported?: boolean }).exported = true;
-        }
-      } else if (this.match(TokenType.ФУНКСИЯ)) {
-        stmt = this.functionDeclaration();
-        if (isExported && stmt) {
-          (stmt as FunctionDeclaration & { exported?: boolean }).exported = true;
-        }
-      } else if (this.match(TokenType.ТАҒЙИРЁБАНДА) || this.match(TokenType.СОБИТ)) {
-        stmt = this.variableDeclaration();
-        if (isExported && stmt) {
-          (stmt as VariableDeclaration & { exported?: boolean }).exported = true;
-        }
-      }
+      const stmt = this.parseNamespaceMember(isExported);
 
       if (stmt) {
         statements.push(stmt);
@@ -2999,6 +2931,36 @@ export class Parser {
       line: namespaceToken.line,
       column: namespaceToken.column,
     };
+  }
+
+  private parseNamespaceMember(isExported: boolean): Statement | null {
+    if (this.match(TokenType.НОМФАЗО)) {
+      const nestedNamespace = this.namespaceDeclaration();
+      if (isExported) {
+        nestedNamespace.exported = true;
+      }
+      return nestedNamespace;
+    }
+
+    const declarationParsers: [TokenType | TokenType[], () => Statement | null][] = [
+      [TokenType.ИНТЕРФЕЙС, () => this.interfaceDeclaration()],
+      [TokenType.НАВЪ, () => this.typeAlias()],
+      [TokenType.СИНФ, () => this.classDeclaration()],
+      [TokenType.ФУНКСИЯ, () => this.functionDeclaration()],
+      [[TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ], () => this.variableDeclaration()],
+    ];
+
+    for (const [tokenType, parser] of declarationParsers) {
+      if (Array.isArray(tokenType) ? this.match(...tokenType) : this.match(tokenType)) {
+        const stmt = parser();
+        if (isExported && stmt) {
+          (stmt as Statement & { exported?: boolean }).exported = true;
+        }
+        return stmt;
+      }
+    }
+
+    return null;
   }
 
   // eslint-disable-next-line complexity
@@ -3161,9 +3123,7 @@ export class Parser {
 
   private parseIdentifierPattern(): Identifier {
     // Allow certain keyword tokens to be treated as identifiers in binding patterns
-    // 'объект' is a keyword mapped to TokenType.ОБЪЕКТ but test suite expects it
-    // can be used as a normal variable name. Extendable list if more appear.
-    if (this.check(TokenType.IDENTIFIER) || this.check(TokenType.ОБЪЕКТ)) {
+    if (this.check(TokenType.IDENTIFIER)) {
       const identTok = this.advance();
       return {
         type: 'Identifier',

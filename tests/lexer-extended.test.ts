@@ -492,7 +492,7 @@ describe('Lexer Extended Coverage Tests', () => {
       const source = 'объект калидҳо қиматҳо';
       const tokens = tokenize(source);
 
-      expect(tokens[0].type).toBe(TokenType.ОБЪЕКТ);
+      expect(tokens[0].type).toBe(TokenType.IDENTIFIER); // 'объект' is now a regular identifier
       expect(tokens[1].type).toBe(TokenType.КАЛИДҲО);
       expect(tokens[2].type).toBe(TokenType.ҚИМАТҲО);
     });

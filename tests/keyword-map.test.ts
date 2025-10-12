@@ -25,6 +25,7 @@ describe('Keyword map coverage', () => {
     ['ворид', TokenType.ВОРИД],
     ['содир', TokenType.СОДИР],
     ['аз', TokenType.АЗ],
+    ['дар', TokenType.ДАР],
     ['пешфарз', TokenType.ПЕШФАРЗ],
     ['чун', TokenType.ЧУН],
 
@@ -52,7 +53,6 @@ describe('Keyword map coverage', () => {
     ['ҷудокунӣ', TokenType.ҶУДОКУНӢ],
 
     // Object methods
-    ['объект', TokenType.ОБЪЕКТ],
     ['калидҳо', TokenType.КАЛИДҲО],
     ['қиматҳо', TokenType.ҚИМАТҲО],
 

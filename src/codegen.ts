@@ -771,7 +771,7 @@ export class CodeGenerator {
       const objectName = (node.object as Identifier).name;
       // Only map specific built-in objects, not user variables
       // Note: These are used as built-in objects in the examples
-      const builtinObjects = ['чоп', 'объект', 'математика'];
+      const builtinObjects = ['чоп', 'математика'];
       if (builtinObjects.includes(objectName)) {
         const mappedObject = this.builtinMappings.get(objectName);
         if (mappedObject) {
@@ -932,39 +932,9 @@ export class CodeGenerator {
           continue;
         }
 
-        if (isExported) {
-          const memberName = this.getMemberName(stmt);
-          if (memberName) {
-            if (stmt.type === 'NamespaceDeclaration') {
-              // For nested namespaces, generate them inline and assign directly
-              const nestedNs = stmt as NamespaceDeclaration;
-              // Remove the exported flag for nested generation
-              const originalExported = nestedNs.exported;
-              nestedNs.exported = false;
-              const nestedCode = this.generateStatement(nestedNs).trim();
-              nestedNs.exported = originalExported;
-
-              // Generate as a property of parent namespace
-              // Remove the initial assignment part from the nested code (e.g., "Дарунӣ = ")
-              const assignmentStart = nestedCode.indexOf('= (function()');
-              if (assignmentStart !== -1) {
-                const nestedIIFE = nestedCode.substring(assignmentStart + 2); // Skip "= "
-                result += this.indent(`${name}.${memberName} = ${nestedIIFE}`);
-              } else {
-                result += this.indent(`${name}.${memberName} = ${nestedCode}`);
-              }
-            } else {
-              // For functions, variables, classes
-              const stmtCode = this.generateStatement(stmt);
-              result += stmtCode;
-              if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
-                result += this.indent(`${name}.${memberName} = ${memberName};\n`);
-              }
-            }
-          }
-        } else {
-          result += this.generateStatement(stmt);
-        }
+        result += isExported
+          ? this.generateExportedNamespaceMember(stmt, name)
+          : this.generateStatement(stmt);
       }
     }
 
@@ -973,6 +943,51 @@ export class CodeGenerator {
     result += this.indent('})();\n');
 
     return result;
+  }
+
+  private generateExportedNamespaceMember(stmt: Statement, namespaceName: string): string {
+    const memberName = this.getMemberName(stmt);
+    if (!memberName) {
+      return '';
+    }
+
+    if (stmt.type === 'NamespaceDeclaration') {
+      return this.generateNestedNamespaceExport(
+        stmt as NamespaceDeclaration,
+        namespaceName,
+        memberName
+      );
+    }
+
+    // For functions, variables, classes
+    const stmtCode = this.generateStatement(stmt);
+    let result = stmtCode;
+    if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
+      result += this.indent(`${namespaceName}.${memberName} = ${memberName};\n`);
+    }
+    return result;
+  }
+
+  private generateNestedNamespaceExport(
+    nestedNs: NamespaceDeclaration,
+    parentName: string,
+    memberName: string
+  ): string {
+    // Remove the exported flag for nested generation
+    const originalExported = nestedNs.exported;
+    nestedNs.exported = false;
+    const nestedCode = this.generateStatement(nestedNs).trim();
+    nestedNs.exported = originalExported;
+
+    // Generate as a property of parent namespace
+    // Remove the initial assignment part from the nested code (e.g., "Дарунӣ = ")
+    const assignmentStart = nestedCode.indexOf('= (function()');
+    const nestedIIFE =
+      assignmentStart !== -1
+        ? nestedCode.substring(assignmentStart + 2) // Skip "= "
+        : nestedCode;
+
+    return this.indent(`${parentName}.${memberName} = ${nestedIIFE}`);
   }
 
   private getMemberName(stmt: Statement): string | null {

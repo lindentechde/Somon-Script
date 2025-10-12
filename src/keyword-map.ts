@@ -51,7 +51,6 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['ҷудокунӣ', TokenType.ҶУДОКУНӢ],
 
   // Object methods
-  ['объект', TokenType.ОБЪЕКТ],
   ['калидҳо', TokenType.КАЛИДҲО],
   ['қиматҳо', TokenType.ҚИМАТҲО],
 

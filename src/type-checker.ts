@@ -444,37 +444,21 @@ export class TypeChecker {
   }
 
   private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
-    // If we have a target interface type, use it
     if (targetType && targetType.kind === 'interface') {
       return targetType;
     }
 
-    // If we have a target intersection type, infer the object and let type checking handle it
-    if (targetType && targetType.kind === 'intersection') {
-      // Infer object type from properties
-      const properties = new Map<string, PropertyType>();
-
-      if (objExpr.properties) {
-        for (const prop of objExpr.properties) {
-          if (prop.key && prop.value) {
-            const keyName =
-              prop.key.type === 'Identifier'
-                ? (prop.key as Identifier).name
-                : String((prop.key as Literal).value);
-            const valueType = this.inferExpressionType(prop.value);
-            properties.set(keyName, {
-              type: valueType,
-              optional: false,
-            });
-          }
-        }
-      }
-
-      // Return the object type - isAssignable will check if it matches the intersection
-      return { kind: 'object', properties: properties };
+    if (
+      targetType &&
+      (targetType.kind === 'intersection' || (targetType.kind === 'unknown' && targetType.name))
+    ) {
+      return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
     }
 
-    // Otherwise, infer object type from properties
+    return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
+  }
+
+  private extractObjectProperties(objExpr: ObjectExpression): Map<string, PropertyType> {
     const properties = new Map<string, PropertyType>();
 
     if (objExpr.properties) {
@@ -493,7 +477,7 @@ export class TypeChecker {
       }
     }
 
-    return { kind: 'object', properties: properties };
+    return properties;
   }
 
   private inferCallType(callExpr: CallExpression): Type {
@@ -558,6 +542,15 @@ export class TypeChecker {
 
     if (this.isUniqueAssignable(source, target)) {
       return true;
+    }
+
+    // Allow assignment to unknown types with names (unresolved type references)
+    // This handles complex types that couldn't be resolved like namespaced types and mapped types
+    if (target.kind === 'unknown' && target.name) {
+      // Allow objects to be assigned to unknown named types
+      if (source.kind === 'object' || source.kind === 'interface') {
+        return true;
+      }
     }
 
     return false;
