@@ -19,6 +19,43 @@ const results = {
   total: examples.length,
 };
 
+// Helper function to extract and compile dependencies
+function compileDependencies(sourceFile) {
+  const content = fs.readFileSync(sourceFile, 'utf-8');
+  const importRegex = /ворид\s+.*?\s+аз\s+["'](.+?)["']/g;
+  const dependencies = [];
+  let match;
+
+  while ((match = importRegex.exec(content)) !== null) {
+    const importPath = match[1];
+    // Only handle relative imports
+    if (importPath.startsWith('./') || importPath.startsWith('../')) {
+      dependencies.push(importPath);
+    }
+  }
+
+  // Compile each dependency
+  dependencies.forEach(dep => {
+    const depPath = path.join(examplesDir, dep.replace('./', ''));
+    const depSomPath = depPath.endsWith('.som') ? depPath : `${depPath}.som`;
+    const depJsPath = depPath.replace(/\.som$/, '') + '.js';
+
+    if (fs.existsSync(depSomPath) && !fs.existsSync(depJsPath)) {
+      try {
+        const compileCommand = `node dist/cli.js compile "${depSomPath}" -o "${depJsPath}"`;
+        execSync(compileCommand, { stdio: 'pipe' });
+      } catch (e) {
+        // Ignore compilation errors for dependencies
+      }
+    }
+  });
+
+  return dependencies.map(dep => {
+    const depPath = path.join(examplesDir, dep.replace('./', ''));
+    return depPath.replace(/\.som$/, '') + '.js';
+  });
+}
+
 examples.forEach((example, index) => {
   const examplePath = path.join(examplesDir, example);
   const exampleName = example.replace('.som', '');
@@ -26,38 +63,70 @@ examples.forEach((example, index) => {
   console.log(`[${index + 1}/${examples.length}] Testing ${example}...`);
 
   try {
-    // Try to compile the example
-    const compileCommand = `node dist/cli.js compile "${examplePath}" -o /tmp/test-${exampleName}.js`;
-    execSync(compileCommand, { stdio: 'pipe' });
+    // First, compile any dependencies
+    const compiledDeps = compileDependencies(examplePath);
 
-    // Check if it's a future implementation example
-    const content = fs.readFileSync(examplePath, 'utf-8');
-    if (content.includes('Future Implementation') || content.includes('planned for future')) {
-      results.partial.push({
-        name: example,
-        status: 'partial',
-        reason: 'Marked as future implementation',
-      });
-      console.log(`  ⚠️  Partial - Future implementation`);
-    } else {
-      // Try to run the compiled JavaScript
-      try {
-        const jsPath = `/tmp/test-${exampleName}.js`;
-        execSync(`node "${jsPath}"`, { stdio: 'pipe', timeout: 5000 });
-        results.working.push({
-          name: example,
-          status: 'working',
-          reason: 'Compiles and runs successfully',
-        });
-        console.log(`  ✅ Working`);
-      } catch (runError) {
+    // Use the same approach as 'somon run' - compile to source directory
+    const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    const jsPath = path.join(examplesDir, `${exampleName}.somon-test-${uniqueSuffix}.js`);
+
+    try {
+      // Try to compile the example to the source directory
+      const compileCommand = `node dist/cli.js compile "${examplePath}" -o "${jsPath}"`;
+      execSync(compileCommand, { stdio: 'pipe' });
+
+      // Check if it's a future implementation example
+      const content = fs.readFileSync(examplePath, 'utf-8');
+      if (content.includes('Future Implementation') || content.includes('planned for future')) {
         results.partial.push({
           name: example,
           status: 'partial',
-          reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0],
+          reason: 'Marked as future implementation',
         });
-        console.log(`  ⚠️  Partial - Runtime error`);
+        console.log(`  ⚠️  Partial - Future implementation`);
+      } else {
+        // Try to run the compiled JavaScript with cwd set to examples directory
+        try {
+          execSync(`node "${path.basename(jsPath)}"`, {
+            stdio: 'pipe',
+            timeout: 5000,
+            cwd: examplesDir,
+          });
+          results.working.push({
+            name: example,
+            status: 'working',
+            reason: 'Compiles and runs successfully',
+          });
+          console.log(`  ✅ Working`);
+        } catch (runError) {
+          results.partial.push({
+            name: example,
+            status: 'partial',
+            reason: 'Compiles but runtime error: ' + runError.message.split('\n')[0],
+          });
+          console.log(`  ⚠️  Partial - Runtime error`);
+        }
       }
+    } finally {
+      // Clean up compiled file
+      try {
+        if (fs.existsSync(jsPath)) {
+          fs.unlinkSync(jsPath);
+        }
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+
+      // Clean up compiled dependencies
+      compiledDeps.forEach(depJs => {
+        try {
+          if (fs.existsSync(depJs)) {
+            fs.unlinkSync(depJs);
+          }
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      });
     }
   } catch (compileError) {
     results.failing.push({

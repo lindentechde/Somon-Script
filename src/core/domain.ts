@@ -415,7 +415,7 @@ export class CompilationContext {
     public readonly options: CompilationOptions,
     public readonly diagnostics: IDiagnosticsReporter,
     public readonly sourceFile: string,
-    public readonly workingDirectory: string = process.cwd()
+    public readonly workingDirectory: string
   ) {}
 }
 

@@ -12,7 +12,7 @@ export interface TypeNode extends ASTNode {
 
 export interface PrimitiveType extends TypeNode {
   type: 'PrimitiveType';
-  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат';
 }
 
 export interface ArrayType extends TypeNode {
@@ -71,6 +71,18 @@ export interface TypeAlias extends Statement {
   typeAnnotation: TypeAnnotation;
 }
 
+export interface NamespaceDeclaration extends Statement {
+  type: 'NamespaceDeclaration';
+  name: Identifier;
+  body: NamespaceBody;
+  exported?: boolean;
+}
+
+export interface NamespaceBody extends ASTNode {
+  type: 'NamespaceBody';
+  statements: Statement[];
+}
+
 export interface ConditionalType extends TypeNode {
   type: 'ConditionalType';
   checkType: TypeNode;
@@ -111,4 +123,9 @@ export interface TupleType extends TypeNode {
 export interface LiteralType extends TypeNode {
   type: 'LiteralType';
   value: string | number | boolean;
+}
+
+export interface ObjectType extends TypeNode {
+  type: 'ObjectType';
+  properties: PropertySignature[];
 }

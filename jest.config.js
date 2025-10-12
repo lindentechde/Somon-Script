@@ -18,6 +18,7 @@ const baseConfig = {
   },
   testTimeout: 10000,
   verbose: true,
+  maxWorkers: 1,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/coverage/'],
   collectCoverageFrom: [

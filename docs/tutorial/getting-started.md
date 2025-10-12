@@ -37,7 +37,7 @@ For project-specific installation:
 mkdir my-somon-project
 cd my-somon-project
 npm init -y
-npm install somon-script --save-dev
+npm install @lindentech/somon-script --save-dev
 ```
 
 ### Verify Installation

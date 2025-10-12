@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadConfig } from '../src/config';
+import { ConfigError, loadConfig } from '../src/config';
 
 describe('somon.config.json loader/validation', () => {
   let tempDir: string;
@@ -18,10 +18,19 @@ describe('somon.config.json loader/validation', () => {
     }
   });
 
-  test('returns empty config on invalid content', () => {
+  test('throws when config file cannot be parsed', () => {
     fs.writeFileSync(path.join(tempDir, 'somon.config.json'), '{ invalid json');
-    const cfg = loadConfig(tempDir);
-    expect(cfg).toEqual({});
+    expect(() => loadConfig(tempDir)).toThrow(ConfigError);
+
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      if (error instanceof ConfigError) {
+        expect(error.message).toContain('Failed to parse config file');
+        expect(error.details).toHaveLength(0);
+      }
+    }
   });
 
   test('rejects unknown top-level properties', () => {
@@ -29,8 +38,16 @@ describe('somon.config.json loader/validation', () => {
       path.join(tempDir, 'somon.config.json'),
       JSON.stringify({ unknown: true }, null, 2)
     );
-    const cfg = loadConfig(tempDir);
-    expect(cfg).toEqual({});
+    expect(() => loadConfig(tempDir)).toThrow(ConfigError);
+
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      if (error instanceof ConfigError) {
+        expect(error.details.some(detail => detail.path === 'unknown')).toBe(true);
+      }
+    }
   });
 
   test('accepts moduleSystem and bundle sections', () => {
@@ -43,7 +60,13 @@ describe('somon.config.json loader/validation', () => {
             loading: { cache: true, circularDependencyStrategy: 'warn' },
             compilation: { target: 'es2015' },
           },
-          bundle: { format: 'commonjs', minify: true, sourceMaps: false, externals: ['fs'] },
+          bundle: {
+            format: 'commonjs',
+            minify: true,
+            sourceMaps: false,
+            inlineSources: true,
+            externals: ['fs'],
+          },
         },
         null,
         2
@@ -56,5 +79,43 @@ describe('somon.config.json loader/validation', () => {
     expect(cfg.moduleSystem?.compilation?.target).toBe('es2015');
     expect(cfg.bundle?.format).toBe('commonjs');
     expect(cfg.bundle?.externals).toEqual(['fs']);
+    expect(cfg.bundle?.inlineSources).toBe(true);
+  });
+
+  test('rejects unsupported bundle format', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ bundle: { format: 'esm' } }, null, 2)
+    );
+
+    expect(() => loadConfig(tempDir)).toThrow(ConfigError);
+
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      if (error instanceof ConfigError) {
+        expect(error.details.some(detail => detail.path === 'bundle.format')).toBe(true);
+        expect(error.details.some(detail => /commonjs/.test(detail.message))).toBe(true);
+      }
+    }
+  });
+
+  test('rejects non-boolean bundle.inlineSources', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ bundle: { inlineSources: 'yes please' } }, null, 2)
+    );
+
+    expect(() => loadConfig(tempDir)).toThrow(ConfigError);
+
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      if (error instanceof ConfigError) {
+        expect(error.details.some(detail => detail.path === 'bundle.inlineSources')).toBe(true);
+      }
+    }
   });
 });

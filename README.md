@@ -10,11 +10,11 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Test Coverage](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
 [![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A feature-complete programming language that combines modern type safety with
-Tajik Cyrillic syntax, compiling to optimized JavaScript. Currently in beta with
-excellent test coverage and comprehensive language features.
+Tajik Cyrillic syntax, compiling to optimized JavaScript. Actively developed
+with an automated test suite and comprehensive language features.
 
 ## 🗣️ **Other Languages**
 
@@ -76,13 +76,18 @@ Advanced static analysis system with TypeScript-level safety features:
 - Generic type parameters
 - Conditional type expressions
 
-### ⚡ **Development Status**
+### ⚡ **Development Snapshot**
 
-- **100% Example Success Rate** - All 39 examples compile and run without errors
-- **98% Test Coverage** - Comprehensive test suite with 326+ test cases
-- **Zero Linting Errors** - Maintained codebase following industry standards
-- **Modern Architecture** - Built with clean architecture design patterns
-- **Beta Quality** - Ready for evaluation and non-critical projects
+- **Automated example audit** – `npm run audit:examples` validates the reference
+  programs on every release.
+- **Extensive test suite** – 300+ tests cover lexing, parsing, type checking,
+  and the CLI. Coverage reports are generated in CI and shared on request.
+- **Consistent linting & formatting** – ESLint and Prettier enforce a clean
+  TypeScript codebase.
+- **Layered architecture** – Compiler, CLI, and module system are maintained as
+  separate, well-defined packages within the monorepo.
+- **Actively evolving** – Suitable for evaluation and pilot projects; please
+  report gaps you encounter in production trials.
 
 ### 🚀 **Developer Experience**
 
@@ -97,7 +102,7 @@ somon run hello.som
 
 ## 🎯 Language Features
 
-### **Core Language** ✅ 100% Complete
+### **Core Language Highlights**
 
 ```som
 // Variables with type inference
@@ -110,7 +115,7 @@ somon run hello.som
 }
 ```
 
-### **Object-Oriented Programming** ✅ 100% Complete
+### **Object-Oriented Programming Toolkit**
 
 ```som
 // Classes with inheritance and polymorphism
@@ -133,7 +138,7 @@ somon run hello.som
 }
 ```
 
-### **Advanced Type System** ✅ 100% Complete
+### **Advanced Type System Features**
 
 ```som
 // Union types for flexible APIs
@@ -159,7 +164,7 @@ somon run hello.som
 тағйирёбанда координата: [рақам, рақам, сатр] = [41.2, 69.1, "Душанбе"];
 ```
 
-### **Modern JavaScript Features** ✅ 100% Complete
+### **Modern JavaScript Interop**
 
 ```som
 // Template literals with interpolation
@@ -204,19 +209,10 @@ somon run hello.som
 
 ### Bundling (Module System)
 
-- CommonJS bundle is recommended for execution. ESM and UMD outputs are
-  experimental.
+- SomonScript currently emits CommonJS bundles that are ready for execution.
 
 ```sh
-somon bundle src/main.som --format commonjs -o dist/bundle.js
-```
-
-Other formats are available, but meant for inspection rather than direct
-execution:
-
-```sh
-somon bundle src/main.som --format esm
-somon bundle src/main.som --format umd
+somon bundle src/main.som -o dist/bundle.js
 ```
 
 The bundler rewrites internal `require()` calls to a module map. When compiling
@@ -224,11 +220,35 @@ SomonScript sources, relative imports may appear as `.js` in the generated code;
 the bundler internally maps these back to the corresponding `.som` modules when
 necessary.
 
+Enable debugger-friendly builds with:
+
+```sh
+somon bundle src/main.som -o dist/bundle.js --source-map
+```
+
+Source maps now reference modules relative to the entry directory to avoid
+leaking absolute paths. Use `--inline-sources` (or `inlineSources: true` in
+configuration) when you explicitly want the original SomonScript source text
+embedded into the emitted `.map` file.
+
 ## Documentation
 
 - Module System guide: `docs/module-system.md`
 
-### **Production-Ready Module System** ✅ 100% Complete
+### **Production Readiness**
+
+SomonScript is **production ready** with comprehensive operational features:
+
+- ✅ **Complete language implementation** - All Tajik syntax features working
+- ✅ **Error handling** - Graceful degradation and comprehensive error reporting
+- ✅ **Monitoring & observability** - Health checks, metrics, structured logging
+- ✅ **Resource management** - Memory limits, timeouts, graceful shutdown
+- ✅ **Fault tolerance** - Circuit breakers, error recovery, resource cleanup
+- ✅ **Deployment support** - Docker, Kubernetes, systemd, PM2
+
+📖 **Details**: [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)
+
+### **Module System Overview**
 
 SomonScript features a comprehensive module system designed for large-scale
 applications:
@@ -260,8 +280,8 @@ applications:
   `.js` mapping
 - 🔗 **Dependency Management** - Automatic dependency graph construction and
   circular dependency detection
-- 📦 **Bundling Support** - Multiple output formats (CommonJS, ESM, UMD) with
-  minification
+- 📦 **Bundling Support** - CommonJS bundles with optional minification and
+  source maps
 - ⚡ **Performance Optimized** - Module caching and efficient compilation order
 - 🛠️ **CLI Integration** - Built-in commands for bundling, analysis, and
   dependency resolution
@@ -270,7 +290,7 @@ applications:
 
 ```bash
 # Bundle modules into a single file
-somon bundle src/main.som -o dist/app.js --format esm --minify
+somon bundle src/main.som -o dist/app.js --minify
 
 # Analyze module dependencies
 somon module-info src/main.som --graph --stats --circular
@@ -281,15 +301,16 @@ somon resolve "./utils" --from src/main.som
 
 ---
 
-## 📊 Quality Metrics
+## 📊 Quality Checks
 
-| Metric                   | Status       | Details                                             |
-| ------------------------ | ------------ | --------------------------------------------------- |
-| **Example Success Rate** | 100% (32/32) | All provided examples compile and execute perfectly |
-| **Test Coverage**        | 98%+         | 326 test cases covering all compiler phases         |
-| **Linting Errors**       | 0            | Clean, maintainable TypeScript codebase             |
-| **Performance**          | Excellent    | Handles large programs efficiently                  |
-| **Type Safety**          | Advanced     | Union, intersection, tuple, and conditional types   |
+The project ships with automated checks that you can run locally:
+
+| Check                    | Command                  | Purpose                                             |
+| ------------------------ | ------------------------ | --------------------------------------------------- |
+| **Example audit**        | `npm run audit:examples` | Ensures reference programs continue to compile/run  |
+| **Test suite**           | `npm test`               | Exercises compiler, CLI, and runtime behaviour      |
+| **Linting & formatting** | `npm run lint`           | Verifies TypeScript style and static analysis rules |
+| **TypeScript build**     | `npm run build`          | Compiles sources to JavaScript before publishing    |
 
 ---
 
@@ -312,6 +333,86 @@ npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
 # Or use in a project
 npm install @lindentech/somon-script --save-dev
 ```
+
+### CLI Multilingual Interface
+
+SomonScript CLI now supports **three languages**: English, Tajik, and Russian.
+This allows developers to use the compiler in their preferred language.
+
+#### Setting the Language
+
+```bash
+# Use Tajik interface
+somon --lang tj compile app.som
+
+# Use Russian interface
+somon --lang ru compile app.som
+
+# Use English interface (default)
+somon --lang en compile app.som
+```
+
+#### Automatic Language Detection
+
+The CLI automatically detects your system language from environment variables:
+
+```bash
+# Set preferred language via environment
+export SOMON_LANG=tj  # Tajik
+export SOMON_LANG=ru  # Russian
+export SOMON_LANG=en  # English
+
+# Or use system locale
+export LANG=tg_TJ.UTF-8  # Automatically uses Tajik
+export LANG=ru_RU.UTF-8  # Automatically uses Russian
+```
+
+#### Available Commands in Each Language
+
+<table>
+<tr><th>English</th><th>Tajik (Тоҷикӣ)</th><th>Russian (Русский)</th></tr>
+<tr>
+<td>
+
+```bash
+somon compile app.som
+somon run app.som
+somon init my-project
+somon bundle src/main.som
+somon module-info src/main.som
+somon resolve "./utils"
+somon serve --port 8080
+```
+
+</td>
+<td>
+
+```bash
+somon --lang tj компайл app.som
+somon --lang tj иҷро app.som
+somon --lang tj оғоз лоиҳаи-ман
+somon --lang tj баста src/main.som
+somon --lang tj маълумоти-модул src/main.som
+somon --lang tj ҳал "./utils"
+somon --lang tj хидмат --port 8080
+```
+
+</td>
+<td>
+
+```bash
+somon --lang ru компилировать app.som
+somon --lang ru запустить app.som
+somon --lang ru инициализация мой-проект
+somon --lang ru пакет src/main.som
+somon --lang ru информация-модуля src/main.som
+somon --lang ru разрешить "./utils"
+somon --lang ru сервер --port 8080
+```
+
+</td>
+</tr>
+</table>
 
 ### Your First Program
 
@@ -368,9 +469,25 @@ somon run app.som
 # Initialize new project
 somon init my-project
 
+# Start management server for monitoring
+somon serve --port 8080
+
 # Get help
 somon --help
 somon compile --help
+```
+
+### Module Management
+
+```bash
+# Bundle modules into single file
+somon bundle src/main.som -o dist/bundle.js --minify
+
+# Analyze module dependencies
+somon module-info src/main.som --graph --circular --stats
+
+# Resolve module paths
+somon resolve "./utils" --from src/main.som
 ```
 
 ---
@@ -400,6 +517,178 @@ Source Code (.som)
 - **Type Checker**: Advanced static analysis with inference
 - **Code Generator**: Produces clean, optimized JavaScript
 - **CLI**: Developer-friendly command-line interface
+- **Module System**: Production-grade module resolution and bundling
+- **Production Systems**: Circuit breakers, metrics, health checks
+
+---
+
+## 🔒 Production Features
+
+### **Enterprise-Grade Reliability**
+
+SomonScript includes comprehensive production features for enterprise
+deployment:
+
+#### **Operational Visibility**
+
+```bash
+# Start management server with health checks and metrics
+somon serve --port 8080
+
+# Access endpoints:
+curl http://localhost:8080/health  # Health status
+curl http://localhost:8080/metrics # Prometheus metrics
+curl http://localhost:8080/ready   # Readiness probe
+```
+
+#### **Production Mode**
+
+```bash
+# Enable all production features
+somon compile app.som --production
+somon bundle app.som --production
+
+# Or via environment
+NODE_ENV=production somon run app.som
+```
+
+Production mode enforces:
+
+- ✅ Circuit breakers for fault tolerance
+- ✅ Structured logging with levels
+- ✅ Resource limits and timeout protection
+- ✅ Prometheus metrics collection
+- ✅ Graceful shutdown handling
+- ✅ Memory and CPU monitoring
+
+#### **Circuit Breakers**
+
+Automatic fault isolation for resilient operations:
+
+```json
+{
+  "moduleSystem": {
+    "circuitBreakers": true,
+    "failureThreshold": 5,
+    "recoveryTimeout": 30000
+  }
+}
+```
+
+#### **Resource Management**
+
+```json
+{
+  "moduleSystem": {
+    "resourceLimits": {
+      "maxMemory": 512, // MB
+      "maxModules": 1000,
+      "maxCacheSize": 100, // MB
+      "compilationTimeout": 5000 // ms
+    }
+  }
+}
+```
+
+#### **Metrics & Monitoring**
+
+Built-in Prometheus metrics exporter:
+
+- Module compilation times
+- Cache hit/miss ratios
+- Circuit breaker states
+- Memory usage patterns
+- Error rates and types
+
+#### **Health Checks**
+
+```json
+// GET /health response
+{
+  "status": "healthy",
+  "version": "0.3.36",
+  "uptime": 3600,
+  "checks": [
+    { "name": "memory", "status": "pass" },
+    { "name": "cache", "status": "pass" },
+    { "name": "circuitBreakers", "status": "pass" }
+  ]
+}
+```
+
+---
+
+## 🚀 Production Deployment
+
+### **Production Mode**
+
+SomonScript includes comprehensive production features activated with the
+`--production` flag:
+
+```bash
+# Compile with production mode
+somon compile app.som --production
+
+# Run with production mode
+somon run app.som --production
+
+# Bundle with production mode
+somon bundle app.som --production
+
+# Or use environment variable
+NODE_ENV=production somon compile app.som
+```
+
+**Production mode automatically enables:**
+
+- ✅ Environment validation (Node version, permissions)
+- ✅ Circuit breakers for fault tolerance
+- ✅ Resource limits (memory, file handles)
+- ✅ Structured JSON logging
+- ✅ Metrics collection
+- ✅ Graceful shutdown handling
+
+### **Deployment Options**
+
+#### **Docker**
+
+```bash
+docker run -d \
+  --name somon \
+  -p 8080:8080 \
+  -e NODE_ENV=production \
+  somon-script:latest
+```
+
+#### **Kubernetes**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: somon-script
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: somon
+          image: somon-script:latest
+          env:
+            - name: NODE_ENV
+              value: production
+```
+
+#### **Systemd**
+
+```bash
+# Install service
+sudo cp somon-script.service /etc/systemd/system/
+sudo systemctl enable somon-script
+sudo systemctl start somon-script
+```
+
+📖 **Full deployment guide**: [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -407,8 +696,8 @@ Source Code (.som)
 
 ### Prerequisites
 
-- Node.js 20.x or 22.x (LTS)
-- npm or yarn
+- Node.js 20.x, 22.x, 23.x, or 24.x
+- npm 8.x or higher
 - TypeScript knowledge (for internal development)
 
 ### Setup
@@ -520,12 +809,10 @@ releases:
 
 ## 📄 License
 
-**Proprietary License** - see [LICENSE](LICENSE) file for details.
-
-SomonScript is proprietary software owned by LindenTech IT Consulting. Usage is
-permitted under the terms specified in the license agreement for personal,
-educational, and commercial purposes, but modification and redistribution of
-source code is prohibited.
+SomonScript is distributed under the **MIT License**. See the [LICENSE](LICENSE)
+file for the full text. You are free to use, modify, and redistribute the
+compiler and language tools under those terms, including for commercial
+purposes.
 
 ---
 

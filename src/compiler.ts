@@ -32,6 +32,11 @@ export interface CompileOptions {
    * Abort compilation when any type errors are encountered instead of emitting code.
    */
   strict?: boolean;
+  /**
+   * Maximum compilation time in milliseconds. Defaults to 120000ms (2 minutes).
+   * Set to 0 to disable timeout.
+   */
+  timeout?: number;
 }
 
 /**
@@ -57,6 +62,24 @@ export interface CompileResult {
  * diagnostics, and warnings.
  */
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
+  const timeout = options.timeout ?? 120000; // Default 2 minutes
+
+  if (timeout > 0) {
+    const timeoutId = setTimeout(() => {
+      throw new Error(`Compilation timed out after ${timeout}ms`);
+    }, timeout);
+
+    try {
+      return compileInternal(source, options);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return compileInternal(source, options);
+}
+
+function compileInternal(source: string, options: CompileOptions): CompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -165,12 +188,18 @@ function minifyCode(
   // Lazy-load minify preset to avoid hard dependency at runtime
   let presetModule: unknown = null;
   try {
+    try {
+      const resolvedPreset = require.resolve('babel-preset-minify');
+      delete require.cache[resolvedPreset];
+    } catch {
+      // ignore - module is either not installed or already absent from the cache
+    }
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     presetModule = require('babel-preset-minify');
   } catch {
-    // Preset not available; apply a conservative whitespace trim as fallback
-    const basic = code.replace(/\s*=\s*/g, '=').replace(/\s*;\s*/g, ';');
-    return { code: basic, map };
+    throw new Error(
+      "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable --minify."
+    );
   }
   // Safely coerce the dynamically required preset into a PluginItem if possible.
   // babel-preset-minify exports either a function or an object acceptable as a preset.

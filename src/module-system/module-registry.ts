@@ -1,7 +1,6 @@
 import * as path from 'path';
 import { LoadedModule, ModuleExports } from './module-loader';
 import { Program, ImportDeclaration } from '../types';
-import { ModuleResolver } from './module-resolver';
 
 export interface ModuleMetadata {
   id: string;
@@ -37,7 +36,6 @@ export type DependencyTreeNode =
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleMetadata>();
   private readonly dependencyGraph = new Map<string, DependencyNode>();
-  private readonly resolver = new ModuleResolver();
 
   /**
    * Register a loaded module
@@ -236,39 +234,52 @@ export class ModuleRegistry {
   }
 
   private updateDependencyGraph(moduleId: string, dependencies: string[]): void {
+    // Resolve raw dependency specifiers to module IDs
+    const module = this.modules.get(moduleId);
+    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+
+    const resolvedDeps: string[] = [];
+    for (const dep of dependencies) {
+      // Try to resolve the raw specifier to a module ID
+      const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
+      if (resolvedDepId) {
+        resolvedDeps.push(resolvedDepId);
+      } else {
+        // Keep raw specifier if we can't resolve it yet
+        resolvedDeps.push(dep);
+      }
+    }
+
     // Create or update node
     let node = this.dependencyGraph.get(moduleId);
     if (node) {
       // Update existing node
-      node.dependencies = [...dependencies];
+      node.dependencies = resolvedDeps;
     } else {
       // Create new node
       node = {
         id: moduleId,
-        dependencies: [...dependencies],
+        dependencies: resolvedDeps,
         dependents: [],
         level: 0,
       };
       this.dependencyGraph.set(moduleId, node);
     }
 
-    // Update dependents for dependencies (resolve specifiers to module IDs when possible)
-    for (const dep of dependencies) {
-      try {
-        const resolved = this.resolver.resolve(dep, moduleId);
-        // Ensure dependency node exists
-        if (!this.dependencyGraph.has(resolved.resolvedPath)) {
-          this.dependencyGraph.set(resolved.resolvedPath, {
-            id: resolved.resolvedPath,
-            dependencies: [],
-            dependents: [],
-            level: 0,
-          });
-        }
-        const depNode = this.dependencyGraph.get(resolved.resolvedPath)!;
-        if (!depNode.dependents.includes(moduleId)) depNode.dependents.push(moduleId);
-      } catch {
-        // Ignore unresolved here; validation will report them
+    // Update dependents for dependencies
+    for (const depId of resolvedDeps) {
+      // Ensure dependency node exists
+      if (!this.dependencyGraph.has(depId)) {
+        this.dependencyGraph.set(depId, {
+          id: depId,
+          dependencies: [],
+          dependents: [],
+          level: 0,
+        });
+      }
+      const depNode = this.dependencyGraph.get(depId)!;
+      if (!depNode.dependents.includes(moduleId)) {
+        depNode.dependents.push(moduleId);
       }
     }
 
@@ -380,23 +391,54 @@ export class ModuleRegistry {
     }
   }
 
-  // Resolve specifier dependencies for a given module ID to registered module IDs
+  // Get resolved dependencies for a given module ID
   private getResolvedDependencies(moduleId: string): string[] {
     const node = this.dependencyGraph.get(moduleId);
     if (!node) return [];
 
-    const deps: string[] = [];
-    for (const depSpec of node.dependencies) {
-      try {
-        const resolved = this.resolver.resolve(depSpec, moduleId);
-        const depId = resolved.resolvedPath;
-        if (this.dependencyGraph.has(depId)) {
-          deps.push(depId);
+    const module = this.modules.get(moduleId);
+    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+
+    const resolved: string[] = [];
+    for (const dep of node.dependencies) {
+      // Try to resolve if it's a raw specifier
+      if (!path.isAbsolute(dep) && !dep.startsWith('external:')) {
+        const resolvedId = this.resolveSpecifierToModuleId(dep, moduleDir);
+        if (resolvedId && this.dependencyGraph.has(resolvedId)) {
+          resolved.push(resolvedId);
         }
-      } catch {
-        // Unresolvable dependency will be caught by validation; ignore for traversal
+      } else if (this.dependencyGraph.has(dep)) {
+        // Already resolved
+        resolved.push(dep);
       }
     }
-    return deps;
+
+    return resolved;
+  }
+
+  // Resolve a raw specifier to a module ID
+  private resolveSpecifierToModuleId(specifier: string, fromDir: string): string | null {
+    // If it's already an absolute path or external module, return as-is
+    if (path.isAbsolute(specifier) || specifier.startsWith('external:')) {
+      return specifier;
+    }
+
+    // For relative paths, try to find the matching module
+    const possiblePaths = [
+      path.resolve(fromDir, specifier),
+      path.resolve(fromDir, specifier + '.som'),
+      path.resolve(fromDir, specifier + '.js'),
+      path.resolve(fromDir, specifier, 'index.som'),
+      path.resolve(fromDir, specifier, 'index.js'),
+    ];
+
+    // Find a registered module that matches one of the possible paths
+    for (const mod of this.modules.values()) {
+      if (possiblePaths.includes(mod.resolvedPath)) {
+        return mod.id;
+      }
+    }
+
+    return null;
   }
 }

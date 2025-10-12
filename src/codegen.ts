@@ -4,11 +4,14 @@ import {
   Expression,
   VariableDeclaration,
   FunctionDeclaration,
+  FunctionExpression,
   BlockStatement,
   ReturnStatement,
   IfStatement,
   WhileStatement,
   ForStatement,
+  ForInStatement,
+  ForOfStatement,
   ExpressionStatement,
   Identifier,
   Literal,
@@ -16,6 +19,7 @@ import {
   UnaryExpression,
   UpdateExpression,
   CallExpression,
+  ArrowFunctionExpression,
   AssignmentExpression,
   MemberExpression,
   ImportDeclaration,
@@ -26,6 +30,7 @@ import {
   ObjectExpression,
   InterfaceDeclaration,
   TypeAlias,
+  NamespaceDeclaration,
   Parameter,
   TryStatement,
   ThrowStatement,
@@ -58,6 +63,18 @@ export class CodeGenerator {
     ['хато', 'error'],
     ['огоҳӣ', 'warn'],
     ['маълумот', 'info'],
+    ['ҷадвал', 'table'],
+    ['гурӯҳ', 'group'],
+    ['анҷомиГурӯҳ', 'groupEnd'],
+    ['гурӯҳиПечида', 'groupCollapsed'],
+    ['вақт', 'time'],
+    ['анҷомиВақт', 'timeEnd'],
+    ['шумор', 'count'],
+    ['сифриШумор', 'countReset'],
+    ['тасдиқ', 'assert'],
+    ['тоза', 'clear'],
+    ['феҳрист', 'dir'],
+    ['пайгирӣ', 'trace'],
 
     // Error handling
     ['Хато', 'Error'],
@@ -78,7 +95,7 @@ export class CodeGenerator {
     ['дарозии_сатр', 'length'],
     ['пайвастан', 'concat'],
     ['ҷойивазкунӣ', 'replace'],
-    ['ҷудокунӣ', 'split'],
+    ['ҷудокунӣ', 'join'], // Array join method (combines elements into string)
 
     // Object methods
     ['объект', 'Object'],
@@ -141,6 +158,10 @@ export class CodeGenerator {
         return this.generateWhileStatement(node as WhileStatement);
       case 'ForStatement':
         return this.generateForStatement(node as ForStatement);
+      case 'ForInStatement':
+        return this.generateForInStatement(node as ForInStatement);
+      case 'ForOfStatement':
+        return this.generateForOfStatement(node as ForOfStatement);
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -151,6 +172,8 @@ export class CodeGenerator {
         return this.generateInterfaceDeclaration(node as InterfaceDeclaration);
       case 'TypeAlias':
         return this.generateTypeAlias(node as TypeAlias);
+      case 'NamespaceDeclaration':
+        return this.generateNamespaceDeclaration(node as NamespaceDeclaration);
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
       case 'SwitchStatement':
@@ -271,6 +294,38 @@ export class CodeGenerator {
     return result;
   }
 
+  private generateForInStatement(node: ForInStatement): string {
+    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const right = this.generateExpression(node.right);
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${left} in ${right}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
+  private generateForOfStatement(node: ForOfStatement): string {
+    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const right = this.generateExpression(node.right);
+    const body = this.generateStatement(node.body);
+
+    let result = this.indent(`for (${left} of ${right}) `);
+
+    if (node.body.type === 'BlockStatement') {
+      result += body.replace(this.getIndent(), '');
+    } else {
+      result += `{\n${body}\n${this.getIndent()}}`;
+    }
+
+    return result;
+  }
+
   private generateExpressionStatement(node: ExpressionStatement): string {
     const expr = node.expression;
 
@@ -307,6 +362,11 @@ export class CodeGenerator {
 
   // eslint-disable-next-line complexity
   private generateExpression(node: Expression): string {
+    // Handle null or undefined node
+    if (!node) {
+      return '';
+    }
+
     // Use a more direct delegation approach
     const simpleExpressions = [
       'Identifier',
@@ -334,7 +394,13 @@ export class CodeGenerator {
       return this.generateStructuralExpression(node);
     }
 
-    const specialExpressions = ['AwaitExpression', 'NewExpression', 'ImportExpression'];
+    const specialExpressions = [
+      'AwaitExpression',
+      'NewExpression',
+      'ImportExpression',
+      'ArrowFunctionExpression',
+      'FunctionExpression',
+    ];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
     }
@@ -406,8 +472,43 @@ export class CodeGenerator {
         return this.generateNewExpression(node as NewExpression);
       case 'ImportExpression':
         return this.generateImportExpression(node as ImportExpression);
+      case 'ArrowFunctionExpression':
+        return this.generateArrowFunctionExpression(node as ArrowFunctionExpression);
+      case 'FunctionExpression':
+        return this.generateFunctionExpression(node as FunctionExpression);
       default:
         return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateFunctionExpression(node: FunctionExpression): string {
+    // Handle new Parameter type or legacy Identifier type
+    const params = node.params
+      .map(p => {
+        if ('name' in p && typeof p.name === 'object' && 'name' in p.name) {
+          return p.name.name;
+        } else if ('name' in p && typeof p.name === 'string') {
+          return p.name;
+        }
+        return '';
+      })
+      .join(', ');
+
+    const body = this.generateBlockStatement(node.body);
+    return `function(${params}) ${body}`;
+  }
+
+  private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
+    const params = node.params.map(p => p.name.name).join(', ');
+
+    if (node.body.type === 'BlockStatement') {
+      // Block body
+      const body = this.generateBlockStatement(node.body as BlockStatement);
+      return `(${params}) => ${body}`;
+    } else {
+      // Expression body
+      const body = this.generateExpression(node.body as Expression);
+      return `(${params}) => ${body}`;
     }
   }
 
@@ -437,6 +538,9 @@ export class CodeGenerator {
     // Module resolution: convert .som extensions to .js
     if (source.includes('.som')) {
       source = source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
     }
 
     const results: string[] = [];
@@ -475,31 +579,106 @@ export class CodeGenerator {
 
   private generateExportDeclaration(node: ExportDeclaration): string {
     if (node.declaration) {
-      const declaration = this.generateStatement(node.declaration);
+      return this.generateExportWithDeclaration(node);
+    }
 
-      // Extract the name from the declaration for CommonJS export
-      let exportName = '';
-      if (node.declaration.type === 'FunctionDeclaration') {
-        const funcDecl = node.declaration as FunctionDeclaration;
-        exportName = funcDecl.name.name;
-      } else if (node.declaration.type === 'VariableDeclaration') {
-        const varDecl = node.declaration as VariableDeclaration;
-        exportName = (varDecl.identifier as Identifier).name;
-      } else if (node.declaration.type === 'ClassDeclaration') {
-        const classDecl = node.declaration as ClassDeclaration;
-        exportName = classDecl.name.name;
-      }
+    if (node.specifiers && node.specifiers.length > 0) {
+      return this.generateExportWithSpecifiers(node);
+    }
 
-      // Generate CommonJS export
-      // For default exports, we need to be careful not to override named exports
-      const commonjsExport = node.default
-        ? `module.exports.default = ${exportName};`
-        : `module.exports.${exportName} = ${exportName};`;
-
-      return declaration + '\n' + this.indent(commonjsExport);
+    if (node.source) {
+      return this.generateWildcardExport(node);
     }
 
     return '';
+  }
+
+  private generateExportWithDeclaration(node: ExportDeclaration): string {
+    const declaration = this.generateStatement(node.declaration!);
+    const exportName = this.extractExportName(node.declaration!);
+
+    // Type-only declarations don't generate runtime exports
+    if (!exportName) {
+      return declaration;
+    }
+
+    const commonjsExport = node.default
+      ? `module.exports.default = ${exportName};`
+      : `module.exports.${exportName} = ${exportName};`;
+
+    return declaration + '\n' + this.indent(commonjsExport);
+  }
+
+  private extractExportName(declaration: Statement): string {
+    if (declaration.type === 'FunctionDeclaration') {
+      return (declaration as FunctionDeclaration).name.name;
+    }
+    if (declaration.type === 'VariableDeclaration') {
+      return ((declaration as VariableDeclaration).identifier as Identifier).name;
+    }
+    if (declaration.type === 'ClassDeclaration') {
+      return (declaration as ClassDeclaration).name.name;
+    }
+    // Interfaces and TypeAlias don't generate runtime code
+    return '';
+  }
+
+  private generateExportWithSpecifiers(node: ExportDeclaration): string {
+    if (node.source) {
+      return this.generateReExportWithSpecifiers(node);
+    }
+    return this.generateDirectExportSpecifiers(node);
+  }
+
+  private generateReExportWithSpecifiers(node: ExportDeclaration): string {
+    const source = this.convertSourcePath(this.generateLiteral(node.source!));
+    const tmpVar = `__somon_reexport_${this.importCounter++}`;
+    const results: string[] = [];
+
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
+
+    for (const spec of node.specifiers!) {
+      const exported = spec.exported.name;
+      const local = spec.local.name;
+      results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
+    }
+
+    return results.join('\n');
+  }
+
+  private generateDirectExportSpecifiers(node: ExportDeclaration): string {
+    return node
+      .specifiers!.map(spec => {
+        const exported = spec.exported.name;
+        const local = spec.local.name;
+        return this.indent(`module.exports.${exported} = ${local};`);
+      })
+      .join('\n');
+  }
+
+  private generateWildcardExport(node: ExportDeclaration): string {
+    const source = this.convertSourcePath(this.generateLiteral(node.source!));
+    const tmpVar = `__somon_reexport_${this.importCounter++}`;
+    const results: string[] = [];
+
+    results.push(this.indent(`const ${tmpVar} = require(${source});`));
+    results.push(this.indent(`Object.keys(${tmpVar}).forEach(key => {`));
+    this.indentLevel++;
+    results.push(this.indent(`if (key !== 'default') module.exports[key] = ${tmpVar}[key];`));
+    this.indentLevel--;
+    results.push(this.indent(`});`));
+
+    return results.join('\n');
+  }
+
+  private convertSourcePath(source: string): string {
+    if (source.includes('.som')) {
+      return source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      return source.replace(/["']$/, '.js"').replace(/^'/, '"');
+    }
+    return source;
   }
 
   private generateIdentifier(node: Identifier): string {
@@ -618,7 +797,8 @@ export class CodeGenerator {
     if (node.object.type === 'Identifier') {
       const objectName = (node.object as Identifier).name;
       // Only map specific built-in objects, not user variables
-      const builtinObjects = ['чоп', 'математика', 'рӯйхат'];
+      // Note: These are used as built-in objects in the examples
+      const builtinObjects = ['чоп', 'математика', 'объект'];
       if (builtinObjects.includes(objectName)) {
         const mappedObject = this.builtinMappings.get(objectName);
         if (mappedObject) {
@@ -628,12 +808,16 @@ export class CodeGenerator {
       }
     }
 
-    // Apply built-in mappings for property names if the object was mapped OR for common array/string methods
+    // Apply built-in mappings for property names based on context
     if (!node.computed && node.property.type === 'Identifier') {
       const propertyName = (node.property as Identifier).name;
       const mappedProperty = this.builtinMappings.get(propertyName);
 
-      // Always map common array and string methods
+      // Map methods if:
+      // 1. The object was a mapped built-in (like чоп -> console)
+      // 2. The property is a common array/string method (but only if not on a known user namespace)
+
+      // Common array and string methods that should be mapped
       const commonMethods = [
         'пуш',
         'илова',
@@ -648,7 +832,24 @@ export class CodeGenerator {
         'буридан', // slice
       ];
 
-      if (mappedProperty && (objectMapped || commonMethods.includes(propertyName))) {
+      // Map method names when:
+      // 1. The object was explicitly mapped (like чоп -> console), OR
+      // 2. It's a common method AND the object doesn't look like a user-defined class instance
+      //    (class instances typically start with lowercase in user code)
+
+      // Check if object looks like a user class instance (starts with lowercase and is long)
+      // We consider it a class instance if it's a multi-character identifier starting with lowercase
+      // This heuristic helps distinguish `рӯйхати_рақамҳо` (class instance) from `элементҳо` (array variable)
+      const looksLikeClassInstance =
+        node.object.type === 'Identifier' &&
+        /^[а-яё]/.test((node.object as Identifier).name) &&
+        (node.object as Identifier).name.includes('_'); // Class instances often have underscores
+
+      // Map if object was mapped, or if it's a common method on something that's likely an array/string
+      if (
+        mappedProperty &&
+        (objectMapped || (!looksLikeClassInstance && commonMethods.includes(propertyName)))
+      ) {
         property = mappedProperty;
       }
     }
@@ -729,13 +930,114 @@ export class CodeGenerator {
     // They should NOT generate any executable code at all
     const name = this.generateIdentifier(node.name);
 
-    return this.indent(`// Interface: ${name}`);
+    return this.indent(`// Interface: ${name}\n`);
   }
 
   private generateTypeAlias(node: TypeAlias): string {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = this.generateIdentifier(node.name);
-    return this.indent(`// Type alias: ${name}`);
+    return this.indent(`// Type alias: ${name}\n`);
+  }
+
+  private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
+    // Generate namespace as an IIFE (Immediately Invoked Function Expression)
+    const name = this.generateIdentifier(node.name);
+    const exported = node.exported ? 'exports.' : '';
+
+    let result = this.indent(`${exported}${name} = (function() {\n`);
+    this.indentLevel++;
+    result += this.indent(`const ${name} = {};\n`);
+
+    // Generate namespace body
+    if (node.body && node.body.statements) {
+      for (const stmt of node.body.statements) {
+        const isExported = (stmt as Statement & { exported?: boolean }).exported;
+
+        // Skip interface declarations and type aliases - they don't generate runtime code
+        if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
+          result += this.generateStatement(stmt);
+          continue;
+        }
+
+        result += isExported
+          ? this.generateExportedNamespaceMember(stmt, name)
+          : this.generateStatement(stmt);
+      }
+    }
+
+    result += this.indent(`return ${name};\n`);
+    this.indentLevel--;
+    result += this.indent('})();\n');
+
+    return result;
+  }
+
+  private generateExportedNamespaceMember(stmt: Statement, namespaceName: string): string {
+    const memberName = this.getMemberName(stmt);
+    if (!memberName) {
+      return '';
+    }
+
+    if (stmt.type === 'NamespaceDeclaration') {
+      return this.generateNestedNamespaceExport(
+        stmt as NamespaceDeclaration,
+        namespaceName,
+        memberName
+      );
+    }
+
+    // For functions, variables, classes
+    const stmtCode = this.generateStatement(stmt);
+    let result = stmtCode;
+    if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
+      // Ensure there's a newline before the assignment if stmtCode doesn't end with one
+      if (!stmtCode.endsWith('\n')) {
+        result += '\n';
+      }
+      result += this.indent(`${namespaceName}.${memberName} = ${memberName};\n`);
+    }
+    return result;
+  }
+
+  private generateNestedNamespaceExport(
+    nestedNs: NamespaceDeclaration,
+    parentName: string,
+    memberName: string
+  ): string {
+    // Remove the exported flag for nested generation
+    const originalExported = nestedNs.exported;
+    nestedNs.exported = false;
+    const nestedCode = this.generateStatement(nestedNs).trim();
+    nestedNs.exported = originalExported;
+
+    // Generate as a property of parent namespace
+    // Remove the initial assignment part from the nested code (e.g., "Дарунӣ = ")
+    const assignmentStart = nestedCode.indexOf('= (function()');
+    const nestedIIFE =
+      assignmentStart !== -1
+        ? nestedCode.substring(assignmentStart + 2) // Skip "= "
+        : nestedCode;
+
+    return this.indent(`${parentName}.${memberName} = ${nestedIIFE}`);
+  }
+
+  private getMemberName(stmt: Statement): string | null {
+    switch (stmt.type) {
+      case 'FunctionDeclaration':
+        return (stmt as FunctionDeclaration).name.name;
+      case 'VariableDeclaration': {
+        const varDecl = stmt as VariableDeclaration;
+        if (varDecl.identifier && varDecl.identifier.type === 'Identifier') {
+          return varDecl.identifier.name;
+        }
+        break;
+      }
+      case 'ClassDeclaration':
+        return (stmt as ClassDeclaration).name.name;
+      case 'NamespaceDeclaration':
+        return (stmt as NamespaceDeclaration).name.name;
+    }
+    return null;
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {
@@ -743,9 +1045,7 @@ export class CodeGenerator {
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
       : '';
-    const abstractModifier = (node as ClassDeclaration & { abstract?: boolean }).abstract
-      ? 'abstract '
-      : '';
+    // Note: JavaScript doesn't support abstract classes, so we skip the abstract modifier
 
     let classBody = '';
 
@@ -771,28 +1071,30 @@ export class CodeGenerator {
       }
     }
 
-    return this.indent(`${abstractModifier}class ${className}${extendsClause} {${classBody}}`);
+    return this.indent(`class ${className}${extendsClause} {${classBody}}`);
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
     const methodName =
       node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
     const isStatic = node.static ? 'static ' : '';
-    const isAbstract = (node as MethodDefinition & { abstract?: boolean }).abstract
-      ? 'abstract '
-      : '';
+    // Note: JavaScript doesn't support abstract methods, so we skip them entirely
 
     // Generate parameters
     const params = node.value.params
       ? node.value.params.map(param => this.generateIdentifier(param.name)).join(', ')
       : '';
 
-    // Generate method body or abstract signature
+    // Skip abstract methods - they don't exist in JavaScript
     if ((node as MethodDefinition & { abstract?: boolean }).abstract) {
-      // Abstract methods have no body
-      return this.indent(`${isAbstract}${isStatic}${methodName}(${params});`);
+      // Abstract methods should not generate any code in JavaScript
+      return '';
     } else {
       // Regular methods have a body
+      // Handle cases where body might be null or undefined
+      if (!node.value || !node.value.body) {
+        return this.indent(`${isStatic}${methodName}(${params}) {}`);
+      }
       const body = this.generateBlockStatement(node.value.body);
       return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
     }

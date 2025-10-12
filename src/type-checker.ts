@@ -444,12 +444,21 @@ export class TypeChecker {
   }
 
   private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
-    // If we have a target interface type, use it
     if (targetType && targetType.kind === 'interface') {
       return targetType;
     }
 
-    // Otherwise, infer object type from properties
+    if (
+      targetType &&
+      (targetType.kind === 'intersection' || (targetType.kind === 'unknown' && targetType.name))
+    ) {
+      return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
+    }
+
+    return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
+  }
+
+  private extractObjectProperties(objExpr: ObjectExpression): Map<string, PropertyType> {
     const properties = new Map<string, PropertyType>();
 
     if (objExpr.properties) {
@@ -468,7 +477,7 @@ export class TypeChecker {
       }
     }
 
-    return { kind: 'object', properties: properties };
+    return properties;
   }
 
   private inferCallType(callExpr: CallExpression): Type {
@@ -523,12 +532,25 @@ export class TypeChecker {
       return true;
     }
 
+    if (this.isObjectAssignable(source, target)) {
+      return true;
+    }
+
     if (this.isClassAssignable(source, target)) {
       return true;
     }
 
     if (this.isUniqueAssignable(source, target)) {
       return true;
+    }
+
+    // Allow assignment to unknown types with names (unresolved type references)
+    // This handles complex types that couldn't be resolved like namespaced types and mapped types
+    if (target.kind === 'unknown' && target.name) {
+      // Allow objects to be assigned to unknown named types
+      if (source.kind === 'object' || source.kind === 'interface') {
+        return true;
+      }
     }
 
     return false;
@@ -588,6 +610,16 @@ export class TypeChecker {
       return false;
     }
     if (source.kind === 'interface' || source.kind === 'object') {
+      return this.isStructurallyCompatible(source, target);
+    }
+    return false;
+  }
+
+  private isObjectAssignable(source: Type, target: Type): boolean {
+    if (target.kind !== 'object') {
+      return false;
+    }
+    if (source.kind === 'object') {
       return this.isStructurallyCompatible(source, target);
     }
     return false;
