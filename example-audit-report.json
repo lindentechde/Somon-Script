@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-10-12T12:00:41.230Z",
+  "timestamp": "2025-10-12T12:52:42.566Z",
   "total": 45,
-  "working": 41,
-  "partial": 4,
+  "working": 43,
+  "partial": 2,
   "failing": 0,
-  "workingPercentage": 91,
+  "workingPercentage": 96,
   "details": {
     "working": [
       {
@@ -98,6 +98,11 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "18-import-from-exports.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "18-union-types.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
@@ -149,6 +154,11 @@
       },
       {
         "name": "29-generics.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "30-built-in-objects.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -215,24 +225,14 @@
     ],
     "partial": [
       {
-        "name": "18-import-from-exports.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"18-import-from-exports.somon-test-74918-1760270433770-e02a48.js\""
-      },
-      {
         "name": "28-namespaces.som",
         "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"28-namespaces.somon-test-74918-1760270436786-25fb86.js\""
-      },
-      {
-        "name": "30-built-in-objects.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"30-built-in-objects.somon-test-74918-1760270437337-a4d19e.js\""
+        "reason": "Compiles but runtime error: Command failed: node \"28-namespaces.somon-test-4564-1760273557676-f898f5.js\""
       },
       {
         "name": "31-advanced-type-features.som",
         "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"31-advanced-type-features.somon-test-74918-1760270437630-cc1af5.js\""
+        "reason": "Compiles but runtime error: Command failed: node \"31-advanced-type-features.somon-test-4564-1760273558571-5d5f9a.js\""
       }
     ],
     "failing": []

@@ -164,7 +164,7 @@ describe('Compiler', () => {
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.code).toContain('let қимат = объект.ном;');
+    expect(result.code).toContain('let қимат = Object.ном;');
   });
 
   test('should compile try-catch statements', () => {

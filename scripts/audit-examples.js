@@ -19,6 +19,43 @@ const results = {
   total: examples.length,
 };
 
+// Helper function to extract and compile dependencies
+function compileDependencies(sourceFile) {
+  const content = fs.readFileSync(sourceFile, 'utf-8');
+  const importRegex = /ворид\s+.*?\s+аз\s+["'](.+?)["']/g;
+  const dependencies = [];
+  let match;
+
+  while ((match = importRegex.exec(content)) !== null) {
+    const importPath = match[1];
+    // Only handle relative imports
+    if (importPath.startsWith('./') || importPath.startsWith('../')) {
+      dependencies.push(importPath);
+    }
+  }
+
+  // Compile each dependency
+  dependencies.forEach(dep => {
+    const depPath = path.join(examplesDir, dep.replace('./', ''));
+    const depSomPath = depPath.endsWith('.som') ? depPath : `${depPath}.som`;
+    const depJsPath = depPath.replace(/\.som$/, '') + '.js';
+
+    if (fs.existsSync(depSomPath) && !fs.existsSync(depJsPath)) {
+      try {
+        const compileCommand = `node dist/cli.js compile "${depSomPath}" -o "${depJsPath}"`;
+        execSync(compileCommand, { stdio: 'pipe' });
+      } catch (e) {
+        // Ignore compilation errors for dependencies
+      }
+    }
+  });
+
+  return dependencies.map(dep => {
+    const depPath = path.join(examplesDir, dep.replace('./', ''));
+    return depPath.replace(/\.som$/, '') + '.js';
+  });
+}
+
 examples.forEach((example, index) => {
   const examplePath = path.join(examplesDir, example);
   const exampleName = example.replace('.som', '');
@@ -26,6 +63,9 @@ examples.forEach((example, index) => {
   console.log(`[${index + 1}/${examples.length}] Testing ${example}...`);
 
   try {
+    // First, compile any dependencies
+    const compiledDeps = compileDependencies(examplePath);
+
     // Use the same approach as 'somon run' - compile to source directory
     const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
     const jsPath = path.join(examplesDir, `${exampleName}.somon-test-${uniqueSuffix}.js`);
@@ -76,6 +116,17 @@ examples.forEach((example, index) => {
       } catch (cleanupError) {
         // Ignore cleanup errors
       }
+
+      // Clean up compiled dependencies
+      compiledDeps.forEach(depJs => {
+        try {
+          if (fs.existsSync(depJs)) {
+            fs.unlinkSync(depJs);
+          }
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      });
     }
   } catch (compileError) {
     results.failing.push({

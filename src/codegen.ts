@@ -538,6 +538,9 @@ export class CodeGenerator {
     // Module resolution: convert .som extensions to .js
     if (source.includes('.som')) {
       source = source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
     }
 
     const results: string[] = [];
@@ -671,6 +674,9 @@ export class CodeGenerator {
   private convertSourcePath(source: string): string {
     if (source.includes('.som')) {
       return source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+      // For relative imports without extension, add .js
+      return source.replace(/["']$/, '.js"').replace(/^'/, '"');
     }
     return source;
   }
@@ -792,7 +798,7 @@ export class CodeGenerator {
       const objectName = (node.object as Identifier).name;
       // Only map specific built-in objects, not user variables
       // Note: These are used as built-in objects in the examples
-      const builtinObjects = ['чоп', 'математика'];
+      const builtinObjects = ['чоп', 'математика', 'объект'];
       if (builtinObjects.includes(objectName)) {
         const mappedObject = this.builtinMappings.get(objectName);
         if (mappedObject) {
