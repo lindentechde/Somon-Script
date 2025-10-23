@@ -125,6 +125,83 @@ export class CodeGenerator {
     // Note: 'хато' is handled specially in generateIdentifier
   ]);
 
+  // Operator precedence table (higher number = higher precedence = evaluated first)
+  // Based on JavaScript operator precedence: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_precedence
+  private readonly operatorPrecedence: Map<string, number> = new Map([
+    // Comma (lowest precedence)
+    [',', 1],
+
+    // Assignment operators
+    ['=', 2],
+    ['+=', 2],
+    ['-=', 2],
+    ['*=', 2],
+    ['/=', 2],
+    ['%=', 2],
+    ['**=', 2],
+    ['<<=', 2],
+    ['>>=', 2],
+    ['>>>=', 2],
+    ['&=', 2],
+    ['^=', 2],
+    ['|=', 2],
+    ['&&=', 2],
+    ['||=', 2],
+    ['??=', 2],
+
+    // Conditional (ternary)
+    ['?', 3],
+
+    // Nullish coalescing
+    ['??', 4],
+
+    // Logical OR
+    ['||', 5],
+
+    // Logical AND
+    ['&&', 6],
+
+    // Bitwise OR
+    ['|', 7],
+
+    // Bitwise XOR
+    ['^', 8],
+
+    // Bitwise AND
+    ['&', 9],
+
+    // Equality operators
+    ['==', 10],
+    ['!=', 10],
+    ['===', 10],
+    ['!==', 10],
+
+    // Relational operators
+    ['<', 11],
+    ['<=', 11],
+    ['>', 11],
+    ['>=', 11],
+    ['in', 11],
+    ['instanceof', 11],
+
+    // Bitwise shift
+    ['<<', 12],
+    ['>>', 12],
+    ['>>>', 12],
+
+    // Additive
+    ['+', 13],
+    ['-', 13],
+
+    // Multiplicative
+    ['*', 14],
+    ['/', 14],
+    ['%', 14],
+
+    // Exponentiation (right-associative, highest precedence for binary operators)
+    ['**', 15],
+  ]);
+
   generate(ast: Program): string {
     return this.generateProgram(ast);
   }
@@ -745,15 +822,26 @@ export class CodeGenerator {
     return result;
   }
 
-  private generateBinaryExpression(node: BinaryExpression): string {
-    const left = this.generateExpression(node.left);
-    const right = this.generateExpression(node.right);
+  private generateBinaryExpression(node: BinaryExpression, parentOperator?: string): string {
+    // Generate left and right operands, passing parent operator context for proper precedence
+    const left =
+      node.left.type === 'BinaryExpression'
+        ? this.generateBinaryExpression(node.left as BinaryExpression, node.operator)
+        : this.generateExpression(node.left);
 
-    // Handle operator precedence with parentheses when needed
-    const needsParens = this.needsParentheses(node);
+    const right =
+      node.right.type === 'BinaryExpression'
+        ? this.generateBinaryExpression(node.right as BinaryExpression, node.operator)
+        : this.generateExpression(node.right);
+
     const expr = `${left} ${node.operator} ${right}`;
 
-    return needsParens ? `(${expr})` : expr;
+    // Add parentheses if this expression has lower precedence than its parent
+    if (parentOperator && this.needsParentheses(node.operator, parentOperator)) {
+      return `(${expr})`;
+    }
+
+    return expr;
   }
 
   private generateUnaryExpression(node: UnaryExpression): string {
@@ -1108,13 +1196,27 @@ export class CodeGenerator {
     return this.indent(`${isStatic}${propertyName}${initializer};`);
   }
 
-  private needsParentheses(node: BinaryExpression): boolean {
-    // Simple precedence check - in a full implementation, this would be more sophisticated
-    // For now, always return false to avoid complexity
-    node; // Use the parameter to avoid unused warning
+  private needsParentheses(operator: string, parentOperator: string): boolean {
+    // Get precedence values (default to 0 if not found)
+    const opPrecedence = this.operatorPrecedence.get(operator) || 0;
+    const parentPrecedence = this.operatorPrecedence.get(parentOperator) || 0;
 
-    // For now, we'll be conservative and add parentheses for nested binary expressions
-    return node.left.type === 'BinaryExpression' || node.right.type === 'BinaryExpression';
+    // Parentheses are needed if:
+    // 1. Current operator has lower precedence than parent (evaluated later)
+    // 2. Same precedence but parent is not left-associative (for right-associative like **)
+
+    if (opPrecedence < parentPrecedence) {
+      return true;
+    }
+
+    // Special case: exponentiation is right-associative
+    // a ** b ** c means a ** (b ** c), so we need parens for left operand
+    // This is handled by parser, so we just need to preserve them
+    if (opPrecedence === parentPrecedence && parentOperator === '**') {
+      return operator !== '**'; // Add parens if operators differ at same level under **
+    }
+
+    return false;
   }
 
   private generateSwitchStatement(node: SwitchStatement): string {

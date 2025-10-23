@@ -2480,6 +2480,47 @@ export class Parser {
       readonly = true;
     }
 
+    // Handle computed property names [expression]: type;
+    if (this.check(TokenType.LEFT_BRACKET)) {
+      this.advance(); // consume '['
+
+      // Parse the expression inside brackets (e.g., a variable name)
+      // For now, we just skip to the closing bracket since interfaces are type-only
+      let bracketCount = 1;
+      while (bracketCount > 0 && !this.isAtEnd()) {
+        if (this.check(TokenType.LEFT_BRACKET)) {
+          bracketCount++;
+        } else if (this.check(TokenType.RIGHT_BRACKET)) {
+          bracketCount--;
+        }
+        if (bracketCount > 0) {
+          this.advance();
+        }
+      }
+
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property name");
+      this.consume(TokenType.COLON, "Expected ':' after computed property name");
+      const typeAnnotation = this.typeAnnotation();
+      this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
+
+      // Return a property signature with a computed key marker
+      // Since interfaces are compile-time only, we don't need to preserve the exact expression
+      return {
+        type: 'PropertySignature',
+        key: {
+          type: 'Identifier',
+          name: '__computed__', // Placeholder for computed property
+          line: this.peek().line,
+          column: this.peek().column,
+        },
+        typeAnnotation,
+        optional: false,
+        readonly,
+        line: this.peek().line,
+        column: this.peek().column,
+      };
+    }
+
     let keyName: Token;
     if (this.check(TokenType.IDENTIFIER)) {
       keyName = this.advance();

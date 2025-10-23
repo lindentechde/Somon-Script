@@ -25,6 +25,7 @@ import {
   TypeAnnotation,
   UniqueType,
 } from './types';
+import { PropertyDefinition, MethodDefinition } from './ast';
 
 /**
  * Represents a type checking error or warning
@@ -43,6 +44,9 @@ export interface TypeCheckError {
  */
 export const TypeCheckErrorCode = {
   TypeMismatch: 'TYPE_NOT_ASSIGNABLE',
+  ClassNotFound: 'CLASS_NOT_FOUND',
+  InvalidExtends: 'INVALID_EXTENDS',
+  CircularInheritance: 'CIRCULAR_INHERITANCE',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -131,6 +135,14 @@ export class TypeChecker {
     };
   }
 
+  /**
+   * Get the symbol table for language server completions
+   * @returns The symbol table with all defined types
+   */
+  public getSymbolTable(): Map<string, Type> {
+    return this.symbolTable;
+  }
+
   private collectTypeDefinitions(program: Program): void {
     for (const statement of program.body) {
       if (statement.type === 'InterfaceDeclaration') {
@@ -169,10 +181,53 @@ export class TypeChecker {
   }
 
   private collectClass(classDecl: ClassDeclaration): void {
-    // Register the class type in the symbol table during collection phase
+    // Collect class members (properties and methods)
+    const properties = new Map<string, PropertyType>();
+
+    for (const member of classDecl.body.body) {
+      if (member.type === 'PropertyDefinition') {
+        const prop = member as PropertyDefinition;
+        const propType = prop.typeAnnotation
+          ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
+          : { kind: 'unknown' };
+
+        properties.set(prop.key.name, {
+          type: propType,
+          optional: false,
+        });
+      } else if (member.type === 'MethodDefinition') {
+        const method = member as MethodDefinition;
+        if (method.kind === 'constructor') continue; // Skip constructor
+
+        const returnType = method.value.returnType
+          ? this.resolveTypeNode(method.value.returnType.typeAnnotation)
+          : { kind: 'unknown' };
+
+        // Store method as a function type property
+        properties.set(method.key.name, {
+          type: {
+            kind: 'function',
+            name: method.key.name,
+            returnType: returnType,
+          },
+          optional: false,
+        });
+      }
+    }
+
+    // If class extends another class, resolve parent properties
+    let baseType: Type | undefined;
+    if (classDecl.superClass) {
+      const parentName = classDecl.superClass.name;
+      baseType = this.symbolTable.get(parentName);
+    }
+
+    // Register the class type with its members
     const classType: Type = {
       kind: 'class',
       name: classDecl.name.name,
+      properties,
+      baseType,
     };
     this.symbolTable.set(classDecl.name.name, classType);
   }
@@ -295,12 +350,110 @@ export class TypeChecker {
   }
 
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
-    // Register the class type in the symbol table
-    const classType: Type = {
-      kind: 'class',
-      name: classDecl.name.name,
-    };
-    this.symbolTable.set(classDecl.name.name, classType);
+    // Phase 2: Validate class relationships and property types
+
+    // 1. Validate superClass exists and is actually a class
+    if (classDecl.superClass) {
+      const parentType = this.symbolTable.get(classDecl.superClass.name);
+      const interfaceType = this.interfaceTable.get(classDecl.superClass.name);
+
+      if (!parentType && !interfaceType) {
+        this.addError(
+          TypeCheckErrorCode.ClassNotFound,
+          `Base class '${classDecl.superClass.name}' not found`,
+          classDecl.line,
+          classDecl.column
+        );
+      } else if (interfaceType) {
+        // Found in interfaceTable - can't extend interfaces
+        this.addError(
+          TypeCheckErrorCode.InvalidExtends,
+          `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is an interface`,
+          classDecl.line,
+          classDecl.column
+        );
+      } else if (parentType && parentType.kind !== 'class') {
+        const kindDescription =
+          parentType.kind === 'interface' ? 'an interface' : `a ${parentType.kind}`;
+        this.addError(
+          TypeCheckErrorCode.InvalidExtends,
+          `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is ${kindDescription}`,
+          classDecl.line,
+          classDecl.column
+        );
+      } else if (parentType) {
+        // Check for circular inheritance
+        this.checkCircularInheritance(
+          classDecl.name.name,
+          parentType,
+          classDecl.line,
+          classDecl.column
+        );
+      }
+    }
+
+    // 2. Validate property initializers match their declared types
+    for (const member of classDecl.body.body) {
+      if (member.type === 'PropertyDefinition') {
+        const prop = member as PropertyDefinition;
+
+        if (prop.typeAnnotation && prop.value) {
+          const declaredType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
+          const inferredType = this.inferExpressionType(prop.value);
+
+          if (!this.isAssignable(inferredType, declaredType)) {
+            this.addError(
+              TypeCheckErrorCode.TypeMismatch,
+              `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}' for property '${prop.key.name}'`,
+              prop.line,
+              prop.column
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Check for circular inheritance in class hierarchy
+   * Follows fail-fast principle: errors are reported immediately
+   */
+  private checkCircularInheritance(
+    className: string,
+    currentType: Type,
+    line: number,
+    column: number,
+    visited: Set<string> = new Set()
+  ): void {
+    // Check if we've already visited this class in the inheritance chain
+    if (visited.has(className)) {
+      this.addError(
+        TypeCheckErrorCode.CircularInheritance,
+        `Circular inheritance detected involving class '${className}'`,
+        line,
+        column
+      );
+      return;
+    }
+
+    visited.add(className);
+
+    // Traverse up the inheritance chain
+    if (currentType.kind === 'class' && currentType.baseType) {
+      // Direct self-inheritance check
+      if (currentType.baseType.name === className) {
+        this.addError(
+          TypeCheckErrorCode.CircularInheritance,
+          `Circular inheritance detected: class '${className}' cannot extend itself`,
+          line,
+          column
+        );
+        return;
+      }
+
+      // Recursive check up the inheritance chain
+      this.checkCircularInheritance(className, currentType.baseType, line, column, visited);
+    }
   }
 
   private resolveTypeNode(typeNode: TypeNode): Type {
@@ -496,8 +649,8 @@ export class TypeChecker {
       const className = (newExpr.callee as Identifier).name;
       const classType = this.symbolTable.get(className);
       if (classType && classType.kind === 'class') {
-        // Return an instance type of the class
-        return { kind: 'class', name: className };
+        // Return the actual class type with all its properties and baseType
+        return classType;
       }
     }
     return { kind: 'unknown' };
