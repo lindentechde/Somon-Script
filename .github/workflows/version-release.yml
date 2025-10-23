@@ -1,177 +1,112 @@
-name: Test, Version, and Release
+name: Auto Release on Version Change
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      version_type:
-        description: 'Version increment type'
-        required: false
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+    paths:
+      - 'package.json'  # Only trigger when package.json changes (version bump)
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  test:
-    name: Test
+  check-and-release:
+    name: Check Version and Release
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [20.x, 22.x, 23.x, 24.x]
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Lint
-      run: npm run lint
-      
-    - name: Type check
-      run: npm run type-check
-      
-    - name: Build
-      run: npm run build
-      
-    - name: Test
-      run: npm run test:ci
-      
-    - name: Upload coverage reports to Codecov
-      if: matrix.node-version == '20.x'
-      uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./coverage/lcov.info
-        fail_ci_if_error: true
-        flags: unittests
-        name: codecov-umbrella
-        verbose: true
 
-  version:
-    name: Version Increment
-    runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: write
-    outputs:
-      new_version: ${{ steps.version.outputs.new_version }}
-      
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Configure Git
+        fetch-depth: 0  # Need full history for changelog
+
+    - name: Check if version needs release
+      id: version_check
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-    - name: Determine version type
-      id: version_type
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "type=${{ inputs.version_type }}" >> $GITHUB_OUTPUT
+        VERSION=$(node -p "require('./package.json').version")
+        echo "Current version: $VERSION"
+
+        # Check if this version already has a tag
+        if git tag | grep -q "^v$VERSION$"; then
+          echo "✅ Version v$VERSION already released, skipping"
+          echo "should_release=false" >> $GITHUB_OUTPUT
         else
-          echo "type=patch" >> $GITHUB_OUTPUT
+          echo "🆕 New version detected: v$VERSION - will release"
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
         fi
-        
-    - name: Increment version
-      id: version
-      run: |
-        # Use npm version with lifecycle script for automatic jsr.json synchronization
-        echo "Running npm version ${{ steps.version_type.outputs.type }}..."
-        npm version ${{ steps.version_type.outputs.type }} --no-git-tag-version
-        
-        # Get the new version from package.json (more reliable than parsing npm output)
-        NEW_VERSION="v$(node -p 'require("./package.json").version')"
-        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-        echo "📦 New version: $NEW_VERSION"
-        
-    - name: Commit and tag version
-      run: |
-        git add package.json package-lock.json jsr.json
-        git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}
 
-        Co-authored-by: Ona <no-reply@ona.com>"
-        git tag ${{ steps.version.outputs.new_version }}
-        git push origin main
-        git push origin ${{ steps.version.outputs.new_version }}
-
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs: version
-    permissions:
-      contents: write
-      id-token: write # Required for JSR OIDC authentication
-      
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ needs.version.outputs.new_version }}
-        fetch-depth: 0
-        
     - name: Setup Node.js
+      if: steps.version_check.outputs.should_release == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: '20.x'
         cache: 'npm'
         registry-url: 'https://registry.npmjs.org'
-        
+
     - name: Install dependencies
+      if: steps.version_check.outputs.should_release == 'true'
       run: npm ci
-      
+
+    - name: Lint
+      if: steps.version_check.outputs.should_release == 'true'
+      run: npm run lint
+
     - name: Build
+      if: steps.version_check.outputs.should_release == 'true'
       run: npm run build
-      
+
+    - name: Test
+      if: steps.version_check.outputs.should_release == 'true'
+      run: npm run test:ci
+
+    - name: Test examples
+      if: steps.version_check.outputs.should_release == 'true'
+      run: npm run audit:examples
+
+    - name: Upload coverage to Codecov
+      if: steps.version_check.outputs.should_release == 'true'
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+        fail_ci_if_error: true
+        flags: release
+        name: codecov-release
+        verbose: true
+
     - name: Create package
+      if: steps.version_check.outputs.should_release == 'true'
       run: npm pack
-      
+
+    - name: Create and push tag
+      if: steps.version_check.outputs.should_release == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git tag ${{ steps.version_check.outputs.version }} -m "Release ${{ steps.version_check.outputs.version }}"
+        git push origin ${{ steps.version_check.outputs.version }}
+
     - name: Publish to NPM
+      if: steps.version_check.outputs.should_release == 'true'
       run: |
         echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
-        npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN
-        npm whoami
         npm publish --access public
       env:
         NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        
+
     - name: Publish to JSR
-      run: |
-        git status --short
-        npx jsr publish --allow-slow-types
-        
+      if: steps.version_check.outputs.should_release == 'true'
+      run: npx jsr publish --allow-slow-types
+
     - name: Generate changelog
+      if: steps.version_check.outputs.should_release == 'true'
       id: release_notes
       run: |
         NOTES="$RUNNER_TEMP/release_notes.md"
         {
-          echo "## 🎉 SomonScript ${{ needs.version.outputs.new_version }}";
+          echo "## 🎉 SomonScript ${{ steps.version_check.outputs.version }}";
           echo "";
           echo "### ✨ What's New";
           echo "";
@@ -179,16 +114,16 @@ jobs:
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "");
           if [ -n "$LAST_TAG" ]; then
             echo "Changes since $LAST_TAG:";
-            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD^;
+            echo "";
+            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD;
           else
-            echo "- Automatic version increment to ${{ needs.version.outputs.new_version }}";
-            echo "- Comprehensive architecture with union type support";
-            echo "- Type-safe compilation";
-            echo "- Modular design";
+            echo "- Initial release of ${{ steps.version_check.outputs.version }}";
           fi
 
           echo "";
+          echo "";
           echo "### 📦 Installation";
+          echo "";
           echo '```bash';
           echo 'npm install -g @lindentech/somon-script';
           echo '```';
@@ -196,22 +131,29 @@ jobs:
         echo "path=$NOTES" >> "$GITHUB_OUTPUT"
 
     - name: Create GitHub Release
+      if: steps.version_check.outputs.should_release == 'true'
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: ${{ needs.version.outputs.new_version }}
-        name: "SomonScript ${{ needs.version.outputs.new_version }}"
+        tag_name: ${{ steps.version_check.outputs.version }}
+        name: "SomonScript ${{ steps.version_check.outputs.version }}"
         body_path: ${{ steps.release_notes.outputs.path }}
-        files: |
-          *.tgz
+        files: '*.tgz'
         draft: false
         prerelease: false
-        
+
     - name: Summary
+      if: steps.version_check.outputs.should_release == 'true'
       run: |
-        echo "🎉 Release ${{ needs.version.outputs.new_version }} completed!"
+        echo "🎉 Release ${{ steps.version_check.outputs.version }} completed successfully!"
+        echo ""
         echo "✅ Tests passed"
-        echo "✅ Version incremented automatically"
         echo "✅ Git tag created and pushed"
-        echo "✅ GitHub release created"
+        echo "✅ NPM package published"
         echo "✅ JSR package published"
-        echo "⏳ NPM publishing pending (24-hour restriction)"
+        echo "✅ GitHub release created"
+        echo ""
+        echo "📦 View release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version_check.outputs.version }}"
+
+    - name: Skip message
+      if: steps.version_check.outputs.should_release == 'false'
+      run: echo "ℹ️ No new version to release, skipping workflow"
