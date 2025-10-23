@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-10-12T12:52:42.566Z",
+  "timestamp": "2025-10-23T13:50:02.659Z",
   "total": 45,
-  "working": 43,
-  "partial": 2,
+  "working": 45,
+  "partial": 0,
   "failing": 0,
-  "workingPercentage": 96,
+  "workingPercentage": 100,
   "details": {
     "working": [
       {
@@ -153,12 +153,22 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "28-namespaces.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "29-generics.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
       {
         "name": "30-built-in-objects.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "31-advanced-type-features.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
@@ -223,18 +233,7 @@
         "reason": "Compiles and runs successfully"
       }
     ],
-    "partial": [
-      {
-        "name": "28-namespaces.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"28-namespaces.somon-test-4564-1760273557676-f898f5.js\""
-      },
-      {
-        "name": "31-advanced-type-features.som",
-        "status": "partial",
-        "reason": "Compiles but runtime error: Command failed: node \"31-advanced-type-features.somon-test-4564-1760273558571-5d5f9a.js\""
-      }
-    ],
+    "partial": [],
     "failing": []
   }
 }
