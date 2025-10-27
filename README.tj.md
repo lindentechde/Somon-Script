@@ -7,6 +7,7 @@
 **Забони барномарезии синфи истеҳсолот бо синтаксиси тоҷикӣ**
 
 [![Версия](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
+[![Васеъшавии VS Code](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
 [![Ҳолати Сохтан](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Пӯшиши Тест](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
 [![Муваффақияти Намунаҳо](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
@@ -80,6 +81,19 @@
   ҷудогона нигоҳ дошта мешаванд.
 - **Рушди фаъол** – Барои арзёбӣ ва лоиҳаҳои пилотӣ мувофиқ аст; дар бораи
   мушкилоти дар муҳитҳои истеҳсолӣ дучоршуда хабар диҳед.
+
+---
+
+## 🎨 **Васеъшавии VS Code**
+
+Дастгирии пурраи IDE бо рӯшноии синтаксис, IntelliSense ва фрагментҳои код:
+
+- **Насб аз Бозори VS Code**: "SomonScript"-ро ҷустуҷӯ кунед ё
+  [бевосита насб кунед](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
+- **Хусусиятҳо**: Рӯшноии синтаксис, толеби худшиносъанд-намуд, 30+ фрагмент,
+  вазнданиҳои ҳам-замон
+- **Маълумоти Hovering**: Ҳуҷҷатгузории кунҷи тоҷикӣ бо эквивалентҳои
+  JavaScript-ро бубинед
 
 ---
 
