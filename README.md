@@ -7,6 +7,7 @@
 **Production-Grade Programming Language with Tajik Syntax**
 
 [![Version](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
+[![VS Code Extension](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Test Coverage](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
 [![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
@@ -97,6 +98,16 @@ npm install -g @lindentech/somon-script
 echo 'чоп.сабт("Hello, World!");' > hello.som
 somon run hello.som
 ```
+
+### 🎨 **VS Code Extension**
+
+Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
+
+- **Install from VS Code Marketplace**: Search for "SomonScript" or
+  [install directly](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
+- **Features**: Syntax highlighting, type-aware completions, 30+ snippets,
+  real-time diagnostics
+- **Hover Info**: View Tajik keyword documentation with JavaScript equivalents
 
 ---
 

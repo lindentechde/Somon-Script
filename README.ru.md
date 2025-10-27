@@ -7,6 +7,7 @@
 **Язык программирования производственного уровня с таджикским синтаксисом**
 
 [![Версия](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
+[![Расширение VS Code](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
 [![Статус Сборки](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Покрытие Тестов](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
 [![Успех Примеров](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
@@ -80,6 +81,20 @@ SomonScript революционизирует разработку програ
   отдельные, чётко определённые пакеты.
 - **Активное развитие** – Подходит для оценки и пилотных проектов; сообщайте о
   проблемах, которые вы обнаружите в производственной среде.
+
+---
+
+## 🎨 **Расширение VS Code**
+
+Получите полную поддержку IDE с подсветкой синтаксиса, IntelliSense и
+фрагментами кода:
+
+- **Установка из VS Code Marketplace**: Поиск "SomonScript" или
+  [прямая установка](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
+- **Функции**: Подсветка синтаксиса, автодополнение с учётом типов, 30+
+  фрагментов, диагностика в реальном времени
+- **Информация при наведении**: Просмотрите документацию таджикских ключевых
+  слов с эквивалентами JavaScript
 
 ---
 
