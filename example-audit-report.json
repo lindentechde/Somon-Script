@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-10-23T13:50:02.659Z",
-  "total": 45,
-  "working": 45,
+  "timestamp": "2025-10-28T15:38:53.987Z",
+  "total": 48,
+  "working": 48,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -184,6 +184,21 @@
       },
       {
         "name": "33-console-methods.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "34-api-server.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "35-advanced-backend-patterns.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "36-user-management.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },

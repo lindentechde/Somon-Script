@@ -125,7 +125,7 @@ describe('CLI Program (in-process)', () => {
     expect(consoleErrorSpy.mock.calls.some(c => String(c[0]).includes('not found'))).toBe(true);
   });
 
-  test('run: should compile and execute program', () => {
+  test('run: should compile and execute program', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'hello.som');
@@ -135,7 +135,7 @@ describe('CLI Program (in-process)', () => {
       status: 0,
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile, '--strict', 'input.txt'], { from: 'user' });
+    await program.parseAsync(['run', inputFile, '--strict', 'input.txt'], { from: 'user' });
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
     const [tempFilePath, forwardedArgv, spawnOptions] = executeSpy.mock.calls[0];
@@ -580,7 +580,7 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(outputFile)).toBe(true);
   });
 
-  test('run: should handle production mode flag', () => {
+  test('run: should handle production mode flag', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'run-prod.som');
@@ -590,13 +590,13 @@ describe('CLI Program (in-process)', () => {
       status: 0,
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile, '--production'], { from: 'user' });
+    await program.parseAsync(['run', inputFile, '--production'], { from: 'user' });
 
     expect(executeSpy).toHaveBeenCalled();
     executeSpy.mockRestore();
   });
 
-  test('run: should handle execution errors gracefully', () => {
+  test('run: should handle execution errors gracefully', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'run-error.som');
@@ -607,13 +607,13 @@ describe('CLI Program (in-process)', () => {
       error: new Error('Execution failed'),
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile], { from: 'user' });
+    await program.parseAsync(['run', inputFile], { from: 'user' });
 
     expect(process.exitCode).toBe(1);
     executeSpy.mockRestore();
   });
 
-  test('run: should handle signal termination', () => {
+  test('run: should handle signal termination', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'run-signal.som');
@@ -623,7 +623,7 @@ describe('CLI Program (in-process)', () => {
       signal: 'SIGTERM',
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile], { from: 'user' });
+    await program.parseAsync(['run', inputFile], { from: 'user' });
 
     expect(process.exitCode).toBe(1);
     expect(consoleErrorSpy.mock.calls.some(c => String(c[0]).includes('SIGTERM'))).toBe(true);
@@ -742,7 +742,7 @@ describe('CLI Program (in-process)', () => {
     }
   });
 
-  test('run: should cleanup temporary files even on error', () => {
+  test('run: should cleanup temporary files even on error', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'cleanup.som');
@@ -752,7 +752,7 @@ describe('CLI Program (in-process)', () => {
       status: 0,
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile], { from: 'user' });
+    await program.parseAsync(['run', inputFile], { from: 'user' });
 
     // Verify temp file was cleaned up
     const tempFiles = fs.readdirSync(tempDir).filter(f => f.includes('.somon-run-'));
@@ -841,7 +841,7 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(path.join(tempDir, 'with-warnings.js'))).toBe(true);
   });
 
-  test('run: should handle no-type-check option', () => {
+  test('run: should handle no-type-check option', async () => {
     const program = createProgram();
     program.exitOverride();
     const inputFile = path.join(tempDir, 'no-type.som');
@@ -851,7 +851,7 @@ describe('CLI Program (in-process)', () => {
       status: 0,
     } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
 
-    program.parse(['run', inputFile, '--no-type-check'], { from: 'user' });
+    await program.parseAsync(['run', inputFile, '--no-type-check'], { from: 'user' });
 
     expect(executeSpy).toHaveBeenCalled();
     executeSpy.mockRestore();
