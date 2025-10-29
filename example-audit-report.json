@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-10-28T15:38:53.987Z",
-  "total": 48,
-  "working": 48,
+  "timestamp": "2025-10-29T11:07:49.864Z",
+  "total": 51,
+  "working": 51,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -203,7 +203,22 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "38-fibonacci.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "console-log-simple.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "console-methods-guide.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },

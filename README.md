@@ -775,6 +775,18 @@ npm run audit:examples
   methodology
 - [🤝 Community Participation](CONTRIBUTING.md) - Engagement guidelines
 
+### **Built-in Functions & APIs**
+
+- [📖 Console Methods Guide](examples/CONSOLE_METHODS.md) - Complete reference
+  for all `чоп.*` methods (log, error, warn, info, debug, assert, count, time,
+  table, trace, and more)
+  - [Тоҷикӣ (Tajik)](examples/CONSOLE_METHODS.tj.md)
+  - [Русский (Russian)](examples/CONSOLE_METHODS.ru.md)
+- [🖨️ Console Output Examples](examples/console-log-simple.som) - Simple
+  examples for getting started
+- [📊 Advanced Console Usage](examples/console-methods-guide.som) -
+  Comprehensive guide with all console methods
+
 ---
 
 ## 🌍 Professional Support
