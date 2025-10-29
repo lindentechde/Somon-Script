@@ -10,6 +10,9 @@ vscode-extension/
 # Mcps
 /.serena
 
+# Claude
+/.claude
+
 # Build output
 dist/
 *.tsbuildinfo
