@@ -588,16 +588,16 @@ export function createProgram(): Command {
     .option('--no-type-check', 'Disable type checking')
     .option('--strict', 'Enable strict type checking')
     .option('--production', 'Enable production mode with strict validation')
-    .action((input: string, options: CompileOptions, command: Command): void => {
+    .action(async (input: string, options: CompileOptions, command: Command): Promise<void> => {
       const cleanupTargets: string[] = [];
       try {
-        const merged = mergeOptions(input, options);
+        const baseDir = path.dirname(path.resolve(input));
+        const config = loadConfig(baseDir);
+        const isProduction = options.production || process.env.NODE_ENV === 'production';
 
         // Validate production environment if --production flag is set
-        if (merged.production || process.env.NODE_ENV === 'production') {
-          const sourceDir = path.dirname(path.resolve(input));
-          const compiledFilePath = createRunOutputPath(input, sourceDir);
-
+        if (isProduction) {
+          const compiledFilePath = createRunOutputPath(input, baseDir);
           try {
             validateProductionEnvironment(compiledFilePath, [input]);
           } catch (error) {
@@ -606,24 +606,40 @@ export function createProgram(): Command {
           }
         }
 
-        const result = compileFile(input, merged);
-        if (result.errors.length > 0) return;
+        // Create module system and bundle the file with all dependencies
+        const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
 
-        const sourceDir = path.dirname(path.resolve(input));
-        const compiledFilePath = createRunOutputPath(input, sourceDir);
-        fs.writeFileSync(compiledFilePath, result.code, 'utf8');
+        // Create bundle options for temporary output
+        const compiledFilePath = createRunOutputPath(input, baseDir);
+        const bundleOptions = {
+          entryPoint: path.resolve(input),
+          outputPath: compiledFilePath,
+          format: 'commonjs' as const,
+          minify: options.minify ?? config.bundle?.minify,
+          sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
+          inlineSources: false,
+          externals: config.bundle?.externals,
+        };
+
+        // Bundle the file and all its dependencies
+        const bundle = await moduleSystem.bundle(bundleOptions);
+
+        // Write the bundled code to temporary file
+        fs.writeFileSync(compiledFilePath, bundle.code, 'utf8');
         cleanupTargets.push(compiledFilePath);
 
-        if (merged.sourceMap && result.sourceMap) {
+        // Write source map if enabled
+        if (options.sourceMap && bundle.map) {
           const mapPath = `${compiledFilePath}.map`;
-          fs.writeFileSync(mapPath, result.sourceMap, 'utf8');
+          fs.writeFileSync(mapPath, bundle.map, 'utf8');
           cleanupTargets.push(mapPath);
         }
 
+        // Execute the bundled file
         const child = cliRuntime.executeCompiledFile(
           compiledFilePath,
           resolveForwardedArgv(command, input),
-          { cwd: sourceDir }
+          { cwd: baseDir }
         );
 
         if (child.error) {
@@ -639,6 +655,7 @@ export function createProgram(): Command {
         handleCliFailure(error, 'Error:');
         return;
       } finally {
+        // Clean up temporary files
         for (const target of cleanupTargets) {
           try {
             fs.rmSync(target, { force: true });

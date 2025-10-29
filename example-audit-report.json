@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-10-23T13:50:02.659Z",
-  "total": 45,
-  "working": 45,
+  "timestamp": "2025-10-29T11:07:49.864Z",
+  "total": 51,
+  "working": 51,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -188,7 +188,37 @@
         "reason": "Compiles and runs successfully"
       },
       {
+        "name": "34-api-server.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "35-advanced-backend-patterns.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "36-user-management.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "38-fibonacci.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
         "name": "comprehensive-operator-test.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "console-log-simple.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "console-methods-guide.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },
