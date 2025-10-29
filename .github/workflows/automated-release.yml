@@ -1,0 +1,227 @@
+name: Automated Release Process
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even if version unchanged'
+        required: false
+        default: false
+        type: boolean
+
+# Prevent concurrent releases to avoid race conditions
+concurrency:
+  group: release-process
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  check-version:
+    name: Check Version and Validate
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check.outputs.version_changed }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      should_publish: ${{ steps.check.outputs.should_publish }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Check if version should be released
+        id: check
+        run: |
+          # Get current version from package.json
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "Current version in package.json: $CURRENT_VERSION"
+
+          # Validate version format (MAJOR.MINOR.PATCH)
+          if ! echo "$CURRENT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format: $CURRENT_VERSION (expected MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+
+          # Check if version is already published on NPM
+          if npm view "@lindentech/somon-script@$CURRENT_VERSION" version 2>/dev/null >/dev/null; then
+            echo "::warning::Version $CURRENT_VERSION already published on NPM"
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $CURRENT_VERSION is new and ready to publish"
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+        continue-on-error: false
+
+      - name: Log version check results
+        run: |
+          echo "::notice::Version check completed"
+          echo "Should publish: ${{ steps.check.outputs.should_publish }}"
+          echo "New version: ${{ steps.check.outputs.new_version }}"
+
+  publish-on-version-change:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.should_publish == 'true'
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Validate examples
+        run: npm run audit:examples
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
+          flags: release
+          name: codecov-release-${{ needs.check-version.outputs.new_version }}
+          verbose: true
+
+      - name: Verify package
+        run: |
+          npm pack --dry-run
+          ls -la dist/
+
+      - name: Publish to NPM
+        id: npm_publish
+        run: |
+          set -e
+          npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify NPM Package Published
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          echo "Waiting for NPM package to be indexed..."
+          sleep 10
+
+          if npm view "@lindentech/somon-script@$VERSION" version >/dev/null 2>&1; then
+            echo "✅ Package successfully published to NPM: v$VERSION"
+          else
+            echo "::error::Package not found on NPM after publish attempt"
+            exit 1
+          fi
+
+      - name: Create Git Tag
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Create annotated tag
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+          echo "✅ Git tag created: v${VERSION}"
+
+      - name: Publish to JSR
+        id: jsr_publish
+        run: npx jsr publish --allow-slow-types
+        continue-on-error: true
+
+      - name: Report JSR Publish Status
+        if: always()
+        run: |
+          if [ "${{ steps.jsr_publish.outcome }}" = "success" ]; then
+            echo "✅ Successfully published to JSR"
+          else
+            echo "::warning::JSR publish failed (continuing with NPM success)"
+            echo "JSR publish outcome: ${{ steps.jsr_publish.outcome }}"
+          fi
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          VERSION="${{ needs.check-version.outputs.new_version }}"
+
+          NOTES=$(mktemp)
+          {
+            echo "## 🎉 SomonScript v${VERSION}"
+            echo ""
+            echo "### ✨ What's New"
+            echo ""
+
+            # Try to get commits since last tag
+            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+            if [ -n "$LAST_TAG" ] && git rev-parse "${LAST_TAG}" >/dev/null 2>&1; then
+              echo "Changes since ${LAST_TAG}:"
+              echo ""
+              git log "${LAST_TAG}..HEAD" --pretty=format:"- %s (%h)" --max-count=20
+            else
+              echo "- Initial release or tag information not available"
+              echo ""
+              git log --pretty=format:"- %s (%h)" --max-count=20
+            fi
+
+            echo ""
+            echo ""
+            echo "### 📦 Installation"
+            echo ""
+            echo '```bash'
+            echo "npm install -g @lindentech/somon-script@${VERSION}"
+            echo '```'
+            echo ""
+            echo "### 🔗 Resources"
+            echo "- [NPM Package](https://www.npmjs.com/package/@lindentech/somon-script)"
+            echo "- [JSR Package](https://jsr.io/@lindentech/somon-script)"
+            echo "- [GitHub Repository](https://github.com/lindentechde/Somon-Script)"
+          } > "$NOTES"
+
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-version.outputs.new_version }}
+          name: SomonScript v${{ needs.check-version.outputs.new_version }}
+          body_path: ${{ steps.release_notes.outputs.path }}
+          draft: false
+          prerelease: false
+
+      - name: Publish Success Summary
+        run: |
+          echo "## ✅ Release Published Successfully"
+          echo ""
+          echo "**Version**: v${{ needs.check-version.outputs.new_version }}"
+          echo "**NPM Package**: [@lindentech/somon-script](https://www.npmjs.com/package/@lindentech/somon-script)"
+          echo "**GitHub Release**: [v${{ needs.check-version.outputs.new_version }}](https://github.com/lindentechde/Somon-Script/releases/tag/v${{ needs.check-version.outputs.new_version }})"
