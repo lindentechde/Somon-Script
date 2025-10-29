@@ -8,9 +8,9 @@
 
 [![Version](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![VS Code Extension](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
 [![Test Coverage](https://img.shields.io/codecov/c/github/lindentechde/Somon-Script)](https://codecov.io/gh/lindentechde/Somon-Script)
-[![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/version-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
+[![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A feature-complete programming language that combines modern type safety with
