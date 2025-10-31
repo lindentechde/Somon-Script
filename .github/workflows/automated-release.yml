@@ -106,6 +106,14 @@ jobs:
       - name: Validate examples
         run: npm run audit:examples
 
+      - name: Verify package
+        run: |
+          npm pack --dry-run
+          ls -la dist/
+
+      - name: Publish to JSR
+        run: npx jsr publish
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -115,11 +123,6 @@ jobs:
           flags: release
           name: codecov-release-${{ needs.check-version.outputs.new_version }}
           verbose: true
-
-      - name: Verify package
-        run: |
-          npm pack --dry-run
-          ls -la dist/
 
       - name: Publish to NPM
         id: npm_publish
@@ -152,14 +155,6 @@ jobs:
           git tag -a "v${VERSION}" -m "Release v${VERSION}"
           git push origin "v${VERSION}"
           echo "✅ Git tag created: v${VERSION}"
-
-      - name: Clean up CI artifacts before JSR publish
-        run: |
-          rm -rf codecov/
-          rm -f codecov.SHA256SUM*
-
-      - name: Publish to JSR
-        run: npx jsr publish
 
       - name: Generate Release Notes
         id: release_notes
