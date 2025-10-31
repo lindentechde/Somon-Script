@@ -1,7 +1,7 @@
 {
-  "timestamp": "2025-10-29T11:10:37.132Z",
-  "total": 51,
-  "working": 51,
+  "timestamp": "2025-10-31T00:58:24.920Z",
+  "total": 56,
+  "working": 56,
   "partial": 0,
   "failing": 0,
   "workingPercentage": 100,
@@ -204,6 +204,31 @@
       },
       {
         "name": "38-fibonacci.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "40-primitive-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "41-special-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "42-composite-types.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "43-collections-guide.som",
+        "status": "working",
+        "reason": "Compiles and runs successfully"
+      },
+      {
+        "name": "44-utility-types-guide.som",
         "status": "working",
         "reason": "Compiles and runs successfully"
       },

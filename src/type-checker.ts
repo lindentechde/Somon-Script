@@ -1,5 +1,6 @@
 /* eslint-disable no-case-declarations */
 import {
+  ArrayExpression,
   ArrayType,
   CallExpression,
   ClassDeclaration,
@@ -12,6 +13,7 @@ import {
   InterfaceDeclaration,
   IntersectionType,
   Literal,
+  LiteralType,
   NewExpression,
   ObjectExpression,
   PrimitiveType,
@@ -65,11 +67,13 @@ export interface TypeCheckResult {
 export interface Type {
   kind: string;
   name?: string;
+  value?: string | number | boolean | null; // For literal types
   elementType?: Type;
   types?: Type[];
   properties?: Map<string, PropertyType>;
   returnType?: Type;
   baseType?: Type;
+  typeParameters?: Type[]; // For generic types like Map<K,V>, Set<T>
 }
 
 /**
@@ -472,6 +476,8 @@ export class TypeChecker {
         return this.resolveGenericType(typeNode as GenericType);
       case 'UniqueType':
         return this.resolveUniqueType(typeNode as UniqueType);
+      case 'LiteralType':
+        return this.resolveLiteralType(typeNode as LiteralType);
       case 'Identifier':
         return this.resolveIdentifierType(typeNode as Identifier);
       default:
@@ -481,6 +487,10 @@ export class TypeChecker {
 
   private resolvePrimitiveType(primitiveType: PrimitiveType): Type {
     return { kind: 'primitive', name: this.mapTajikToPrimitive(primitiveType.name) };
+  }
+
+  private resolveLiteralType(literalType: LiteralType): Type {
+    return { kind: 'literal', value: literalType.value };
   }
 
   private resolveArrayType(arrayType: ArrayType): Type {
@@ -512,7 +522,29 @@ export class TypeChecker {
   }
 
   private resolveGenericType(genericType: GenericType): Type {
-    return this.resolveNamedType(genericType.name.name);
+    const baseName = genericType.name.name;
+    const baseType = this.resolveNamedType(baseName);
+
+    // Add type parameters for generic types
+    if (genericType.typeParameters && genericType.typeParameters.length > 0) {
+      const typeParams = genericType.typeParameters.map(tp => this.resolveTypeNode(tp));
+
+      // For Map and Set, explicitly mark as generic
+      if (baseName === 'Map' || baseName === 'Set') {
+        return {
+          kind: 'generic',
+          name: baseName,
+          typeParameters: typeParams,
+        };
+      }
+
+      // For type aliases and other generics, preserve the base type kind and add type parameters
+      return {
+        ...baseType,
+        typeParameters: typeParams,
+      };
+    }
+    return baseType;
   }
 
   private resolveUniqueType(uniqueType: UniqueType): Type {
@@ -555,6 +587,18 @@ export class TypeChecker {
         return 'boolean';
       case 'холӣ':
         return 'null';
+      case 'беқимат':
+        return 'undefined';
+      case 'ҳар':
+        return 'any';
+      case 'ношинос':
+        return 'unknown';
+      case 'абадан':
+        return 'never';
+      case 'беджавоб':
+        return 'void';
+      case 'объект':
+        return 'object';
       default:
         return 'unknown';
     }
@@ -567,7 +611,7 @@ export class TypeChecker {
       case 'Identifier':
         return this.inferIdentifierType(expression as Identifier);
       case 'ArrayExpression':
-        return { kind: 'array', elementType: { kind: 'unknown' } };
+        return this.inferArrayExpressionType(expression as ArrayExpression, targetType);
       case 'ObjectExpression':
         return this.inferObjectType(expression as ObjectExpression, targetType);
       case 'CallExpression':
@@ -581,11 +625,14 @@ export class TypeChecker {
 
   private inferLiteralType(literal: Literal): Type {
     if (typeof literal.value === 'string') {
-      return { kind: 'primitive', name: 'string' };
+      // Return as literal type for better type inference
+      return { kind: 'literal', value: literal.value };
     } else if (typeof literal.value === 'number') {
-      return { kind: 'primitive', name: 'number' };
+      // Return as literal type for better type inference
+      return { kind: 'literal', value: literal.value };
     } else if (typeof literal.value === 'boolean') {
-      return { kind: 'primitive', name: 'boolean' };
+      // Return as literal type for better type inference
+      return { kind: 'literal', value: literal.value };
     } else if (literal.value === null) {
       return { kind: 'primitive', name: 'null' };
     }
@@ -594,6 +641,90 @@ export class TypeChecker {
 
   private inferIdentifierType(identifier: Identifier): Type {
     return this.symbolTable.get(identifier.name) || { kind: 'unknown' };
+  }
+
+  private inferTupleTypeFromTarget(arrayExpr: ArrayExpression, targetTypes: Type[]): Type {
+    const inferredTypes: Type[] = [];
+    for (let i = 0; i < arrayExpr.elements.length; i++) {
+      const element = arrayExpr.elements[i];
+      const targetElementType = targetTypes[i] || { kind: 'unknown' };
+      const inferredType = this.inferExpressionType(element, targetElementType);
+      inferredTypes.push(inferredType);
+    }
+    return { kind: 'tuple', types: inferredTypes };
+  }
+
+  private inferArrayElementType(arrayExpr: ArrayExpression): Type {
+    if (arrayExpr.elements.length === 0) {
+      return { kind: 'array', elementType: { kind: 'unknown' } };
+    }
+
+    const elementTypes = arrayExpr.elements.map((element: Expression) =>
+      this.inferExpressionType(element)
+    );
+
+    const firstType = elementTypes[0];
+    const baseType = this.getBaseType(firstType);
+
+    // Check if all elements have the same base type
+    const allSameBase = elementTypes.every((t: Type) => {
+      const tBase = this.getBaseType(t);
+      return this.isExactMatch(tBase, baseType);
+    });
+
+    if (allSameBase) {
+      return { kind: 'array', elementType: baseType };
+    }
+
+    // Mixed types: return as array of union type
+    const unionType: Type = { kind: 'union', types: elementTypes };
+    return { kind: 'array', elementType: unionType };
+  }
+
+  private inferArrayExpressionType(arrayExpr: ArrayExpression, targetType?: Type): Type {
+    // If target type is a tuple, use bidirectional inference
+    if (targetType && targetType.kind === 'tuple' && targetType.types) {
+      return this.inferTupleTypeFromTarget(arrayExpr, targetType.types);
+    }
+
+    // If target is an array, infer array element type
+    if (targetType && targetType.kind === 'array') {
+      const elementType = targetType.elementType || { kind: 'unknown' };
+      arrayExpr.elements.forEach((element: Expression) =>
+        this.inferExpressionType(element, elementType)
+      );
+      return { kind: 'array', elementType };
+    }
+
+    // If target is an interface/object with numeric indices (simulating tuple)
+    if (targetType && (targetType.kind === 'interface' || targetType.kind === 'object')) {
+      const inferredTypes: Type[] = arrayExpr.elements.map(element =>
+        this.inferExpressionType(element)
+      );
+      return { kind: 'tuple', types: inferredTypes };
+    }
+
+    // Default: infer array type from elements
+    return this.inferArrayElementType(arrayExpr);
+  }
+
+  /**
+   * Get the base type of a type, converting literals to their base primitives
+   * E.g., { kind: 'literal', value: 5 } -> { kind: 'primitive', name: 'number' }
+   */
+  private getBaseType(type: Type): Type {
+    if (type.kind === 'literal') {
+      const baseTypeName =
+        typeof type.value === 'string'
+          ? 'string'
+          : typeof type.value === 'number'
+            ? 'number'
+            : typeof type.value === 'boolean'
+              ? 'boolean'
+              : 'null';
+      return { kind: 'primitive', name: baseTypeName };
+    }
+    return type;
   }
 
   private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
@@ -647,6 +778,26 @@ export class TypeChecker {
   private inferNewExpressionType(newExpr: NewExpression): Type {
     if (newExpr.callee && newExpr.callee.type === 'Identifier') {
       const className = (newExpr.callee as Identifier).name;
+
+      // Handle built-in generic types: Map and Set
+      if (className === 'Map') {
+        return {
+          kind: 'generic',
+          name: 'Map',
+          typeParameters: [
+            { kind: 'primitive', name: 'any' },
+            { kind: 'primitive', name: 'any' },
+          ],
+        };
+      }
+      if (className === 'Set') {
+        return {
+          kind: 'generic',
+          name: 'Set',
+          typeParameters: [{ kind: 'primitive', name: 'any' }],
+        };
+      }
+
       const classType = this.symbolTable.get(className);
       if (classType && classType.kind === 'class') {
         // Return the actual class type with all its properties and baseType
@@ -656,52 +807,49 @@ export class TypeChecker {
     return { kind: 'unknown' };
   }
 
-  private isAssignable(source: Type, target: Type): boolean {
-    if (this.isExactMatch(source, target)) {
-      return true;
+  private isLiteralAssignableToPrimitive(source: Type, target: Type): boolean {
+    if (source.kind !== 'literal' || target.kind !== 'primitive') {
+      return false;
     }
+    const baseType =
+      typeof source.value === 'string'
+        ? 'string'
+        : typeof source.value === 'number'
+          ? 'number'
+          : typeof source.value === 'boolean'
+            ? 'boolean'
+            : 'null';
+    return baseType === target.name;
+  }
 
-    if (this.isArrayAssignable(source, target)) {
-      return true;
-    }
+  private isStandardTypeAssignable(source: Type, target: Type): boolean {
+    return (
+      this.isArrayAssignable(source, target) ||
+      this.isTupleAssignable(source, target) ||
+      this.isArrayToTupleAssignable(source, target) ||
+      this.isUnionAssignable(source, target) ||
+      this.isIntersectionAssignable(source, target)
+    );
+  }
 
-    if (this.isTupleAssignable(source, target)) {
-      return true;
-    }
+  private isStructuralTypeAssignable(source: Type, target: Type): boolean {
+    return (
+      this.isInterfaceAssignable(source, target) ||
+      this.isObjectAssignable(source, target) ||
+      this.isClassAssignable(source, target) ||
+      this.isUniqueAssignable(source, target)
+    );
+  }
 
-    if (this.isArrayToTupleAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isUnionAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isIntersectionAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isInterfaceAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isObjectAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isClassAssignable(source, target)) {
-      return true;
-    }
-
-    if (this.isUniqueAssignable(source, target)) {
+  private isSpecialCaseAssignable(source: Type, target: Type): boolean {
+    // Tuples are assignable to interfaces (for interface-based tuples)
+    if (source.kind === 'tuple' && target.kind === 'interface') {
       return true;
     }
 
     // Allow assignment to unknown types with names (unresolved type references)
-    // This handles complex types that couldn't be resolved like namespaced types and mapped types
     if (target.kind === 'unknown' && target.name) {
-      // Allow objects to be assigned to unknown named types
-      if (source.kind === 'object' || source.kind === 'interface') {
+      if (source.kind === 'object' || source.kind === 'interface' || source.kind === 'tuple') {
         return true;
       }
     }
@@ -709,7 +857,52 @@ export class TypeChecker {
     return false;
   }
 
+  private isAssignable(source: Type, target: Type): boolean {
+    if (this.isExactMatch(source, target)) {
+      return true;
+    }
+
+    // Anything is assignable to 'any' type
+    if (target.kind === 'primitive' && target.name === 'any') {
+      return true;
+    }
+
+    if (this.isLiteralAssignableToPrimitive(source, target)) {
+      return true;
+    }
+
+    if (this.isStandardTypeAssignable(source, target)) {
+      return true;
+    }
+
+    if (this.isStructuralTypeAssignable(source, target)) {
+      return true;
+    }
+
+    return this.isSpecialCaseAssignable(source, target);
+  }
+
   private isExactMatch(source: Type, target: Type): boolean {
+    // Check for literal type match
+    if (source.kind === 'literal' && target.kind === 'literal') {
+      return source.value === target.value;
+    }
+    // Check for generic type match (Map<K,V>, Set<T>)
+    if (source.kind === 'generic' && target.kind === 'generic') {
+      if (source.name !== target.name) {
+        return false;
+      }
+      if (!source.typeParameters || !target.typeParameters) {
+        return source.typeParameters === target.typeParameters;
+      }
+      if (source.typeParameters.length !== target.typeParameters.length) {
+        return false;
+      }
+      // For now, we consider generics with 'any' type parameters compatible
+      // Full variance checking can be added later
+      return true;
+    }
+    // Check for primitive type match
     return source.kind === target.kind && source.name === target.name;
   }
 
@@ -735,7 +928,19 @@ export class TypeChecker {
   }
 
   private isArrayToTupleAssignable(source: Type, target: Type): boolean {
-    return source.kind === 'array' && target.kind === 'tuple';
+    if (source.kind !== 'array' || target.kind !== 'tuple') {
+      return false;
+    }
+    // An array is assignable to a tuple if the array element type
+    // is assignable to all tuple element types
+    if (!target.types || target.types.length === 0) {
+      return true; // Empty tuple accepts any array
+    }
+    const sourceElementType = source.elementType || { kind: 'unknown' };
+    // Check if source element type is compatible with all tuple positions
+    return target.types.every(tupleElementType =>
+      this.isAssignable(sourceElementType, tupleElementType)
+    );
   }
 
   private isUnionAssignable(source: Type, target: Type): boolean {
@@ -807,7 +1012,7 @@ export class TypeChecker {
       case 'tuple':
         return `[${type.types!.map(t => this.typeToString(t)).join(', ')}]`;
       case 'literal':
-        return typeof type.name === 'string' ? `"${type.name}"` : String(type.name);
+        return typeof type.value === 'string' ? `"${type.value}"` : String(type.value);
       case 'class':
         return type.name || 'class';
       case 'unique':
