@@ -8,6 +8,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['функция', TokenType.ФУНКСИЯ], // Alternative spelling
   ['агар', TokenType.АГАР],
   ['вагарна', TokenType.ВАГАРНА],
+  ['чунин', TokenType.ЧУНИН],
   ['барои', TokenType.БАРОИ],
   ['то', TokenType.ТО],
   ['бозгашт', TokenType.БОЗГАШТ],
@@ -91,10 +92,21 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['интизор', TokenType.ИНТИЗОР],
   ['ваъда', TokenType.ВАЪДА],
 
-  // Type system
+  // Type system - Primitive Types
   ['сатр', TokenType.САТР],
   ['рақам', TokenType.РАҚАМ],
   ['мантиқӣ', TokenType.МАНТИҚӢ],
+  ['калонрақам', TokenType.КАЛОНРАҚАМ],
+  ['рамз', TokenType.РАМЗ],
+
+  // Type system - Special Types
+  ['ҳар', TokenType.ҲАР],
+  ['ношинос', TokenType.НОШИНОС],
+  ['абадан', TokenType.АБАДАН],
+  ['беджавоб', TokenType.БЕДЖАВОБ],
+  ['объект', TokenType.ОБЪЕКТ],
+
+  // Type system - Core Keywords
   ['интерфейс', TokenType.ИНТЕРФЕЙС],
   ['навъ', TokenType.НАВЪ],
   ['якхела', TokenType.ЯКХЕЛА],
@@ -110,6 +122,27 @@ export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenTyp
   ['номфазо', TokenType.НОМФАЗО],
   ['калидҳои', TokenType.КАЛИДҲОИ],
   ['инфер', TokenType.ИНФЕР],
+  ['хулоса', TokenType.ХУЛОСА],
   ['танҳохонӣ', TokenType.ТАНҲОХОНӢ],
   ['беназир', TokenType.БЕНАЗИР],
+  ['навъи', TokenType.НАВЪИ],
+  ['аст', TokenType.АСТ],
+  ['бармесоё', TokenType.БАРМЕСОЁ],
+
+  // Type system - Utility Types
+  ['қисмӣ', TokenType.ҚИСМӢ],
+  ['ҳатмӣ', TokenType.ҲАТМӢ],
+  ['танҳохон', TokenType.ТАНҲОХОН],
+  ['сабт_навъ', TokenType.САБТ_НАВЪ],
+  ['гирифтан_навъ', TokenType.ГИРИФТАН_НАВЪ],
+  ['ҳазф', TokenType.ҲАЗФ],
+  ['хориҷ', TokenType.ХОРИҶ],
+  ['истихроҷ', TokenType.ИСТИХРОҶ],
+  ['беналиӣ', TokenType.БЕНАЛИӢ],
+  ['навъи_бозгашт', TokenType.НАВЪИ_БОЗГАШТ],
+  ['параметрҳо', TokenType.ПАРАМЕТРҲО],
+  ['навъи_намуна', TokenType.НАВЪИ_НАМУНА],
+  ['параметрҳои_конструктор', TokenType.ПАРАМЕТРҲОИ_КОНСТРУКТОР],
+  ['навъи_параметри_ин', TokenType.НАВЪИ_ПАРАМЕТРИ_ИН],
+  ['интизоршуда', TokenType.ИНТИЗОРШУДА],
 ]);

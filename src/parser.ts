@@ -44,6 +44,8 @@ import {
   NamespaceDeclaration,
   Parameter,
   UniqueType,
+  LiteralType,
+  ConditionalType,
   AwaitExpression,
   NewExpression,
   TryStatement,
@@ -295,7 +297,7 @@ export class Parser {
     const consequent = this.statement()!;
     let alternate: Statement | undefined;
 
-    if (this.match(TokenType.ВАГАРНА)) {
+    if (this.match(TokenType.ВАГАРНА, TokenType.ЧУНИН)) {
       alternate = this.statement()!;
     }
 
@@ -897,21 +899,27 @@ export class Parser {
         this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
       }
 
-      return {
+      const newExpr = {
         type: 'NewExpression',
         callee,
         arguments: args,
         line: newToken.line,
         column: newToken.column,
       } as NewExpression;
+
+      // Apply call chaining to support expressions like: new Date().toISOString()
+      return this.applyCallChaining(newExpr);
     }
 
     return this.call();
   }
 
   private call(): Expression {
-    let expr = this.primary();
+    const expr = this.primary();
+    return this.applyCallChaining(expr);
+  }
 
+  private applyCallChaining(expr: Expression): Expression {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       // Skip generic type parameters only for function calls (e.g., func<Type>(args))
@@ -1861,13 +1869,63 @@ export class Parser {
       TokenType.ТАРҲ,
       TokenType.ЗАРБ,
       TokenType.ТАҚСИМ,
-      TokenType.ҲОЛАТ, // Allow 'case' keyword as identifier (for property names)
-      // Basic type keywords can appear as variable names in examples
+      TokenType.ҲОЛАТ,
+
+      // Control flow keywords that can be used as property names
+      TokenType.ТО,
+      TokenType.АЗ,
+      TokenType.ДАР,
+
+      // Contextual Keywords: Primitive and special types
+      // These can be used as identifiers in value contexts but act as keywords in type contexts
       TokenType.РАҚАМ,
       TokenType.САТР,
       TokenType.МАНТИҚӢ,
       TokenType.ХОЛӢ,
-      // Note: We don't include control flow keywords here as they have special parsing
+      TokenType.ОБЪЕКТ, // Contextual: can be used as variable name
+      TokenType.ҲАР, // Contextual: any type
+      TokenType.НОШИНОС, // Contextual: unknown type
+      TokenType.АБАДАН, // Contextual: never type
+      TokenType.БЕДЖАВОБ, // Contextual: void type
+
+      // Contextual Keywords: Type operators and utilities
+      TokenType.НАВЪ, // Contextual: type keyword
+      TokenType.КАЛИДҲОИ, // Contextual: keyof operator
+      TokenType.НАВЪИ, // Contextual: typeof operator
+      TokenType.САБТ_НАВЪ, // Contextual: typeof/type alias
+      TokenType.ГИРИФТАН_НАВЪ, // Contextual: ReturnType utility
+      TokenType.ҲАЗФ, // Contextual: Omit utility
+      TokenType.ХОРИҶ, // Contextual: Exclude utility
+      TokenType.ИСТИХРОҶ, // Contextual: Extract utility
+      TokenType.БЕНАЛИӢ, // Contextual: Awaited utility
+      TokenType.НАВЪИ_БОЗГАШТ, // Contextual: ReturnType
+      TokenType.ПАРАМЕТРҲО, // Contextual: Parameters
+      TokenType.НАВЪИ_НАМУНА, // Contextual: InstanceType
+      TokenType.ПАРАМЕТРҲОИ_КОНСТРУКТОР, // Contextual: ConstructorParameters
+      TokenType.НАВЪИ_ПАРАМЕТРИ_ИН, // Contextual: ThisParameterType
+      TokenType.ИНТИЗОРШУДА, // Contextual: Awaited type
+
+      // Type declaration keywords (contextual)
+      TokenType.ЯКХЕЛА, // Contextual: extends keyword
+      TokenType.МЕРОС, // Contextual: inheritance
+      TokenType.ТАТБИҚ, // Contextual: implements
+      TokenType.СУПЕР, // Contextual: super (can appear in expressions)
+      TokenType.КОНСТРУКТОР, // Contextual: constructor
+      TokenType.ХОСУСӢ, // Contextual: private
+      TokenType.МУҲОФИЗАТШУДА, // Contextual: protected
+      TokenType.ҶАМЪИЯТӢ, // Contextual: public
+      TokenType.СТАТИКӢ, // Contextual: static
+      TokenType.МАВҲУМ, // Contextual: abstract
+      TokenType.НОМФАЗО, // Contextual: namespace
+      TokenType.ИНФЕР, // Contextual: infer
+      TokenType.ХУЛОСА, // Contextual: conclusion/end
+      TokenType.ТАНҲОХОНӢ, // Contextual: readonly
+      TokenType.БЕНАЗИР, // Contextual: unique
+      TokenType.АСТ, // Contextual: is type guard
+      TokenType.БАРМЕСОЁ, // Contextual: satisfies operator
+      TokenType.ҚИСМӢ, // Contextual: Partial utility
+      TokenType.ҲАТМӢ, // Contextual: Required utility
+      TokenType.ТАНҲОХОН, // Contextual: Readonly utility
     ];
 
     for (const type of builtinTypes) {
@@ -1979,8 +2037,20 @@ export class Parser {
       this.consume(TokenType.RIGHT_BRACKET, "Expected ']'");
       computed = true;
     } else {
-      // Regular property
-      const keyToken = this.advance();
+      // Regular property - can be identifier, contextual keyword, or any keyword
+      // In JavaScript/SomonScript, keywords can be used as property names
+      let keyToken: Token;
+      if (this.check(TokenType.IDENTIFIER)) {
+        keyToken = this.advance();
+      } else if (this.matchBuiltinIdentifier()) {
+        keyToken = this.previous();
+      } else if (this.check(TokenType.STRING)) {
+        keyToken = this.advance();
+      } else {
+        // Allow any keyword as a property name
+        keyToken = this.advance();
+      }
+
       key = {
         type: 'Identifier',
         name: keyToken.value,
@@ -2120,7 +2190,46 @@ export class Parser {
   }
 
   private parseType(): TypeNode {
-    return this.unionType();
+    return this.conditionalType();
+  }
+
+  private conditionalType(): TypeNode {
+    const type = this.unionType();
+
+    // Handle conditional types: T мерос constraint ? trueType : falseType
+    if (this.match(TokenType.МЕРОС)) {
+      const constraint = this.unionType();
+
+      if (!this.match(TokenType.QUESTION)) {
+        this.errors.push(
+          `Expected '?' in conditional type at line ${this.peek().line}, column ${this.peek().column}`
+        );
+        return type;
+      }
+
+      const trueType = this.unionType();
+
+      if (!this.match(TokenType.COLON)) {
+        this.errors.push(
+          `Expected ':' in conditional type at line ${this.peek().line}, column ${this.peek().column}`
+        );
+        return type;
+      }
+
+      const falseType = this.conditionalType(); // Right-associative for nested conditionals
+
+      return {
+        type: 'ConditionalType',
+        checkType: type,
+        extendsType: constraint,
+        trueType,
+        falseType,
+        line: type.line,
+        column: type.column,
+      } as ConditionalType;
+    }
+
+    return type;
   }
 
   private unionType(): TypeNode {
@@ -2167,6 +2276,7 @@ export class Parser {
     return (
       this.parseParenthesizedOrArrayType() ??
       this.parseUniqueType() ??
+      this.parseLiteralType() ??
       this.parsePrimitiveType() ??
       this.parseGenericOrIdentifierType() ??
       this.parseTupleType() ??
@@ -2209,6 +2319,40 @@ export class Parser {
     } as ArrayType;
   }
 
+  private parseLiteralType(): TypeNode | undefined {
+    // Parse string literals in types (e.g., "фъало" in union types)
+    if (this.check(TokenType.STRING)) {
+      const token = this.advance();
+      return {
+        type: 'LiteralType',
+        value: token.value,
+        line: token.line,
+        column: token.column,
+      } as LiteralType;
+    }
+    // Parse number literals in types (e.g., 1 | 2 in union types)
+    if (this.check(TokenType.NUMBER)) {
+      const token = this.advance();
+      return {
+        type: 'LiteralType',
+        value: parseFloat(token.value),
+        line: token.line,
+        column: token.column,
+      } as LiteralType;
+    }
+    // Parse boolean literals in types (e.g., true | false)
+    if (this.match(TokenType.ДУРУСТ, TokenType.НОДУРУСТ)) {
+      const token = this.previous();
+      return {
+        type: 'LiteralType',
+        value: token.value === 'дуруст',
+        line: token.line,
+        column: token.column,
+      } as LiteralType;
+    }
+    return undefined;
+  }
+
   private parsePrimitiveType(): TypeNode | undefined {
     if (
       !this.match(
@@ -2216,7 +2360,12 @@ export class Parser {
         TokenType.РАҚАМ,
         TokenType.МАНТИҚӢ,
         TokenType.ХОЛӢ,
-        TokenType.БЕҚИМАТ
+        TokenType.БЕҚИМАТ,
+        TokenType.ҲАР,
+        TokenType.НОШИНОС,
+        TokenType.АБАДАН,
+        TokenType.БЕДЖАВОБ,
+        TokenType.ОБЪЕКТ
       )
     ) {
       return undefined;
@@ -2473,59 +2622,85 @@ export class Parser {
     return result;
   }
 
-  private propertySignature(): PropertySignature {
-    // Parse optional readonly modifier
-    let readonly = false;
-    if (this.match(TokenType.ТАНҲОХОНӢ)) {
-      readonly = true;
+  private parseComputedPropertySignature(readonly: boolean): PropertySignature {
+    this.advance(); // consume '['
+
+    // Parse the expression inside brackets (e.g., a variable name)
+    // For now, we just skip to the closing bracket since interfaces are type-only
+    let bracketCount = 1;
+    while (bracketCount > 0 && !this.isAtEnd()) {
+      if (this.check(TokenType.LEFT_BRACKET)) {
+        bracketCount++;
+      } else if (this.check(TokenType.RIGHT_BRACKET)) {
+        bracketCount--;
+      }
+      if (bracketCount > 0) {
+        this.advance();
+      }
     }
 
-    // Handle computed property names [expression]: type;
-    if (this.check(TokenType.LEFT_BRACKET)) {
-      this.advance(); // consume '['
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property name");
+    this.consume(TokenType.COLON, "Expected ':' after computed property name");
+    const typeAnnotation = this.typeAnnotation();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
 
-      // Parse the expression inside brackets (e.g., a variable name)
-      // For now, we just skip to the closing bracket since interfaces are type-only
-      let bracketCount = 1;
-      while (bracketCount > 0 && !this.isAtEnd()) {
-        if (this.check(TokenType.LEFT_BRACKET)) {
-          bracketCount++;
-        } else if (this.check(TokenType.RIGHT_BRACKET)) {
-          bracketCount--;
-        }
-        if (bracketCount > 0) {
-          this.advance();
-        }
-      }
-
-      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property name");
-      this.consume(TokenType.COLON, "Expected ':' after computed property name");
-      const typeAnnotation = this.typeAnnotation();
-      this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
-
-      // Return a property signature with a computed key marker
-      // Since interfaces are compile-time only, we don't need to preserve the exact expression
-      return {
-        type: 'PropertySignature',
-        key: {
-          type: 'Identifier',
-          name: '__computed__', // Placeholder for computed property
-          line: this.peek().line,
-          column: this.peek().column,
-        },
-        typeAnnotation,
-        optional: false,
-        readonly,
+    // Return a property signature with a computed key marker
+    // Since interfaces are compile-time only, we don't need to preserve the exact expression
+    return {
+      type: 'PropertySignature',
+      key: {
+        type: 'Identifier',
+        name: '__computed__', // Placeholder for computed property
         line: this.peek().line,
         column: this.peek().column,
-      };
+      },
+      typeAnnotation,
+      optional: false,
+      readonly,
+      line: this.peek().line,
+      column: this.peek().column,
+    };
+  }
+
+  private parseMethodSignature(keyName: Token, readonly: boolean): PropertySignature {
+    this.advance(); // consume '('
+
+    // Skip parameters for now (just consume until ')')
+    let parenCount = 1;
+    while (parenCount > 0 && !this.isAtEnd()) {
+      if (this.check(TokenType.LEFT_PAREN)) {
+        parenCount++;
+      } else if (this.check(TokenType.RIGHT_PAREN)) {
+        parenCount--;
+      }
+      this.advance();
     }
 
-    let keyName: Token;
+    this.consume(TokenType.COLON, "Expected ':' after method parameters");
+    const typeAnnotation = this.typeAnnotation();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after method signature");
+
+    return {
+      type: 'PropertySignature',
+      key: {
+        type: 'Identifier',
+        name: keyName.value,
+        line: keyName.line,
+        column: keyName.column,
+      },
+      typeAnnotation,
+      optional: false,
+      readonly,
+      line: keyName.line,
+      column: keyName.column,
+    };
+  }
+
+  private parsePropertyKeyName(): Token {
     if (this.check(TokenType.IDENTIFIER)) {
-      keyName = this.advance();
+      return this.advance();
     } else if (this.matchBuiltinIdentifier()) {
-      keyName = this.previous();
+      return this.previous();
     } else if (
       this.check(TokenType.САТР) ||
       this.check(TokenType.РАҚАМ) ||
@@ -2533,72 +2708,50 @@ export class Parser {
       this.check(TokenType.ХОЛӢ)
     ) {
       // Allow type keywords as property names
-      keyName = this.advance();
+      return this.advance();
     } else {
       throw new Error(
         `Expected property name at line ${this.peek().line}, column ${this.peek().column}`
       );
     }
+  }
+
+  private propertySignature(): PropertySignature {
+    // Parse optional readonly modifier
+    const readonly = this.match(TokenType.ТАНҲОХОНӢ);
+
+    // Handle computed property names [expression]: type;
+    if (this.check(TokenType.LEFT_BRACKET)) {
+      return this.parseComputedPropertySignature(readonly);
+    }
+
+    const keyName = this.parsePropertyKeyName();
 
     // Check if this is a method signature (has parentheses)
     if (this.check(TokenType.LEFT_PAREN)) {
-      // Method signature: methodName(params): returnType;
-      this.advance(); // consume '('
-
-      // Skip parameters for now (just consume until ')')
-      let parenCount = 1;
-      while (parenCount > 0 && !this.isAtEnd()) {
-        if (this.check(TokenType.LEFT_PAREN)) {
-          parenCount++;
-        } else if (this.check(TokenType.RIGHT_PAREN)) {
-          parenCount--;
-        }
-        this.advance();
-      }
-
-      this.consume(TokenType.COLON, "Expected ':' after method parameters");
-      const typeAnnotation = this.typeAnnotation();
-      this.consume(TokenType.SEMICOLON, "Expected ';' after method signature");
-
-      return {
-        type: 'PropertySignature',
-        key: {
-          type: 'Identifier',
-          name: keyName.value,
-          line: keyName.line,
-          column: keyName.column,
-        },
-        typeAnnotation,
-        optional: false,
-        readonly,
-        line: keyName.line,
-        column: keyName.column,
-      };
-    } else {
-      // Regular property signature: propName: type;
-      // Check for optional property
-      const optional = this.match(TokenType.QUESTION);
-
-      this.consume(TokenType.COLON, "Expected ':' after property name");
-      const typeAnnotation = this.typeAnnotation();
-
-      this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
-
-      return {
-        type: 'PropertySignature',
-        key: {
-          type: 'Identifier',
-          name: keyName.value,
-          line: keyName.line,
-          column: keyName.column,
-        },
-        typeAnnotation,
-        optional: optional || false,
-        readonly,
-        line: keyName.line,
-        column: keyName.column,
-      };
+      return this.parseMethodSignature(keyName, readonly);
     }
+
+    // Regular property signature: propName: type;
+    const optional = this.match(TokenType.QUESTION);
+    this.consume(TokenType.COLON, "Expected ':' after property name");
+    const typeAnnotation = this.typeAnnotation();
+    this.consume(TokenType.SEMICOLON, "Expected ';' after property type");
+
+    return {
+      type: 'PropertySignature',
+      key: {
+        type: 'Identifier',
+        name: keyName.value,
+        line: keyName.line,
+        column: keyName.column,
+      },
+      typeAnnotation,
+      optional: optional || false,
+      readonly,
+      line: keyName.line,
+      column: keyName.column,
+    };
   }
 
   public classDeclaration(): ClassDeclaration {

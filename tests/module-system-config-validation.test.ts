@@ -8,10 +8,25 @@ describe('ModuleSystem Configuration Validation', () => {
     },
   };
 
+  const moduleSystems: ModuleSystem[] = [];
+
+  // Helper to track ModuleSystem instances for cleanup
+  function createTrackedModuleSystem(config: any): ModuleSystem {
+    const ms = new ModuleSystem(config);
+    moduleSystems.push(ms);
+    return ms;
+  }
+
+  afterEach(async () => {
+    // Shutdown all created instances
+    await Promise.all(moduleSystems.map(ms => ms.shutdown()));
+    moduleSystems.length = 0;
+  });
+
   describe('Management Server Dependencies', () => {
     it('should reject managementServer without metrics', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
           circuitBreakers: true,
@@ -22,7 +37,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject managementServer without circuitBreakers', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
           metrics: true,
@@ -33,7 +48,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject managementServer without both metrics and circuitBreakers', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
         });
@@ -42,7 +57,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept managementServer with both metrics and circuitBreakers', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
           metrics: true,
@@ -55,7 +70,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Management Port Validation', () => {
     it('should reject port below valid range', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 0,
         });
@@ -64,7 +79,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject port above valid range', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 65536,
         });
@@ -73,7 +88,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-integer port', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 3000.5,
         });
@@ -82,21 +97,21 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid port range', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 3000,
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 1,
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementPort: 65535,
         });
@@ -107,7 +122,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Operation Timeout Validation', () => {
     it('should reject timeout below minimum', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 999,
         });
@@ -116,7 +131,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject timeout above maximum', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 600001,
         });
@@ -125,7 +140,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-integer timeout', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 5000.5,
         });
@@ -134,21 +149,21 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid timeout range', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 1000,
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 120000,
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           operationTimeout: 600000,
         });
@@ -159,7 +174,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Resource Limits Validation', () => {
     it('should reject maxMemoryBytes below 1MB', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             maxMemoryBytes: 1024 * 1024 - 1,
@@ -170,7 +185,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject negative maxFileHandles', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             maxFileHandles: 0,
@@ -181,7 +196,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject negative maxCachedModules', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             maxCachedModules: 0,
@@ -192,7 +207,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject checkInterval below minimum', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             checkInterval: 99,
@@ -203,7 +218,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject checkInterval above maximum', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             checkInterval: 60001,
@@ -214,7 +229,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid resource limits', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resourceLimits: {
             maxMemoryBytes: 100 * 1024 * 1024, // 100MB
@@ -230,7 +245,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Loader Options Validation', () => {
     it('should reject invalid circularDependencyStrategy', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: {
             circularDependencyStrategy: 'invalid' as any,
@@ -241,7 +256,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject invalid maxCacheSize', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: {
             maxCacheSize: 0,
@@ -252,7 +267,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject maxCacheMemory below minimum', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: {
             maxCacheMemory: 1023,
@@ -263,7 +278,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject invalid encoding', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: {
             encoding: 'invalid-encoding' as any,
@@ -274,7 +289,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid loader options', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: {
             circularDependencyStrategy: 'error',
@@ -288,21 +303,21 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept all valid circular dependency strategies', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: { circularDependencyStrategy: 'error' },
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: { circularDependencyStrategy: 'warn' },
         });
       }).not.toThrow();
 
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           loading: { circularDependencyStrategy: 'ignore' },
         });
@@ -326,7 +341,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
       for (const encoding of validEncodings) {
         expect(() => {
-          new ModuleSystem({
+          createTrackedModuleSystem({
             ...validBaseConfig,
             loading: { encoding: encoding as any },
           });
@@ -338,7 +353,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Resolution Options Validation', () => {
     it('should reject non-string baseUrl', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           resolution: {
             baseUrl: 123 as any,
           },
@@ -348,7 +363,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject invalid paths object', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -360,7 +375,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject paths with non-array values', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -374,7 +389,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject paths with non-string array elements', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -388,7 +403,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-array extensions', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -400,7 +415,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject extensions with non-string elements', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -412,7 +427,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject empty extensions array', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -424,7 +439,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject extensions without leading dot', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -436,7 +451,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-array moduleDirectories', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -448,7 +463,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject moduleDirectories with non-string elements', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -460,7 +475,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject empty moduleDirectories array', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -472,7 +487,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean allowJs', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -484,7 +499,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean resolveJsonModule', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           resolution: {
             ...validBaseConfig.resolution,
@@ -496,7 +511,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid resolution options', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           resolution: {
             baseUrl: path.resolve(__dirname, '..'),
             paths: {
@@ -516,7 +531,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Compilation Options Validation', () => {
     it('should reject invalid target', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             target: 'es2022' as any,
@@ -527,7 +542,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean sourceMap', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             sourceMap: 'true' as any,
@@ -538,7 +553,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean minify', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             minify: 'true' as any,
@@ -549,7 +564,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean noTypeCheck', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             noTypeCheck: 1 as any,
@@ -560,7 +575,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean strict', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             strict: 'yes' as any,
@@ -571,7 +586,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean watch', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             watch: 1 as any,
@@ -582,7 +597,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-boolean compileOnSave', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             compileOnSave: 1 as any,
@@ -593,7 +608,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-string output', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             output: 123 as any,
@@ -604,7 +619,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should reject non-string outDir', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             outDir: 123 as any,
@@ -618,7 +633,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
       for (const target of validTargets) {
         expect(() => {
-          new ModuleSystem({
+          createTrackedModuleSystem({
             ...validBaseConfig,
             compilation: {
               target: target as any,
@@ -630,7 +645,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept valid compilation options', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           compilation: {
             target: 'es2020',
@@ -651,7 +666,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Error Aggregation', () => {
     it('should report multiple validation errors together', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
           // Missing metrics and circuitBreakers
@@ -669,7 +684,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should include all errors in error message', () => {
       try {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           ...validBaseConfig,
           managementServer: true,
           managementPort: 0,
@@ -687,7 +702,7 @@ describe('ModuleSystem Configuration Validation', () => {
   describe('Valid Configurations', () => {
     it('should accept minimal valid configuration', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           resolution: {
             baseUrl: path.resolve(__dirname, '..'),
           },
@@ -697,7 +712,7 @@ describe('ModuleSystem Configuration Validation', () => {
 
     it('should accept full production configuration', () => {
       expect(() => {
-        new ModuleSystem({
+        createTrackedModuleSystem({
           resolution: {
             baseUrl: path.resolve(__dirname, '..'),
             extensions: ['.som', '.js'],

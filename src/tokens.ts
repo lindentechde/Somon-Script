@@ -16,7 +16,8 @@ export enum TokenType {
   СОБИТ = 'СОБИТ', // constant
   ФУНКСИЯ = 'ФУНКСИЯ', // function
   АГАР = 'АГАР', // if
-  ВАГАРНА = 'ВАГАРНА', // else
+  ВАГАРНА = 'ВАГАРНА', // else if
+  ЧУНИН = 'ЧУНИН', // else
   БАРОИ = 'БАРОИ', // for
   ТО = 'ТО', // while
   БОЗГАШТ = 'БОЗГАШТ', // return
@@ -100,10 +101,21 @@ export enum TokenType {
   ИНТИЗОР = 'ИНТИЗОР', // await
   ВАЪДА = 'ВАЪДА', // Promise
 
-  // Type system keywords
+  // Type system keywords (Primitive Types)
   САТР = 'САТР', // string type
   РАҚАМ = 'РАҚАМ', // number type
   МАНТИҚӢ = 'МАНТИҚӢ', // boolean type
+  КАЛОНРАҚАМ = 'КАЛОНРАҚАМ', // bigint type
+  РАМЗ = 'РАМЗ', // symbol type
+
+  // Special Types
+  ҲАР = 'ҲАР', // any type
+  НОШИНОС = 'НОШИНОС', // unknown type
+  АБАДАН = 'АБАДАН', // never type
+  БЕДЖАВОБ = 'БЕДЖАВОБ', // void type
+  ОБЪЕКТ = 'ОБЪЕКТ', // object type
+
+  // Type System Keywords
   ИНТЕРФЕЙС = 'ИНТЕРФЕЙС', // interface
   НАВЪ = 'НАВЪ', // type
   ЯКХЕЛА = 'ЯКХЕЛА', // generic (same/uniform)
@@ -119,8 +131,29 @@ export enum TokenType {
   НОМФАЗО = 'НОМФАЗО', // namespace
   КАЛИДҲОИ = 'КАЛИДҲОИ', // keyof
   ИНФЕР = 'ИНФЕР', // infer
+  ХУЛОСА = 'ХУЛОСА', // infer (alternative)
   ТАНҲОХОНӢ = 'ТАНҲОХОНӢ', // readonly
   БЕНАЗИР = 'БЕНАЗИР', // unique
+  НАВЪИ = 'НАВЪИ', // typeof
+  АСТ = 'АСТ', // is (type predicate)
+  БАРМЕСОЁ = 'БАРМЕСОЁ', // asserts (type predicate)
+
+  // Utility Type Keywords
+  ҚИСМӢ = 'ҚИСМӢ', // Partial<T>
+  ҲАТМӢ = 'ҲАТМӢ', // Required<T>
+  ТАНҲОХОН = 'ТАНҲОХОН', // Readonly<T>
+  САБТ_НАВЪ = 'САБТ_НАВЪ', // Record<K, V>
+  ГИРИФТАН_НАВЪ = 'ГИРИФТАН_НАВЪ', // Pick<T, K>
+  ҲАЗФ = 'ҲАЗФ', // Omit<T, K>
+  ХОРИҶ = 'ХОРИҶ', // Exclude<T, U>
+  ИСТИХРОҶ = 'ИСТИХРОҶ', // Extract<T, U>
+  БЕНАЛИӢ = 'БЕНАЛИӢ', // NonNullable<T>
+  НАВЪИ_БОЗГАШТ = 'НАВЪИ_БОЗГАШТ', // ReturnType<T>
+  ПАРАМЕТРҲО = 'ПАРАМЕТРҲО', // Parameters<T>
+  НАВЪИ_НАМУНА = 'НАВЪИ_НАМУНА', // InstanceType<T>
+  ПАРАМЕТРҲОИ_КОНСТРУКТОР = 'ПАРАМЕТРҲОИ_КОНСТРУКТОР', // ConstructorParameters<T>
+  НАВЪИ_ПАРАМЕТРИ_ИН = 'НАВЪИ_ПАРАМЕТРИ_ИН', // ThisParameterType<T>
+  ИНТИЗОРШУДА = 'ИНТИЗОРШУДА', // Awaited<T>
 
   // Operators
   PLUS = '+',

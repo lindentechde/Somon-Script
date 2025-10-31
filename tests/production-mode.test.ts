@@ -11,12 +11,17 @@ import { ModuleSystem } from '../src/module-system';
 
 describe('Production Mode Enforcement', () => {
   let testDir: string;
+  const moduleSystems: ModuleSystem[] = [];
 
   beforeEach(() => {
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prod-mode-test-'));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Shutdown all ModuleSystem instances
+    await Promise.all(moduleSystems.map(ms => ms.shutdown()));
+    moduleSystems.length = 0;
+
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true, force: true });
     }
@@ -30,6 +35,7 @@ describe('Production Mode Enforcement', () => {
         },
         metrics: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // Metrics should be enabled
       const stats = moduleSystem.getStatistics();
@@ -44,6 +50,7 @@ describe('Production Mode Enforcement', () => {
         },
         circuitBreakers: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // Circuit breakers should be available
       const health = await moduleSystem.getHealth();
@@ -60,6 +67,7 @@ describe('Production Mode Enforcement', () => {
         circuitBreakers: true,
         logger: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // All features should be enabled
       const stats = moduleSystem.getStatistics();
@@ -76,6 +84,7 @@ describe('Production Mode Enforcement', () => {
         },
         // No production features enabled
       });
+      moduleSystems.push(moduleSystem);
 
       // Should still work without production features
       const validation = moduleSystem.validate();
@@ -140,6 +149,7 @@ describe('Production Mode Enforcement', () => {
           strict: true,
         },
       });
+      moduleSystems.push(moduleSystem);
 
       // Should fail with strict type checking
       await expect(moduleSystem.loadModule(inputFile, testDir)).rejects.toThrow();
@@ -155,6 +165,7 @@ describe('Production Mode Enforcement', () => {
         metrics: true,
         circuitBreakers: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // Should fail gracefully with clear error
       await expect(moduleSystem.loadModule(invalidFile, testDir)).rejects.toThrow();
@@ -174,6 +185,7 @@ describe('Production Mode Enforcement', () => {
         },
         metrics: true,
       });
+      moduleSystems.push(moduleSystem);
 
       try {
         await moduleSystem.loadModule(invalidFile, testDir);
@@ -206,6 +218,7 @@ describe('Production Mode Enforcement', () => {
         circuitBreakers: true,
         logger: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // All features should be initialized
       const stats = moduleSystem.getStatistics();
@@ -224,6 +237,7 @@ describe('Production Mode Enforcement', () => {
         metrics: true,
         circuitBreakers: true,
       });
+      moduleSystems.push(moduleSystem);
 
       const health = await moduleSystem.getHealth();
       expect(health).toBeDefined();
@@ -249,6 +263,7 @@ describe('Production Mode Enforcement', () => {
         },
         metrics: true,
       });
+      moduleSystems.push(moduleSystem);
 
       await moduleSystem.loadModule(validFile, testDir);
 
@@ -267,6 +282,7 @@ describe('Production Mode Enforcement', () => {
         metrics: true,
         circuitBreakers: true,
       });
+      moduleSystems.push(moduleSystem);
 
       // Create and use resources
       const testFile = path.join(testDir, 'test.som');
@@ -297,6 +313,7 @@ describe('Production Mode Enforcement', () => {
         },
         metrics: true,
       });
+      moduleSystems.push(moduleSystem);
 
       const invalidFile = path.join(testDir, 'invalid.som');
       fs.writeFileSync(invalidFile, '}{][invalid');
@@ -321,6 +338,7 @@ describe('Production Mode Enforcement', () => {
         },
         logger: true,
       });
+      moduleSystems.push(moduleSystem);
 
       const missingFile = path.join(testDir, 'missing.som');
 
@@ -334,6 +352,7 @@ describe('Production Mode Enforcement', () => {
         },
         logger: true,
       });
+      moduleSystems.push(moduleSystem);
 
       const missingFile = path.join(testDir, 'missing.som');
 
@@ -352,6 +371,7 @@ describe('Production Mode Enforcement', () => {
         },
         metrics: true,
       });
+      moduleSystems.push(moduleSystem);
 
       const validation = moduleSystem.validate();
       expect(validation).toBeDefined();

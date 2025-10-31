@@ -17,12 +17,17 @@ import { ModuleSystem } from '../src/module-system';
 
 describe('Failure Mode Testing', () => {
   let testDir: string;
+  const moduleSystems: ModuleSystem[] = [];
 
   beforeEach(() => {
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-failure-test-'));
   });
 
   afterEach(async () => {
+    // Shutdown all ModuleSystem instances
+    await Promise.all(moduleSystems.map(ms => ms.shutdown()));
+    moduleSystems.length = 0;
+
     if (fs.existsSync(testDir)) {
       // Restore write permissions before cleanup
       try {
@@ -47,6 +52,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       // Verify the validation API exists
       expect(typeof moduleSystem.validate).toBe('function');
@@ -74,6 +80,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       await expect(async () => {
         await moduleSystem.loadModule(unreadableFile, testDir);
@@ -98,6 +105,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       try {
         await moduleSystem.loadModule(unreadableFile, testDir);
@@ -124,6 +132,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       await expect(async () => {
         await moduleSystem.loadModule(corruptFile, testDir);
@@ -139,6 +148,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       await expect(async () => {
         await moduleSystem.loadModule(incompleteFile, testDir);
@@ -157,6 +167,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       // Should throw error about parse error or missing module
       await expect(async () => {
@@ -175,6 +186,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       await moduleSystem.loadModule(testFile, testDir);
 
@@ -193,6 +205,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       await moduleSystem.loadModule(testFile, testDir);
 
@@ -211,6 +224,7 @@ describe('Failure Mode Testing', () => {
           checkInterval: 100,
         },
       });
+      moduleSystems.push(moduleSystem);
 
       // Create multiple files
       const files: string[] = [];
@@ -252,6 +266,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       // First attempt should fail
       await expect(moduleSystem.loadModule(invalidFile, testDir)).rejects.toThrow();
@@ -269,6 +284,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       try {
         await moduleSystem.loadModule(errorFile, testDir);
@@ -294,6 +310,7 @@ describe('Failure Mode Testing', () => {
       const moduleSystem = new ModuleSystem({
         resolution: { baseUrl: testDir },
       });
+      moduleSystems.push(moduleSystem);
 
       // Create multiple files
       const files: string[] = [];

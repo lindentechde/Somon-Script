@@ -8,12 +8,17 @@ import { ModuleSystem } from '../src/module-system';
 
 describe('ModuleSystem Bundle Runtime', () => {
   let tempDir: string;
+  const moduleSystems: ModuleSystem[] = [];
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-bundle-'));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Shutdown all ModuleSystem instances
+    await Promise.all(moduleSystems.map(ms => ms.shutdown()));
+    moduleSystems.length = 0;
+
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch {
@@ -31,6 +36,7 @@ describe('ModuleSystem Bundle Runtime', () => {
     const moduleSystem = new ModuleSystem({
       resolution: { baseUrl: tempDir },
     });
+    moduleSystems.push(moduleSystem);
 
     const bundle = await moduleSystem.bundle({ entryPoint: mainFile, format: 'commonjs' });
 
@@ -52,6 +58,7 @@ describe('ModuleSystem Bundle Runtime', () => {
     const moduleSystem = new ModuleSystem({
       resolution: { baseUrl: tempDir },
     });
+    moduleSystems.push(moduleSystem);
 
     const bundle = await moduleSystem.bundle({
       entryPoint: mainFile,
