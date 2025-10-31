@@ -154,19 +154,7 @@ jobs:
           echo "✅ Git tag created: v${VERSION}"
 
       - name: Publish to JSR
-        id: jsr_publish
-        run: npx jsr publish --allow-slow-types
-        continue-on-error: true
-
-      - name: Report JSR Publish Status
-        if: always()
-        run: |
-          if [ "${{ steps.jsr_publish.outcome }}" = "success" ]; then
-            echo "✅ Successfully published to JSR"
-          else
-            echo "::warning::JSR publish failed (continuing with NPM success)"
-            echo "JSR publish outcome: ${{ steps.jsr_publish.outcome }}"
-          fi
+        run: npx jsr publish
 
       - name: Generate Release Notes
         id: release_notes
