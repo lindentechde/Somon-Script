@@ -153,6 +153,11 @@ jobs:
           git push origin "v${VERSION}"
           echo "✅ Git tag created: v${VERSION}"
 
+      - name: Clean up CI artifacts before JSR publish
+        run: |
+          rm -rf codecov/
+          rm -f codecov.SHA256SUM*
+
       - name: Publish to JSR
         run: npx jsr publish
 
