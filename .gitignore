@@ -85,3 +85,8 @@ temp/
 
 # Ona configuration (contains API keys)
 .ona/
+
+# CI/CD artifacts
+codecov/
+codecov.SHA256SUM*
+example-audit-report.json
