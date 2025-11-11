@@ -569,6 +569,7 @@ export class Lexer {
 
   private isCyrillic(char: string): boolean {
     const code = char.codePointAt(0);
+    if (code === undefined) return false;
     return (
       (code >= 0x0400 && code <= 0x04ff) || // Cyrillic
       (code >= 0x0500 && code <= 0x052f)

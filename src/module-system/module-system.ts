@@ -1580,13 +1580,13 @@ export class ModuleSystem {
       return `require('${sanitizedKey}')`;
     };
 
-    let result = code.replaceAll(singleQuotePattern, (match, spec) =>
+    let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
       processMatch(match, spec, 'single')
     );
-    result = result.replaceAll(doubleQuotePattern, (match, spec) =>
+    result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
       processMatch(match, spec, 'double')
     );
-    result = result.replaceAll(templatePattern, (match, spec) => {
+    result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {
         throw new Error(
           `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
