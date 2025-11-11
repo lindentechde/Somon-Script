@@ -12,7 +12,6 @@ import {
   getCurrentNodeMajorVersion,
   SUPPORTED_NODE_VERSIONS,
   createTestFile,
-  TEST_FIXTURES,
   isNodeVersionSupported,
   isWindows,
 } from './helpers/test-utils';
@@ -31,7 +30,7 @@ describe('Production Environment Validation', () => {
   });
 
   /** Helper to run CLI command with production mode */
-  function runProduction(args: string[], env: NodeJS.ProcessEnv = process.env) {
+  function runProduction(args: string[], env: Record<string, string | undefined> = process.env) {
     return spawnSync('node', [CLI_PATH, ...args], {
       cwd: testDir,
       env: { ...env, NODE_ENV: 'production' },
@@ -47,8 +46,6 @@ describe('Production Environment Validation', () => {
 
   describe('Node.js Version Validation', () => {
     test('should pass on Node.js 20.x, 22.x, 23.x, or 24.x', () => {
-      const major = getCurrentNodeMajorVersion();
-
       if (isNodeVersionSupported()) {
         expect(process.versions.node).toMatch(/^(20|22|23|24)\./);
       } else {
