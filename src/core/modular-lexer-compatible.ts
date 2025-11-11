@@ -297,7 +297,7 @@ export class StringRecognizer extends BaseTokenRecognizer {
           }
         }
         if (unicode.length === 4) {
-          return { char: String.fromCharCode(parseInt(unicode, 16)), consumed };
+          return { char: String.fromCodePoint(Number.parseInt(unicode, 16)), consumed };
         } else {
           return { char: char, consumed: 1 };
         }

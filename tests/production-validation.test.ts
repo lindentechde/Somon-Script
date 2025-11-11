@@ -24,7 +24,7 @@ describe('Production Environment Validation', () => {
   describe('Node.js Version Validation', () => {
     test('should pass on Node.js 20.x, 22.x, 23.x, or 24.x', () => {
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       if (major === 20 || major === 22 || major === 23 || major === 24) {
         expect(nodeVersion).toMatch(/^(20|22|23|24)\./);
@@ -36,7 +36,7 @@ describe('Production Environment Validation', () => {
 
     test('should pass on specific supported versions', () => {
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       if (major >= 20 && major <= 24) {
         expect([20, 22, 23, 24]).toContain(major);
@@ -51,7 +51,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       // Only test version rejection if we're NOT on supported versions
       if (![20, 22, 23, 24].includes(major)) {
@@ -105,7 +105,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       // Only test if on valid Node version
       if (major === 20 || major === 22 || major === 23 || major === 24) {
@@ -145,7 +145,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       // Only test if on valid Node version
       if (major === 20 || major === 22 || major === 23 || major === 24) {
@@ -237,7 +237,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       if (major === 20 || major === 22 || major === 23 || major === 24) {
         const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
@@ -298,7 +298,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       // Test only on invalid Node versions
       if (![20, 22, 23, 24].includes(major)) {
@@ -326,7 +326,7 @@ describe('Production Environment Validation', () => {
       fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
 
       const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = Number.parseInt(nodeVersion.split('.')[0], 10);
 
       if (![20, 22, 23, 24].includes(major)) {
         const result = spawnSync(

@@ -1,4 +1,4 @@
-const nodeVersion = parseInt(process.version.slice(1).split('.')[0]);
+const nodeVersion = Number.parseInt(process.version.slice(1).split('.')[0]);
 
 const baseConfig = {
   preset: 'ts-jest',

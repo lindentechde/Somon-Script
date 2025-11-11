@@ -34,7 +34,7 @@ describe('Performance Tests', () => {
     }
   `;
 
-  const largeProgram = Array(50).fill(mediumProgram).join('\n\n');
+  const largeProgram = new Array(50).fill(mediumProgram).join('\n\n');
 
   describe('Lexer Performance', () => {
     test('should tokenize small program quickly', () => {

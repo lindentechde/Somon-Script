@@ -53,7 +53,7 @@ describe('CLI Production Mode', () => {
       );
 
       // Should pass validation on supported Node versions
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {
@@ -154,7 +154,7 @@ describe('CLI Production Mode', () => {
         cwd: testDir,
       });
 
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {
@@ -210,7 +210,7 @@ describe('CLI Production Mode', () => {
         }
       );
 
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {
@@ -280,7 +280,7 @@ describe('CLI Production Mode', () => {
         }
       );
 
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {
@@ -322,7 +322,7 @@ describe('CLI Production Mode', () => {
         }
       );
 
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {
@@ -363,7 +363,7 @@ describe('CLI Production Mode', () => {
         return;
       }
 
-      const major = parseInt(process.versions.node.split('.')[0], 10);
+      const major = Number.parseInt(process.versions.node.split('.')[0], 10);
       const isSupported = [20, 22, 23, 24].includes(major);
 
       if (isSupported) {

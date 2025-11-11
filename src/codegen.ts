@@ -598,7 +598,7 @@ export class CodeGenerator {
 
     // Handle .som extension conversion for dynamic imports
     if (source.includes('.som')) {
-      source = source.replace(/\.som/g, '.js');
+      source = source.replaceAll('.som', '.js');
     } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
       // For relative imports without extension, add .js
       source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
@@ -617,7 +617,7 @@ export class CodeGenerator {
 
     // Module resolution: convert .som extensions to .js
     if (source.includes('.som')) {
-      source = source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+      source = source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
     } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
       // For relative imports without extension, add .js
       source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
@@ -753,7 +753,7 @@ export class CodeGenerator {
 
   private convertSourcePath(source: string): string {
     if (source.includes('.som')) {
-      return source.replace(/\.som"/g, '.js"').replace(/\.som'/g, ".js'");
+      return source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
     } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
       // For relative imports without extension, add .js
       return source.replace(/["']$/, '.js"').replace(/^'/, '"');
@@ -791,11 +791,11 @@ export class CodeGenerator {
     if (typeof node.value === 'string') {
       // Properly escape string literals
       const escaped = node.value
-        .replace(/\\/g, '\\\\') // Escape backslashes first
-        .replace(/"/g, '\\"') // Escape quotes
-        .replace(/\n/g, '\\n') // Escape newlines
-        .replace(/\t/g, '\\t') // Escape tabs
-        .replace(/\r/g, '\\r'); // Escape carriage returns
+        .replaceAll('\\', '\\\\') // Escape backslashes first
+        .replaceAll('"', '\\"') // Escape quotes
+        .replaceAll('\n', '\\n') // Escape newlines
+        .replaceAll('\t', '\\t') // Escape tabs
+        .replaceAll('\r', '\\r'); // Escape carriage returns
       return `"${escaped}"`;
     }
     if (node.value === null) {
