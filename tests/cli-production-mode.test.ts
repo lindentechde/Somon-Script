@@ -14,8 +14,6 @@ import {
   TEST_FIXTURES,
   validateProductionExecution,
   isNodeVersionSupported,
-  getCurrentNodeMajorVersion,
-  SUPPORTED_NODE_VERSIONS,
   isWindows,
 } from './helpers/test-utils';
 

@@ -62,9 +62,9 @@ export interface CliRunOptions {
   command: string;
   args: string[];
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string | undefined>;
   timeout?: number;
-  encoding?: BufferEncoding;
+  encoding?: 'utf-8' | 'utf8' | 'ascii' | 'buffer';
 }
 
 /** Run a CLI command with common defaults */
