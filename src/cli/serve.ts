@@ -27,7 +27,7 @@ export function createServeCommand(): Command {
           ? JSON.parse(fs.readFileSync(path.resolve(options.config), 'utf8'))
           : loadConfig(process.cwd());
 
-        const port = parseInt(options.port, 10);
+        const port = Number.parseInt(options.port, 10);
         const isProduction = options.production || process.env.NODE_ENV === 'production';
 
         // Configure structured logging if requested

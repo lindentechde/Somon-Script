@@ -20,21 +20,21 @@ echo -e "${BLUE}╔════════════════════�
 echo ""
 
 # Fix nvm compatibility issue with Homebrew
-if [ -n "$npm_config_prefix" ]; then
+if [[ -n "$npm_config_prefix" ]]; then
     echo -e "${YELLOW}⚠ Unsetting npm_config_prefix for nvm compatibility${NC}"
     unset npm_config_prefix
 fi
 
 # Check if nvm is installed
 if ! command -v nvm &> /dev/null; then
-    if [ ! -s "$HOME/.nvm/nvm.sh" ]; then
+    if [[ ! -s "$HOME/.nvm/nvm.sh" ]]; then
         echo -e "${RED}✗ nvm not found${NC}"
         echo "Install with: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash"
         exit 1
     else
         # Load nvm
         export NVM_DIR="$HOME/.nvm"
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        [[ -s "$NVM_DIR/nvm.sh" ]] && \. "$NVM_DIR/nvm.sh"
     fi
 fi
 
@@ -69,7 +69,7 @@ for VERSION in "${NODE_VERSIONS[@]}"; do
     TEST_EXIT=$?
     set -e
     
-    if [ $TEST_EXIT -eq 0 ]; then
+    if [[ $TEST_EXIT -eq 0 ]]; then
         echo -e "${GREEN}✓ Tests passed on Node.js ${VERSION}.x${NC}"
         ((PASSED++))
     else
@@ -98,7 +98,7 @@ echo -e "Total tested: ${#NODE_VERSIONS[@]} versions"
 echo -e "${GREEN}Passed: ${PASSED}${NC}"
 echo -e "${RED}Failed: ${FAILED}${NC}"
 
-if [ $FAILED -gt 0 ]; then
+if [[ $FAILED -gt 0 ]]; then
     echo ""
     echo -e "${RED}Failed versions:${NC}"
     for VERSION in "${FAILED_VERSIONS[@]}"; do

@@ -10,7 +10,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 // Validate Node.js version
-const nodeVersion = parseInt(process.version.match(/^v(\d+)/)[1]);
+const nodeVersion = Number.parseInt(process.version.match(/^v(\d+)/)[1]);
 if (nodeVersion < 20) {
   console.error(`❌ Node.js 20+ required, found ${process.version}`);
   process.exit(1);

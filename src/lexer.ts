@@ -11,7 +11,7 @@ export class Lexer {
 
   constructor(input: string) {
     // Remove BOM if present
-    this.input = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+    this.input = input.codePointAt(0) === 0xfeff ? input.slice(1) : input;
   }
 
   tokenize(): Token[] {
@@ -568,7 +568,7 @@ export class Lexer {
   }
 
   private isCyrillic(char: string): boolean {
-    const code = char.charCodeAt(0);
+    const code = char.codePointAt(0);
     return (
       (code >= 0x0400 && code <= 0x04ff) || // Cyrillic
       (code >= 0x0500 && code <= 0x052f)

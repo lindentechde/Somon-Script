@@ -277,7 +277,7 @@ describe('Error Handling Tests', () => {
       const result = compile(deepNesting);
 
       // Should either compile successfully or fail gracefully
-      expect(result.errors.length >= 0).toBe(true);
+      expect(Array.isArray(result.errors)).toBe(true);
     });
   });
 });

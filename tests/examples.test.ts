@@ -113,7 +113,7 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
     const newExamples = exampleFiles.filter(f => {
       const basename = path.basename(f);
       const match = basename.match(/^(\d+)-/);
-      return match && parseInt(match[1]) >= 26 && parseInt(match[1]) <= 33;
+      return match && Number.parseInt(match[1]) >= 26 && Number.parseInt(match[1]) <= 33;
     });
 
     // Helper to validate feature-specific patterns
