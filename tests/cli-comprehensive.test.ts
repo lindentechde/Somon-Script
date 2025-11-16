@@ -3,10 +3,10 @@
  * Testing all CLI functionality with proper mocking and error handling
  */
 
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 
 // Mock dependencies first
-jest.mock('fs');
+jest.mock('node:fs');
 jest.mock('../src/compiler');
 
 // Import after mocking

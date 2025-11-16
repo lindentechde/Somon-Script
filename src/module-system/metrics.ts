@@ -2,8 +2,8 @@
  * Production-grade metrics and observability system for the module system
  * Provides enterprise-level monitoring similar to Apache brpc
  */
-import * as os from 'os';
-import * as process from 'process';
+import * as os from 'node:os';
+import * as process from 'node:process';
 
 export interface LatencyMetrics {
   count: number;

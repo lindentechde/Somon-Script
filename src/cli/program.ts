@@ -5,13 +5,13 @@
  * Licensed under the MIT License. See the LICENSE file for details.
  */
 
-import { spawnSync } from 'child_process';
+import { spawnSync } from 'node:child_process';
 import { Command } from 'commander';
 import chokidar from 'chokidar';
-import * as fs from 'fs';
-import * as path from 'path';
-import { createRequire } from 'module';
-import type { Module as NodeModuleType } from 'module';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { createRequire } from 'node:module';
+import type { Module as NodeModuleType } from 'node:module';
 
 import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
@@ -158,7 +158,7 @@ async function createModuleSystem(baseDir: string, config: SomonConfig, isProduc
   return new ModuleSystem({
     resolution: {
       baseUrl: baseDir,
-      ...(config.moduleSystem?.resolution || {}),
+      ...config.moduleSystem?.resolution,
     },
     loading: config.moduleSystem?.loading
       ? {
@@ -285,7 +285,7 @@ export interface CompileOptions {
 
 function mergeOptions(input: string, options: CompileOptions): CompileOptions {
   const config = loadConfig(path.dirname(path.resolve(input)));
-  const merged = { ...(config.compilerOptions ?? {}), ...options };
+  const merged = { ...config.compilerOptions, ...options };
 
   // Handle negation flags - they override positive flags
   if (options.noSourceMap) {
@@ -323,13 +323,17 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
 
     if (result.errors.length > 0) {
       console.error(t().commands.compile.messages.compilationErrors);
-      result.errors.forEach(error => console.error(`  ${error}`));
+      for (const error of result.errors) {
+        console.error(`  ${error}`);
+      }
       process.exitCode = 1;
     }
 
     if (result.warnings.length > 0) {
       console.warn(t().commands.compile.messages.warnings);
-      result.warnings.forEach(warning => console.warn(`  ${warning}`));
+      for (const warning of result.warnings) {
+        console.warn(`  ${warning}`);
+      }
     }
 
     return result;
@@ -964,10 +968,11 @@ function isModuleNotFound(error: unknown): boolean {
 
 function loadTypeScript(): typeof import('typescript') {
   try {
-    return require('typescript') as typeof import('typescript');
+    return require('typescript');
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error loading TypeScript';
     throw new Error(
-      'TypeScript runtime is required to execute the CLI without compiled artifacts. Please install dev dependencies.'
+      `TypeScript runtime is required to execute the CLI without compiled artifacts. Please install dev dependencies. Original error: ${message}`
     );
   }
 }

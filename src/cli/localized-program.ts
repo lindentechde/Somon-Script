@@ -90,7 +90,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.compile.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -110,7 +110,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.run.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -120,7 +120,7 @@ export function createPureLocalizedProgram(): Command {
           .argument('[name]', tr.commands.init.args.name, 'somon-project');
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -139,7 +139,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--production', tr.commands.bundle.options.production);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -154,7 +154,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--circular', tr.commands.moduleInfo.options.circular);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -166,7 +166,7 @@ export function createPureLocalizedProgram(): Command {
           .option('-f, --from <file>', tr.commands.resolve.options.from);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -179,7 +179,7 @@ export function createPureLocalizedProgram(): Command {
           .option('--json', tr.commands.serve.options.json);
         {
           const handler = (cmd as CommandWithHandler)._actionHandler;
-          if (handler) localizedCmd.action(handler as ActionHandler);
+          if (handler) localizedCmd.action(handler);
         }
         break;
 
@@ -196,12 +196,12 @@ export function createPureLocalizedProgram(): Command {
     return localizedCmd;
   };
 
-  commands.forEach(cmd => {
+  for (const cmd of commands) {
     const localizedCmd = localizeCommand(cmd);
     if (localizedCmd) {
       program.addCommand(localizedCmd);
     }
-  });
+  }
 
   return program;
 }
@@ -263,9 +263,9 @@ function createMixedProgram(): Command {
     });
 
   // Add all commands from base program
-  baseProgram.commands.forEach(cmd => {
+  for (const cmd of baseProgram.commands) {
     program.addCommand(cmd);
-  });
+  }
 
   return program;
 }

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import packageJson from '../package.json';
 
 // Mock the compile function
@@ -8,7 +8,7 @@ jest.mock('../src/compiler', () => ({
 }));
 
 // Mock fs operations
-jest.mock('fs');
+jest.mock('node:fs');
 const mockFs = fs as jest.Mocked<typeof fs>;
 
 // Mock package.json reading for the program module
