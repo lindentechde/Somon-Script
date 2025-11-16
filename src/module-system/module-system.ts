@@ -231,7 +231,8 @@ export class ModuleSystem {
     // Try to extract line and column from error message
     const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
     const line = lineColMatch ? Number.parseInt(lineColMatch[1], 10) : undefined;
-    const column = lineColMatch && lineColMatch[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
+    const column =
+      lineColMatch && lineColMatch[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
 
     return {
       message,
