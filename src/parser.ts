@@ -2923,7 +2923,7 @@ export class Parser {
 
   private constructorMethod(accessibility?: string, isStatic?: boolean): MethodDefinition {
     const constructorToken = this.previous();
-    const access: 'public' | 'private' | 'protected' | undefined =
+    const access: AccessibilityModifier =
       accessibility === 'public' || accessibility === 'private' || accessibility === 'protected'
         ? accessibility
         : undefined;

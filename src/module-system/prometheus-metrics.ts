@@ -133,6 +133,14 @@ export class PrometheusExporter {
   }
 
   /**
+   * Helper to add metric header (HELP and TYPE lines)
+   */
+  private addMetricHeader(lines: string[], name: string, help: string, type: string): void {
+    const metricName = `${this.prefix}_${name}`;
+    lines.push(`# HELP ${metricName} ${help}`, `# TYPE ${metricName} ${type}`);
+  }
+
+  /**
    * Helper to add a gauge metric
    */
   private addGaugeMetric(
@@ -141,15 +149,10 @@ export class PrometheusExporter {
     help: string,
     value: number,
     timestamp: number,
-    labels?: string
+    labels: string = ''
   ): void {
-    const metricName = `${this.prefix}_${name}`;
-    const labelStr = labels || '';
-    lines.push(
-      `# HELP ${metricName} ${help}`,
-      `# TYPE ${metricName} gauge`,
-      `${metricName}${labelStr} ${value} ${timestamp}`
-    );
+    this.addMetricHeader(lines, name, help, 'gauge');
+    lines.push(`${this.prefix}_${name}${labels} ${value} ${timestamp}`);
   }
 
   /**
@@ -188,16 +191,26 @@ export class PrometheusExporter {
     );
 
     // Individual circuit breaker metrics
-    lines.push(
-      `# HELP ${this.prefix}_circuit_breaker_state Circuit breaker state (0=closed, 1=open, 2=half-open)`
+    this.addMetricHeader(
+      lines,
+      'circuit_breaker_state',
+      'Circuit breaker state (0=closed, 1=open, 2=half-open)',
+      'gauge'
     );
-    lines.push(`# TYPE ${this.prefix}_circuit_breaker_state gauge`);
 
-    lines.push(`# HELP ${this.prefix}_circuit_breaker_failures Circuit breaker failure count`);
-    lines.push(`# TYPE ${this.prefix}_circuit_breaker_failures counter`);
+    this.addMetricHeader(
+      lines,
+      'circuit_breaker_failures',
+      'Circuit breaker failure count',
+      'counter'
+    );
 
-    lines.push(`# HELP ${this.prefix}_circuit_breaker_failure_rate Circuit breaker failure rate`);
-    lines.push(`# TYPE ${this.prefix}_circuit_breaker_failure_rate gauge`);
+    this.addMetricHeader(
+      lines,
+      'circuit_breaker_failure_rate',
+      'Circuit breaker failure rate',
+      'gauge'
+    );
 
     for (const [name, status] of Object.entries(cbStats)) {
       const stateValue = status.state === 'closed' ? 0 : status.state === 'open' ? 1 : 2;
