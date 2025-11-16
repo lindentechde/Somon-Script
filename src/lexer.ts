@@ -457,15 +457,12 @@ export class Lexer {
 
   private handleRegularCharacter(): string {
     const char = this.currentChar();
+    this.advance();
     if (char === '\n') {
-      this.advance();
       this.line++;
       this.column = 1;
-      return char;
-    } else {
-      this.advance();
-      return char;
     }
+    return char;
   }
 
   private readNumber(startLine: number, startColumn: number): Token {

@@ -69,20 +69,19 @@ export interface CliRunOptions {
 
 /** Run a CLI command with common defaults */
 export function runCliCommand(options: CliRunOptions): SpawnSyncReturns<string> {
-  return spawnSync(
-    process.execPath,
-    [CLI_PATH, options.command, ...options.args],
-    {
-      encoding: options.encoding || 'utf-8',
-      timeout: options.timeout || 10000,
-      cwd: options.cwd,
-      env: options.env || process.env,
-    }
-  );
+  return spawnSync(process.execPath, [CLI_PATH, options.command, ...options.args], {
+    encoding: options.encoding || 'utf-8',
+    timeout: options.timeout || 10000,
+    cwd: options.cwd,
+    env: options.env || process.env,
+  });
 }
 
 /** Create a test .som file with given content */
-export function createTestFile(filePath: string, content: string = TEST_FIXTURES.testFunction): void {
+export function createTestFile(
+  filePath: string,
+  content: string = TEST_FIXTURES.testFunction
+): void {
   fs.writeFileSync(filePath, content);
 }
 

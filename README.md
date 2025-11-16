@@ -14,7 +14,6 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=alert_status)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=coverage)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=bugs)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=code_smells)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=security_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
