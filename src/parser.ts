@@ -1166,7 +1166,7 @@ export class Parser {
       const token = this.previous();
       return {
         type: 'Literal',
-        value: parseFloat(token.value),
+        value: Number.parseFloat(token.value),
         raw: token.value,
         line: token.line,
         column: token.column,
@@ -2335,7 +2335,7 @@ export class Parser {
       const token = this.advance();
       return {
         type: 'LiteralType',
-        value: parseFloat(token.value),
+        value: Number.parseFloat(token.value),
         line: token.line,
         column: token.column,
       } as LiteralType;

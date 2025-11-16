@@ -230,8 +230,8 @@ export class ModuleSystem {
   ): CompilationError {
     // Try to extract line and column from error message
     const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
-    const line = lineColMatch ? parseInt(lineColMatch[1], 10) : undefined;
-    const column = lineColMatch && lineColMatch[2] ? parseInt(lineColMatch[2], 10) : undefined;
+    const line = lineColMatch ? Number.parseInt(lineColMatch[1], 10) : undefined;
+    const column = lineColMatch && lineColMatch[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
 
     return {
       message,
@@ -1573,20 +1573,20 @@ export class ModuleSystem {
         return match;
       }
 
-      const sanitizedKey = resolved.key.replace(/['"`\\]/g, '');
+      const sanitizedKey = resolved.key.replaceAll(/['"`\\]/g, '');
       if (quote === 'double') {
         return `require("${sanitizedKey}")`;
       }
       return `require('${sanitizedKey}')`;
     };
 
-    let result = code.replace(singleQuotePattern, (match, spec) =>
+    let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
       processMatch(match, spec, 'single')
     );
-    result = result.replace(doubleQuotePattern, (match, spec) =>
+    result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
       processMatch(match, spec, 'double')
     );
-    result = result.replace(templatePattern, (match, spec) => {
+    result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {
         throw new Error(
           `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`

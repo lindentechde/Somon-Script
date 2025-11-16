@@ -16,7 +16,7 @@ describe('ProductionValidator', () => {
   let exitSpy: jest.SpyInstance;
 
   function isCurrentVersionSupported(): boolean {
-    const major = parseInt(process.versions.node.split('.')[0], 10);
+    const major = Number.parseInt(process.versions.node.split('.')[0], 10);
     return SUPPORTED_VERSIONS.includes(major);
   }
 

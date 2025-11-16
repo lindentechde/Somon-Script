@@ -7,6 +7,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawnSync } from 'child_process';
+import {
+  CLI_PATH,
+  getCurrentNodeMajorVersion,
+  SUPPORTED_NODE_VERSIONS,
+  createTestFile,
+  isNodeVersionSupported,
+  isWindows,
+} from './helpers/test-utils';
 
 describe('Production Environment Validation', () => {
   let testDir: string;
@@ -21,13 +29,25 @@ describe('Production Environment Validation', () => {
     }
   });
 
+  /** Helper to run CLI command with production mode */
+  function runProduction(args: string[], env: Record<string, string | undefined> = process.env) {
+    return spawnSync('node', [CLI_PATH, ...args], {
+      cwd: testDir,
+      env: { ...env, NODE_ENV: 'production' },
+    });
+  }
+
+  /** Helper to check CLI exists */
+  function ensureCliExists(): void {
+    if (!fs.existsSync(CLI_PATH)) {
+      throw new Error(`CLI not found at ${CLI_PATH}. Run 'npm run build' first.`);
+    }
+  }
+
   describe('Node.js Version Validation', () => {
     test('should pass on Node.js 20.x, 22.x, 23.x, or 24.x', () => {
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
-
-      if (major === 20 || major === 22 || major === 23 || major === 24) {
-        expect(nodeVersion).toMatch(/^(20|22|23|24)\./);
+      if (isNodeVersionSupported()) {
+        expect(process.versions.node).toMatch(/^(20|22|23|24)\./);
       } else {
         // If running on different version, skip this test
         expect(true).toBe(true);
@@ -35,11 +55,10 @@ describe('Production Environment Validation', () => {
     });
 
     test('should pass on specific supported versions', () => {
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      const major = getCurrentNodeMajorVersion();
 
       if (major >= 20 && major <= 24) {
-        expect([20, 22, 23, 24]).toContain(major);
+        expect(SUPPORTED_NODE_VERSIONS).toContain(major);
       } else {
         // If running on different version, skip this test
         expect(true).toBe(true);
@@ -48,21 +67,11 @@ describe('Production Environment Validation', () => {
 
     test('should detect invalid Node version in CLI', () => {
       const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
-
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      createTestFile(testFile);
 
       // Only test version rejection if we're NOT on supported versions
-      if (![20, 22, 23, 24].includes(major)) {
-        const result = spawnSync(
-          'node',
-          [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', testFile, '--production'],
-          {
-            cwd: testDir,
-            env: { ...process.env, NODE_ENV: 'production' },
-          }
-        );
+      if (!isNodeVersionSupported()) {
+        const result = runProduction(['compile', testFile, '--production']);
 
         expect(result.status).not.toBe(0);
         const output = result.stderr.toString() + result.stdout.toString();
@@ -78,7 +87,7 @@ describe('Production Environment Validation', () => {
     test('should pass when output directory is writable', () => {
       const testFile = path.join(testDir, 'test.som');
 
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
+      createTestFile(testFile);
 
       // Test that directory is writable
       const testWrite = path.join(testDir, `.write-test-${Date.now()}`);
@@ -90,7 +99,7 @@ describe('Production Environment Validation', () => {
 
     test('should fail when output directory is not writable', () => {
       // Skip on Windows as permission testing is different
-      if (process.platform === 'win32') {
+      if (isWindows()) {
         expect(true).toBe(true);
         return;
       }
@@ -102,28 +111,11 @@ describe('Production Environment Validation', () => {
       const testFile = path.join(testDir, 'test.som');
       const outputFile = path.join(readOnlyDir, 'output.js');
 
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
-
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      createTestFile(testFile);
 
       // Only test if on valid Node version
-      if (major === 20 || major === 22 || major === 23 || major === 24) {
-        const result = spawnSync(
-          'node',
-          [
-            path.join(__dirname, '..', 'dist', 'cli.js'),
-            'compile',
-            testFile,
-            '-o',
-            outputFile,
-            '--production',
-          ],
-          {
-            cwd: testDir,
-            env: { ...process.env, NODE_ENV: 'production' },
-          }
-        );
+      if (isNodeVersionSupported()) {
+        const result = runProduction(['compile', testFile, '-o', outputFile, '--production']);
 
         // Restore permissions before cleanup
         fs.chmodSync(readOnlyDir, 0o755);
@@ -142,28 +134,11 @@ describe('Production Environment Validation', () => {
       const testFile = path.join(testDir, 'test.som');
       const outputFile = path.join(nestedDir, 'output.js');
 
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
-
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      createTestFile(testFile);
 
       // Only test if on valid Node version
-      if (major === 20 || major === 22 || major === 23 || major === 24) {
-        const result = spawnSync(
-          'node',
-          [
-            path.join(__dirname, '..', 'dist', 'cli.js'),
-            'compile',
-            testFile,
-            '-o',
-            outputFile,
-            '--production',
-          ],
-          {
-            cwd: testDir,
-            env: { ...process.env, NODE_ENV: 'production' },
-          }
-        );
+      if (isNodeVersionSupported()) {
+        const result = runProduction(['compile', testFile, '-o', outputFile, '--production']);
 
         if (result.status === 0) {
           expect(fs.existsSync(nestedDir)).toBe(true);
@@ -176,77 +151,41 @@ describe('Production Environment Validation', () => {
   });
 
   describe('Production Flag Integration', () => {
-    test('compile command should accept --production flag', () => {
-      const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
+    /** Helper to test command help output */
+    function testCommandHelp(command: string): void {
+      ensureCliExists();
 
-      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
-
-      // Ensure CLI is built before running tests
-      if (!fs.existsSync(cliPath)) {
-        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
-      }
-
-      const result = spawnSync('node', [cliPath, 'compile', '--help'], {
+      const result = spawnSync('node', [CLI_PATH, command, '--help'], {
         cwd: testDir,
         encoding: 'utf8',
       });
 
       const output = result.stdout + result.stderr;
       expect(output).toMatch(/--production/);
+    }
+
+    test('compile command should accept --production flag', () => {
+      testCommandHelp('compile');
     });
 
     test('run command should accept --production flag', () => {
-      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
-
-      // Ensure CLI is built before running tests
-      if (!fs.existsSync(cliPath)) {
-        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
-      }
-
-      const result = spawnSync('node', [cliPath, 'run', '--help'], {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      const output = result.stdout + result.stderr;
-      expect(output).toMatch(/--production/);
+      testCommandHelp('run');
     });
 
     test('bundle command should accept --production flag', () => {
-      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
-
-      // Ensure CLI is built before running tests
-      if (!fs.existsSync(cliPath)) {
-        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
-      }
-
-      const result = spawnSync('node', [cliPath, 'bundle', '--help'], {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      const output = result.stdout + result.stderr;
-      expect(output).toMatch(/--production/);
+      testCommandHelp('bundle');
     });
   });
 
   describe('NODE_ENV Environment Variable', () => {
     test('should trigger validation when NODE_ENV=production', () => {
       const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
+      createTestFile(testFile);
 
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      if (isNodeVersionSupported()) {
+        ensureCliExists();
 
-      if (major === 20 || major === 22 || major === 23 || major === 24) {
-        const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
-
-        if (!fs.existsSync(cliPath)) {
-          throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
-        }
-
-        const result = spawnSync('node', [cliPath, 'compile', testFile], {
+        const result = spawnSync('node', [CLI_PATH, 'compile', testFile], {
           cwd: testDir,
           env: { ...process.env, NODE_ENV: 'production' },
           encoding: 'utf8',
@@ -267,15 +206,11 @@ describe('Production Environment Validation', () => {
 
     test('should skip validation when NODE_ENV is not production', () => {
       const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
+      createTestFile(testFile);
 
-      const cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+      ensureCliExists();
 
-      if (!fs.existsSync(cliPath)) {
-        throw new Error(`CLI not found at ${cliPath}. Run 'npm run build' first.`);
-      }
-
-      const result = spawnSync('node', [cliPath, 'compile', testFile], {
+      const result = spawnSync('node', [CLI_PATH, 'compile', testFile], {
         cwd: testDir,
         env: { ...process.env, NODE_ENV: 'development' },
         encoding: 'utf8',
@@ -295,20 +230,11 @@ describe('Production Environment Validation', () => {
   describe('Fail-Fast Error Reporting', () => {
     test('should report clear error message on validation failure', () => {
       const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
-
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
+      createTestFile(testFile);
 
       // Test only on invalid Node versions
-      if (![20, 22, 23, 24].includes(major)) {
-        const result = spawnSync(
-          'node',
-          [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', testFile, '--production'],
-          {
-            cwd: testDir,
-          }
-        );
+      if (!isNodeVersionSupported()) {
+        const result = runProduction(['compile', testFile, '--production']);
 
         expect(result.status).not.toBe(0);
         const errorOutput = result.stderr.toString();
@@ -323,19 +249,10 @@ describe('Production Environment Validation', () => {
 
     test('should exit immediately on validation error', () => {
       const testFile = path.join(testDir, 'test.som');
-      fs.writeFileSync(testFile, 'функсия тест(): void { чоп.сабт("Салом"); }');
+      createTestFile(testFile);
 
-      const nodeVersion = process.versions.node;
-      const major = parseInt(nodeVersion.split('.')[0], 10);
-
-      if (![20, 22, 23, 24].includes(major)) {
-        const result = spawnSync(
-          'node',
-          [path.join(__dirname, '..', 'dist', 'cli.js'), 'compile', testFile, '--production'],
-          {
-            cwd: testDir,
-          }
-        );
+      if (!isNodeVersionSupported()) {
+        const result = runProduction(['compile', testFile, '--production']);
 
         expect(result.status).toBe(1);
 

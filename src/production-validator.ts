@@ -54,7 +54,7 @@ export class ProductionValidator {
 
   private validateNodeVersion(): void {
     const version = process.versions.node;
-    const major = parseInt(version.split('.')[0], 10);
+    const major = Number.parseInt(version.split('.')[0], 10);
 
     if (major !== 20 && major !== 22 && major !== 23 && major !== 24) {
       this.errors.push({
