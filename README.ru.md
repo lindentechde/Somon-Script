@@ -13,6 +13,13 @@
 [![Успех Примеров](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
 [![Лицензия](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+[![Статус Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Покрытие](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=coverage)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Ошибки](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=bugs)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Проблемы Кода](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Рейтинг Безопасности](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Рейтинг Поддерживаемости](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+
 Полнофункциональный язык программирования с современной типобезопасностью и
 синтаксисом таджикской кириллицы, компилирующийся в оптимизированный JavaScript.
 Проект активно развивается, сопровождается автоматизированными тестами и

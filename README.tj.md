@@ -13,6 +13,13 @@
 [![Муваффақияти Намунаҳо](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
 [![Иҷозатнома](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+[![Ҳолати Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Пӯшиш](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=coverage)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Хатоҳо](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=bugs)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Мушкилоти Код](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Рейтинги Бехатарӣ](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Рейтинги Нигоҳдорӣ](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+
 Забони барномарезии пурра бо хусусиятҳои муосири бехатарии навъ ва синтаксиси
 кирилликаи тоҷикӣ, ки ба JavaScript-и беҳинашуда компил мешавад. Лоиҳа фаъолона
 рушд меёбад, бо маҷмӯи автоматии тестҳо ва ҳуҷҷатгузории муфассал дастгирӣ
