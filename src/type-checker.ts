@@ -426,7 +426,7 @@ export class TypeChecker {
   private validateClassPropertyTypes(classDecl: ClassDeclaration): void {
     for (const member of classDecl.body.body) {
       if (member.type === 'PropertyDefinition') {
-        this.validatePropertyDefinition(member as PropertyDefinition);
+        this.validatePropertyDefinition(member);
       }
     }
   }

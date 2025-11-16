@@ -77,6 +77,8 @@ import { ImportHandler } from './handlers/import-handler';
 import { DeclarationHandler } from './handlers/declaration-handler';
 import { LoopHandler } from './handlers/loop-handler';
 
+type AccessibilityModifier = 'public' | 'private' | 'protected' | undefined;
+
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
@@ -2856,7 +2858,7 @@ export class Parser {
     );
   }
 
-  private parseAccessibility(): 'public' | 'private' | 'protected' | undefined {
+  private parseAccessibility(): AccessibilityModifier {
     if (!this.match(TokenType.ҶАМЪИЯТӢ, TokenType.ХОСУСӢ, TokenType.МУҲОФИЗАТШУДА)) {
       return undefined;
     }

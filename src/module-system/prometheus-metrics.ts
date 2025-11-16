@@ -133,6 +133,26 @@ export class PrometheusExporter {
   }
 
   /**
+   * Helper to add a gauge metric
+   */
+  private addGaugeMetric(
+    lines: string[],
+    name: string,
+    help: string,
+    value: number,
+    timestamp: number,
+    labels?: string
+  ): void {
+    const metricName = `${this.prefix}_${name}`;
+    const labelStr = labels || '';
+    lines.push(
+      `# HELP ${metricName} ${help}`,
+      `# TYPE ${metricName} gauge`,
+      `${metricName}${labelStr} ${value} ${timestamp}`
+    );
+  }
+
+  /**
    * Add circuit breaker metrics
    */
   private addCircuitBreakerMetrics(
@@ -143,18 +163,28 @@ export class PrometheusExporter {
     const cbStats = circuitBreakers.getAllStatus();
     const overallHealth = circuitBreakers.getOverallHealth();
 
-    lines.push(`# HELP ${this.prefix}_circuit_breakers_total Total number of circuit breakers`);
-    lines.push(`# TYPE ${this.prefix}_circuit_breakers_total gauge`);
-    lines.push(`${this.prefix}_circuit_breakers_total ${overallHealth.totalBreakers} ${timestamp}`);
+    this.addGaugeMetric(
+      lines,
+      'circuit_breakers_total',
+      'Total number of circuit breakers',
+      overallHealth.totalBreakers,
+      timestamp
+    );
 
-    lines.push(`# HELP ${this.prefix}_circuit_breakers_open Number of open circuit breakers`);
-    lines.push(`# TYPE ${this.prefix}_circuit_breakers_open gauge`);
-    lines.push(`${this.prefix}_circuit_breakers_open ${overallHealth.openBreakers} ${timestamp}`);
+    this.addGaugeMetric(
+      lines,
+      'circuit_breakers_open',
+      'Number of open circuit breakers',
+      overallHealth.openBreakers,
+      timestamp
+    );
 
-    lines.push(`# HELP ${this.prefix}_circuit_breakers_healthy Number of healthy circuit breakers`);
-    lines.push(`# TYPE ${this.prefix}_circuit_breakers_healthy gauge`);
-    lines.push(
-      `${this.prefix}_circuit_breakers_healthy ${overallHealth.healthyBreakers} ${timestamp}`
+    this.addGaugeMetric(
+      lines,
+      'circuit_breakers_healthy',
+      'Number of healthy circuit breakers',
+      overallHealth.healthyBreakers,
+      timestamp
     );
 
     // Individual circuit breaker metrics
