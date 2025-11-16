@@ -327,7 +327,7 @@ export class Lexer {
       return this.createToken(TokenType.BITWISE_NOT, '~', startLine, startColumn);
     }
 
-    if (char === '"' || char === "'") {
+    if (this.isQuote(char)) {
       return this.readString(char, startLine, startColumn);
     }
 
@@ -339,7 +339,7 @@ export class Lexer {
       return this.readNumber(startLine, startColumn);
     }
 
-    if (this.isAlpha(char) || this.isCyrillic(char)) {
+    if (this.isIdentifierStart(char)) {
       return this.readIdentifier(startLine, startColumn);
     }
 
@@ -593,6 +593,14 @@ export class Lexer {
 
   private isWhitespace(char: string): boolean {
     return char === ' ' || char === '\t' || char === '\r';
+  }
+
+  private isQuote(char: string): boolean {
+    return char === '"' || char === "'";
+  }
+
+  private isIdentifierStart(char: string): boolean {
+    return this.isAlpha(char) || this.isCyrillic(char);
   }
 
   private peekNext(offset: number = 0): string {
