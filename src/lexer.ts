@@ -480,13 +480,7 @@ export class Lexer {
   }
 
   private handleRegularCharacter(): string {
-    const char = this.currentChar();
-    this.advance();
-    if (char === '\n') {
-      this.line++;
-      this.column = 1;
-    }
-    return char;
+    return this.processStringCharacter();
   }
 
   private readNumber(startLine: number, startColumn: number): Token {
