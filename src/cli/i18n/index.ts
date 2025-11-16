@@ -183,7 +183,7 @@ export interface Translations {
 
 class I18n {
   private language: Language = 'en';
-  private translations: Map<Language, Translations> = new Map();
+  private readonly translations: Map<Language, Translations> = new Map();
 
   constructor() {
     this.detectLanguage();
