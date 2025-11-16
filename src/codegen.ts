@@ -879,82 +879,91 @@ export class CodeGenerator {
     return `${left} ${node.operator} ${right}`;
   }
 
+  /**
+   * Try to map object name if it's a built-in object
+   */
+  private mapBuiltinObject(
+    node: MemberExpression,
+    object: string
+  ): { mapped: string; wasMapped: boolean } {
+    if (node.object.type !== 'Identifier') {
+      return { mapped: object, wasMapped: false };
+    }
+
+    const objectName = (node.object as Identifier).name;
+    const builtinObjects = ['чоп', 'математика', 'объект'];
+
+    if (!builtinObjects.includes(objectName)) {
+      return { mapped: object, wasMapped: false };
+    }
+
+    const mappedObject = this.builtinMappings.get(objectName);
+    if (mappedObject) {
+      return { mapped: mappedObject, wasMapped: true };
+    }
+
+    return { mapped: object, wasMapped: false };
+  }
+
+  /**
+   * Check if object looks like a user class instance
+   */
+  private looksLikeClassInstance(node: MemberExpression): boolean {
+    return (
+      node.object.type === 'Identifier' &&
+      /^[а-яё]/.test((node.object as Identifier).name) &&
+      (node.object as Identifier).name.includes('_')
+    );
+  }
+
+  /**
+   * Try to map property name based on context
+   */
+  private mapPropertyName(node: MemberExpression, property: string, objectMapped: boolean): string {
+    if (node.computed || node.property.type !== 'Identifier') {
+      return property;
+    }
+
+    const propertyName = (node.property as Identifier).name;
+    const mappedProperty = this.builtinMappings.get(propertyName);
+    if (!mappedProperty) {
+      return property;
+    }
+
+    const commonMethods = [
+      'пуш',
+      'илова',
+      'баровардан',
+      'дарозӣ',
+      'харита',
+      'филтр',
+      'кофтан',
+      'пайвастан',
+      'ҷойивазкунӣ',
+      'ҷудокунӣ',
+      'буридан',
+    ];
+
+    const shouldMap =
+      objectMapped || (!this.looksLikeClassInstance(node) && commonMethods.includes(propertyName));
+    return shouldMap ? mappedProperty : property;
+  }
+
   private generateMemberExpression(node: MemberExpression): string {
     let object = this.generateExpression(node.object);
     let property = this.generateExpression(node.property);
 
-    // Apply built-in mappings for object names only for specific built-ins
-    let objectMapped = false;
-    if (node.object.type === 'Identifier') {
-      const objectName = (node.object as Identifier).name;
-      // Only map specific built-in objects, not user variables
-      // Note: These are used as built-in objects in the examples
-      const builtinObjects = ['чоп', 'математика', 'объект'];
-      if (builtinObjects.includes(objectName)) {
-        const mappedObject = this.builtinMappings.get(objectName);
-        if (mappedObject) {
-          object = mappedObject;
-          objectMapped = true;
-        }
-      }
-    }
+    const { mapped: mappedObject, wasMapped: objectMapped } = this.mapBuiltinObject(node, object);
+    object = mappedObject;
 
-    // Apply built-in mappings for property names based on context
-    if (!node.computed && node.property.type === 'Identifier') {
-      const propertyName = (node.property as Identifier).name;
-      const mappedProperty = this.builtinMappings.get(propertyName);
-
-      // Map methods if:
-      // 1. The object was a mapped built-in (like чоп -> console)
-      // 2. The property is a common array/string method (but only if not on a known user namespace)
-
-      // Common array and string methods that should be mapped
-      const commonMethods = [
-        'пуш',
-        'илова',
-        'баровардан',
-        'дарозӣ',
-        'харита',
-        'филтр',
-        'кофтан',
-        'пайвастан',
-        'ҷойивазкунӣ',
-        'ҷудокунӣ',
-        'буридан', // slice
-      ];
-
-      // Map method names when:
-      // 1. The object was explicitly mapped (like чоп -> console), OR
-      // 2. It's a common method AND the object doesn't look like a user-defined class instance
-      //    (class instances typically start with lowercase in user code)
-
-      // Check if object looks like a user class instance (starts with lowercase and is long)
-      // We consider it a class instance if it's a multi-character identifier starting with lowercase
-      // This heuristic helps distinguish `рӯйхати_рақамҳо` (class instance) from `элементҳо` (array variable)
-      const looksLikeClassInstance =
-        node.object.type === 'Identifier' &&
-        /^[а-яё]/.test((node.object as Identifier).name) &&
-        (node.object as Identifier).name.includes('_'); // Class instances often have underscores
-
-      // Map if object was mapped, or if it's a common method on something that's likely an array/string
-      if (
-        mappedProperty &&
-        (objectMapped || (!looksLikeClassInstance && commonMethods.includes(propertyName)))
-      ) {
-        property = mappedProperty;
-      }
-    }
+    property = this.mapPropertyName(node, property, objectMapped);
 
     // Special case: чоп.хато should become console.error
     if (object === 'console' && property === 'Error') {
       property = 'error';
     }
 
-    if (node.computed) {
-      return `${object}[${property}]`;
-    } else {
-      return `${object}.${property}`;
-    }
+    return node.computed ? `${object}[${property}]` : `${object}.${property}`;
   }
 
   private generateArrayExpression(node: ArrayExpression): string {

@@ -590,11 +590,90 @@ export class ModuleSystem {
     return module;
   }
 
+  private setupExternals(externals: string[] | undefined, previousExternals: string[]): void {
+    if (externals !== undefined) {
+      this.loader.setExternals(externals);
+    } else if (previousExternals.length > 0) {
+      this.loader.setExternals();
+    }
+  }
+
+  private collectLoaderWarnings(warnings: string[]): void {
+    const loaderWarnings = this.loader.getWarnings();
+    if (loaderWarnings.length > 0) {
+      warnings.push(...loaderWarnings);
+      this.loader.clearWarnings();
+    }
+  }
+
+  private checkCircularDependencies(warnings: string[]): void {
+    const circularDeps = this.registry.findCircularDependencies();
+    if (circularDeps.length > 0) {
+      warnings.push(
+        `Circular dependencies detected: ${circularDeps.map(cycle => cycle.join(' -> ')).join(', ')}`
+      );
+    }
+  }
+
+  private compileModulesInOrder(
+    compilationOrder: string[],
+    compilationConfig: CompilerOptions,
+    modules: Map<string, CompiledModule>,
+    errors: CompilationError[],
+    warnings: string[]
+  ): void {
+    for (const moduleId of compilationOrder) {
+      const module = this.loader.getModule(moduleId);
+      if (!module?.resolvedPath.endsWith('.som')) {
+        continue;
+      }
+
+      this.compileModule({
+        module,
+        moduleId,
+        compilationConfig,
+        modules,
+        errors,
+        warnings,
+      });
+    }
+  }
+
+  private handleEntryPointLoadError(
+    error: unknown,
+    entryPoint: string,
+    errors: CompilationError[]
+  ): void {
+    const loadError = this.createCompilationError(
+      `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`,
+      entryPoint,
+      error instanceof Error ? error : undefined
+    );
+    errors.push(loadError);
+
+    if (this.logger) {
+      this.logger.error('Entry point loading failed', {
+        file: loadError.filePath,
+        message: loadError.message,
+        suggestion: loadError.suggestion,
+      });
+    }
+  }
+
+  private async cleanupOnCompilationFailure(): Promise<void> {
+    if (this.activeWatchers.size > 0) {
+      if (this.logger) {
+        this.logger.warn('Compilation failed, cleaning up active watchers', {
+          watcherCount: this.activeWatchers.size,
+        });
+      }
+      await this.stopWatching();
+    }
+  }
+
   /**
    * Compile a module and all its dependencies
-   * The compile method has necessary complexity for comprehensive error handling
    */
-  // eslint-disable-next-line complexity, max-depth
   async compile(
     entryPoint: string,
     externals?: string[],
@@ -605,62 +684,18 @@ export class ModuleSystem {
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
-    if (externals !== undefined) {
-      this.loader.setExternals(externals);
-    } else if (previousExternals.length > 0) {
-      this.loader.setExternals();
-    }
+    this.setupExternals(externals, previousExternals);
 
     try {
-      // Load entry point and all dependencies
       const entryModule = await this.loader.load(entryPoint, path.dirname(entryPoint));
+      this.collectLoaderWarnings(warnings);
+      this.registerAllLoadedModules();
 
-      // Collect warnings from the loader (e.g., circular dependency warnings)
-      const loaderWarnings = this.loader.getWarnings();
-      if (loaderWarnings.length > 0) {
-        warnings.push(...loaderWarnings);
-        this.loader.clearWarnings(); // Clear warnings after collecting them
-      }
-
-      // Register all loaded modules
-      const allModules = this.loader.getAllModules();
-      for (const module of allModules) {
-        this.registry.register(module);
-      }
-
-      // Get compilation order
       const compilationOrder = this.registry.getTopologicalSort();
+      this.checkCircularDependencies(warnings);
 
-      // Check for circular dependencies
-      const circularDeps = this.registry.findCircularDependencies();
-      if (circularDeps.length > 0) {
-        warnings.push(
-          `Circular dependencies detected: ${circularDeps.map(cycle => cycle.join(' -> ')).join(', ')}`
-        );
-      }
-
-      // Compile each module - collect ALL errors before returning
       const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
-
-      for (const moduleId of compilationOrder) {
-        const module = this.loader.getModule(moduleId);
-        if (!module?.resolvedPath.endsWith('.som')) {
-          continue;
-        }
-
-        const compilationResult = this.compileModule({
-          module,
-          moduleId,
-          compilationConfig,
-          modules,
-          errors,
-          warnings,
-        });
-
-        if (!compilationResult.success) {
-          continue; // Errors already collected, move to next module
-        }
-      }
+      this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, warnings);
 
       return {
         modules,
@@ -670,31 +705,8 @@ export class ModuleSystem {
         warnings,
       };
     } catch (error) {
-      // Handle entry point loading errors
-      const loadError = this.createCompilationError(
-        `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`,
-        entryPoint,
-        error instanceof Error ? error : undefined
-      );
-      errors.push(loadError);
-
-      if (this.logger) {
-        this.logger.error('Entry point loading failed', {
-          file: loadError.filePath,
-          message: loadError.message,
-          suggestion: loadError.suggestion,
-        });
-      }
-
-      // Clean up any active watchers on compilation failure
-      if (this.activeWatchers.size > 0) {
-        if (this.logger) {
-          this.logger.warn('Compilation failed, cleaning up active watchers', {
-            watcherCount: this.activeWatchers.size,
-          });
-        }
-        await this.stopWatching();
-      }
+      this.handleEntryPointLoadError(error, entryPoint, errors);
+      await this.cleanupOnCompilationFailure();
 
       return {
         modules,
@@ -877,94 +889,101 @@ export class ModuleSystem {
       this.logger.info('Shutting down ModuleSystem');
     }
 
-    // The shutdown sequence handles multiple systems with error isolation; complexity is necessary for robustness
-    // eslint-disable-next-line complexity
-    const shutdownPromise = (async () => {
-      // Stop resource limiter first
-      try {
-        if (this.resourceLimiter) {
-          this.resourceLimiter.stop();
-          if (this.logger) {
-            this.logger.info('Resource limiter stopped');
-          }
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+    const shutdownPromise = this.performShutdownSequence();
+    await this.executeWithTimeout(shutdownPromise, 30000, 'Shutdown');
+
+    if (this.logger) {
+      this.logger.info('ModuleSystem shutdown complete');
+    }
+  }
+
+  private async performShutdownSequence(): Promise<void> {
+    await this.shutdownResourceLimiter();
+    await this.shutdownWatchers();
+    await this.shutdownCircuitBreakers();
+    await this.shutdownManagementServerSafely();
+    await this.shutdownClearCaches();
+  }
+
+  private async shutdownResourceLimiter(): Promise<void> {
+    try {
+      if (this.resourceLimiter) {
+        this.resourceLimiter.stop();
         if (this.logger) {
-          this.logger.error('Error stopping resource limiter during shutdown', {
-            error: message,
-          });
+          this.logger.info('Resource limiter stopped');
         }
       }
+    } catch (error) {
+      this.logShutdownError('resource limiter', error);
+    }
+  }
 
-      // Stop watchers (most likely to hang)
-      try {
-        await this.stopWatching();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+  private async shutdownWatchers(): Promise<void> {
+    try {
+      await this.stopWatching();
+    } catch (error) {
+      this.logShutdownError('watchers', error);
+    }
+  }
+
+  private async shutdownCircuitBreakers(): Promise<void> {
+    try {
+      if (this.circuitBreakers) {
+        this.circuitBreakers.shutdown();
         if (this.logger) {
-          this.logger.error('Error stopping watchers during shutdown', { error: message });
+          this.logger.info('Circuit breakers shut down');
         }
       }
+    } catch (error) {
+      this.logShutdownError('circuit breakers', error);
+    }
+  }
 
-      // Shutdown circuit breakers (cancel active timers)
-      try {
-        if (this.circuitBreakers) {
-          this.circuitBreakers.shutdown();
-          if (this.logger) {
-            this.logger.info('Circuit breakers shut down');
-          }
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (this.logger) {
-          this.logger.error('Error shutting down circuit breakers', { error: message });
-        }
-      }
+  private async shutdownManagementServerSafely(): Promise<void> {
+    try {
+      await this.stopManagementServer();
+    } catch (error) {
+      this.logShutdownError('management server', error);
+    }
+  }
 
-      // Stop management server
-      try {
-        await this.stopManagementServer();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (this.logger) {
-          this.logger.error('Error stopping management server during shutdown', {
-            error: message,
-          });
-        }
-      }
+  private async shutdownClearCaches(): Promise<void> {
+    try {
+      this.clearCache();
+    } catch (error) {
+      this.logShutdownError('caches', error);
+    }
+  }
 
-      // Clear caches (synchronous, should not fail)
-      try {
-        this.clearCache();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (this.logger) {
-          this.logger.error('Error clearing caches during shutdown', { error: message });
-        }
-      }
-    })();
+  private logShutdownError(component: string, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error);
+    if (this.logger) {
+      this.logger.error(`Error stopping ${component} during shutdown`, { error: message });
+    }
+  }
 
-    // Enforce 30-second shutdown timeout with proper cleanup
+  private async executeWithTimeout(
+    promise: Promise<void>,
+    timeoutMs: number,
+    operation: string
+  ): Promise<void> {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<void>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Shutdown timeout after 30 seconds')), 30000);
+      timeoutId = setTimeout(
+        () => reject(new Error(`${operation} timeout after ${timeoutMs / 1000} seconds`)),
+        timeoutMs
+      );
     });
 
     try {
-      await Promise.race([shutdownPromise, timeoutPromise]);
-
-      if (this.logger) {
-        this.logger.info('ModuleSystem shutdown complete');
-      }
+      await Promise.race([promise, timeoutPromise]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (this.logger) {
-        this.logger.error('Shutdown failed or timed out', { error: message });
+        this.logger.error(`${operation} failed or timed out`, { error: message });
       }
       throw error;
     } finally {
-      // Always clear the timeout to prevent resource leaks
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
       }
@@ -1039,8 +1058,8 @@ export class ModuleSystem {
       }
 
       // Close watcher on error - the wrapped close() will handle removal from tracking
-      // Use void to indicate intentional fire-and-forget for error cleanup
-      void watcher.close().catch(closeError => {
+      // Handle the promise explicitly to avoid unhandled rejections
+      watcher.close().catch(closeError => {
         const closeMessage = closeError instanceof Error ? closeError.message : String(closeError);
         if (this.logger) {
           this.logger.warn('Failed to close errored watcher', { error: closeMessage });
@@ -1168,29 +1187,29 @@ export class ModuleSystem {
     return options;
   }
 
-  // The bundler assembly needs multiple guards and sequencing steps; suppress complexity warnings for maintainability.
-  // eslint-disable-next-line complexity
-  private async generateCommonJSBundle(
+  private initializeBundleContext(
     result: CompilationResult,
     options: BundleOptions
-  ): Promise<BundleOutput> {
+  ): {
+    moduleIdMapping: Map<string, string>;
+    externals: Set<string>;
+    externalModuleIds: Set<string>;
+  } {
+    if (!path.isAbsolute(result.entryPoint)) {
+      throw new Error('Entry point must be an absolute path for bundling.');
+    }
+
+    const entryDir = path.dirname(result.entryPoint);
     const moduleIdMapping = new Map<string, string>();
     const externals = new Set(
       (options.externals ?? []).map(ext => ext.trim()).filter(ext => ext.length > 0)
     );
     const externalModuleIds = new Set<string>();
 
-    if (!path.isAbsolute(result.entryPoint)) {
-      throw new Error('Entry point must be an absolute path for bundling.');
-    }
-    const entryDir = path.dirname(result.entryPoint);
     const normalizeKey = (absolutePath: string): string => {
       const relativePath = path.relative(entryDir, absolutePath);
       const normalized = relativePath.split(path.sep).join('/');
-      if (normalized.length === 0) {
-        return path.basename(absolutePath);
-      }
-      return normalized;
+      return normalized.length === 0 ? path.basename(absolutePath) : normalized;
     };
 
     for (const [moduleId] of result.modules) {
@@ -1206,88 +1225,126 @@ export class ModuleSystem {
       this.markExternalModule(result.entryPoint, ext, externalModuleIds, result.entryPoint);
     }
 
-    const processedModules = this.prepareModulesForBundle(
-      result,
-      moduleIdMapping,
-      externals,
-      externalModuleIds
-    );
+    return { moduleIdMapping, externals, externalModuleIds };
+  }
 
-    const entryKey = moduleIdMapping.get(result.entryPoint);
-    if (!entryKey) {
-      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
+  private createBundleCodeBuilder(): { code: string; line: number } {
+    return { code: '', line: 1 };
+  }
+
+  private appendToBuilder(builder: { code: string; line: number }, segment: string): void {
+    builder.code += segment;
+    const matches = segment.match(/\n/g);
+    if (matches) {
+      builder.line += matches.length;
+    }
+  }
+
+  private createSourceMapGenerator(
+    options: BundleOptions,
+    result: CompilationResult
+  ): SourceMapGenerator | null {
+    if (!options.sourceMaps) {
+      return null;
     }
 
-    const append = (builder: { code: string; line: number }, segment: string): void => {
-      builder.code += segment;
-      const matches = segment.match(/\n/g);
-      if (matches) {
-        builder.line += matches.length;
-      }
-    };
+    return new SourceMapGenerator({
+      file: path.basename(options.outputPath ?? this.deriveBundleFilename(result.entryPoint)),
+    });
+  }
 
-    const bundleBuilder = { code: '', line: 1 };
-    append(bundleBuilder, "(function() {\n  'use strict';\n\n  var modules = {\n");
-
-    const generator = options.sourceMaps
-      ? new SourceMapGenerator({
-          file: path.basename(options.outputPath ?? this.deriveBundleFilename(result.entryPoint)),
-        })
-      : null;
+  private async buildModuleMapSection(
+    bundleBuilder: { code: string; line: number },
+    processedModules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }>,
+    externalModuleIds: Set<string>,
+    generator: SourceMapGenerator | null,
+    options: BundleOptions
+  ): Promise<void> {
+    this.appendToBuilder(bundleBuilder, "(function() {\n  'use strict';\n\n  var modules = {\n");
 
     const inlinedSources = new Set<string>();
-
     let firstModule = true;
+
     for (const module of processedModules) {
       if (externalModuleIds.has(module.id)) {
         continue;
       }
+
       if (!firstModule) {
-        append(bundleBuilder, ',\n');
+        this.appendToBuilder(bundleBuilder, ',\n');
       } else {
         firstModule = false;
       }
 
-      append(bundleBuilder, `  '${module.key}': function(module, exports, require) {\n`);
+      this.appendToBuilder(
+        bundleBuilder,
+        `  '${module.key}': function(module, exports, require) {\n`
+      );
       const moduleStartLine = bundleBuilder.line;
-
-      append(bundleBuilder, module.code);
+      this.appendToBuilder(bundleBuilder, module.code);
 
       if (generator && module.map) {
-        const moduleMap = module.map;
-        await SourceMapConsumer.with(moduleMap, null, consumer => {
-          consumer.eachMapping(mapping => {
-            if (mapping.originalLine == null || mapping.originalColumn == null) {
-              return;
-            }
-            generator.addMapping({
-              generated: {
-                line: moduleStartLine + (mapping.generatedLine - 1),
-                column: mapping.generatedColumn,
-              },
-              original: {
-                line: mapping.originalLine,
-                column: mapping.originalColumn,
-              },
-              source: module.key,
-              name: mapping.name ?? undefined,
-            });
-          });
-          if (options.inlineSources && !inlinedSources.has(module.key)) {
-            const content = moduleMap.sourcesContent?.find(item => typeof item === 'string');
-            if (content !== undefined) {
-              generator.setSourceContent(module.key, content);
-              inlinedSources.add(module.key);
-            }
-          }
-        });
+        await this.addModuleSourceMappings(
+          generator,
+          module,
+          moduleStartLine,
+          inlinedSources,
+          options
+        );
       }
 
-      append(bundleBuilder, '\n  }');
+      this.appendToBuilder(bundleBuilder, '\n  }');
     }
 
-    append(bundleBuilder, '\n  };\n\n');
-    append(
+    this.appendToBuilder(bundleBuilder, '\n  };\n\n');
+  }
+
+  private async addModuleSourceMappings(
+    generator: SourceMapGenerator,
+    module: { key: string; map?: RawSourceMap },
+    moduleStartLine: number,
+    inlinedSources: Set<string>,
+    options: BundleOptions
+  ): Promise<void> {
+    if (!module.map) {
+      return;
+    }
+
+    const moduleMap = module.map;
+    await SourceMapConsumer.with(moduleMap, null, consumer => {
+      consumer.eachMapping(mapping => {
+        if (mapping.originalLine == null || mapping.originalColumn == null) {
+          return;
+        }
+        generator.addMapping({
+          generated: {
+            line: moduleStartLine + (mapping.generatedLine - 1),
+            column: mapping.generatedColumn,
+          },
+          original: {
+            line: mapping.originalLine,
+            column: mapping.originalColumn,
+          },
+          source: module.key,
+          name: mapping.name ?? undefined,
+        });
+      });
+
+      if (options.inlineSources && !inlinedSources.has(module.key)) {
+        const content = moduleMap.sourcesContent?.find(item => typeof item === 'string');
+        if (content !== undefined) {
+          generator.setSourceContent(module.key, content);
+          inlinedSources.add(module.key);
+        }
+      }
+    });
+  }
+
+  private addBundleRuntimeCode(
+    bundleBuilder: { code: string; line: number },
+    entryKey: string
+  ): void {
+    this.appendToBuilder(
       bundleBuilder,
       '  var cache = {};\n' +
         "  var __externalRequire = typeof module !== 'undefined' && module.require\n" +
@@ -1296,7 +1353,8 @@ export class ModuleSystem {
         '      ? require\n' +
         '      : null;\n\n'
     );
-    append(
+
+    this.appendToBuilder(
       bundleBuilder,
       '  function _require(id) {\n' +
         '    if (cache[id]) return cache[id].exports;\n\n' +
@@ -1311,85 +1369,143 @@ export class ModuleSystem {
         '    return module.exports;\n' +
         '  }\n\n'
     );
-    append(
+
+    this.appendToBuilder(
       bundleBuilder,
       `  // Start with entry point and expose its exports\n  var entryModule = _require('${entryKey}');\n\n`
     );
-    append(
+
+    this.appendToBuilder(
       bundleBuilder,
       '  // Expose entry point exports as bundle exports (for Node.js)\n' +
         "  if (typeof module !== 'undefined' && module.exports) {\n" +
         '    module.exports = entryModule;\n' +
         '  }\n\n'
     );
-    append(
+
+    this.appendToBuilder(
       bundleBuilder,
       '  // Return entry point exports (for other environments)\n' + '  return entryModule;\n})();'
     );
+  }
 
-    let rawMap: RawSourceMap | undefined;
-    if (generator) {
-      try {
-        rawMap = JSON.parse(generator.toString()) as RawSourceMap;
-        // Validate generated source map before using it
-        this.validateSourceMap(rawMap, 'bundle generation');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
-        if (this.logger) {
-          this.logger.error('Failed to generate bundle source map', {
-            entryPoint: result.entryPoint,
-            error: message,
-          });
-        }
-
-        // Fail fast on source map generation errors when source maps are explicitly requested
-        throw new Error(`Source map generation failed: ${message}`);
-      }
+  private generateBundleSourceMap(
+    generator: SourceMapGenerator | null,
+    entryPoint: string
+  ): RawSourceMap | undefined {
+    if (!generator) {
+      return undefined;
     }
 
-    if (options.minify) {
-      try {
-        const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
-        bundleBuilder.code = minified.code;
-        rawMap = minified.map;
+    try {
+      const rawMap = JSON.parse(generator.toString()) as RawSourceMap;
+      this.validateSourceMap(rawMap, 'bundle generation');
+      return rawMap;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
 
-        // Validate minified source map if present
-        if (rawMap && options.sourceMaps) {
-          this.validateSourceMap(rawMap, 'minification');
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
-        if (this.logger) {
-          this.logger.error('Minification failed', {
-            entryPoint: result.entryPoint,
-            error: message,
-          });
-        }
-
-        throw new Error(`Minification failed: ${message}`);
+      if (this.logger) {
+        this.logger.error('Failed to generate bundle source map', {
+          entryPoint,
+          error: message,
+        });
       }
+
+      throw new Error(`Source map generation failed: ${message}`);
+    }
+  }
+
+  private async applyMinification(
+    bundleBuilder: { code: string; line: number },
+    rawMap: RawSourceMap | undefined,
+    options: BundleOptions,
+    entryPoint: string
+  ): Promise<RawSourceMap | undefined> {
+    if (!options.minify) {
+      return rawMap;
     }
 
-    // Final validation and serialization of source map
-    let serializedMap: string | undefined;
-    if (rawMap) {
-      try {
-        serializedMap = JSON.stringify(rawMap);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+    try {
+      const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
+      bundleBuilder.code = minified.code;
+      const minifiedMap = minified.map;
 
-        if (this.logger) {
-          this.logger.error('Failed to serialize source map', {
-            entryPoint: result.entryPoint,
-            error: message,
-          });
-        }
-
-        throw new Error(`Failed to serialize source map: ${message}`);
+      if (minifiedMap && options.sourceMaps) {
+        this.validateSourceMap(minifiedMap, 'minification');
       }
+
+      return minifiedMap;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (this.logger) {
+        this.logger.error('Minification failed', {
+          entryPoint,
+          error: message,
+        });
+      }
+
+      throw new Error(`Minification failed: ${message}`);
     }
+  }
+
+  private serializeBundleSourceMap(
+    rawMap: RawSourceMap | undefined,
+    entryPoint: string
+  ): string | undefined {
+    if (!rawMap) {
+      return undefined;
+    }
+
+    try {
+      return JSON.stringify(rawMap);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (this.logger) {
+        this.logger.error('Failed to serialize source map', {
+          entryPoint,
+          error: message,
+        });
+      }
+
+      throw new Error(`Failed to serialize source map: ${message}`);
+    }
+  }
+
+  private async generateCommonJSBundle(
+    result: CompilationResult,
+    options: BundleOptions
+  ): Promise<BundleOutput> {
+    const context = this.initializeBundleContext(result, options);
+    const processedModules = this.prepareModulesForBundle(
+      result,
+      context.moduleIdMapping,
+      context.externals,
+      context.externalModuleIds
+    );
+
+    const entryKey = context.moduleIdMapping.get(result.entryPoint);
+    if (!entryKey) {
+      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
+    }
+
+    const bundleBuilder = this.createBundleCodeBuilder();
+    const generator = this.createSourceMapGenerator(options, result);
+
+    await this.buildModuleMapSection(
+      bundleBuilder,
+      processedModules,
+      context.externalModuleIds,
+      generator,
+      options
+    );
+
+    this.addBundleRuntimeCode(bundleBuilder, entryKey);
+
+    let rawMap = this.generateBundleSourceMap(generator, result.entryPoint);
+    rawMap = await this.applyMinification(bundleBuilder, rawMap, options, result.entryPoint);
+    const serializedMap = this.serializeBundleSourceMap(rawMap, result.entryPoint);
 
     return {
       code: bundleBuilder.code,

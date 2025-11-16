@@ -1127,194 +1127,173 @@ export class Parser {
     } as CallExpression;
   }
 
-  // eslint-disable-next-line complexity
-  private primary(): Expression {
+  private createLiteral(value: boolean | null | number | string, token: Token): Literal {
+    const raw = typeof value === 'string' ? `"${value}"` : token.value;
+    return {
+      type: 'Literal',
+      value,
+      raw,
+      line: token.line,
+      column: token.column,
+    } as Literal;
+  }
+
+  private parseNewExpression(token: Token): NewExpression {
+    const callee = this.primary();
+    this.skipGenericTypeArguments();
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав'");
+    const args: Expression[] = [];
+
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        args.push(this.expression());
+      } while (this.match(TokenType.COMMA));
+    }
+
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
+    return {
+      type: 'NewExpression',
+      callee,
+      arguments: args,
+      line: token.line,
+      column: token.column,
+    } as NewExpression;
+  }
+
+  private parseDynamicImport(importToken: Token): ImportExpression {
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'ворид'");
+    const source = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after import specifier");
+    return {
+      type: 'ImportExpression',
+      source,
+      line: importToken.line,
+      column: importToken.column,
+    } as ImportExpression;
+  }
+
+  private parseFunctionExpression(funcToken: Token): FunctionExpression {
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
+    const params: Parameter[] = [];
+
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        params.push(this.parseParameter());
+      } while (this.match(TokenType.COMMA));
+    }
+
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
+    let returnType: TypeAnnotation | undefined;
+
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
+    }
+
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
+    const body = this.blockStatement();
+    return {
+      type: 'FunctionExpression',
+      params,
+      body,
+      returnType,
+      line: funcToken.line,
+      column: funcToken.column,
+    } as FunctionExpression;
+  }
+
+  private createIdentifier(token: Token): Identifier {
+    return {
+      type: 'Identifier',
+      name: token.value,
+      line: token.line,
+      column: token.column,
+    } as Identifier;
+  }
+
+  private parseLiteralExpression(): Expression | null {
     if (this.match(TokenType.ДУРУСТ)) {
-      const token = this.previous();
-      return {
-        type: 'Literal',
-        value: true,
-        raw: token.value,
-        line: token.line,
-        column: token.column,
-      } as Literal;
+      return this.createLiteral(true, this.previous());
     }
-
     if (this.match(TokenType.НОДУРУСТ)) {
-      const token = this.previous();
-      return {
-        type: 'Literal',
-        value: false,
-        raw: token.value,
-        line: token.line,
-        column: token.column,
-      } as Literal;
+      return this.createLiteral(false, this.previous());
     }
-
     if (this.match(TokenType.ХОЛӢ)) {
-      const token = this.previous();
-      return {
-        type: 'Literal',
-        value: null,
-        raw: token.value,
-        line: token.line,
-        column: token.column,
-      } as Literal;
+      return this.createLiteral(null, this.previous());
     }
-
     if (this.match(TokenType.NUMBER)) {
       const token = this.previous();
-      return {
-        type: 'Literal',
-        value: Number.parseFloat(token.value),
-        raw: token.value,
-        line: token.line,
-        column: token.column,
-      } as Literal;
+      return this.createLiteral(Number.parseFloat(token.value), token);
     }
-
     if (this.match(TokenType.STRING)) {
-      const token = this.previous();
-      return {
-        type: 'Literal',
-        value: token.value,
-        raw: `"${token.value}"`,
-        line: token.line,
-        column: token.column,
-      } as Literal;
+      return this.createLiteral(this.previous().value, this.previous());
     }
-
     if (this.match(TokenType.TEMPLATE_LITERAL)) {
       return this.parseTemplateLiteral();
     }
+    return null;
+  }
 
+  private parseThisOrSuperExpression(): Expression | null {
     if (this.match(TokenType.ИН)) {
       const token = this.previous();
-      return {
-        type: 'ThisExpression',
-        line: token.line,
-        column: token.column,
-      };
+      return { type: 'ThisExpression', line: token.line, column: token.column };
     }
-
     if (this.match(TokenType.СУПЕР)) {
       const token = this.previous();
-      return {
-        type: 'Super',
-        line: token.line,
-        column: token.column,
-      };
+      return { type: 'Super', line: token.line, column: token.column };
     }
+    return null;
+  }
 
-    if (this.match(TokenType.НАВ)) {
-      const token = this.previous();
-      const callee = this.primary();
-
-      // Skip generic type parameters if present (e.g., new Class<T>(args))
-      this.skipGenericTypeArguments();
-
-      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав'");
-      const args: Expression[] = [];
-
-      if (!this.check(TokenType.RIGHT_PAREN)) {
-        do {
-          args.push(this.expression());
-        } while (this.match(TokenType.COMMA));
-      }
-
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after arguments");
-
-      return {
-        type: 'NewExpression',
-        callee: callee,
-        arguments: args,
-        line: token.line,
-        column: token.column,
-      } as NewExpression;
-    }
-
-    // Dynamic import: ворид(specifier)
-    if (this.check(TokenType.ВОРИД) && this.peekNext()?.type === TokenType.LEFT_PAREN) {
-      const importToken = this.advance();
-      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'ворид'");
-      const source = this.expression();
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after import specifier");
-
-      return {
-        type: 'ImportExpression',
-        source,
-        line: importToken.line,
-        column: importToken.column,
-      } as ImportExpression;
-    }
-
-    // Function expressions: функсия(params) { body }
-    if (this.match(TokenType.ФУНКСИЯ)) {
-      const funcToken = this.previous();
-      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
-
-      const params: Parameter[] = [];
-      if (!this.check(TokenType.RIGHT_PAREN)) {
-        do {
-          params.push(this.parseParameter());
-        } while (this.match(TokenType.COMMA));
-      }
-
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after parameters");
-
-      // Optional return type annotation
-      let returnType: TypeAnnotation | undefined;
-      if (this.match(TokenType.COLON)) {
-        returnType = this.typeAnnotation();
-      }
-
-      this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
-      const body = this.blockStatement();
-
-      return {
-        type: 'FunctionExpression',
-        params,
-        body,
-        returnType,
-        line: funcToken.line,
-        column: funcToken.column,
-      } as FunctionExpression;
-    }
-
+  private parseIdentifierExpression(): Expression | null {
     if (this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
-      const token = this.previous();
-      return {
-        type: 'Identifier',
-        name: token.value,
-        line: token.line,
-        column: token.column,
-      } as Identifier;
+      return this.createIdentifier(this.previous());
     }
-
-    // Allow certain keywords to be used as identifiers in expression contexts
     if (this.match(TokenType.НАВЪ, TokenType.МАЪЛУМОТ, TokenType.РӮЙХАТ, TokenType.БЕҚИМАТ)) {
-      const token = this.previous();
-      return {
-        type: 'Identifier',
-        name: token.value,
-        line: token.line,
-        column: token.column,
-      } as Identifier;
+      return this.createIdentifier(this.previous());
     }
+    return null;
+  }
 
+  private parseGroupingOrCollection(): Expression | null {
     if (this.match(TokenType.LEFT_PAREN)) {
       const expr = this.expression();
       this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
       return expr;
     }
-
     if (this.match(TokenType.LEFT_BRACKET)) {
       return this.arrayExpression();
     }
-
     if (this.match(TokenType.LEFT_BRACE)) {
       return this.objectExpression();
     }
+    return null;
+  }
+
+  private primary(): Expression {
+    const literal = this.parseLiteralExpression();
+    if (literal) return literal;
+
+    const thisOrSuper = this.parseThisOrSuperExpression();
+    if (thisOrSuper) return thisOrSuper;
+
+    if (this.match(TokenType.НАВ)) {
+      return this.parseNewExpression(this.previous());
+    }
+
+    if (this.check(TokenType.ВОРИД) && this.peekNext()?.type === TokenType.LEFT_PAREN) {
+      return this.parseDynamicImport(this.advance());
+    }
+
+    if (this.match(TokenType.ФУНКСИЯ)) {
+      return this.parseFunctionExpression(this.previous());
+    }
+
+    const identifier = this.parseIdentifierExpression();
+    if (identifier) return identifier;
+
+    const grouping = this.parseGroupingOrCollection();
+    if (grouping) return grouping;
 
     const token = this.peek();
     throw new Error(
@@ -1411,6 +1390,39 @@ export class Parser {
     };
   }
 
+  private extractExpression(
+    template: string,
+    startIndex: number
+  ): { expr: string; newIndex: number } {
+    let i = startIndex;
+    let braceCount = 1;
+    let expr = '';
+
+    while (i < template.length && braceCount > 0) {
+      if (template[i] === '{') {
+        braceCount++;
+      } else if (template[i] === '}') {
+        braceCount--;
+      }
+
+      if (braceCount > 0) {
+        expr += template[i];
+      }
+      i++;
+    }
+
+    return { expr, newIndex: i };
+  }
+
+  private addTextPart(
+    parts: Array<{ type: 'text' | 'expression'; value: string }>,
+    current: string
+  ): void {
+    if (current || parts.length === 0) {
+      parts.push({ type: 'text', value: current });
+    }
+  }
+
   private parseTemplateString(
     template: string
   ): Array<{ type: 'text' | 'expression'; value: string }> {
@@ -1419,30 +1431,15 @@ export class Parser {
     let i = 0;
 
     while (i < template.length) {
-      if (template[i] === '$' && template[i + 1] === '{') {
-        // Save current text part (even if empty at the start)
-        if (current || parts.length === 0) {
-          parts.push({ type: 'text', value: current });
-          current = '';
-        }
+      const isInterpolation = template[i] === '$' && template[i + 1] === '{';
 
-        // Find the matching closing brace
+      if (isInterpolation) {
+        this.addTextPart(parts, current);
+        current = '';
+
         i += 2; // Skip ${
-        let braceCount = 1;
-        let expr = '';
-
-        while (i < template.length && braceCount > 0) {
-          if (template[i] === '{') {
-            braceCount++;
-          } else if (template[i] === '}') {
-            braceCount--;
-          }
-
-          if (braceCount > 0) {
-            expr += template[i];
-          }
-          i++;
-        }
+        const { expr, newIndex } = this.extractExpression(template, i);
+        i = newIndex;
 
         parts.push({ type: 'expression', value: expr });
       } else {
@@ -1451,11 +1448,7 @@ export class Parser {
       }
     }
 
-    // Add remaining text (even if empty)
-    if (current || parts.length === 0) {
-      parts.push({ type: 'text', value: current });
-    }
-
+    this.addTextPart(parts, current);
     return parts;
   }
 
@@ -1621,75 +1614,65 @@ export class Parser {
     };
   }
 
+  private skipNewlines(): void {
+    while (this.match(TokenType.NEWLINE)) {
+      // consume newlines
+    }
+  }
+
+  private parseImportOrExportName(errorMessage: string): Token {
+    if (this.check(TokenType.IDENTIFIER)) {
+      return this.advance();
+    }
+    if (this.matchBuiltinIdentifier()) {
+      return this.previous();
+    }
+    throw new Error(`${errorMessage} at line ${this.peek().line}, column ${this.peek().column}`);
+  }
+
+  private createImportSpecifier(imported: Token, local: Token): ImportSpecifier {
+    return {
+      type: 'ImportSpecifier',
+      imported: {
+        type: 'Identifier',
+        name: imported.value,
+        line: imported.line,
+        column: imported.column,
+      } as Identifier,
+      local: {
+        type: 'Identifier',
+        name: local.value,
+        line: local.line,
+        column: local.column,
+      } as Identifier,
+      line: imported.line,
+      column: imported.column,
+    } as ImportSpecifier;
+  }
+
   private parseNamedImports(
     specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier>
   ): void {
-    // Skip any leading newlines after opening brace
-    while (this.match(TokenType.NEWLINE)) {
-      // consume newlines
+    this.skipNewlines();
+
+    if (this.check(TokenType.RIGHT_BRACE)) {
+      return;
     }
 
-    if (!this.check(TokenType.RIGHT_BRACE)) {
-      do {
-        // Skip newlines before each import
-        while (this.match(TokenType.NEWLINE)) {
-          // consume newlines
-        }
+    do {
+      this.skipNewlines();
+      const imported = this.parseImportOrExportName('Expected import name');
+      let local = imported;
 
-        let imported: Token;
-        if (this.check(TokenType.IDENTIFIER)) {
-          imported = this.advance();
-        } else if (this.matchBuiltinIdentifier()) {
-          imported = this.previous();
-        } else {
-          throw new Error(
-            `Expected import name at line ${this.peek().line}, column ${this.peek().column}`
-          );
-        }
-        let local = imported;
+      if (this.match(TokenType.ЧУН)) {
+        local = this.parseImportOrExportName("Expected local name after 'чун'");
+      }
 
-        // Handle 'as' alias (we'll use 'чун' for 'as')
-        if (this.match(TokenType.ЧУН)) {
-          if (this.check(TokenType.IDENTIFIER)) {
-            local = this.advance();
-          } else if (this.matchBuiltinIdentifier()) {
-            local = this.previous();
-          } else {
-            throw new Error(
-              `Expected local name after 'чун' at line ${this.peek().line}, column ${this.peek().column}`
-            );
-          }
-        }
+      specifiers.push(this.createImportSpecifier(imported, local));
+      this.skipNewlines();
+    } while (this.match(TokenType.COMMA));
 
-        specifiers.push({
-          type: 'ImportSpecifier',
-          imported: {
-            type: 'Identifier',
-            name: imported.value,
-            line: imported.line,
-            column: imported.column,
-          } as Identifier,
-          local: {
-            type: 'Identifier',
-            name: local.value,
-            line: local.line,
-            column: local.column,
-          } as Identifier,
-          line: imported.line,
-          column: imported.column,
-        } as ImportSpecifier);
-
-        // Skip newlines after each import
-        while (this.match(TokenType.NEWLINE)) {
-          // consume newlines
-        }
-      } while (this.match(TokenType.COMMA));
-    }
-
-    // Skip any trailing newlines before closing brace
-    while (this.match(TokenType.NEWLINE)) {
-      // consume newlines
-    }
+    this.skipNewlines();
   }
 
   public exportDeclaration(): ExportDeclaration {
@@ -1788,56 +1771,43 @@ export class Parser {
     };
   }
 
+  private createExportSpecifier(local: Token, exported: Token): ExportSpecifier {
+    return {
+      type: 'ExportSpecifier',
+      local: {
+        type: 'Identifier',
+        name: local.value,
+        line: local.line,
+        column: local.column,
+      },
+      exported: {
+        type: 'Identifier',
+        name: exported.value,
+        line: exported.line,
+        column: exported.column,
+      },
+      line: local.line,
+      column: local.column,
+    };
+  }
+
   private parseExportSpecifiers(): ExportSpecifier[] {
     const specifiers: ExportSpecifier[] = [];
 
-    if (!this.check(TokenType.RIGHT_BRACE)) {
-      do {
-        let local: Token;
-        if (this.check(TokenType.IDENTIFIER)) {
-          local = this.advance();
-        } else if (this.matchBuiltinIdentifier()) {
-          local = this.previous();
-        } else {
-          throw new Error(
-            `Expected export name at line ${this.peek().line}, column ${this.peek().column}`
-          );
-        }
-
-        let exported = local;
-
-        // Handle 'чун' (as) alias: { localName чун exportedName }
-        if (this.match(TokenType.ЧУН)) {
-          if (this.check(TokenType.IDENTIFIER)) {
-            exported = this.advance();
-          } else if (this.matchBuiltinIdentifier()) {
-            exported = this.previous();
-          } else {
-            throw new Error(
-              `Expected export alias after 'чун' at line ${this.peek().line}, column ${this.peek().column}`
-            );
-          }
-        }
-
-        specifiers.push({
-          type: 'ExportSpecifier',
-          local: {
-            type: 'Identifier',
-            name: local.value,
-            line: local.line,
-            column: local.column,
-          },
-          exported: {
-            type: 'Identifier',
-            name: exported.value,
-            line: exported.line,
-            column: exported.column,
-          },
-          line: local.line,
-          column: local.column,
-        });
-      } while (this.match(TokenType.COMMA));
+    if (this.check(TokenType.RIGHT_BRACE)) {
+      return specifiers;
     }
+
+    do {
+      const local = this.parseImportOrExportName('Expected export name');
+      let exported = local;
+
+      if (this.match(TokenType.ЧУН)) {
+        exported = this.parseImportOrExportName("Expected export alias after 'чун'");
+      }
+
+      specifiers.push(this.createExportSpecifier(local, exported));
+    } while (this.match(TokenType.COMMA));
 
     return specifiers;
   }
@@ -2530,77 +2500,75 @@ export class Parser {
     throw new Error(`Expected type at line ${this.peek().line}, column ${this.peek().column}`);
   }
 
-  public interfaceDeclaration(): InterfaceDeclaration {
-    const interfaceToken = this.previous();
-
-    let name: Token;
-    if (this.check(TokenType.IDENTIFIER)) {
-      name = this.advance();
-    } else if (this.matchBuiltinIdentifier()) {
-      name = this.previous();
-    } else {
-      throw new Error(
-        `Expected interface name at line ${this.peek().line}, column ${this.peek().column}`
-      );
+  private parseTypeParameters(): TypeParameter[] | undefined {
+    if (!this.match(TokenType.LESS_THAN)) {
+      return undefined;
     }
 
-    // Parse optional type parameters
-    let typeParameters: TypeParameter[] | undefined;
-    if (this.match(TokenType.LESS_THAN)) {
-      typeParameters = [];
-      do {
-        const paramName = this.consume(TokenType.IDENTIFIER, 'Expected type parameter name');
-        typeParameters.push({
-          type: 'TypeParameter',
-          name: {
-            type: 'Identifier',
-            name: paramName.value,
-            line: paramName.line,
-            column: paramName.column,
-          },
+    const typeParameters: TypeParameter[] = [];
+    do {
+      const paramName = this.consume(TokenType.IDENTIFIER, 'Expected type parameter name');
+      typeParameters.push({
+        type: 'TypeParameter',
+        name: {
+          type: 'Identifier',
+          name: paramName.value,
           line: paramName.line,
           column: paramName.column,
-        });
-      } while (this.match(TokenType.COMMA));
-      this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
+        },
+        line: paramName.line,
+        column: paramName.column,
+      });
+    } while (this.match(TokenType.COMMA));
+
+    this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
+    return typeParameters;
+  }
+
+  private parseInterfaceExtendsClause(): void {
+    if (!this.match(TokenType.МЕРОС)) {
+      return;
     }
 
-    // Parse optional extends clause (interface inheritance)
-    // Note: extends clause is parsed but not used in JavaScript generation
-    if (this.match(TokenType.МЕРОС)) {
-      if (this.check(TokenType.IDENTIFIER)) {
-        this.advance(); // consume interface name
-      } else if (this.matchBuiltinIdentifier()) {
-        // already consumed by matchBuiltinIdentifier
-      } else {
-        throw new Error(
-          `Expected interface name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
-        );
-      }
+    if (this.check(TokenType.IDENTIFIER)) {
+      this.advance();
+    } else if (!this.matchBuiltinIdentifier()) {
+      throw new Error(
+        `Expected interface name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
+      );
     }
+  }
 
-    this.consume(TokenType.LEFT_BRACE, "Expected '{' after interface name");
-
+  private parseInterfaceProperties(): PropertySignature[] {
     const properties: PropertySignature[] = [];
+
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-      // Skip newlines and whitespace
       if (this.match(TokenType.NEWLINE)) {
         continue;
       }
 
-      const property = this.propertySignature();
-      properties.push(property);
+      properties.push(this.propertySignature());
 
-      // After parsing a property, ensure we're positioned correctly for the next one
-      // Skip any trailing whitespace or newlines
       while (this.check(TokenType.NEWLINE)) {
         this.advance();
       }
     }
 
+    return properties;
+  }
+
+  public interfaceDeclaration(): InterfaceDeclaration {
+    const interfaceToken = this.previous();
+    const name = this.parseImportOrExportName('Expected interface name');
+    const typeParameters = this.parseTypeParameters();
+
+    this.parseInterfaceExtendsClause();
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after interface name");
+
+    const properties = this.parseInterfaceProperties();
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' after interface body");
 
-    const result = {
+    return {
       type: 'InterfaceDeclaration',
       name: {
         type: 'Identifier',
@@ -2618,8 +2586,6 @@ export class Parser {
       line: interfaceToken.line,
       column: interfaceToken.column,
     } as InterfaceDeclaration;
-
-    return result;
   }
 
   private parseComputedPropertySignature(readonly: boolean): PropertySignature {
@@ -2754,70 +2720,55 @@ export class Parser {
     };
   }
 
-  public classDeclaration(): ClassDeclaration {
-    const classToken = this.previous();
-
-    // Class name
-    let nameToken: Token;
-    if (this.check(TokenType.IDENTIFIER)) {
-      nameToken = this.advance();
-    } else if (this.matchBuiltinIdentifier()) {
-      nameToken = this.previous();
-    } else {
-      throw new Error(
-        `Expected class name at line ${this.peek().line}, column ${this.peek().column}`
-      );
+  private parseClassExtendsClause(): Token | undefined {
+    if (!this.match(TokenType.МЕРОС)) {
+      return undefined;
     }
 
-    // Skip generic type parameters if present (e.g., <T>, <T, U>)
+    const superClassToken = this.parseImportOrExportName("Expected superclass name after 'мерос'");
     this.skipGenericTypeArguments();
+    return superClassToken;
+  }
 
-    // Optional extends clause
-    let superClassToken: Token | undefined = undefined;
-    if (this.match(TokenType.МЕРОС)) {
-      if (this.check(TokenType.IDENTIFIER)) {
-        superClassToken = this.advance();
-      } else if (this.matchBuiltinIdentifier()) {
-        superClassToken = this.previous();
-      } else {
-        throw new Error(
-          `Expected superclass name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
-        );
-      }
-
-      // Skip generic type parameters if present (e.g., BaseClass<T>)
-      this.skipGenericTypeArguments();
+  private parseClassImplementsClause(): Token[] {
+    if (!this.match(TokenType.ТАТБИҚ)) {
+      return [];
     }
 
-    // Optional implements clause
     const implementsTokens: Token[] = [];
-    if (this.match(TokenType.ТАТБИҚ)) {
-      do {
-        if (this.check(TokenType.IDENTIFIER)) {
-          implementsTokens.push(this.advance());
-        } else if (this.matchBuiltinIdentifier()) {
-          implementsTokens.push(this.previous());
-        } else {
-          throw new Error(
-            `Expected interface name in implements clause at line ${this.peek().line}, column ${this.peek().column}`
-          );
-        }
+    do {
+      const interfaceToken = this.parseImportOrExportName(
+        'Expected interface name in implements clause'
+      );
+      implementsTokens.push(interfaceToken);
+      this.skipGenericTypeArguments();
+    } while (this.match(TokenType.COMMA));
 
-        // Skip generic type parameters if present (e.g., Interface<T>)
-        this.skipGenericTypeArguments();
-      } while (this.match(TokenType.COMMA));
-    }
+    return implementsTokens;
+  }
 
-    // Class body
+  private consumeClassBody(): ClassBody {
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after class declaration");
     const body = this.classBody();
-    // classBody() stops when it sees RIGHT_BRACE, so we need to consume it
+
     if (this.check(TokenType.RIGHT_BRACE)) {
-      this.advance(); // Consume the closing brace
+      this.advance();
     } else {
-      // If we're not at a closing brace, something went wrong
       this.errors.push(`Expected '}' after class body at line ${this.peek().line}`);
     }
+
+    return body;
+  }
+
+  public classDeclaration(): ClassDeclaration {
+    const classToken = this.previous();
+    const nameToken = this.parseImportOrExportName('Expected class name');
+
+    this.skipGenericTypeArguments();
+
+    const superClassToken = this.parseClassExtendsClause();
+    const implementsTokens = this.parseClassImplementsClause();
+    const body = this.consumeClassBody();
 
     return {
       type: 'ClassDeclaration',
@@ -2841,7 +2792,7 @@ export class Parser {
         line: impl.line,
         column: impl.column,
       })),
-      body: body,
+      body,
       line: classToken.line,
       column: classToken.column,
     };
@@ -2877,12 +2828,6 @@ export class Parser {
     };
   }
 
-  private skipNewlines(): void {
-    while (this.check(TokenType.NEWLINE)) {
-      this.advance();
-    }
-  }
-
   private recoverFromClassMemberError(): boolean {
     while (this.shouldContinueErrorRecovery()) {
       this.advance();
@@ -2911,64 +2856,67 @@ export class Parser {
     );
   }
 
-  private classMember(): MethodDefinition | PropertyDefinition | undefined {
-    // Check for access modifiers
-    let accessibility: 'public' | 'private' | 'protected' | undefined = undefined;
-    if (this.match(TokenType.ҶАМЪИЯТӢ, TokenType.ХОСУСӢ, TokenType.МУҲОФИЗАТШУДА)) {
-      const accessToken = this.previous();
-      accessibility =
-        accessToken.type === TokenType.ҶАМЪИЯТӢ
-          ? 'public'
-          : accessToken.type === TokenType.ХОСУСӢ
-            ? 'private'
-            : 'protected';
+  private parseAccessibility(): 'public' | 'private' | 'protected' | undefined {
+    if (!this.match(TokenType.ҶАМЪИЯТӢ, TokenType.ХОСУСӢ, TokenType.МУҲОФИЗАТШУДА)) {
+      return undefined;
     }
 
-    // Check for static
+    const accessToken = this.previous();
+    if (accessToken.type === TokenType.ҶАМЪИЯТӢ) return 'public';
+    if (accessToken.type === TokenType.ХОСУСӢ) return 'private';
+    return 'protected';
+  }
+
+  private parseModifiers(): { isStatic: boolean; isAbstract: boolean } {
     let isStatic = false;
+    let isAbstract = false;
+
     if (this.match(TokenType.СТАТИКӢ)) {
       isStatic = true;
     }
 
-    // Check for abstract
-    let isAbstract = false;
     if (this.match(TokenType.МАВҲУМ)) {
       isAbstract = true;
       // Abstract members can have 'функсия' keyword
-      if (this.match(TokenType.ФУНКСИЯ)) {
-        // Continue to parse the method name
-      }
+      this.match(TokenType.ФУНКСИЯ);
     }
+
+    return { isStatic, isAbstract };
+  }
+
+  private parseMemberName(): Token {
+    // Check for regular method with 'функсия' keyword
+    this.match(TokenType.ФУНКСИЯ);
+
+    if (this.check(TokenType.IDENTIFIER)) {
+      return this.advance();
+    }
+
+    if (this.matchBuiltinIdentifier()) {
+      return this.previous();
+    }
+
+    throw new Error(
+      `Expected class member at line ${this.peek().line}, column ${this.peek().column}`
+    );
+  }
+
+  private classMember(): MethodDefinition | PropertyDefinition | undefined {
+    const accessibility = this.parseAccessibility();
+    const { isStatic, isAbstract } = this.parseModifiers();
 
     // Constructor
     if (this.match(TokenType.КОНСТРУКТОР)) {
       return this.constructorMethod(accessibility, isStatic);
     }
 
-    // Check for regular method with 'функсия' keyword
-    if (this.match(TokenType.ФУНКСИЯ)) {
-      // Continue to parse the method name
-    }
-
-    // Method or property
-    let nameToken;
-    if (this.check(TokenType.IDENTIFIER)) {
-      nameToken = this.advance();
-    } else if (this.matchBuiltinIdentifier()) {
-      nameToken = this.previous();
-    } else {
-      throw new Error(
-        `Expected class member at line ${this.peek().line}, column ${this.peek().column}`
-      );
-    }
+    const nameToken = this.parseMemberName();
 
     if (this.check(TokenType.LEFT_PAREN)) {
-      // Method
       return this.classMethod(nameToken, accessibility, isStatic, isAbstract);
-    } else {
-      // Property
-      return this.classProperty(nameToken, accessibility, isStatic);
     }
+
+    return this.classProperty(nameToken, accessibility, isStatic);
   }
 
   private constructorMethod(accessibility?: string, isStatic?: boolean): MethodDefinition {
@@ -3231,14 +3179,48 @@ export class Parser {
     return null;
   }
 
-  // eslint-disable-next-line complexity
-  private switchStatement(): SwitchStatement {
-    const switchToken = this.previous();
-    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'интихоб'");
-    const discriminant = this.expression();
-    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after switch expression");
-    this.consume(TokenType.LEFT_BRACE, "Expected '{' after switch expression");
+  private parseSwitchCaseConsequent(): Statement[] {
+    const consequent: Statement[] = [];
+    while (
+      !this.check(TokenType.ҲОЛАТ) &&
+      !this.check(TokenType.ПЕШФАРЗ) &&
+      !this.check(TokenType.RIGHT_BRACE) &&
+      !this.isAtEnd()
+    ) {
+      if (this.match(TokenType.NEWLINE)) continue;
+      const stmt = this.statement();
+      if (stmt) consequent.push(stmt);
+    }
+    return consequent;
+  }
 
+  private parseRegularCase(): SwitchCase {
+    const test = this.expression();
+    this.consume(TokenType.COLON, "Expected ':' after case value");
+    const consequent = this.parseSwitchCaseConsequent();
+    return {
+      type: 'SwitchCase',
+      test,
+      consequent,
+      line: test.line,
+      column: test.column,
+    };
+  }
+
+  private parseDefaultCase(): SwitchCase {
+    this.consume(TokenType.COLON, "Expected ':' after default keyword");
+    const startToken = this.previous();
+    const consequent = this.parseSwitchCaseConsequent();
+    return {
+      type: 'SwitchCase',
+      test: undefined,
+      consequent,
+      line: startToken.line,
+      column: startToken.column,
+    } as SwitchCase;
+  }
+
+  private parseSwitchCases(): SwitchCase[] {
     const cases: SwitchCase[] = [];
     let foundDefault = false;
 
@@ -3246,55 +3228,36 @@ export class Parser {
       if (this.match(TokenType.NEWLINE)) continue;
 
       if (this.match(TokenType.ҲОЛАТ)) {
-        // case
-        const test = this.expression();
-        this.consume(TokenType.COLON, "Expected ':' after case value");
-        const consequent: Statement[] = [];
-        while (
-          !this.check(TokenType.ҲОЛАТ) &&
-          !this.check(TokenType.ПЕШФАРЗ) &&
-          !this.check(TokenType.RIGHT_BRACE) &&
-          !this.isAtEnd()
-        ) {
-          if (this.match(TokenType.NEWLINE)) continue;
-          const stmt = this.statement();
-          if (stmt) consequent.push(stmt);
-        }
-        cases.push({ type: 'SwitchCase', test, consequent, line: test.line, column: test.column });
+        cases.push(this.parseRegularCase());
         continue;
       }
 
       if (this.match(TokenType.ПЕШФАРЗ)) {
-        // default
         if (foundDefault) {
           this.errors.push('Multiple default cases in switch');
         }
         foundDefault = true;
-        this.consume(TokenType.COLON, "Expected ':' after default keyword");
-        const startToken = this.previous();
-        const consequent: Statement[] = [];
-        while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-          if (this.check(TokenType.ҲОЛАТ) || this.check(TokenType.ПЕШФАРЗ)) break;
-          if (this.match(TokenType.NEWLINE)) continue;
-          const stmt = this.statement();
-          if (stmt) consequent.push(stmt);
-        }
-        cases.push({
-          type: 'SwitchCase',
-          test: undefined, // default case
-          consequent,
-          line: startToken.line,
-          column: startToken.column,
-        } as SwitchCase);
+        cases.push(this.parseDefaultCase());
         continue;
       }
 
-      // Unrecognized token inside switch; attempt recovery
       this.errors.push(
         `Unexpected token '${this.peek().value}' in switch at line ${this.peek().line}`
       );
       this.advance();
     }
+
+    return cases;
+  }
+
+  private switchStatement(): SwitchStatement {
+    const switchToken = this.previous();
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'интихоб'");
+    const discriminant = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after switch expression");
+    this.consume(TokenType.LEFT_BRACE, "Expected '{' after switch expression");
+
+    const cases = this.parseSwitchCases();
 
     this.consume(TokenType.RIGHT_BRACE, "Expected '}' after switch cases");
 
