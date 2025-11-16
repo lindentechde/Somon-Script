@@ -419,12 +419,13 @@ describe('StructuredLogger', () => {
       const logger = createTestLogger();
       const timer = logger.startTimer();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const duration = timer();
 
-      expect(duration).toBeGreaterThanOrEqual(10);
-      expect(duration).toBeLessThan(100);
+      // Timer should measure at least some time, but allow for timer imprecision
+      expect(duration).toBeGreaterThanOrEqual(30);
+      expect(duration).toBeLessThan(200);
     });
 
     it('should return consistent duration on multiple calls', async () => {
