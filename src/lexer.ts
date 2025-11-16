@@ -2,7 +2,7 @@ import { Token, TokenType } from './types';
 import { KEYWORDS } from './keyword-map';
 
 export class Lexer {
-  private input: string;
+  private readonly input: string;
   private position: number = 0;
   private line: number = 1;
   private column: number = 1;

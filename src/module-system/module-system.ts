@@ -1,6 +1,6 @@
 import chokidar from 'chokidar';
 import type { FSWatcher, WatchOptions } from 'chokidar';
-import * as path from 'path';
+import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';

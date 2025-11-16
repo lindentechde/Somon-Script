@@ -6,8 +6,8 @@ import { Command } from 'commander';
 import { ModuleSystem } from '../module-system';
 import { loadConfig } from '../config';
 import { StructuredLoggerFactory } from '../module-system/structured-logger';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 
 const logger = StructuredLoggerFactory.getLogger('serve-command');
 

@@ -23,7 +23,7 @@ export class CompilationErrorAggregator {
   private errors: CompilationError[] = [];
   private warnings: CompilationError[] = [];
   private criticalErrors: CompilationError[] = [];
-  private maxErrors = 100; // Prevent memory explosion
+  private readonly maxErrors = 100; // Prevent memory explosion
   private failFastOnCritical = true;
 
   /**
@@ -51,10 +51,8 @@ export class CompilationErrorAggregator {
       }
     } else if (error.severity === 'warning') {
       this.warnings.push(error);
-    } else {
-      if (this.errors.length < this.maxErrors) {
-        this.errors.push(error);
-      }
+    } else if (this.errors.length < this.maxErrors) {
+      this.errors.push(error);
     }
   }
 
@@ -196,9 +194,16 @@ export class CompilationErrorAggregator {
    * Report a single error with formatting
    */
   private reportSingleError(error: CompilationError, icon: string): void {
-    const location = error.line ? `:${error.line}${error.column ? `:${error.column}` : ''}` : '';
+    let location = '';
+    if (error.line) {
+      location = `:${error.line}`;
+      if (error.column) {
+        location += `:${error.column}`;
+      }
+    }
 
-    console.error(`  ${icon} [${error.code}]${location ? ` Line ${location}` : ''}`);
+    const locationPrefix = location ? ` Line ${location}` : '';
+    console.error(`  ${icon} [${error.code}]${locationPrefix}`);
     console.error(`     ${error.message}`);
 
     if (error.category !== 'unknown') {
@@ -407,9 +412,7 @@ let globalAggregator: CompilationErrorAggregator | null = null;
  * Get or create global error aggregator
  */
 export function getGlobalErrorAggregator(): CompilationErrorAggregator {
-  if (!globalAggregator) {
-    globalAggregator = new CompilationErrorAggregator();
-  }
+  globalAggregator ??= new CompilationErrorAggregator();
   return globalAggregator;
 }
 
