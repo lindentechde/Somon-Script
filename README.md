@@ -13,12 +13,12 @@
 [![Examples Success](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=examples&job=test)](https://github.com/lindentechde/Somon-Script/actions)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=coverage)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=bugs)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
-[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentech_somon-script&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=lindentech_somon-script)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=alert_status)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=coverage)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=bugs)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=code_smells)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=security_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=sqale_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 
 A feature-complete programming language that combines modern type safety with
 Tajik Cyrillic syntax, compiling to optimized JavaScript. Actively developed
