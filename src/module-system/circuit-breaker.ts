@@ -96,17 +96,40 @@ export class CircuitBreaker {
   }
 
   /**
+   * Check if shutting down and throw error if so
+   */
+  private checkShutdown(): void {
+    if (this.isShuttingDown) {
+      throw new Error('Circuit breaker is shutting down');
+    }
+  }
+
+  /**
+   * Calculate retry delay with exponential backoff and jitter
+   */
+  private calculateRetryDelay(attempt: number, options: RetryOptions): number {
+    let delay = options.exponential
+      ? options.initialDelay * Math.pow(2, attempt)
+      : options.initialDelay;
+
+    delay = Math.min(delay, options.maxDelay);
+
+    if (options.jitter) {
+      delay *= 0.5 + Math.random() * 0.5;
+    }
+
+    return delay;
+  }
+
+  /**
    * Execute with retry logic
    */
-  // eslint-disable-next-line complexity
   async executeWithRetry<T>(
     operation: () => Promise<T>,
     retryOptions: Partial<RetryOptions> = {},
     fallback?: () => Promise<T>
   ): Promise<T> {
-    if (this.isShuttingDown) {
-      throw new Error('Circuit breaker is shutting down');
-    }
+    this.checkShutdown();
 
     const options: RetryOptions = {
       maxRetries: retryOptions.maxRetries ?? 3,
@@ -119,37 +142,19 @@ export class CircuitBreaker {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= options.maxRetries; attempt++) {
-      if (this.isShuttingDown) {
-        throw new Error('Circuit breaker is shutting down');
-      }
+      this.checkShutdown();
 
       try {
         return await this.execute(operation, fallback);
       } catch (error) {
         lastError = error as Error;
-
-        // If shutting down, fail immediately
-        if (this.isShuttingDown) {
-          throw new Error('Circuit breaker is shutting down');
-        }
+        this.checkShutdown();
 
         if (attempt === options.maxRetries) {
-          break; // No more retries
+          break;
         }
 
-        // Calculate delay with exponential backoff
-        let delay = options.exponential
-          ? options.initialDelay * Math.pow(2, attempt)
-          : options.initialDelay;
-
-        delay = Math.min(delay, options.maxDelay);
-
-        // Add jitter to prevent thundering herd
-        if (options.jitter) {
-          delay *= 0.5 + Math.random() * 0.5;
-        }
-
-        // Sleep was interrupted by shutdown if error is thrown
+        const delay = this.calculateRetryDelay(attempt, options);
         await this.sleep(delay);
       }
     }

@@ -295,29 +295,41 @@ export class TypeChecker {
       return;
     }
 
-    if (pattern.type === 'ArrayPattern' && type.elementType) {
-      pattern.elements.forEach(element => {
-        if (element) {
-          this.bindPatternTypes(
-            element as Identifier | ArrayPattern | ObjectPattern,
-            type.elementType!
-          );
-        }
-      });
+    if (pattern.type === 'ArrayPattern') {
+      this.bindArrayPatternTypes(pattern, type);
       return;
     }
 
-    if (pattern.type === 'ObjectPattern' && type.properties) {
-      for (const prop of pattern.properties) {
-        if (prop.type !== 'PropertyPattern') continue;
-        const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
-        const propType = type.properties.get(keyName);
-        if (propType) {
-          this.bindPatternTypes(
-            prop.value as Identifier | ArrayPattern | ObjectPattern,
-            propType.type
-          );
-        }
+    if (pattern.type === 'ObjectPattern') {
+      this.bindObjectPatternTypes(pattern, type);
+    }
+  }
+
+  private bindArrayPatternTypes(pattern: ArrayPattern, type: Type): void {
+    if (!type.elementType) return;
+
+    pattern.elements.forEach(element => {
+      if (element) {
+        this.bindPatternTypes(
+          element as Identifier | ArrayPattern | ObjectPattern,
+          type.elementType!
+        );
+      }
+    });
+  }
+
+  private bindObjectPatternTypes(pattern: ObjectPattern, type: Type): void {
+    if (!type.properties) return;
+
+    for (const prop of pattern.properties) {
+      if (prop.type !== 'PropertyPattern') continue;
+      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+      const propType = type.properties.get(keyName);
+      if (propType) {
+        this.bindPatternTypes(
+          prop.value as Identifier | ArrayPattern | ObjectPattern,
+          propType.type
+        );
       }
     }
   }
@@ -355,66 +367,83 @@ export class TypeChecker {
 
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
     // Phase 2: Validate class relationships and property types
+    this.validateSuperClass(classDecl);
+    this.validateClassPropertyTypes(classDecl);
+  }
 
-    // 1. Validate superClass exists and is actually a class
-    if (classDecl.superClass) {
-      const parentType = this.symbolTable.get(classDecl.superClass.name);
-      const interfaceType = this.interfaceTable.get(classDecl.superClass.name);
+  private validateSuperClass(classDecl: ClassDeclaration): void {
+    if (!classDecl.superClass) return;
 
-      if (!parentType && !interfaceType) {
-        this.addError(
-          TypeCheckErrorCode.ClassNotFound,
-          `Base class '${classDecl.superClass.name}' not found`,
-          classDecl.line,
-          classDecl.column
-        );
-      } else if (interfaceType) {
-        // Found in interfaceTable - can't extend interfaces
-        this.addError(
-          TypeCheckErrorCode.InvalidExtends,
-          `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is an interface`,
-          classDecl.line,
-          classDecl.column
-        );
-      } else if (parentType && parentType.kind !== 'class') {
-        const kindDescription =
-          parentType.kind === 'interface' ? 'an interface' : `a ${parentType.kind}`;
-        this.addError(
-          TypeCheckErrorCode.InvalidExtends,
-          `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is ${kindDescription}`,
-          classDecl.line,
-          classDecl.column
-        );
-      } else if (parentType) {
-        // Check for circular inheritance
-        this.checkCircularInheritance(
-          classDecl.name.name,
-          parentType,
-          classDecl.line,
-          classDecl.column
-        );
-      }
+    const parentType = this.symbolTable.get(classDecl.superClass.name);
+    const interfaceType = this.interfaceTable.get(classDecl.superClass.name);
+
+    if (!parentType && !interfaceType) {
+      this.addError(
+        TypeCheckErrorCode.ClassNotFound,
+        `Base class '${classDecl.superClass.name}' not found`,
+        classDecl.line,
+        classDecl.column
+      );
+      return;
     }
 
-    // 2. Validate property initializers match their declared types
+    if (interfaceType) {
+      this.addError(
+        TypeCheckErrorCode.InvalidExtends,
+        `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is an interface`,
+        classDecl.line,
+        classDecl.column
+      );
+      return;
+    }
+
+    if (parentType && parentType.kind !== 'class') {
+      this.addInvalidExtendsError(classDecl, parentType);
+      return;
+    }
+
+    if (parentType) {
+      this.checkCircularInheritance(
+        classDecl.name.name,
+        parentType,
+        classDecl.line,
+        classDecl.column
+      );
+    }
+  }
+
+  private addInvalidExtendsError(classDecl: ClassDeclaration, parentType: Type): void {
+    const kindDescription =
+      parentType.kind === 'interface' ? 'an interface' : `a ${parentType.kind}`;
+    this.addError(
+      TypeCheckErrorCode.InvalidExtends,
+      `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass!.name}' is ${kindDescription}`,
+      classDecl.line,
+      classDecl.column
+    );
+  }
+
+  private validateClassPropertyTypes(classDecl: ClassDeclaration): void {
     for (const member of classDecl.body.body) {
       if (member.type === 'PropertyDefinition') {
-        const prop = member as PropertyDefinition;
-
-        if (prop.typeAnnotation && prop.value) {
-          const declaredType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
-          const inferredType = this.inferExpressionType(prop.value);
-
-          if (!this.isAssignable(inferredType, declaredType)) {
-            this.addError(
-              TypeCheckErrorCode.TypeMismatch,
-              `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}' for property '${prop.key.name}'`,
-              prop.line,
-              prop.column
-            );
-          }
-        }
+        this.validatePropertyDefinition(member);
       }
+    }
+  }
+
+  private validatePropertyDefinition(prop: PropertyDefinition): void {
+    if (!prop.typeAnnotation || !prop.value) return;
+
+    const declaredType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
+    const inferredType = this.inferExpressionType(prop.value);
+
+    if (!this.isAssignable(inferredType, declaredType)) {
+      this.addError(
+        TypeCheckErrorCode.TypeMismatch,
+        `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}' for property '${prop.key.name}'`,
+        prop.line,
+        prop.column
+      );
     }
   }
 

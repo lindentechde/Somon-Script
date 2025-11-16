@@ -84,27 +84,19 @@ export class CompilationErrorAggregator {
   }
 
   /**
-   * Report all collected errors and warnings
-   * Provides comprehensive context for debugging
+   * Report header and summary statistics
    */
-  public reportAll(): void {
-    const totalIssues = this.criticalErrors.length + this.errors.length + this.warnings.length;
-    if (totalIssues === 0) {
-      return;
-    }
-
+  private reportHeaderAndSummary(totalIssues: number): void {
     console.error('\n╔═══════════════════════════════════════════════════════════════╗');
     console.error('║            COMPILATION ERROR REPORT                           ║');
     console.error('╚═══════════════════════════════════════════════════════════════╝\n');
 
-    // Summary
     console.error(`📊 Summary:`);
     console.error(`   Total issues: ${totalIssues}`);
     console.error(
       `   Critical: ${this.criticalErrors.length}, Errors: ${this.errors.length}, Warnings: ${this.warnings.length}`
     );
 
-    // Category breakdown
     const byCategory = this.getErrorsByCategory();
     if (byCategory.size > 0) {
       console.error(
@@ -114,52 +106,86 @@ export class CompilationErrorAggregator {
       );
     }
     console.error('');
+  }
 
-    // Report critical errors first (these cause immediate failure)
-    if (this.criticalErrors.length > 0) {
-      console.error('🚨 CRITICAL ERRORS (System will exit):');
-      const criticalByFile = this.groupByFile(this.criticalErrors);
-
-      for (const [file, fileErrors] of criticalByFile.entries()) {
-        console.error(`\n📄 ${file}:`);
-        for (const error of fileErrors) {
-          this.reportSingleError(error, '🚨');
-        }
-      }
-      console.error('');
+  /**
+   * Report critical errors section
+   */
+  private reportCriticalErrors(): void {
+    if (this.criticalErrors.length === 0) {
+      return;
     }
 
-    // Report errors
-    if (this.errors.length > 0) {
-      console.error(`❌ ERRORS (${this.errors.length}):`);
-      const errorsByFile = this.groupByFile(this.errors);
+    console.error('🚨 CRITICAL ERRORS (System will exit):');
+    const criticalByFile = this.groupByFile(this.criticalErrors);
 
-      for (const [file, fileErrors] of errorsByFile.entries()) {
-        console.error(`\n📄 ${file}:`);
-        for (const error of fileErrors) {
-          this.reportSingleError(error, '❌');
-        }
+    for (const [file, fileErrors] of criticalByFile.entries()) {
+      console.error(`\n📄 ${file}:`);
+      for (const error of fileErrors) {
+        this.reportSingleError(error, '🚨');
       }
+    }
+    console.error('');
+  }
 
-      if (this.errors.length >= this.maxErrors) {
-        console.error(`\n⚠️  Error limit reached. There may be more errors.`);
-      }
-      console.error('');
+  /**
+   * Report errors section
+   */
+  private reportErrors(): void {
+    if (this.errors.length === 0) {
+      return;
     }
 
-    // Report warnings
-    if (this.warnings.length > 0) {
-      console.error(`⚠️  WARNINGS (${this.warnings.length}):`);
-      const warningsByFile = this.groupByFile(this.warnings);
+    console.error(`❌ ERRORS (${this.errors.length}):`);
+    const errorsByFile = this.groupByFile(this.errors);
 
-      for (const [file, fileWarnings] of warningsByFile.entries()) {
-        console.error(`\n📄 ${file}:`);
-        for (const warning of fileWarnings) {
-          this.reportSingleError(warning, '⚠️ ');
-        }
+    for (const [file, fileErrors] of errorsByFile.entries()) {
+      console.error(`\n📄 ${file}:`);
+      for (const error of fileErrors) {
+        this.reportSingleError(error, '❌');
       }
-      console.error('');
     }
+
+    if (this.errors.length >= this.maxErrors) {
+      console.error(`\n⚠️  Error limit reached. There may be more errors.`);
+    }
+    console.error('');
+  }
+
+  /**
+   * Report warnings section
+   */
+  private reportWarnings(): void {
+    if (this.warnings.length === 0) {
+      return;
+    }
+
+    console.error(`⚠️  WARNINGS (${this.warnings.length}):`);
+    const warningsByFile = this.groupByFile(this.warnings);
+
+    for (const [file, fileWarnings] of warningsByFile.entries()) {
+      console.error(`\n📄 ${file}:`);
+      for (const warning of fileWarnings) {
+        this.reportSingleError(warning, '⚠️ ');
+      }
+    }
+    console.error('');
+  }
+
+  /**
+   * Report all collected errors and warnings
+   * Provides comprehensive context for debugging
+   */
+  public reportAll(): void {
+    const totalIssues = this.criticalErrors.length + this.errors.length + this.warnings.length;
+    if (totalIssues === 0) {
+      return;
+    }
+
+    this.reportHeaderAndSummary(totalIssues);
+    this.reportCriticalErrors();
+    this.reportErrors();
+    this.reportWarnings();
 
     console.error('╔═══════════════════════════════════════════════════════════════╗');
     console.error('║            END OF ERROR REPORT                                ║');

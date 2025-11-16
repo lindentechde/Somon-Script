@@ -28,7 +28,237 @@ export class Lexer {
     return tokens;
   }
 
-  // eslint-disable-next-line complexity
+  private handlePlusOperator(): Token {
+    if (this.peek() === '+') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.INCREMENT, '++', this.line, this.column - 2);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.PLUS_ASSIGN, '+=', this.line, this.column - 2);
+    }
+    return this.singleCharToken(TokenType.PLUS);
+  }
+
+  private handleMinusOperator(): Token {
+    if (this.peek() === '-') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.DECREMENT, '--', this.line, this.column - 2);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.MINUS_ASSIGN, '-=', this.line, this.column - 2);
+    }
+    return this.singleCharToken(TokenType.MINUS);
+  }
+
+  private handleMultiplyOperator(): Token {
+    if (this.peek() === '*') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.EXPONENT_ASSIGN, '**=', this.line, this.column - 3);
+      }
+      this.advance();
+      return this.createToken(TokenType.EXPONENT, '**', this.line, this.column - 2);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.MULTIPLY_ASSIGN, '*=', this.line, this.column - 2);
+    }
+    return this.singleCharToken(TokenType.MULTIPLY);
+  }
+
+  private handleDivideOperator(): Token {
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.DIVIDE_ASSIGN, '/=', this.line, this.column - 2);
+    }
+    return this.singleCharToken(TokenType.DIVIDE);
+  }
+
+  private handleModuloOperator(): Token {
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.MODULO_ASSIGN, '%=', this.line, this.column - 2);
+    }
+    return this.singleCharToken(TokenType.MODULO);
+  }
+
+  private handleDotOperator(): Token {
+    if (this.peekNext() === '.' && this.peekNext(1) === '.') {
+      this.advance();
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.SPREAD, '...');
+    }
+    return this.singleCharToken(TokenType.DOT);
+  }
+
+  private handleEqualOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '=') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.STRICT_EQUAL, '===', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.EQUAL, '==', startLine, startColumn);
+    }
+    if (this.peek() === '>') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.ARROW, '=>', startLine, startColumn);
+    }
+    return this.singleCharToken(TokenType.ASSIGN);
+  }
+
+  private handleNotOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '=') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.STRICT_NOT_EQUAL, '!==', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.NOT_EQUAL, '!=', startLine, startColumn);
+    }
+    return this.singleCharToken(TokenType.NOT);
+  }
+
+  private handleLessThanOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '<') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.LEFT_SHIFT_ASSIGN, '<<=', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.LEFT_SHIFT, '<<', startLine, startColumn);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.LESS_EQUAL, '<=', startLine, startColumn);
+    }
+    return this.singleCharToken(TokenType.LESS_THAN);
+  }
+
+  private handleGreaterThanOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '>') {
+      this.advance();
+      if (this.peek() === '>') {
+        this.advance();
+        if (this.peek() === '=') {
+          this.advance();
+          this.advance();
+          return this.createToken(
+            TokenType.UNSIGNED_RIGHT_SHIFT_ASSIGN,
+            '>>>=',
+            startLine,
+            startColumn
+          );
+        }
+        this.advance();
+        return this.createToken(TokenType.UNSIGNED_RIGHT_SHIFT, '>>>', startLine, startColumn);
+      }
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.RIGHT_SHIFT_ASSIGN, '>>=', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.RIGHT_SHIFT, '>>', startLine, startColumn);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.GREATER_EQUAL, '>=', startLine, startColumn);
+    }
+    return this.singleCharToken(TokenType.GREATER_THAN);
+  }
+
+  private handleAmpersandOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '&') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.AND_ASSIGN, '&&=', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.AND, '&&', startLine, startColumn);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.BITWISE_AND_ASSIGN, '&=', startLine, startColumn);
+    }
+    this.advance();
+    return this.createToken(TokenType.BITWISE_AND, '&', startLine, startColumn);
+  }
+
+  private handlePipeOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '|') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.OR_ASSIGN, '||=', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.OR, '||', startLine, startColumn);
+    }
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.BITWISE_OR_ASSIGN, '|=', startLine, startColumn);
+    }
+    this.advance();
+    return this.createToken(TokenType.BITWISE_OR, '|', startLine, startColumn);
+  }
+
+  private handleCaretOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '=') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.BITWISE_XOR_ASSIGN, '^=', startLine, startColumn);
+    }
+    this.advance();
+    return this.createToken(TokenType.BITWISE_XOR, '^', startLine, startColumn);
+  }
+
+  private handleQuestionOperator(startLine: number, startColumn: number): Token {
+    if (this.peek() === '?') {
+      this.advance();
+      if (this.peek() === '=') {
+        this.advance();
+        this.advance();
+        return this.createToken(TokenType.NULLISH_ASSIGN, '??=', startLine, startColumn);
+      }
+      this.advance();
+      return this.createToken(TokenType.NULLISH_COALESCING, '??', startLine, startColumn);
+    }
+    if (this.peek() === '.') {
+      this.advance();
+      this.advance();
+      return this.createToken(TokenType.OPTIONAL_CHAINING, '?.', startLine, startColumn);
+    }
+    this.advance();
+    return this.createToken(TokenType.QUESTION, '?', startLine, startColumn);
+  }
+
   private nextToken(): Token {
     this.skipWhitespace();
 
@@ -40,67 +270,22 @@ export class Lexer {
     const startLine = this.line;
     const startColumn = this.column;
 
-    // Comments
     if (char === '/' && this.peek() === '/') {
       this.skipLineComment();
       return this.nextToken();
     }
 
-    // Single character tokens and multi-character operators
     switch (char) {
       case '+':
-        if (this.peek() === '+') {
-          this.advance(); // consume first '+'
-          this.advance(); // consume second '+'
-          return this.createToken(TokenType.INCREMENT, '++', this.line, this.column - 2);
-        } else if (this.peek() === '=') {
-          this.advance(); // consume '+'
-          this.advance(); // consume '='
-          return this.createToken(TokenType.PLUS_ASSIGN, '+=', this.line, this.column - 2);
-        }
-        return this.singleCharToken(TokenType.PLUS);
+        return this.handlePlusOperator();
       case '-':
-        if (this.peek() === '-') {
-          this.advance(); // consume first '-'
-          this.advance(); // consume second '-'
-          return this.createToken(TokenType.DECREMENT, '--', this.line, this.column - 2);
-        } else if (this.peek() === '=') {
-          this.advance(); // consume '-'
-          this.advance(); // consume '='
-          return this.createToken(TokenType.MINUS_ASSIGN, '-=', this.line, this.column - 2);
-        }
-        return this.singleCharToken(TokenType.MINUS);
+        return this.handleMinusOperator();
       case '*':
-        if (this.peek() === '*') {
-          this.advance(); // consume first '*'
-          if (this.peek() === '=') {
-            this.advance(); // consume second '*'
-            this.advance(); // consume '='
-            return this.createToken(TokenType.EXPONENT_ASSIGN, '**=', this.line, this.column - 3);
-          } else {
-            this.advance(); // consume second '*'
-            return this.createToken(TokenType.EXPONENT, '**', this.line, this.column - 2);
-          }
-        } else if (this.peek() === '=') {
-          this.advance(); // consume '*'
-          this.advance(); // consume '='
-          return this.createToken(TokenType.MULTIPLY_ASSIGN, '*=', this.line, this.column - 2);
-        }
-        return this.singleCharToken(TokenType.MULTIPLY);
+        return this.handleMultiplyOperator();
       case '/':
-        if (this.peek() === '=') {
-          this.advance(); // consume '/'
-          this.advance(); // consume '='
-          return this.createToken(TokenType.DIVIDE_ASSIGN, '/=', this.line, this.column - 2);
-        }
-        return this.singleCharToken(TokenType.DIVIDE);
+        return this.handleDivideOperator();
       case '%':
-        if (this.peek() === '=') {
-          this.advance(); // consume '%'
-          this.advance(); // consume '='
-          return this.createToken(TokenType.MODULO_ASSIGN, '%=', this.line, this.column - 2);
-        }
-        return this.singleCharToken(TokenType.MODULO);
+        return this.handleModuloOperator();
       case '(':
         return this.singleCharToken(TokenType.LEFT_PAREN);
       case ')':
@@ -118,17 +303,9 @@ export class Lexer {
       case ',':
         return this.singleCharToken(TokenType.COMMA);
       case '.':
-        if (this.peekNext() === '.' && this.peekNext(1) === '.') {
-          this.advance(); // consume first '.'
-          this.advance(); // consume second '.'
-          this.advance(); // consume third '.'
-          return this.createToken(TokenType.SPREAD, '...');
-        }
-        return this.singleCharToken(TokenType.DOT);
+        return this.handleDotOperator();
       case ':':
         return this.singleCharToken(TokenType.COLON);
-      case '?':
-        return this.singleCharToken(TokenType.QUESTION);
       case '\n':
         this.advance();
         this.line++;
@@ -136,189 +313,32 @@ export class Lexer {
         return this.createToken(TokenType.NEWLINE, '\n', startLine, startColumn);
     }
 
-    // Multi-character operators
-    if (char === '=') {
-      if (this.peek() === '=') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.STRICT_EQUAL, '===', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.EQUAL, '==', startLine, startColumn);
-        }
-      } else if (this.peek() === '>') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.ARROW, '=>', startLine, startColumn);
-      }
-      return this.singleCharToken(TokenType.ASSIGN);
-    }
-
-    if (char === '!') {
-      if (this.peek() === '=') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.STRICT_NOT_EQUAL, '!==', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.NOT_EQUAL, '!=', startLine, startColumn);
-        }
-      }
-      return this.singleCharToken(TokenType.NOT);
-    }
-
-    if (char === '<') {
-      if (this.peek() === '<') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.LEFT_SHIFT_ASSIGN, '<<=', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.LEFT_SHIFT, '<<', startLine, startColumn);
-        }
-      } else if (this.peek() === '=') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.LESS_EQUAL, '<=', startLine, startColumn);
-      }
-      return this.singleCharToken(TokenType.LESS_THAN);
-    }
-
-    if (char === '>') {
-      if (this.peek() === '>') {
-        this.advance();
-        if (this.peek() === '>') {
-          this.advance();
-          if (this.peek() === '=') {
-            this.advance();
-            this.advance();
-            return this.createToken(
-              TokenType.UNSIGNED_RIGHT_SHIFT_ASSIGN,
-              '>>>=',
-              startLine,
-              startColumn
-            );
-          } else {
-            this.advance();
-            return this.createToken(TokenType.UNSIGNED_RIGHT_SHIFT, '>>>', startLine, startColumn);
-          }
-        } else if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.RIGHT_SHIFT_ASSIGN, '>>=', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.RIGHT_SHIFT, '>>', startLine, startColumn);
-        }
-      } else if (this.peek() === '=') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.GREATER_EQUAL, '>=', startLine, startColumn);
-      }
-      return this.singleCharToken(TokenType.GREATER_THAN);
-    }
-
-    if (char === '&') {
-      if (this.peek() === '&') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.AND_ASSIGN, '&&=', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.AND, '&&', startLine, startColumn);
-        }
-      } else if (this.peek() === '=') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.BITWISE_AND_ASSIGN, '&=', startLine, startColumn);
-      } else {
-        this.advance();
-        return this.createToken(TokenType.BITWISE_AND, '&', startLine, startColumn);
-      }
-    }
-
-    if (char === '|') {
-      if (this.peek() === '|') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.OR_ASSIGN, '||=', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.OR, '||', startLine, startColumn);
-        }
-      } else if (this.peek() === '=') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.BITWISE_OR_ASSIGN, '|=', startLine, startColumn);
-      } else {
-        this.advance();
-        return this.createToken(TokenType.BITWISE_OR, '|', startLine, startColumn);
-      }
-    }
-
-    if (char === '^') {
-      if (this.peek() === '=') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.BITWISE_XOR_ASSIGN, '^=', startLine, startColumn);
-      } else {
-        this.advance();
-        return this.createToken(TokenType.BITWISE_XOR, '^', startLine, startColumn);
-      }
-    }
+    if (char === '=') return this.handleEqualOperator(startLine, startColumn);
+    if (char === '!') return this.handleNotOperator(startLine, startColumn);
+    if (char === '<') return this.handleLessThanOperator(startLine, startColumn);
+    if (char === '>') return this.handleGreaterThanOperator(startLine, startColumn);
+    if (char === '&') return this.handleAmpersandOperator(startLine, startColumn);
+    if (char === '|') return this.handlePipeOperator(startLine, startColumn);
+    if (char === '^') return this.handleCaretOperator(startLine, startColumn);
+    if (char === '?') return this.handleQuestionOperator(startLine, startColumn);
 
     if (char === '~') {
       this.advance();
       return this.createToken(TokenType.BITWISE_NOT, '~', startLine, startColumn);
     }
 
-    if (char === '?') {
-      if (this.peek() === '?') {
-        this.advance();
-        if (this.peek() === '=') {
-          this.advance();
-          this.advance();
-          return this.createToken(TokenType.NULLISH_ASSIGN, '??=', startLine, startColumn);
-        } else {
-          this.advance();
-          return this.createToken(TokenType.NULLISH_COALESCING, '??', startLine, startColumn);
-        }
-      } else if (this.peek() === '.') {
-        this.advance();
-        this.advance();
-        return this.createToken(TokenType.OPTIONAL_CHAINING, '?.', startLine, startColumn);
-      } else {
-        this.advance();
-        return this.createToken(TokenType.QUESTION, '?', startLine, startColumn);
-      }
-    }
-
-    // String literals
     if (char === '"' || char === "'") {
       return this.readString(char, startLine, startColumn);
     }
 
-    // Template literals
     if (char === '`') {
       return this.readTemplateLiteral(startLine, startColumn);
     }
 
-    // Number literals
     if (this.isDigit(char)) {
       return this.readNumber(startLine, startColumn);
     }
 
-    // Identifiers and keywords (Cyrillic support)
     if (this.isAlpha(char) || this.isCyrillic(char)) {
       return this.readIdentifier(startLine, startColumn);
     }
@@ -334,50 +354,54 @@ export class Lexer {
     return this.createToken(type, char, line, column);
   }
 
+  private processStringEscapeSequence(): string {
+    this.advance(); // Skip backslash
+    if (this.isAtEnd()) {
+      return '';
+    }
+
+    const escaped = this.currentChar();
+    this.advance();
+
+    switch (escaped) {
+      case 'n':
+        return '\n';
+      case 't':
+        return '\t';
+      case 'r':
+        return '\r';
+      case '\\':
+        return '\\';
+      case '"':
+        return '"';
+      case "'":
+        return "'";
+      default:
+        return escaped;
+    }
+  }
+
+  private processStringCharacter(): string {
+    const char = this.currentChar();
+    this.advance();
+
+    if (char === '\n') {
+      this.line++;
+      this.column = 1;
+    }
+
+    return char;
+  }
+
   private readString(quote: string, startLine: number, startColumn: number): Token {
     let value = '';
     this.advance(); // Skip opening quote
 
     while (!this.isAtEnd() && this.currentChar() !== quote) {
       if (this.currentChar() === '\\') {
-        this.advance();
-        if (!this.isAtEnd()) {
-          const escaped = this.currentChar();
-          switch (escaped) {
-            case 'n':
-              value += '\n';
-              break;
-            case 't':
-              value += '\t';
-              break;
-            case 'r':
-              value += '\r';
-              break;
-            case '\\':
-              value += '\\';
-              break;
-            case '"':
-              value += '"';
-              break;
-            case "'":
-              value += "'";
-              break;
-            default:
-              value += escaped;
-              break;
-          }
-          this.advance();
-        }
+        value += this.processStringEscapeSequence();
       } else {
-        if (this.currentChar() === '\n') {
-          value += this.currentChar();
-          this.advance();
-          this.line++;
-          this.column = 1;
-        } else {
-          value += this.currentChar();
-          this.advance();
-        }
+        value += this.processStringCharacter();
       }
     }
 
@@ -456,13 +480,7 @@ export class Lexer {
   }
 
   private handleRegularCharacter(): string {
-    const char = this.currentChar();
-    this.advance();
-    if (char === '\n') {
-      this.line++;
-      this.column = 1;
-    }
-    return char;
+    return this.processStringCharacter();
   }
 
   private readNumber(startLine: number, startColumn: number): Token {

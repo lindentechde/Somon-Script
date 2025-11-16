@@ -136,6 +136,25 @@ export class ModuleResolver {
     packageName?: string
   ): ResolvedModule {
     // Try exact path first
+    const exactMatch = this.tryExactPath(targetPath, isExternal, packageName);
+    if (exactMatch) return exactMatch;
+
+    // Try with extensions
+    const withExtension = this.tryWithExtensions(targetPath, isExternal, packageName);
+    if (withExtension) return withExtension;
+
+    // Try as directory
+    const asDirectory = this.tryAsDirectory(targetPath, isExternal, packageName);
+    if (asDirectory) return asDirectory;
+
+    throw new Error(`Cannot resolve module: ${targetPath}`);
+  }
+
+  private tryExactPath(
+    targetPath: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
     if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
       return {
         resolvedPath: targetPath,
@@ -144,8 +163,14 @@ export class ModuleResolver {
         extension: path.extname(targetPath),
       };
     }
+    return null;
+  }
 
-    // Try with extensions
+  private tryWithExtensions(
+    targetPath: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
     for (const ext of this.options.extensions) {
       const pathWithExt = targetPath + ext;
       if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
@@ -157,34 +182,62 @@ export class ModuleResolver {
         };
       }
     }
+    return null;
+  }
 
-    // Try as directory with index file
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isDirectory()) {
-      // Check for package.json
-      const packageJsonPath = path.join(targetPath, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-        if (packageJson.main) {
-          const mainPath = path.resolve(targetPath, packageJson.main);
-          return this.resolveFile(mainPath, isExternal, packageName);
-        }
-      }
-
-      // Try index files
-      for (const ext of this.options.extensions) {
-        const indexPath = path.join(targetPath, `index${ext}`);
-        if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
-          return {
-            resolvedPath: indexPath,
-            isExternalLibrary: isExternal,
-            packageName,
-            extension: ext,
-          };
-        }
-      }
+  private tryAsDirectory(
+    targetPath: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
+    if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isDirectory()) {
+      return null;
     }
 
-    throw new Error(`Cannot resolve module: ${targetPath}`);
+    // Try package.json main field
+    const fromPackageJson = this.tryPackageJsonMain(targetPath, isExternal, packageName);
+    if (fromPackageJson) return fromPackageJson;
+
+    // Try index files
+    return this.tryIndexFiles(targetPath, isExternal, packageName);
+  }
+
+  private tryPackageJsonMain(
+    targetPath: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
+    const packageJsonPath = path.join(targetPath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return null;
+    }
+
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    if (packageJson.main) {
+      const mainPath = path.resolve(targetPath, packageJson.main);
+      return this.resolveFile(mainPath, isExternal, packageName);
+    }
+
+    return null;
+  }
+
+  private tryIndexFiles(
+    targetPath: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
+    for (const ext of this.options.extensions) {
+      const indexPath = path.join(targetPath, `index${ext}`);
+      if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
+        return {
+          resolvedPath: indexPath,
+          isExternalLibrary: isExternal,
+          packageName,
+          extension: ext,
+        };
+      }
+    }
+    return null;
   }
 
   private matchesPattern(specifier: string, pattern: string): boolean {

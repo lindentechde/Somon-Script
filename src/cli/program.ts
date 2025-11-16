@@ -372,6 +372,49 @@ export const cliRuntime = {
   },
 };
 
+/**
+ * Display module statistics
+ */
+function displayModuleStatistics(moduleSystem: ModuleSystem): void {
+  const stats = moduleSystem.getStatistics();
+  console.log('\n📊 Module Statistics:');
+  console.log(`  Total modules: ${stats.totalModules}`);
+  console.log(`  Total dependencies: ${stats.totalDependencies}`);
+  console.log(`  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`);
+  console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
+  console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+}
+
+/**
+ * Display dependency graph
+ */
+function displayDependencyGraph(moduleSystem: ModuleSystem, baseDir: string): void {
+  const graph = moduleSystem.getDependencyGraph();
+  console.log('\n🕸️  Dependency Graph:');
+  for (const [moduleId, deps] of graph) {
+    const relativePath = path.relative(baseDir, moduleId);
+    console.log(`  ${relativePath}:`);
+    for (const dep of deps) {
+      console.log(`    └── ${dep}`);
+    }
+  }
+}
+
+/**
+ * Display circular dependency validation results
+ */
+function displayCircularDependencies(moduleSystem: ModuleSystem): void {
+  const validation = moduleSystem.validate();
+  if (validation.isValid) {
+    console.log('\n✅ No circular dependencies found');
+  } else {
+    console.log('\n❌ Issues found:');
+    for (const error of validation.errors) {
+      console.log(`  • ${error}`);
+    }
+  }
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -791,39 +834,15 @@ export function createProgram(): Command {
           await moduleSystem.loadModule(resolvedInput, path.dirname(resolvedInput));
 
           if (options.stats) {
-            const stats = moduleSystem.getStatistics();
-            console.log('\n📊 Module Statistics:');
-            console.log(`  Total modules: ${stats.totalModules}`);
-            console.log(`  Total dependencies: ${stats.totalDependencies}`);
-            console.log(
-              `  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`
-            );
-            console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
-            console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+            displayModuleStatistics(moduleSystem);
           }
 
           if (options.graph) {
-            const graph = moduleSystem.getDependencyGraph();
-            console.log('\n🕸️  Dependency Graph:');
-            for (const [moduleId, deps] of graph) {
-              const relativePath = path.relative(baseDir, moduleId);
-              console.log(`  ${relativePath}:`);
-              for (const dep of deps) {
-                console.log(`    └── ${dep}`);
-              }
-            }
+            displayDependencyGraph(moduleSystem, baseDir);
           }
 
           if (options.circular) {
-            const validation = moduleSystem.validate();
-            if (validation.isValid) {
-              console.log('\n✅ No circular dependencies found');
-            } else {
-              console.log('\n❌ Issues found:');
-              for (const error of validation.errors) {
-                console.log(`  • ${error}`);
-              }
-            }
+            displayCircularDependencies(moduleSystem);
           }
         } catch (error) {
           console.error('Analysis error:', error instanceof Error ? error.message : error);
