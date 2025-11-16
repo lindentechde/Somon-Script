@@ -14,7 +14,6 @@
 [![Иҷозатнома](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [![Ҳолати Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=alert_status)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
-[![Пӯшиш](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=coverage)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Хатоҳо](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=bugs)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Мушкилоти Код](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=code_smells)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Рейтинги Бехатарӣ](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=security_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
