@@ -208,9 +208,10 @@ describe('Lexer Extended Coverage Tests', () => {
       const source = 'а ?? б';
       const tokens = tokenize(source);
 
-      // Might be tokenized as two separate ? tokens or as NULL_COALESCING
-      const questionTokens = tokens.filter(t => t.type === TokenType.QUESTION);
-      expect(questionTokens.length).toBeGreaterThanOrEqual(1);
+      // Should be tokenized as a single NULLISH_COALESCING token
+      const nullishTokens = tokens.filter(t => t.type === TokenType.NULLISH_COALESCING);
+      expect(nullishTokens.length).toBe(1);
+      expect(nullishTokens[0].value).toBe('??');
     });
   });
 
