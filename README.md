@@ -87,7 +87,7 @@ Advanced static analysis system with TypeScript-level safety features:
 
 - **Automated example audit** – `npm run audit:examples` validates the reference
   programs on every release.
-- **Extensive test suite** – 300+ tests cover lexing, parsing, type checking,
+- **Extensive test suite** – 1220+ tests cover lexing, parsing, type checking,
   and the CLI. Coverage reports are generated in CI and shared on request.
 - **Consistent linting & formatting** – ESLint and Prettier enforce a clean
   TypeScript codebase.
