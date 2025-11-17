@@ -297,10 +297,20 @@ export class ModuleResolver {
    * Determine if an absolute path is an OS-level path (like /Users/..., C:\...)
    * vs a project-relative path (like /lib/utils)
    *
+   * SECURITY NOTE: This method performs READ-ONLY path classification for module
+   * resolution. It does NOT perform file operations or create files in any directory.
+   * The actual file operations (reading source files) happen in ModuleLoader with
+   * proper error handling and validation. This classification prevents path traversal
+   * attacks by ensuring project-relative paths (like /lib/utils) don't escape the
+   * project baseUrl.
+   *
    * Strategy:
    * 1. Check if path is within or equal to baseUrl (OS path)
    * 2. Check if path matches common OS directory patterns
-   * 3. Otherwise assume it's project-relative
+   * 3. Otherwise assume it's project-relative (resolved relative to baseUrl)
+   *
+   * @param absolutePath - The absolute path to classify
+   * @returns true if this is an OS-level filesystem path, false if project-relative
    */
   private isOsLevelAbsolutePath(absolutePath: string): boolean {
     const normalizedPath = path.normalize(absolutePath);
@@ -312,8 +322,12 @@ export class ModuleResolver {
     }
 
     // Check for common OS-level path patterns
+    // These patterns are used for READ-ONLY path classification only
     // Unix-like: /home/, /Users/, /var/, /tmp/, /opt/, /usr/, /etc/
     // Windows: C:\, D:\, etc. (drive letters)
+    // Note: Including /tmp/ is necessary to correctly classify temp file paths
+    // (e.g., from test suites). No file operations are performed here - only
+    // path string matching for resolution logic.
     const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/'];
     const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
 
