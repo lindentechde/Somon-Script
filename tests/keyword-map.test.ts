@@ -5,6 +5,7 @@ describe('Keyword map coverage', () => {
   const cases: Array<[string, TokenType]> = [
     // Core language keywords
     ['тағйирёбанда', TokenType.ТАҒЙИРЁБАНДА],
+    ['тағ', TokenType.ТАҒЙИРЁБАНДА], // Short form
     ['собит', TokenType.СОБИТ],
     ['функсия', TokenType.ФУНКСИЯ],
     ['функция', TokenType.ФУНКСИЯ], // Alternative spelling

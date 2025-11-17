@@ -3,6 +3,7 @@ import { TokenType } from './tokens';
 export const KEYWORDS: ReadonlyMap<string, TokenType> = new Map<string, TokenType>([
   // Core language keywords
   ['тағйирёбанда', TokenType.ТАҒЙИРЁБАНДА],
+  ['тағ', TokenType.ТАҒЙИРЁБАНДА], // Short form of тағйирёбанда
   ['собит', TokenType.СОБИТ],
   ['функсия', TokenType.ФУНКСИЯ],
   ['функция', TokenType.ФУНКСИЯ], // Alternative spelling
