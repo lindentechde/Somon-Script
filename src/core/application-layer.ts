@@ -382,8 +382,6 @@ export class CompilationUseCase implements ICompilationUseCase {
         metrics,
       };
     } catch (error) {
-      const totalTime = performance.now() - startTime;
-
       errors.push({
         message: `Compilation failed: ${error}`,
         line: 0,

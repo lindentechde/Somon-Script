@@ -598,7 +598,7 @@ export class TypeChecker {
 
     // Check if it's a class type
     const classType = this.symbolTable.get(typeName);
-    if (classType && classType.kind === 'class') {
+    if (classType?.kind === 'class') {
       return classType;
     }
 
@@ -712,12 +712,12 @@ export class TypeChecker {
 
   private inferArrayExpressionType(arrayExpr: ArrayExpression, targetType?: Type): Type {
     // If target type is a tuple, use bidirectional inference
-    if (targetType && targetType.kind === 'tuple' && targetType.types) {
+    if (targetType?.kind === 'tuple' && targetType.types) {
       return this.inferTupleTypeFromTarget(arrayExpr, targetType.types);
     }
 
     // If target is an array, infer array element type
-    if (targetType && targetType.kind === 'array') {
+    if (targetType?.kind === 'array') {
       const elementType = targetType.elementType || { kind: 'unknown' };
       arrayExpr.elements.forEach((element: Expression) =>
         this.inferExpressionType(element, elementType)
@@ -743,21 +743,23 @@ export class TypeChecker {
    */
   private getBaseType(type: Type): Type {
     if (type.kind === 'literal') {
-      const baseTypeName =
-        typeof type.value === 'string'
-          ? 'string'
-          : typeof type.value === 'number'
-            ? 'number'
-            : typeof type.value === 'boolean'
-              ? 'boolean'
-              : 'null';
+      let baseTypeName: string;
+      if (typeof type.value === 'string') {
+        baseTypeName = 'string';
+      } else if (typeof type.value === 'number') {
+        baseTypeName = 'number';
+      } else if (typeof type.value === 'boolean') {
+        baseTypeName = 'boolean';
+      } else {
+        baseTypeName = 'null';
+      }
       return { kind: 'primitive', name: baseTypeName };
     }
     return type;
   }
 
   private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
-    if (targetType && targetType.kind === 'interface') {
+    if (targetType?.kind === 'interface') {
       return targetType;
     }
 
@@ -794,10 +796,10 @@ export class TypeChecker {
   }
 
   private inferCallType(callExpr: CallExpression): Type {
-    if (callExpr.callee && callExpr.callee.type === 'Identifier') {
+    if (callExpr.callee?.type === 'Identifier') {
       const functionName = (callExpr.callee as Identifier).name;
       const functionType = this.symbolTable.get(functionName);
-      if (functionType && functionType.kind === 'function' && functionType.returnType) {
+      if (functionType?.kind === 'function' && functionType.returnType) {
         return functionType.returnType;
       }
     }
@@ -805,7 +807,7 @@ export class TypeChecker {
   }
 
   private inferNewExpressionType(newExpr: NewExpression): Type {
-    if (newExpr.callee && newExpr.callee.type === 'Identifier') {
+    if (newExpr.callee?.type === 'Identifier') {
       const className = (newExpr.callee as Identifier).name;
 
       // Handle built-in generic types: Map and Set
@@ -828,7 +830,7 @@ export class TypeChecker {
       }
 
       const classType = this.symbolTable.get(className);
-      if (classType && classType.kind === 'class') {
+      if (classType?.kind === 'class') {
         // Return the actual class type with all its properties and baseType
         return classType;
       }
@@ -840,14 +842,16 @@ export class TypeChecker {
     if (source.kind !== 'literal' || target.kind !== 'primitive') {
       return false;
     }
-    const baseType =
-      typeof source.value === 'string'
-        ? 'string'
-        : typeof source.value === 'number'
-          ? 'number'
-          : typeof source.value === 'boolean'
-            ? 'boolean'
-            : 'null';
+    let baseType: string;
+    if (typeof source.value === 'string') {
+      baseType = 'string';
+    } else if (typeof source.value === 'number') {
+      baseType = 'number';
+    } else if (typeof source.value === 'boolean') {
+      baseType = 'boolean';
+    } else {
+      baseType = 'null';
+    }
     return baseType === target.name;
   }
 

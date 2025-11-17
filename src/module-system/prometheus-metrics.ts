@@ -213,7 +213,14 @@ export class PrometheusExporter {
     );
 
     for (const [name, status] of Object.entries(cbStats)) {
-      const stateValue = status.state === 'closed' ? 0 : status.state === 'open' ? 1 : 2;
+      let stateValue: number;
+      if (status.state === 'closed') {
+        stateValue = 0;
+      } else if (status.state === 'open') {
+        stateValue = 1;
+      } else {
+        stateValue = 2;
+      }
       lines.push(`${this.prefix}_circuit_breaker_state{name="${name}"} ${stateValue} ${timestamp}`);
       lines.push(
         `${this.prefix}_circuit_breaker_failures{name="${name}"} ${status.failures} ${timestamp}`
