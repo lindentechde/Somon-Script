@@ -41,6 +41,16 @@ describe('Compiler - Integration Tests', () => {
       expect(result.code).toBeTruthy();
       expect(result.errors).toHaveLength(0);
     });
+
+    test('should compile variable declaration with short keyword', () => {
+      const source = 'ТАҒ х = 5;';
+      const result = compile(source);
+
+      expect(result.code).toBeTruthy();
+      expect(result.errors).toHaveLength(0);
+      // Should compile to the same output as тағйирёбанда
+      expect(result.code).toContain('let');
+    });
   });
 
   describe('Compilation Options', () => {
