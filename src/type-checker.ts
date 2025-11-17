@@ -92,10 +92,10 @@ export class TypeChecker {
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
   private symbolTable: Map<string, Type> = new Map();
-  private interfaceTable: Map<string, Type> = new Map();
-  private typeAliasTable: Map<string, Type> = new Map();
+  private readonly interfaceTable: Map<string, Type> = new Map();
+  private readonly typeAliasTable: Map<string, Type> = new Map();
 
-  private sourceLines: string[] = [];
+  private readonly sourceLines: string[] = [];
 
   constructor(source?: string) {
     this.sourceLines = source ? source.split(/\r?\n/) : [];

@@ -174,7 +174,7 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
 
 function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
-  const knownTop = [
+  const knownTop = new Set([
     'resolution',
     'loading',
     'compilation',
@@ -183,10 +183,10 @@ function validateModuleSystemTopLevel(config: object, basePath: string): ConfigV
     'logger',
     'managementServer',
     'managementPort',
-  ];
+  ]);
 
   for (const key of Object.keys(config)) {
-    if (!knownTop.includes(key)) {
+    if (!knownTop.has(key)) {
       errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
     }
   }

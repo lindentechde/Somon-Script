@@ -20,7 +20,7 @@ export interface SignalHandlerOptions {
  * Graceful shutdown manager for production systems
  */
 export class SignalHandler {
-  private handlers: ShutdownHandler[] = [];
+  private readonly handlers: ShutdownHandler[] = [];
   private isShuttingDown = false;
   private readonly shutdownTimeout: number;
   private readonly logger?: SignalHandlerOptions['logger'];

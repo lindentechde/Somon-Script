@@ -2,7 +2,7 @@
  * Production-grade resource limiting and monitoring
  * Prevents memory exhaustion and resource leaks
  */
-import * as process from 'process';
+import * as process from 'node:process';
 
 export interface ResourceLimits {
   /** Maximum heap memory in bytes (default: 1GB) */
@@ -33,7 +33,7 @@ export type ResourceWarningCallback = (_usage: ResourceUsage, _limit: string) =>
 export class ResourceLimiter {
   private readonly limits: Required<ResourceLimits>;
   private checkIntervalId?: ReturnType<typeof setInterval>;
-  private warningCallbacks: ResourceWarningCallback[] = [];
+  private readonly warningCallbacks: ResourceWarningCallback[] = [];
   private moduleCount = 0;
   private fileHandleCount = 0;
 
