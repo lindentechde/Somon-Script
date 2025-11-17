@@ -1,6 +1,6 @@
 {
   "name": "@lindentechde/somon-script",
-  "version": "0.3.48",
+  "version": "0.3.49",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "exports": {
     ".": "./src/index.ts"

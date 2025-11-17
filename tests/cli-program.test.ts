@@ -761,6 +761,45 @@ describe('CLI Program (in-process)', () => {
     executeSpy.mockRestore();
   });
 
+  test('run: should handle absolute paths without duplication', async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    // Create test file with greeting function (user's example)
+    const inputFile = path.join(tempDir, 'hello_world.som');
+    const somonCode = `функсия салом(ном: сатр): сатр {
+    бозгашт \`Салом, \${ном}!\`;
+}
+
+чоп.сабт(салом("SomonScript"));`;
+
+    fs.writeFileSync(inputFile, somonCode);
+
+    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
+      status: 0,
+    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+
+    // Run with absolute path (this should not cause path duplication)
+    const absolutePath = path.resolve(inputFile);
+    await program.parseAsync(['run', absolutePath], { from: 'user' });
+
+    // Verify it executed successfully without errors
+    expect(process.exitCode).toBe(0);
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+
+    // Verify the compiled file path doesn't contain duplicated paths
+    const [tempFilePath] = executeSpy.mock.calls[0];
+    expect(tempFilePath).toBeTruthy();
+    expect(tempFilePath).toContain(path.dirname(absolutePath));
+    // Ensure path is not duplicated (shouldn't contain the path twice)
+    const pathParts = tempFilePath.split(path.sep);
+    const uniqueParts = new Set(pathParts);
+    // A duplicated path would have fewer unique parts
+    expect(pathParts.length - uniqueParts.size).toBeLessThan(3); // Allow some normal duplicates
+
+    executeSpy.mockRestore();
+  });
+
   test('bundle: should use default output path when not specified', async () => {
     const program = createProgram();
     program.exitOverride();
