@@ -354,7 +354,7 @@ export class LoggerFactory {
   private static readonly loggers = new Map<string, Logger>();
   private static readonly globalConfig: Partial<LoggerConfig> = {
     level: (process.env.LOG_LEVEL as LogLevel) || 'warn',
-    format: (process.env.LOG_FORMAT === 'json' ? 'json' : 'pretty') as 'json' | 'pretty',
+    format: process.env.LOG_FORMAT === 'json' ? 'json' : 'pretty',
     enableTracing: true,
     enableColors: false,
     timestamp: true,
