@@ -55,12 +55,19 @@ export class ModuleResolver {
     }
 
     // Handle already absolute file paths
-    if (path.isAbsolute(specifier) && fs.existsSync(specifier)) {
-      return {
-        resolvedPath: specifier,
-        isExternalLibrary: false,
-        extension: path.extname(specifier),
-      };
+    // Check if it's an OS-level absolute path (not project-relative like "/module")
+    // We distinguish by checking if it's absolute AND has path separators beyond the first character
+    if (path.isAbsolute(specifier)) {
+      const normalizedPath = path.normalize(specifier);
+      // If the path has multiple segments (e.g., /Users/... or C:\Users\...), treat as OS absolute
+      const pathSegments = normalizedPath.split(path.sep).filter(s => s.length > 0);
+      if (pathSegments.length > 1) {
+        return {
+          resolvedPath: normalizedPath,
+          isExternalLibrary: false,
+          extension: path.extname(normalizedPath),
+        };
+      }
     }
 
     // Handle relative imports (./module, ../module)
