@@ -275,6 +275,20 @@ export class Lexer {
       return this.nextToken();
     }
 
+    const switchResult = this.handleSwitchCharacters(char, startLine, startColumn);
+    if (switchResult) return switchResult;
+
+    const operatorResult = this.handleComparisonAndBitwiseOperators(char, startLine, startColumn);
+    if (operatorResult) return operatorResult;
+
+    return this.handleLiteralsAndIdentifiers(char, startLine, startColumn);
+  }
+
+  private handleSwitchCharacters(
+    char: string,
+    startLine: number,
+    startColumn: number
+  ): Token | null {
     switch (char) {
       case '+':
         return this.handlePlusOperator();
@@ -311,22 +325,46 @@ export class Lexer {
         this.line++;
         this.column = 1;
         return this.createToken(TokenType.NEWLINE, '\n', startLine, startColumn);
+      default:
+        return null;
     }
+  }
 
-    if (char === '=') return this.handleEqualOperator(startLine, startColumn);
-    if (char === '!') return this.handleNotOperator(startLine, startColumn);
-    if (char === '<') return this.handleLessThanOperator(startLine, startColumn);
-    if (char === '>') return this.handleGreaterThanOperator(startLine, startColumn);
-    if (char === '&') return this.handleAmpersandOperator(startLine, startColumn);
-    if (char === '|') return this.handlePipeOperator(startLine, startColumn);
-    if (char === '^') return this.handleCaretOperator(startLine, startColumn);
-    if (char === '?') return this.handleQuestionOperator(startLine, startColumn);
-
-    if (char === '~') {
-      this.advance();
-      return this.createToken(TokenType.BITWISE_NOT, '~', startLine, startColumn);
+  private handleComparisonAndBitwiseOperators(
+    char: string,
+    startLine: number,
+    startColumn: number
+  ): Token | null {
+    switch (char) {
+      case '=':
+        return this.handleEqualOperator(startLine, startColumn);
+      case '!':
+        return this.handleNotOperator(startLine, startColumn);
+      case '<':
+        return this.handleLessThanOperator(startLine, startColumn);
+      case '>':
+        return this.handleGreaterThanOperator(startLine, startColumn);
+      case '&':
+        return this.handleAmpersandOperator(startLine, startColumn);
+      case '|':
+        return this.handlePipeOperator(startLine, startColumn);
+      case '^':
+        return this.handleCaretOperator(startLine, startColumn);
+      case '?':
+        return this.handleQuestionOperator(startLine, startColumn);
+      case '~':
+        this.advance();
+        return this.createToken(TokenType.BITWISE_NOT, '~', startLine, startColumn);
+      default:
+        return null;
     }
+  }
 
+  private handleLiteralsAndIdentifiers(
+    char: string,
+    startLine: number,
+    startColumn: number
+  ): Token {
     if (char === '"' || char === "'") {
       return this.readString(char, startLine, startColumn);
     }
