@@ -140,6 +140,38 @@ describe('Module System', () => {
       expect(resolved.resolvedPath).toBe(moduleFile);
     });
 
+    test('should handle project-relative absolute imports with multiple segments', () => {
+      // Create nested directory structure: lib/utils/math.som
+      const libDir = path.join(tempDir, 'lib');
+      const utilsDir = path.join(libDir, 'utils');
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.mkdirSync(utilsDir, { recursive: true });
+
+      const mainFile = path.join(tempDir, 'main.som');
+      const mathFile = path.join(utilsDir, 'math.som');
+
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+      fs.writeFileSync(mathFile, 'содир функсия add() {}');
+
+      // Project-relative import like /lib/utils/math should resolve to baseUrl/lib/utils/math
+      const resolved = resolver.resolve('/lib/utils/math', mainFile);
+      expect(resolved.resolvedPath).toBe(mathFile);
+    });
+
+    test('should handle OS-level absolute paths', () => {
+      // Create a file with an OS-level absolute path
+      const osLevelFile = path.join(tempDir, 'os-level.som');
+      fs.writeFileSync(osLevelFile, 'содир функсия test() {}');
+
+      const mainFile = path.join(tempDir, 'main.som');
+      fs.writeFileSync(mainFile, 'содир функсия main() {}');
+
+      // Resolve using the full OS path (should return it as-is)
+      const resolved = resolver.resolve(osLevelFile, mainFile);
+      expect(resolved.resolvedPath).toBe(path.normalize(osLevelFile));
+      expect(resolved.isExternalLibrary).toBe(false);
+    });
+
     test('should throw error for missing modules', () => {
       const mainFile = path.join(tempDir, 'main.som');
       fs.writeFileSync(mainFile, 'содир функсия main() {}');
