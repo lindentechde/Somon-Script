@@ -55,19 +55,23 @@ export class ModuleResolver {
     }
 
     // Handle already absolute file paths
-    // Check if it's an OS-level absolute path (not project-relative like "/module")
-    // We distinguish by checking if it's absolute AND has path separators beyond the first character
+    // Distinguish between OS-level absolute paths (/Users/..., C:\Users\...) and
+    // project-relative absolute paths (/lib/utils/...)
     if (path.isAbsolute(specifier)) {
       const normalizedPath = path.normalize(specifier);
-      // If the path has multiple segments (e.g., /Users/... or C:\Users\...), treat as OS absolute
-      const pathSegments = normalizedPath.split(path.sep).filter(s => s.length > 0);
-      if (pathSegments.length > 1) {
+
+      // Check if this is an OS-level absolute path by seeing if it's outside the project
+      // or matches common OS path patterns
+      const isOsPath = this.isOsLevelAbsolutePath(normalizedPath);
+
+      if (isOsPath) {
         return {
           resolvedPath: normalizedPath,
           isExternalLibrary: false,
           extension: path.extname(normalizedPath),
         };
       }
+      // Otherwise, fall through to project-relative handling
     }
 
     // Handle relative imports (./module, ../module)
@@ -287,5 +291,45 @@ export class ModuleResolver {
    */
   updateOptions(options: Partial<ModuleResolutionOptions>): void {
     this.options = { ...this.options, ...options };
+  }
+
+  /**
+   * Determine if an absolute path is an OS-level path (like /Users/..., C:\...)
+   * vs a project-relative path (like /lib/utils)
+   *
+   * Strategy:
+   * 1. Check if path is within or equal to baseUrl (OS path)
+   * 2. Check if path matches common OS directory patterns
+   * 3. Otherwise assume it's project-relative
+   */
+  private isOsLevelAbsolutePath(absolutePath: string): boolean {
+    const normalizedPath = path.normalize(absolutePath);
+    const normalizedBase = path.normalize(this.options.baseUrl);
+
+    // If the path starts with the baseUrl, it's an OS-level path within the project
+    if (normalizedPath.startsWith(normalizedBase)) {
+      return true;
+    }
+
+    // Check for common OS-level path patterns
+    // Unix-like: /home/, /Users/, /var/, /tmp/, /opt/, /usr/, /etc/
+    // Windows: C:\, D:\, etc. (drive letters)
+    const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/'];
+    const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
+
+    // Check Unix patterns
+    for (const prefix of unixOsPrefixes) {
+      if (normalizedPath.startsWith(prefix)) {
+        return true;
+      }
+    }
+
+    // Check Windows drive pattern
+    if (windowsDrivePattern.test(normalizedPath)) {
+      return true;
+    }
+
+    // If we get here, assume it's a project-relative path like /lib/utils
+    return false;
   }
 }
