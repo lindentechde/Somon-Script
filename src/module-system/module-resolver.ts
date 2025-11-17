@@ -328,7 +328,8 @@ export class ModuleResolver {
     // Note: Including /tmp/ is necessary to correctly classify temp file paths
     // (e.g., from test suites). No file operations are performed here - only
     // path string matching for resolution logic.
-    const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/'];
+    // NOSONAR: This is read-only pattern matching for path classification, not file I/O
+    const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
     const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
 
     // Check Unix patterns
