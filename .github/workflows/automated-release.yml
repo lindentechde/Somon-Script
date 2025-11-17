@@ -146,15 +146,84 @@ jobs:
       - name: Verify NPM Package Published
         run: |
           VERSION="${{ needs.check-version.outputs.new_version }}"
-          echo "Waiting for NPM package to be indexed..."
-          sleep 10
+          PACKAGE_NAME="@lindentech/somon-script"
 
-          if npm view "@lindentech/somon-script@$VERSION" version >/dev/null 2>&1; then
-            echo "✅ Package successfully published to NPM: v$VERSION"
-          else
-            echo "::error::Package not found on NPM after publish attempt"
-            exit 1
-          fi
+          # Configuration for retry mechanism
+          MAX_ATTEMPTS=12              # Maximum number of verification attempts
+          INITIAL_WAIT=5               # Initial wait time in seconds
+          MAX_WAIT=30                  # Maximum wait time between attempts in seconds
+          TIMEOUT=180                  # Total timeout in seconds (3 minutes)
+
+          echo "🔍 Verifying NPM package publication: ${PACKAGE_NAME}@${VERSION}"
+          echo "⏱️  Will retry for up to ${TIMEOUT} seconds with exponential backoff"
+          echo ""
+
+          START_TIME=$(date +%s)
+          attempt=1
+          wait_time=$INITIAL_WAIT
+
+          while [ $attempt -le $MAX_ATTEMPTS ]; do
+            ELAPSED=$(($(date +%s) - START_TIME))
+
+            # Check if we've exceeded the total timeout
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo ""
+              echo "::error::❌ Timeout reached (${TIMEOUT}s) - Package not found on NPM registry"
+              echo "::error::Package: ${PACKAGE_NAME}@${VERSION}"
+              echo "::error::Total attempts: $attempt"
+              echo "::error::This may indicate a publishing failure or severe registry delay"
+              echo ""
+              echo "💡 Troubleshooting steps:"
+              echo "  1. Check NPM package page: https://www.npmjs.com/package/${PACKAGE_NAME}"
+              echo "  2. Verify publish step completed successfully"
+              echo "  3. Check NPM registry status: https://status.npmjs.org/"
+              exit 1
+            fi
+
+            echo "📦 Attempt $attempt/$MAX_ATTEMPTS: Checking NPM registry..."
+
+            # Attempt to fetch package version from NPM
+            if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+              ELAPSED=$(($(date +%s) - START_TIME))
+              echo ""
+              echo "✅ Success! Package found on NPM registry"
+              echo "📦 Package: ${PACKAGE_NAME}@${VERSION}"
+              echo "⏱️  Verification time: ${ELAPSED}s (${attempt} attempts)"
+              echo "🔗 View package: https://www.npmjs.com/package/${PACKAGE_NAME}/v/${VERSION}"
+              exit 0
+            fi
+
+            # Package not found yet - calculate next wait time with exponential backoff
+            echo "⏳ Package not yet available (attempt $attempt/$MAX_ATTEMPTS)"
+
+            if [ $attempt -lt $MAX_ATTEMPTS ]; then
+              # Exponential backoff: double wait time each iteration, capped at MAX_WAIT
+              next_wait=$((wait_time * 2))
+              if [ $next_wait -gt $MAX_WAIT ]; then
+                wait_time=$MAX_WAIT
+              else
+                wait_time=$next_wait
+              fi
+
+              # Ensure we don't wait past the timeout
+              REMAINING=$((TIMEOUT - ELAPSED))
+              if [ $wait_time -gt $REMAINING ]; then
+                wait_time=$REMAINING
+              fi
+
+              echo "💤 Waiting ${wait_time}s before next attempt (elapsed: ${ELAPSED}s/${TIMEOUT}s)..."
+              sleep $wait_time
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+          # If we exit the loop without success, fail the job
+          echo ""
+          echo "::error::❌ Package not found after $MAX_ATTEMPTS attempts"
+          echo "::error::Package: ${PACKAGE_NAME}@${VERSION}"
+          echo "::error::Total time: ${ELAPSED}s"
+          exit 1
 
       - name: Create Git Tag
         run: |
