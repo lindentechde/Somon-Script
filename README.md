@@ -123,7 +123,7 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
 
 ```som
 // Variables with type inference
-тағйирёбанда ном = "Дониёр";
+тағ ном = "Дониёр";
 собит МАКС_СИННУ_СОЛ: рақам = 120;
 
 // Functions with type annotations
@@ -159,7 +159,7 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
 
 ```som
 // Union types for flexible APIs
-тағйирёбанда маълумот: сатр | рақам | мантиқӣ = "Салом";
+тағ маълумот: сатр | рақам | мантиқӣ = "Салом";
 
 // Intersection types for composition
 интерфейс Корбар {
@@ -171,32 +171,32 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
     сатҳи_дастрасӣ: рақам;
 }
 
-тағйирёбанда супер_корбар: Корбар & Админ = {
+тағ супер_корбар: Корбар & Админ = {
     ном: "Алӣ",
     синну_сол: 30,
     сатҳи_дастрасӣ: 9
 };
 
 // Tuple types with precise structure
-тағйирёбанда координата: [рақам, рақам, сатр] = [41.2, 69.1, "Душанбе"];
+тағ координата: [рақам, рақам, сатр] = [41.2, 69.1, "Душанбе"];
 ```
 
 ### **Modern JavaScript Interop**
 
 ```som
 // Template literals with interpolation
-тағйирёбанда ном = "Аҳмад";
-тағйирёбанда синну = 25;
-тағйирёбанда паём = `Салом, ${ном}! Шумо ${синну} сола доред.`;
+тағ ном = "Аҳмад";
+тағ синну = 25;
+тағ паём = `Салом, ${ном}! Шумо ${синну} сола доред.`;
 
 // Multiline template literals
-тағйирёбанда матн = `Сатри якум
+тағ матн = `Сатри якум
 Сатри дуюм
 Сатри сеюм`;
 
 // Async/await for modern web development
 ҳамзамон функсия маълумот_гирифтан(url: сатр): Promise<сатр> {
-    тағйирёбанда ҷавоб = интизор fetch(url);
+    тағ ҷавоб = интизор fetch(url);
     бозгашт интизор ҷавоб.text();
 }
 
@@ -218,7 +218,7 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
 
 // Error handling
 кӯшиш {
-    тағйирёбанда натиҷа = тақсим_кардан(10, 0);
+    тағ натиҷа = тақсим_кардан(10, 0);
 } гирифтан (хато) {
     чоп.сабт("Хато рух дод: " + хато.паём);
 }
@@ -444,7 +444,7 @@ cat > calculator.som << 'EOF'
     бозгашт а + б;
 }
 
-тағйирёбанда натиҷа = ҷамъ(5, 3);
+тағ натиҷа = ҷамъ(5, 3);
 чоп.сабт("Натиҷа: " + натиҷа);
 EOF
 
