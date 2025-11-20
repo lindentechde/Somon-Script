@@ -259,9 +259,8 @@ export class ModuleSystem {
     this.validateResourceLimits(options, errors);
 
     if (errors.length > 0) {
-      throw new Error(
-        `ModuleSystem configuration validation failed:\n${errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')}`
-      );
+      const formattedErrors = errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n');
+      throw new Error(`ModuleSystem configuration validation failed:\n${formattedErrors}`);
     }
   }
 
@@ -765,7 +764,12 @@ export class ModuleSystem {
 
       const warningInfo =
         compilationResult.warnings.length > 0
-          ? `\n\nWarnings (${compilationResult.warnings.length}):\n${compilationResult.warnings.map((w, i) => `  ${i + 1}. ${w}`).join('\n')}`
+          ? (() => {
+              const formattedWarnings = compilationResult.warnings
+                .map((w, i) => `  ${i + 1}. ${w}`)
+                .join('\n');
+              return `\n\nWarnings (${compilationResult.warnings.length}):\n${formattedWarnings}`;
+            })()
           : '';
 
       const errorMessage = `Bundle process failed with ${compilationResult.errors.length} error(s):\n\n${errorDetails}${warningInfo}`;
@@ -1026,20 +1030,20 @@ export class ModuleSystem {
 
     const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
 
-    const supportedEvents: ModuleWatchEventType[] = [
+    const supportedEvents = new Set<ModuleWatchEventType>([
       'add',
       'change',
       'unlink',
       'addDir',
       'unlinkDir',
-    ];
+    ]);
 
     watcher.on('all', (event: string, changedPath: string) => {
       if (!options.onChange) {
         return;
       }
 
-      if (!supportedEvents.includes(event as ModuleWatchEventType)) {
+      if (!supportedEvents.has(event as ModuleWatchEventType)) {
         return;
       }
 

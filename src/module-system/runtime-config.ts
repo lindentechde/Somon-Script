@@ -2,8 +2,8 @@
  * Runtime configuration and health check system
  * Provides dynamic configuration updates and HTTP management endpoints
  */
-import * as http from 'http';
-import * as url from 'url';
+import * as http from 'node:http';
+import * as url from 'node:url';
 import { ModuleSystemMetrics } from './metrics';
 import { CircuitBreakerManager } from './circuit-breaker';
 import { LoggerFactory, LogLevel } from './logger';

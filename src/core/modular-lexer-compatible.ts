@@ -374,7 +374,7 @@ export class OperatorRecognizer extends BaseTokenRecognizer {
   canRecognize(input: string, position: number): boolean {
     const char = this.peek(input, position);
     // Check if any operator starts with this character
-    return this.sortedOperators.some(op => op[0] === char);
+    return this.sortedOperators.some(op => op.startsWith(char));
   }
 
   recognize(

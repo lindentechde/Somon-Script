@@ -424,17 +424,17 @@ export class ModuleRegistry {
     }
 
     // For relative paths, try to find the matching module
-    const possiblePaths = [
+    const possiblePaths = new Set([
       path.resolve(fromDir, specifier),
       path.resolve(fromDir, specifier + '.som'),
       path.resolve(fromDir, specifier + '.js'),
       path.resolve(fromDir, specifier, 'index.som'),
       path.resolve(fromDir, specifier, 'index.js'),
-    ];
+    ]);
 
     // Find a registered module that matches one of the possible paths
     for (const mod of this.modules.values()) {
-      if (possiblePaths.includes(mod.resolvedPath)) {
+      if (possiblePaths.has(mod.resolvedPath)) {
         return mod.id;
       }
     }

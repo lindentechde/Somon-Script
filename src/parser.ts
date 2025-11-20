@@ -83,9 +83,9 @@ export class Parser {
   private tokens: Token[];
   private current: number = 0;
   private errors: string[] = [];
-  private importHandler: ImportHandler;
-  private declarationHandler: DeclarationHandler;
-  private loopHandler: LoopHandler;
+  private readonly importHandler: ImportHandler;
+  private readonly declarationHandler: DeclarationHandler;
+  private readonly loopHandler: LoopHandler;
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;

@@ -1335,7 +1335,7 @@ export class CodeGenerator {
     result += this.indent(`const ${name} = {};\n`);
 
     // Generate namespace body
-    if (node.body && node.body.statements) {
+    if (node.body?.statements) {
       for (const stmt of node.body.statements) {
         const isExported = (stmt as Statement & { exported?: boolean }).exported;
 
@@ -1413,7 +1413,7 @@ export class CodeGenerator {
         return (stmt as FunctionDeclaration).name.name;
       case 'VariableDeclaration': {
         const varDecl = stmt as VariableDeclaration;
-        if (varDecl.identifier && varDecl.identifier.type === 'Identifier') {
+        if (varDecl.identifier?.type === 'Identifier') {
           return varDecl.identifier.name;
         }
         break;
@@ -1436,7 +1436,7 @@ export class CodeGenerator {
     let classBody = '';
 
     // Generate class members
-    if (node.body && node.body.body) {
+    if (node.body?.body) {
       const members = node.body.body
         .map(member => {
           switch (member.type) {
@@ -1478,7 +1478,7 @@ export class CodeGenerator {
     } else {
       // Regular methods have a body
       // Handle cases where body might be null or undefined
-      if (!node.value || !node.value.body) {
+      if (!node.value?.body) {
         return this.indent(`${isStatic}${methodName}(${params}) {}`);
       }
       const body = this.generateBlockStatement(node.value.body);

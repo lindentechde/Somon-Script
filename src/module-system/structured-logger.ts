@@ -1,7 +1,7 @@
 /**
  * Structured logging with JSON support and correlation IDs
  */
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 export interface LogContext {
   correlationId?: string;
@@ -207,7 +207,7 @@ export class StructuredLogger {
  * Global logger factory with structured logging support
  */
 export class StructuredLoggerFactory {
-  private static loggers = new Map<string, StructuredLogger>();
+  private static readonly loggers = new Map<string, StructuredLogger>();
   private static globalOptions: StructuredLoggerOptions = {
     format: process.env.LOG_FORMAT === 'json' ? 'json' : 'text',
     level: (process.env.LOG_LEVEL as LogLevel) || 'info',
