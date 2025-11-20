@@ -49,7 +49,7 @@ describe('Standard Library - String Tests', () => {
     ];
 
     testCases.forEach(({ source, expected }) => {
-      const fullSource = `тағйирёбанда матн = "test"; ${source}`;
+      const fullSource = `тағ матн = "test"; ${source}`;
       const result = compile(fullSource);
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain(expected);

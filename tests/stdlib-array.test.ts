@@ -60,7 +60,7 @@ describe('Standard Library - Array Tests', () => {
     ];
 
     testCases.forEach(({ source, expected }) => {
-      const fullSource = `тағйирёбанда рӯйхат = [1, 2, 3]; ${source}`;
+      const fullSource = `тағ рӯйхат = [1, 2, 3]; ${source}`;
       const result = compile(fullSource);
       expect(result.errors).toHaveLength(0);
       expect(result.code).toContain(expected);
