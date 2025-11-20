@@ -1852,6 +1852,14 @@ export class Parser {
       TokenType.ФИЛТР,
       TokenType.КОФТАН,
       TokenType.ГИРИФТАН, // Allow 'гирифтан' as identifier (common method name)
+      // Console method underscore variants
+      TokenType.ГУРУҲ_ОХИР,
+      TokenType.ГУРУҲ_ПӮШИДА,
+      TokenType.ВАҚТ_САБТ,
+      TokenType.ВАҚТ_ОХИР,
+      TokenType.ҚАЙД_АСЛ,
+      TokenType.XML_ФЕҲРИСТ,
+      // String methods
       TokenType.САТР_МЕТОДҲО,
       TokenType.ДАРОЗИИ_САТР,
       TokenType.ПАЙВАСТАН,
