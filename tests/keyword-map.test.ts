@@ -40,18 +40,24 @@ describe('Keyword map coverage', () => {
     ['исфти', TokenType.ИСФТИ],
     ['тасдиқ', TokenType.ТАСДИҚ],
     ['қайд', TokenType.ҚАЙД],
-    ['қайд_асл', TokenType.ҚАЙД_АСЛ],
+    ['қайдАсл', TokenType.ҚАЙДАСЛ],
+    ['қайдасл', TokenType.ҚАЙДАСЛ], // Lowercase version
     ['вақт', TokenType.ВАҚТ],
-    ['вақт_сабт', TokenType.ВАҚТ_САБТ],
-    ['вақт_охир', TokenType.ВАҚТ_ОХИР],
+    ['вақтСабт', TokenType.ВАҚТСАБТ],
+    ['вақтсабт', TokenType.ВАҚТСАБТ], // Lowercase version
+    ['вақтОхир', TokenType.ВАҚТОХИР],
+    ['вақтохир', TokenType.ВАҚТОХИР], // Lowercase version
     ['ҷадвал', TokenType.ҶАДВАЛ],
     ['феҳрист', TokenType.ФЕҲРИСТ],
-    ['xml_феҳрист', TokenType.XML_ФЕҲРИСТ],
+    ['xmlФеҳрист', TokenType.XMLФЕҲРИСТ],
+    ['xmlфеҳрист', TokenType.XMLФЕҲРИСТ], // Lowercase version
     ['пайҷо', TokenType.ПАЙҶО],
     ['полиз', TokenType.ПОЛИЗ],
     ['гуруҳ', TokenType.ГУРУҲ],
-    ['гуруҳ_охир', TokenType.ГУРУҲ_ОХИР],
-    ['гуруҳ_пӯшида', TokenType.ГУРУҲ_ПӮШИДА],
+    ['гуруҳОхир', TokenType.ГУРУҲОХИР],
+    ['гуруҳохир', TokenType.ГУРУҲОХИР], // Lowercase version
+    ['гуруҳПӯшида', TokenType.ГУРУҲПӮШИДА],
+    ['гуруҳпӯшида', TokenType.ГУРУҲПӮШИДА], // Lowercase version
 
     // Array methods
     ['рӯйхат', TokenType.РӮЙХАТ],
@@ -63,8 +69,10 @@ describe('Keyword map coverage', () => {
     ['кофтан', TokenType.КОФТАН],
 
     // String methods
-    ['сатр_методҳо', TokenType.САТР_МЕТОДҲО],
-    ['дарозии_сатр', TokenType.ДАРОЗИИ_САТР],
+    ['сатрМетодҳо', TokenType.САТРМЕТОДҲО],
+    ['сатрметодҳо', TokenType.САТРМЕТОДҲО], // Lowercase version
+    ['дарозииСатр', TokenType.ДАРОЗИИСАТР],
+    ['дарозиисатр', TokenType.ДАРОЗИИСАТР], // Lowercase version
     ['пайвастан', TokenType.ПАЙВАСТАН],
     ['ҷойивазкунӣ', TokenType.ҶОЙИВАЗКУНӢ],
     ['ҷудокунӣ', TokenType.ҶУДОКУНӢ],

@@ -125,11 +125,12 @@ describe('Lexer', () => {
     expect(tokens[3].value).toBe('||');
   });
 
-  test('should tokenize string methods with new naming', () => {
-    const source = 'сатр_методҳо.дарозии_сатр';
+  test('should tokenize string methods with camelCase naming', () => {
+    const source = 'сатрМетодҳо.дарозииСатр';
     const tokens = tokenize(source);
 
-    expect(tokens[0].type).toBe('САТР_МЕТОДҲО');
-    expect(tokens[2].type).toBe('ДАРОЗИИ_САТР');
+    expect(tokens[0].type).toBe('САТРМЕТОДҲО');
+    expect(tokens[1].type).toBe('.');
+    expect(tokens[2].type).toBe('ДАРОЗИИСАТР');
   });
 });
