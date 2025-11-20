@@ -41,17 +41,23 @@ describe('Keyword map coverage', () => {
     ['тасдиқ', TokenType.ТАСДИҚ],
     ['қайд', TokenType.ҚАЙД],
     ['қайдАсл', TokenType.ҚАЙДАСЛ],
+    ['қайдасл', TokenType.ҚАЙДАСЛ], // Lowercase version
     ['вақт', TokenType.ВАҚТ],
     ['вақтСабт', TokenType.ВАҚТСАБТ],
+    ['вақтсабт', TokenType.ВАҚТСАБТ], // Lowercase version
     ['вақтОхир', TokenType.ВАҚТОХИР],
+    ['вақтохир', TokenType.ВАҚТОХИР], // Lowercase version
     ['ҷадвал', TokenType.ҶАДВАЛ],
     ['феҳрист', TokenType.ФЕҲРИСТ],
     ['xmlФеҳрист', TokenType.XMLФЕҲРИСТ],
+    ['xmlфеҳрист', TokenType.XMLФЕҲРИСТ], // Lowercase version
     ['пайҷо', TokenType.ПАЙҶО],
     ['полиз', TokenType.ПОЛИЗ],
     ['гуруҳ', TokenType.ГУРУҲ],
     ['гуруҳОхир', TokenType.ГУРУҲОХИР],
+    ['гуруҳохир', TokenType.ГУРУҲОХИР], // Lowercase version
     ['гуруҳПӯшида', TokenType.ГУРУҲПӮШИДА],
+    ['гуруҳпӯшида', TokenType.ГУРУҲПӮШИДА], // Lowercase version
 
     // Array methods
     ['рӯйхат', TokenType.РӮЙХАТ],
@@ -64,7 +70,9 @@ describe('Keyword map coverage', () => {
 
     // String methods
     ['сатрМетодҳо', TokenType.САТРМЕТОДҲО],
+    ['сатрметодҳо', TokenType.САТРМЕТОДҲО], // Lowercase version
     ['дарозииСатр', TokenType.ДАРОЗИИСАТР],
+    ['дарозиисатр', TokenType.ДАРОЗИИСАТР], // Lowercase version
     ['пайвастан', TokenType.ПАЙВАСТАН],
     ['ҷойивазкунӣ', TokenType.ҶОЙИВАЗКУНӢ],
     ['ҷудокунӣ', TokenType.ҶУДОКУНӢ],
