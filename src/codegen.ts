@@ -67,22 +67,16 @@ export class CodeGenerator {
     ['ҷадвал', 'table'],
     ['гуруҳ', 'group'],
     ['гуруҳОхир', 'groupEnd'],
-    ['гуруҳ_охир', 'groupEnd'], // Underscore variant
     ['гуруҳПӯшида', 'groupCollapsed'],
-    ['гуруҳ_пӯшида', 'groupCollapsed'], // Underscore variant
     ['вақт', 'time'],
     ['вақтОхир', 'timeEnd'],
-    ['вақт_охир', 'timeEnd'], // Underscore variant
     ['вақтСабт', 'timeLog'],
-    ['вақт_сабт', 'timeLog'], // Underscore variant
     ['қайд', 'count'],
     ['қайдАсл', 'countReset'],
-    ['қайд_асл', 'countReset'], // Underscore variant
     ['тасдиқ', 'assert'],
     ['полиз', 'clear'],
     ['феҳрист', 'dir'],
     ['xmlФеҳрист', 'dirxml'],
-    ['xml_феҳрист', 'dirxml'], // Underscore variant
     ['пайҷо', 'trace'],
 
     // Error handling
@@ -137,9 +131,7 @@ export class CodeGenerator {
     // String methods
     ['сатр', 'String'], // String type/constructor
     ['сатрМетодҳо', 'String'], // String methods object
-    ['сатр_методҳо', 'String'], // Underscore variant
     ['дарозииСатр', 'length'],
-    ['дарозии_сатр', 'length'], // Underscore variant
     ['дар', 'at'],
     ['аломатДар', 'charAt'],
     ['кодиАломатДар', 'charCodeAt'],
@@ -918,15 +910,7 @@ export class CodeGenerator {
     }
 
     // Map built-in constructors/objects (when used as identifiers)
-    const builtinConstructors = [
-      'сатр',
-      'рӯйхат',
-      'объект',
-      'математика',
-      'Риёзӣ',
-      'сатрМетодҳо',
-      'сатр_методҳо', // Underscore variant
-    ];
+    const builtinConstructors = ['сатр', 'рӯйхат', 'объект', 'математика', 'Риёзӣ', 'сатрМетодҳо'];
     if (builtinConstructors.includes(node.name)) {
       const mapped = this.builtinMappings.get(node.name);
       if (mapped) {
@@ -1043,15 +1027,7 @@ export class CodeGenerator {
     }
 
     const objectName = (node.object as Identifier).name;
-    const builtinObjects = [
-      'чоп',
-      'математика',
-      'объект',
-      'Риёзӣ',
-      'сатр',
-      'сатрМетодҳо',
-      'сатр_методҳо', // Underscore variant
-    ];
+    const builtinObjects = ['чоп', 'математика', 'объект', 'Риёзӣ', 'сатр', 'сатрМетодҳо'];
 
     if (!builtinObjects.includes(objectName)) {
       return { mapped: object, wasMapped: false };
@@ -1091,13 +1067,26 @@ export class CodeGenerator {
     }
 
     const commonMethods = [
-      // Console methods (underscore variants)
-      'гуруҳ_охир',
-      'гуруҳ_пӯшида',
-      'вақт_сабт',
-      'вақт_охир',
-      'қайд_асл',
-      'xml_феҳрист',
+      // Console methods (basic and camelCase)
+      'сабт',
+      'хато',
+      'огоҳӣ',
+      'маълумот',
+      'исфти',
+      'тасдиқ',
+      'ҷадвал',
+      'гуруҳ',
+      'гуруҳОхир',
+      'гуруҳПӯшида',
+      'вақт',
+      'вақтОхир',
+      'вақтСабт',
+      'қайд',
+      'қайдАсл',
+      'полиз',
+      'феҳрист',
+      'xmlФеҳрист',
+      'пайҷо',
       // Array methods
       'дарозӣ',
       'дар',
@@ -1144,7 +1133,6 @@ export class CodeGenerator {
       'бо',
       // String methods
       'дарозииСатр',
-      'дарозии_сатр', // Underscore variant
       'аломатДар',
       'кодиАломатДар',
       'нуқтаиКодДар',

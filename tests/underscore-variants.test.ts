@@ -2,7 +2,7 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { CodeGenerator } from '../src/codegen';
 
-describe('Underscore variant mappings', () => {
+describe('CamelCase-only mappings (no underscore support)', () => {
   function compileCode(source: string): string {
     const lexer = new Lexer(source);
     const tokens = lexer.tokenize();
@@ -12,79 +12,80 @@ describe('Underscore variant mappings', () => {
     return codegen.generate(ast);
   }
 
-  describe('Console method underscore variants', () => {
-    it('should map гуруҳ_охир to console.groupEnd', () => {
+  describe('Console method camelCase-only support', () => {
+    it('should NOT map underscore variant гуруҳ_охир', () => {
       const code = 'чоп.гуруҳ_охир();';
       const result = compileCode(code);
-      expect(result).toContain('console.groupEnd()');
-      expect(result).not.toContain('гуруҳ_охир');
+      expect(result).toContain('гуруҳ_охир'); // Should remain unchanged
+      expect(result).not.toContain('console.groupEnd()');
     });
 
-    it('should map гуруҳ_пӯшида to console.groupCollapsed', () => {
-      const code = 'чоп.гуруҳ_пӯшида("test");';
+    it('should map camelCase гуруҳОхир to console.groupEnd', () => {
+      const code = 'чоп.гуруҳОхир();';
       const result = compileCode(code);
-      expect(result).toContain('console.groupCollapsed');
-      expect(result).not.toContain('гуруҳ_пӯшида');
+      expect(result).toContain('console.groupEnd()');
+      expect(result).not.toContain('гуруҳОхир');
     });
 
-    it('should map вақт_сабт to console.timeLog', () => {
+    it('should NOT map underscore variant вақт_сабт', () => {
       const code = 'чоп.вақт_сабт("timer");';
       const result = compileCode(code);
-      expect(result).toContain('console.timeLog');
-      expect(result).not.toContain('вақт_сабт');
+      expect(result).toContain('вақт_сабт'); // Should remain unchanged
+      expect(result).not.toContain('console.timeLog');
     });
 
-    it('should map вақт_охир to console.timeEnd', () => {
-      const code = 'чоп.вақт_охир("timer");';
+    it('should map camelCase вақтСабт to console.timeLog', () => {
+      const code = 'чоп.вақтСабт("timer");';
       const result = compileCode(code);
-      expect(result).toContain('console.timeEnd');
-      expect(result).not.toContain('вақт_охир');
+      expect(result).toContain('console.timeLog');
+      expect(result).not.toContain('вақтСабт');
     });
 
-    it('should map қайд_асл to console.countReset', () => {
+    it('should NOT map underscore variant қайд_асл', () => {
       const code = 'чоп.қайд_асл("counter");';
       const result = compileCode(code);
-      expect(result).toContain('console.countReset');
-      expect(result).not.toContain('қайд_асл');
+      expect(result).toContain('қайд_асл'); // Should remain unchanged
+      expect(result).not.toContain('console.countReset');
     });
 
-    it('should map xml_феҳрист to console.dirxml', () => {
-      const code = 'чоп.xml_феҳрист(obj);';
+    it('should map camelCase қайдАсл to console.countReset', () => {
+      const code = 'чоп.қайдАсл("counter");';
       const result = compileCode(code);
-      expect(result).toContain('console.dirxml');
-      expect(result).not.toContain('xml_феҳрист');
+      expect(result).toContain('console.countReset');
+      expect(result).not.toContain('қайдАсл');
     });
   });
 
-  describe('String helper underscore variants', () => {
-    it('should map сатр_методҳо to String', () => {
-      const code = 'тағйирёбанда s = сатр_методҳо;';
+  describe('String helper camelCase variants', () => {
+    it('should map сатрМетодҳо to String', () => {
+      const code = 'тағйирёбанда s = сатрМетодҳо;';
       const result = compileCode(code);
       expect(result).toContain('String');
-      expect(result).not.toContain('сатр_методҳо');
+      expect(result).not.toContain('сатрМетодҳо');
     });
 
-    it('should map дарозии_сатр to length', () => {
-      const code = 'тағйирёбанда len = текст.дарозии_сатр;';
+    it('should map дарозииСатр to length', () => {
+      const code = 'тағйирёбанда len = текст.дарозииСатр;';
       const result = compileCode(code);
       expect(result).toContain('.length');
-      expect(result).not.toContain('дарозии_сатр');
+      expect(result).not.toContain('дарозииСатр');
     });
   });
 
-  describe('Backward compatibility', () => {
-    it('should support both camelCase and underscore variants', () => {
+  describe('CamelCase only support', () => {
+    it('should only support camelCase variants, not underscore', () => {
       const codeUnderscore = 'чоп.гуруҳ_охир();';
       const codeCamel = 'чоп.гуруҳОхир();';
 
       const resultUnderscore = compileCode(codeUnderscore);
       const resultCamel = compileCode(codeCamel);
 
-      expect(resultUnderscore).toContain('console.groupEnd()');
+      // Underscore variant should NOT be translated
+      expect(resultUnderscore).toContain('гуруҳ_охир');
       expect(resultCamel).toContain('console.groupEnd()');
     });
 
-    it('should work in complex example with mixed usage', () => {
+    it('should reject underscore methods in complex example', () => {
       const code = `
 чоп.гуруҳ("Test");
 чоп.сабт("Message");
@@ -96,17 +97,18 @@ describe('Underscore variant mappings', () => {
       `.trim();
 
       const result = compileCode(code);
+      // Basic methods should work
       expect(result).toContain('console.group');
       expect(result).toContain('console.log');
-      expect(result).toContain('console.groupEnd()');
       expect(result).toContain('console.time');
-      expect(result).toContain('console.timeLog');
-      expect(result).toContain('console.timeEnd');
 
-      // Ensure no Tajik identifiers remain in output
-      expect(result).not.toContain('гуруҳ_охир');
-      expect(result).not.toContain('вақт_сабт');
-      expect(result).not.toContain('вақт_охир');
+      // Underscore methods should NOT be translated
+      expect(result).toContain('гуруҳ_охир');
+      expect(result).toContain('вақт_сабт');
+      expect(result).toContain('вақт_охир');
+      expect(result).not.toContain('console.groupEnd()');
+      expect(result).not.toContain('console.timeLog');
+      expect(result).not.toContain('console.timeEnd');
     });
   });
 });
