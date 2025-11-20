@@ -151,14 +151,17 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 тағйирёбанда рақамҳо = [1, 2, 3, 4, 5];
 тағйирёбанда холӣ: сатр[] = [];
 
-// Array methods
-мева.push("шафтолу");          // Add to end
-мева.pop();                    // Remove from end
-мева.unshift("анголур");       // Add to beginning
-мева.shift();                  // Remove from beginning
-мева.length;                   // Array length
-мева.indexOf("себ");          // Find index
-мева.includes("мӯз");         // Check if exists
+// Array methods with Tajik names
+мева.илова("шафтолу");         // push - Илова ба охир
+мева.пуш("ангур");             // push (alternative)
+мева.баровардан();             // pop - Баровардан аз охир
+мева.дарозӣ;                   // length - Дарозии массив
+
+// Array iteration methods
+мева.харита(м => м.калон());   // map - Табдил додан
+мева.филтр(м => м !== "себ");  // filter - Филтр кардан
+мева.кофтан(м => м === "мӯз"); // find - Ёфтан
+мева.буридан(0, 2);            // slice - Буридан
 
 // Array iteration
 мева.forEach((элемент, индекс) => {
@@ -530,32 +533,68 @@ Object.entries(корбар);        // Get key-value pairs
 ### Console
 
 ```som
+// Basic console methods
 чоп.сабт("Паём");              // console.log
 чоп.хато("Хато");              // console.error
 чоп.огоҳӣ("Огоҳӣ");           // console.warn
 чоп.маълумот("Маълумот");      // console.info
+чоп.исфти("Debug");            // console.debug
+
+// Console table and grouping
+чоп.ҷадвал(маълумот);          // console.table
+чоп.гуруҳ("Гуруҳ");           // console.group
+чоп.гуруҳ_охир();              // console.groupEnd
+чоп.гуруҳ_пӯшида("Пӯшида");  // console.groupCollapsed
+
+// Console timing
+чоп.вақт("timer");            // console.time
+чоп.вақт_сабт("timer");       // console.timeLog
+чоп.вақт_охир("timer");       // console.timeEnd
+
+// Console counting and misc
+чоп.қайд("counter");          // console.count
+чоп.қайд_асл("counter");      // console.countReset
+чоп.тасдиқ(шарт, "паём");     // console.assert
+чоп.полиз();                   // console.clear
+чоп.феҳрист(объект);          // console.dir
+чоп.пайҷо();                   // console.trace
 ```
 
-### Math
+### Math (Риёзӣ)
 
 ```som
-Риёзӣ.дуръшака(9);            // Math.sqrt(9) = 3
-Риёзӣ.қувват(2, 3);           // Math.pow(2, 3) = 8
-Риёзӣ.тасодуфӣ();            // Math.random()
-Риёзӣ.дузкунӣ(4.7);          // Math.round(4.7) = 5
-Риёзӣ.боло(4.2);             // Math.ceil(4.2) = 5
-Риёзӣ.поён(4.7);             // Math.floor(4.7) = 4
+// Math methods - Методҳои математикӣ
+Риёзӣ.дуръшака(9);            // Math.sqrt(9) = 3 - Решаи квадратӣ
+Риёзӣ.қувват(2, 3);           // Math.pow(2, 3) = 8 - Қувват/дараҷа
+Риёзӣ.тасодуфӣ();            // Math.random() - Рақами тасодуфӣ (0-1)
+Риёзӣ.дузкунӣ(4.7);          // Math.round(4.7) = 5 - Гирдкунӣ
+Риёзӣ.боло(4.2);             // Math.ceil(4.2) = 5 - Гирдкунӣ ба боло
+Риёзӣ.поён(4.7);             // Math.floor(4.7) = 4 - Гирдкунӣ ба поён
+
+// Complex calculations example
+тағйирёбанда радиус = 5;
+тағйирёбанда майдон = 3.14159 * Риёзӣ.қувват(радиус, 2);
+тағйирёбанда аз_1_то_10 = Риёзӣ.поён(Риёзӣ.тасодуфӣ() * 10) + 1;
 ```
 
 ### String Methods
 
 ```som
-сатр.дарозӣ;                  // string.length
-сатр.калон();                 // string.toUpperCase()
-сатр.хурд();                  // string.toLowerCase()
-сатр.қисмат(0, 5);           // string.substring(0, 5)
-сатр.ҷойгузин("a", "b");     // string.replace("a", "b")
-сатр.ҷудокунӣ(",");          // string.split(",")
+// String properties and methods
+сатр.дарозӣ;                  // string.length - Дарозии сатр
+сатр.калон();                 // string.toUpperCase() - Ба ҳарфҳои калон
+сатр.хурд();                  // string.toLowerCase() - Ба ҳарфҳои хурд
+сатр.қисмат(0, 5);           // string.substring(0, 5) - Зерсатр
+сатр.ҷойгузин("a", "b");     // string.replace("a", "b") - Иваз кардан
+сатр.ҷудокунӣ(",");          // string.split(",") - Ҷудо кардан
+сатр.пайвастан(" Ҷаҳон");     // string.concat(" World") - Пайваст кардан
+
+// Example usage
+тағйирёбанда матн = "Салом, Ҷаҳон!";
+чоп.сабт(матн.дарозӣ);        // 13
+чоп.сабт(матн.калон());       // САЛОМ, ҶАҲОН!
+чоп.сабт(матн.хурд());        // салом, ҷаҳон!
+чоп.сабт(матн.қисмат(0, 5));  // Салом
 ```
 
 ## Best Practices

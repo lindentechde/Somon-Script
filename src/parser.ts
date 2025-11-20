@@ -585,14 +585,21 @@ export class Parser {
             line: token.line,
             column: token.column,
           };
+
+          let paramType: TypeAnnotation | undefined;
+          if (this.match(TokenType.COLON)) {
+            paramType = this.typeAnnotation();
+          }
+
           params.push({
             type: 'Parameter',
             name: identifier,
+            typeAnnotation: paramType,
             line: token.line,
             column: token.column,
           });
         } else {
-          // Not arrow function parameters
+          // Not an identifier, so not a simple parameter list
           this.current = savedIndex;
           return null;
         }
@@ -603,6 +610,11 @@ export class Parser {
       // Not arrow function
       this.current = savedIndex;
       return null;
+    }
+
+    let returnType: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
     }
 
     // Check for arrow
@@ -619,6 +631,7 @@ export class Parser {
       type: 'ArrowFunctionExpression',
       params,
       body,
+      returnType,
       line: this.tokens[savedIndex].line,
       column: this.tokens[savedIndex].column,
     } as ArrowFunctionExpression;

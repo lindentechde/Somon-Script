@@ -146,6 +146,7 @@ export interface ArrowFunctionExpression extends Expression {
   params: Parameter[];
   body: BlockStatement | Expression;
   isAsync?: boolean;
+  returnType?: TypeAnnotation;
 }
 
 export interface AssignmentExpression extends Expression {

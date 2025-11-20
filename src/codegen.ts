@@ -98,7 +98,11 @@ export class CodeGenerator {
     ['дарозии_сатр', 'length'],
     ['пайвастан', 'concat'],
     ['ҷойивазкунӣ', 'replace'],
-    ['ҷудокунӣ', 'join'], // Array join method (combines elements into string)
+    ['ҷудокунӣ', 'split'], // String split method
+    ['калон', 'toUpperCase'],
+    ['хурд', 'toLowerCase'],
+    ['қисмат', 'substring'],
+    ['ҷойгузин', 'replace'],
 
     // Object methods
     ['объект', 'Object'],
@@ -107,6 +111,13 @@ export class CodeGenerator {
 
     // Math
     ['математика', 'Math'],
+    ['Риёзӣ', 'Math'],
+    ['дуръшака', 'sqrt'],
+    ['қувват', 'pow'],
+    ['тасодуфӣ', 'random'],
+    ['дузкунӣ', 'round'],
+    ['боло', 'ceil'],
+    ['поён', 'floor'],
 
     // Control flow
     ['шикастан', 'break'],
@@ -770,13 +781,6 @@ export class CodeGenerator {
       return 'undefined';
     }
 
-    // Special case: don't map 'хато' when it's used as Error constructor
-    if (node.name === 'хато') {
-      // This is a bit of a hack - we need context to know if it's console.error or Error
-      // For now, we'll assume standalone 'хато' means Error, and 'чоп.хато' means console.error
-      return 'Error';
-    }
-
     // Handle Хато (capitalized) as Error constructor
     if (node.name === 'Хато') {
       return 'Error';
@@ -891,7 +895,7 @@ export class CodeGenerator {
     }
 
     const objectName = (node.object as Identifier).name;
-    const builtinObjects = ['чоп', 'математика', 'объект'];
+    const builtinObjects = ['чоп', 'математика', 'объект', 'Риёзӣ'];
 
     if (!builtinObjects.includes(objectName)) {
       return { mapped: object, wasMapped: false };
@@ -931,6 +935,7 @@ export class CodeGenerator {
     }
 
     const commonMethods = [
+      // Array methods
       'пуш',
       'илова',
       'баровардан',
@@ -938,10 +943,22 @@ export class CodeGenerator {
       'харита',
       'филтр',
       'кофтан',
+      'буридан',
+      // String methods
       'пайвастан',
       'ҷойивазкунӣ',
       'ҷудокунӣ',
-      'буридан',
+      'калон',
+      'хурд',
+      'қисмат',
+      'ҷойгузин',
+      // Math methods
+      'дуръшака',
+      'қувват',
+      'тасодуфӣ',
+      'дузкунӣ',
+      'боло',
+      'поён',
     ];
 
     const shouldMap =
@@ -992,7 +1009,8 @@ export class CodeGenerator {
     if (node.handler) {
       result += ' catch ';
       if (node.handler.param) {
-        result += `(${this.generateIdentifier(node.handler.param)}) `;
+        // Don't map catch parameter names - preserve original
+        result += `(${node.handler.param.name}) `;
       } else {
         result += '(error) ';
       }

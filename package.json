@@ -62,23 +62,18 @@
     "javascript",
     "programming-language"
   ],
-  "author": {
-    "name": "LindenTech IT Consulting",
-    "email": "info@lindentech.de",
-    "url": "https://lindentech.de"
-  },
+  "author": "LindenTech IT Consulting <info@lindentech.de> (https://lindentech.de)",
   "contributors": [
     {
       "name": "Bakhtier Gaibulloev",
       "email": "bakhtier.gaibulloev@gmail.com",
-      "url": "https://www.linkedin.com/in/gbakhtier/",
-      "role": "original creator, language author"
+      "url": "https://www.linkedin.com/in/gbakhtier/"
     }
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lindentechde/Somon-Script.git"
+    "url": "git+https://github.com/lindentechde/Somon-Script.git"
   },
   "bugs": {
     "url": "https://github.com/lindentechde/Somon-Script/issues"
@@ -105,7 +100,15 @@
     "babel-preset-minify": "^0.5.2",
     "chokidar": "^3.6.0",
     "commander": "^11.0.0",
+    "figma-developer-mcp": "^0.6.4",
     "source-map": "^0.7.6",
     "typescript": "^5.0.0"
-  }
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "type": "commonjs",
+  "types": "./dist/index.d.ts"
 }
