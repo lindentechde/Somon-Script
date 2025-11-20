@@ -577,32 +577,42 @@ export class Parser {
     const params: Parameter[] = [];
     if (!this.check(TokenType.RIGHT_PAREN)) {
       do {
+        let identifierToken: Token;
+
         if (this.check(TokenType.IDENTIFIER)) {
-          const token = this.advance();
-          const identifier: Identifier = {
-            type: 'Identifier',
-            name: token.value,
-            line: token.line,
-            column: token.column,
-          };
-
-          let paramType: TypeAnnotation | undefined;
-          if (this.match(TokenType.COLON)) {
-            paramType = this.typeAnnotation();
-          }
-
-          params.push({
-            type: 'Parameter',
-            name: identifier,
-            typeAnnotation: paramType,
-            line: token.line,
-            column: token.column,
-          });
+          identifierToken = this.advance();
+        } else if (this.matchBuiltinIdentifier()) {
+          // matchBuiltinIdentifier advances if true
+          identifierToken = this.previous();
+        } else if (
+          this.match(TokenType.НАВЪ, TokenType.МАЪЛУМОТ, TokenType.РӮЙХАТ, TokenType.БЕҚИМАТ)
+        ) {
+          identifierToken = this.previous();
         } else {
-          // Not an identifier, so not a simple parameter list
+          // Not a valid parameter name
           this.current = savedIndex;
           return null;
         }
+
+        const identifier: Identifier = {
+          type: 'Identifier',
+          name: identifierToken.value,
+          line: identifierToken.line,
+          column: identifierToken.column,
+        };
+
+        let paramType: TypeAnnotation | undefined;
+        if (this.match(TokenType.COLON)) {
+          paramType = this.typeAnnotation();
+        }
+
+        params.push({
+          type: 'Parameter',
+          name: identifier,
+          typeAnnotation: paramType,
+          line: identifierToken.line,
+          column: identifierToken.column,
+        });
       } while (this.match(TokenType.COMMA));
     }
 
