@@ -577,25 +577,42 @@ export class Parser {
     const params: Parameter[] = [];
     if (!this.check(TokenType.RIGHT_PAREN)) {
       do {
+        let identifierToken: Token;
+
         if (this.check(TokenType.IDENTIFIER)) {
-          const token = this.advance();
-          const identifier: Identifier = {
-            type: 'Identifier',
-            name: token.value,
-            line: token.line,
-            column: token.column,
-          };
-          params.push({
-            type: 'Parameter',
-            name: identifier,
-            line: token.line,
-            column: token.column,
-          });
+          identifierToken = this.advance();
+        } else if (this.matchBuiltinIdentifier()) {
+          // matchBuiltinIdentifier advances if true
+          identifierToken = this.previous();
+        } else if (
+          this.match(TokenType.НАВЪ, TokenType.МАЪЛУМОТ, TokenType.РӮЙХАТ, TokenType.БЕҚИМАТ)
+        ) {
+          identifierToken = this.previous();
         } else {
-          // Not arrow function parameters
+          // Not a valid parameter name
           this.current = savedIndex;
           return null;
         }
+
+        const identifier: Identifier = {
+          type: 'Identifier',
+          name: identifierToken.value,
+          line: identifierToken.line,
+          column: identifierToken.column,
+        };
+
+        let paramType: TypeAnnotation | undefined;
+        if (this.match(TokenType.COLON)) {
+          paramType = this.typeAnnotation();
+        }
+
+        params.push({
+          type: 'Parameter',
+          name: identifier,
+          typeAnnotation: paramType,
+          line: identifierToken.line,
+          column: identifierToken.column,
+        });
       } while (this.match(TokenType.COMMA));
     }
 
@@ -603,6 +620,11 @@ export class Parser {
       // Not arrow function
       this.current = savedIndex;
       return null;
+    }
+
+    let returnType: TypeAnnotation | undefined;
+    if (this.match(TokenType.COLON)) {
+      returnType = this.typeAnnotation();
     }
 
     // Check for arrow
@@ -619,6 +641,7 @@ export class Parser {
       type: 'ArrowFunctionExpression',
       params,
       body,
+      returnType,
       line: this.tokens[savedIndex].line,
       column: this.tokens[savedIndex].column,
     } as ArrowFunctionExpression;
@@ -1821,6 +1844,21 @@ export class Parser {
       TokenType.ХАТО,
       TokenType.ОГОҲӢ,
       TokenType.МАЪЛУМОТ,
+      TokenType.ИСФТИ,
+      TokenType.ТАСДИҚ,
+      TokenType.ҚАЙД,
+      TokenType.ҚАЙДАСЛ,
+      TokenType.ВАҚТ,
+      TokenType.ВАҚТСАБТ,
+      TokenType.ВАҚТОХИР,
+      TokenType.ҶАДВАЛ,
+      TokenType.ФЕҲРИСТ,
+      TokenType.XMLФЕҲРИСТ,
+      TokenType.ПАЙҶО,
+      TokenType.ПОЛИЗ,
+      TokenType.ГУРУҲ,
+      TokenType.ГУРУҲОХИР,
+      TokenType.ГУРУҲПӮШИДА,
       TokenType.РӮЙХАТ,
       TokenType.ИЛОВА,
       TokenType.БАРОВАРДАН,
@@ -1829,8 +1867,9 @@ export class Parser {
       TokenType.ФИЛТР,
       TokenType.КОФТАН,
       TokenType.ГИРИФТАН, // Allow 'гирифтан' as identifier (common method name)
-      TokenType.САТР_МЕТОДҲО,
-      TokenType.ДАРОЗИИ_САТР,
+      // String methods
+      TokenType.САТРМЕТОДҲО,
+      TokenType.ДАРОЗИИСАТР,
       TokenType.ПАЙВАСТАН,
       TokenType.ҶОЙИВАЗКУНӢ,
       TokenType.ҶУДОКУНӢ,

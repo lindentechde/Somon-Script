@@ -152,11 +152,11 @@ describe('Compiler', () => {
   });
 
   test('should compile object expressions', () => {
-    const source = 'тағйирёбанда объект = { ном: "Аҳмад", сол: 25 };';
+    const source = 'тағйирёбанда объекти = { ном: "Аҳмад", сол: 25 };';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.code).toContain('let объект = {ном: "Аҳмад", сол: 25};');
+    expect(result.code).toContain('let объекти = {ном: "Аҳмад", сол: 25};');
   });
 
   test('should compile member expressions', () => {

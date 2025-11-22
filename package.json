@@ -1,7 +1,7 @@
 {
   "name": "@lindentech/somon-script",
   "homepage": "https://lindentech.de",
-  "version": "0.3.49",
+  "version": "0.3.60",
   "description": "A programming language that compiles to JavaScript, written in Tajik Cyrillic",
   "main": "dist/index.js",
   "bin": {
@@ -62,23 +62,18 @@
     "javascript",
     "programming-language"
   ],
-  "author": {
-    "name": "LindenTech IT Consulting",
-    "email": "info@lindentech.de",
-    "url": "https://lindentech.de"
-  },
+  "author": "LindenTech IT Consulting <info@lindentech.de> (https://lindentech.de)",
   "contributors": [
     {
       "name": "Bakhtier Gaibulloev",
       "email": "bakhtier.gaibulloev@gmail.com",
-      "url": "https://www.linkedin.com/in/gbakhtier/",
-      "role": "original creator, language author"
+      "url": "https://www.linkedin.com/in/gbakhtier/"
     }
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lindentechde/Somon-Script.git"
+    "url": "git+https://github.com/lindentechde/Somon-Script.git"
   },
   "bugs": {
     "url": "https://github.com/lindentechde/Somon-Script/issues"
@@ -107,5 +102,12 @@
     "commander": "^11.0.0",
     "source-map": "^0.7.6",
     "typescript": "^5.0.0"
-  }
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "type": "commonjs",
+  "types": "./dist/index.d.ts"
 }

@@ -466,11 +466,11 @@ describe('Lexer Extended Coverage Tests', () => {
 
   describe('String method tokens', () => {
     test('should tokenize string method identifiers', () => {
-      const source = 'сатр_методҳо дарозии_сатр пайвастан ҷойивазкунӣ ҷудокунӣ';
+      const source = 'сатрМетодҳо дарозииСатр пайвастан ҷойивазкунӣ ҷудокунӣ';
       const tokens = tokenize(source);
 
-      expect(tokens[0].type).toBe(TokenType.САТР_МЕТОДҲО);
-      expect(tokens[1].type).toBe(TokenType.ДАРОЗИИ_САТР);
+      expect(tokens[0].type).toBe(TokenType.САТРМЕТОДҲО);
+      expect(tokens[1].type).toBe(TokenType.ДАРОЗИИСАТР);
       expect(tokens[2].type).toBe(TokenType.ПАЙВАСТАН);
       expect(tokens[3].type).toBe(TokenType.ҶОЙИВАЗКУНӢ);
       expect(tokens[4].type).toBe(TokenType.ҶУДОКУНӢ);

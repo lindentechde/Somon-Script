@@ -22,6 +22,18 @@ describe('Lexer', () => {
     expect(tokens[4].type).toBe(TokenType.SEMICOLON);
   });
 
+  test('should tokenize variable declaration with short keyword', () => {
+    const source = 'тағ ном = "Аҳмад";';
+    const lexer = new Lexer(source);
+    const tokens = lexer.tokenize();
+
+    expect(tokens).toHaveLength(6); // тағ, ном, =, "Аҳмад", ;, EOF
+    expect(tokens[0].type).toBe(TokenType.ТАҒЙИРЁБАНДА); // Same token type as тағйирёбанда
+    expect(tokens[0].value).toBe('тағ');
+    expect(tokens[1].type).toBe(TokenType.IDENTIFIER);
+    expect(tokens[1].value).toBe('ном');
+  });
+
   test('should tokenize numbers', () => {
     const source = '42 3.14';
     const lexer = new Lexer(source);
@@ -113,11 +125,12 @@ describe('Lexer', () => {
     expect(tokens[3].value).toBe('||');
   });
 
-  test('should tokenize string methods with new naming', () => {
-    const source = 'сатр_методҳо.дарозии_сатр';
+  test('should tokenize string methods with camelCase naming', () => {
+    const source = 'сатрМетодҳо.дарозииСатр';
     const tokens = tokenize(source);
 
-    expect(tokens[0].type).toBe('САТР_МЕТОДҲО');
-    expect(tokens[2].type).toBe('ДАРОЗИИ_САТР');
+    expect(tokens[0].type).toBe('САТРМЕТОДҲО');
+    expect(tokens[1].type).toBe('.');
+    expect(tokens[2].type).toBe('ДАРОЗИИСАТР');
   });
 });
