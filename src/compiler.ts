@@ -62,20 +62,10 @@ export interface CompileResult {
  * diagnostics, and warnings.
  */
 export function compile(source: string, options: CompileOptions = {}): CompileResult {
-  const timeout = options.timeout ?? 120000; // Default 2 minutes
-
-  if (timeout > 0) {
-    const timeoutId = setTimeout(() => {
-      throw new Error(`Compilation timed out after ${timeout}ms`);
-    }, timeout);
-
-    try {
-      return compileInternal(source, options);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
+  // Note: the previous `setTimeout`-based timeout was a no-op for a synchronous
+  // parse loop. The thrown error fired in a future tick, became an uncaught
+  // exception, and did not interrupt CPU-bound work. If pathological inputs
+  // become a problem, enforce timeouts via a worker thread at the CLI layer.
   return compileInternal(source, options);
 }
 

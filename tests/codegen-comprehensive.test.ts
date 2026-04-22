@@ -166,7 +166,7 @@ describe('CodeGenerator - Comprehensive Test Suite', () => {
   });
 
   describe('Error Handling', () => {
-    test('should handle invalid input gracefully', () => {
+    test('should collect errors for unknown statement types (never-throw contract)', () => {
       const program: Program = {
         type: 'Program',
         body: [{} as Statement],
@@ -174,10 +174,10 @@ describe('CodeGenerator - Comprehensive Test Suite', () => {
         column: 1,
       };
 
-      // CodeGenerator should throw an error for unknown statement types
-      expect(() => {
-        generator.generate(program);
-      }).toThrow('Unknown statement type: undefined');
+      expect(() => generator.generate(program)).not.toThrow();
+      expect(generator.getErrors()).toEqual(
+        expect.arrayContaining([expect.stringContaining('Unknown statement type:')])
+      );
     });
 
     test('should handle null and undefined gracefully', () => {
