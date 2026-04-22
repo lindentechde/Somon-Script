@@ -1224,13 +1224,6 @@ export class CodeGenerator {
   /**
    * Check if object looks like a user class instance
    */
-  private looksLikeClassInstance(node: MemberExpression): boolean {
-    return (
-      node.object.type === 'Identifier' &&
-      /^[а-яё]/.test((node.object as Identifier).name) &&
-      (node.object as Identifier).name.includes('_')
-    );
-  }
 
   /**
    * Try to map property name based on context
@@ -1246,9 +1239,13 @@ export class CodeGenerator {
       return property;
     }
 
-    const shouldMap =
-      objectMapped ||
-      (!this.looksLikeClassInstance(node) && CodeGenerator.COMMON_METHODS.has(propertyName));
+    // Always map if the property is a recognised Tajik builtin method name.
+    // The previous `looksLikeClassInstance` heuristic (lowercase Cyrillic +
+    // underscore) created asymmetry with MethodDefinition emission: a class
+    // method declared as `илова` emits `push`, but a call on `list_name.илова`
+    // would not — runtime "not a function". Consistency beats the heuristic:
+    // if the user names a class method after a builtin, both sides rewrite.
+    const shouldMap = objectMapped || CodeGenerator.COMMON_METHODS.has(propertyName);
     return shouldMap ? mappedProperty : property;
   }
 
@@ -1479,8 +1476,16 @@ export class CodeGenerator {
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
-    const methodName =
-      node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
+    // Keep symmetry with `mapPropertyName`: a call-site `obj.маълумот()` may rewrite
+    // to `obj.info()` via the builtin map, so the declaration must agree. Without
+    // this, the class emits `маълумот()` while every call emits `info()` and the
+    // runtime hits "not a function". Bug covered examples 10/11/12/13/17/20/24/27/36.
+    const rawName = this.generateIdentifier(node.key);
+    const mappedMethodName =
+      CodeGenerator.COMMON_METHODS.has(rawName) && this.builtinMappings.has(rawName)
+        ? (this.builtinMappings.get(rawName) as string)
+        : rawName;
+    const methodName = node.kind === 'constructor' ? 'constructor' : mappedMethodName;
     const isStatic = node.static ? 'static ' : '';
     // Note: JavaScript doesn't support abstract methods, so we skip them entirely
 
