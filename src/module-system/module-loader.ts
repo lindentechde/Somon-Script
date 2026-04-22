@@ -4,8 +4,6 @@ import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import { Program, ImportDeclaration } from '../types';
-import { ModuleSystemMetrics } from './metrics';
-import { CircuitBreakerManager } from './circuit-breaker';
 import { moduleLoaderLogger as logger } from './logger';
 
 type BufferEncoding =
@@ -58,29 +56,16 @@ export class ModuleLoader {
   private currentMemoryUsage: number = 0;
   private warnings: string[] = [];
 
-  // Production systems
-  private readonly metrics?: ModuleSystemMetrics;
-  private readonly circuitBreakers?: CircuitBreakerManager;
-
-  constructor(
-    resolver: ModuleResolver,
-    options: ModuleLoadOptions = {},
-    metrics?: ModuleSystemMetrics,
-    circuitBreakers?: CircuitBreakerManager
-  ) {
+  constructor(resolver: ModuleResolver, options: ModuleLoadOptions = {}) {
     this.resolver = resolver;
     this.options = {
       encoding: options.encoding || ('utf-8' as BufferEncoding),
       cache: options.cache ?? true,
       circularDependencyStrategy: options.circularDependencyStrategy || 'warn',
       externals: options.externals ?? [],
-      maxCacheSize: options.maxCacheSize ?? 1000, // Default 1000 modules
-      maxCacheMemory: options.maxCacheMemory ?? 512 * 1024 * 1024, // Default 512MB
+      maxCacheSize: options.maxCacheSize ?? 1000,
+      maxCacheMemory: options.maxCacheMemory ?? 512 * 1024 * 1024,
     };
-
-    // Initialize production systems only when explicitly provided
-    this.metrics = metrics;
-    this.circuitBreakers = circuitBreakers;
 
     this.setExternals(options.externals);
   }
@@ -89,57 +74,37 @@ export class ModuleLoader {
    * Load a module and all its dependencies
    */
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
-    const executeLoad = async (): Promise<LoadedModule> => {
-      this.metrics?.requestCount.increment();
+    logger.debug('Loading module', { specifier, fromFile });
 
-      logger.debug('Loading module', { specifier, fromFile });
-
-      const externalMatch = this.matchExternal(specifier);
-      if (externalMatch) {
-        return this.loadExternalModuleWithCircuitBreaker(specifier, externalMatch);
-      }
-
-      const resolved = this.resolver.resolve(specifier, fromFile);
-      const moduleId = this.getModuleId(resolved.resolvedPath);
-
-      // Atomic cache check - single operation to avoid race conditions
-      const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
-      if (cached?.isLoaded) {
-        cached.lastAccessed = Date.now();
-        logger.debug('Module loaded from cache', { moduleId });
-        return cached;
-      }
-      if (cached?.isLoading) {
-        logger.warn('Circular dependency detected during load', { moduleId });
-        return this.handleCircularDependency(moduleId, cached);
-      }
-
-      // Check for circular dependency in loading stack
-      if (this.loadingStack.has(moduleId)) {
-        logger.warn('Circular dependency in loading stack', { moduleId });
-        return this.handleCircularDependency(moduleId);
-      }
-
-      try {
-        const result = await this.loadModule(resolved, moduleId);
-        logger.info('Module loaded successfully', {
-          moduleId,
-          dependencies: result.dependencies.length,
-          sourceSize: result.source.length,
-        });
-        return result;
-      } catch (error) {
-        this.metrics?.loadErrors.increment();
-        logger.error('Module load failed', error as Error, { moduleId, specifier });
-        throw error;
-      }
-    };
-
-    if (this.metrics) {
-      return this.metrics.recordAsync(this.metrics.loadLatency, executeLoad);
+    const externalMatch = this.matchExternal(specifier);
+    if (externalMatch) {
+      return this.getOrCreateExternalModule(specifier, externalMatch);
     }
 
-    return executeLoad();
+    const resolved = this.resolver.resolve(specifier, fromFile);
+    const moduleId = this.getModuleId(resolved.resolvedPath);
+
+    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
+    if (cached?.isLoaded) {
+      cached.lastAccessed = Date.now();
+      return cached;
+    }
+    if (cached?.isLoading) {
+      logger.warn('Circular dependency detected during load', { moduleId });
+      return this.handleCircularDependency(moduleId, cached);
+    }
+
+    if (this.loadingStack.has(moduleId)) {
+      logger.warn('Circular dependency in loading stack', { moduleId });
+      return this.handleCircularDependency(moduleId);
+    }
+
+    try {
+      return await this.loadModule(resolved, moduleId);
+    } catch (error) {
+      logger.error('Module load failed', error, { moduleId, specifier });
+      throw error;
+    }
   }
 
   /**
@@ -172,76 +137,14 @@ export class ModuleLoader {
     return this.loadModuleSync(resolved, moduleId);
   }
 
-  private async loadExternalModuleWithCircuitBreaker(
-    specifier: string,
-    externalMatch: string
-  ): Promise<LoadedModule> {
-    if (!this.circuitBreakers) {
-      return this.getOrCreateExternalModule(specifier, externalMatch);
-    }
-
-    return this.circuitBreakers.executeWithRetry(
-      `external:${externalMatch}`,
-      async () => {
-        return this.getOrCreateExternalModule(specifier, externalMatch);
-      },
-      { maxRetries: 3, initialDelay: 1000 },
-      async () => {
-        // Fallback: create a stub external module
-        logger.warn('Using fallback for external module', { specifier, externalMatch });
-        return this.createStubExternalModule(specifier, externalMatch);
-      }
-    );
-  }
-
-  private createStubExternalModule(specifier: string, canonical: string): LoadedModule {
-    const moduleId = this.getExternalModuleId(canonical);
-
-    return {
-      id: moduleId,
-      resolvedPath: canonical,
-      source: '// External module stub',
-      ast: { type: 'Program', body: [], line: 1, column: 1 },
-      dependencies: [],
-      exports: { named: {} },
-      isLoaded: true,
-      isLoading: false,
-      lastAccessed: Date.now(),
-      error: new Error(`External module ${specifier} failed to load - using stub`),
-    };
-  }
-
   private async loadModule(resolved: ResolvedModule, moduleId: string): Promise<LoadedModule> {
-    const isExternal =
-      resolved.resolvedPath.startsWith('http') || resolved.resolvedPath.includes('node_modules');
-
-    if (isExternal && this.circuitBreakers) {
-      return this.loadExternalModuleWithCircuitBreaker(moduleId, resolved.resolvedPath);
-    }
-
-    const startTime = process.hrtime.bigint();
-
     try {
-      const result = this.loadModuleSync(resolved, moduleId);
-
-      if (this.metrics) {
-        const endTime = process.hrtime.bigint();
-        const duration = Number(endTime - startTime) / 1000000; // Convert to milliseconds
-        this.metrics.loadLatency.record(duration);
-      }
-
-      return result;
+      return this.loadModuleSync(resolved, moduleId);
     } catch (error) {
-      if (this.metrics) {
-        this.metrics.loadErrors.increment();
-      }
-
-      // Ensure we're throwing an Error object for Promise rejection
       if (error instanceof Error) {
         throw error;
-      } else {
-        throw new Error(String(error));
       }
+      throw new Error(String(error));
     }
   }
 

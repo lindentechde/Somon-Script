@@ -90,3 +90,6 @@ temp/
 codecov/
 codecov.SHA256SUM*
 example-audit-report.json
+
+# Gitnexus
+.gitnexus/

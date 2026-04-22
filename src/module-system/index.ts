@@ -19,11 +19,6 @@ export type {
   ModuleWatchEventType,
 } from './module-system';
 
-// Production utilities
-export { SignalHandler } from './signal-handler';
-export type { ShutdownHandler, SignalHandlerOptions } from './signal-handler';
-export { ResourceLimiter } from './resource-limiter';
-export type { ResourceLimits, ResourceUsage, ResourceWarningCallback } from './resource-limiter';
 export {
   withTimeout,
   createTimeoutWrapper,
@@ -32,5 +27,5 @@ export {
   AggregateTimeoutError,
 } from './async-timeout';
 export type { TimeoutOptions } from './async-timeout';
-export { Logger, LoggerFactory, PerformanceTrace } from './logger';
-export type { LogLevel, LogEntry, LoggerConfig } from './logger';
+export { Logger } from './logger';
+export type { LogLevel } from './logger';

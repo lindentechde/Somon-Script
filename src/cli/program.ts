@@ -16,7 +16,6 @@ import type { Module as NodeModuleType } from 'node:module';
 import type { CompileResult } from '../compiler';
 import type { SomonConfig } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
-import { ProductionValidator } from '../production-validator';
 import { i18n, t, type Language } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -80,22 +79,6 @@ function handleCliFailure(error: unknown, fallbackPrefix: string): void {
   }
 }
 
-/**
- * Validate production environment requirements
- * Implements AGENTS.md principle: "Fail fast, fail clearly"
- *
- * @param outputPath - Output path to validate write permissions
- * @param requiredPaths - Optional array of required input paths
- */
-function validateProductionEnvironment(outputPath: string, requiredPaths?: string[]): void {
-  const validator = new ProductionValidator();
-  validator.validate({
-    isProduction: true,
-    outputPath,
-    requiredPaths,
-  });
-}
-
 type BufferEncoding =
   | 'ascii'
   | 'utf8'
@@ -126,24 +109,7 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
 
     const isProduction = options.production || process.env.NODE_ENV === 'production';
 
-    // Validate production environment if --production flag is set
-    if (isProduction) {
-      const outputPath = options.output || input.replace(/\.som$/, '.bundle.js');
-
-      try {
-        validateProductionEnvironment(outputPath, [input]);
-      } catch (error) {
-        handleCliFailure(error, 'Production validation failed:');
-        throw error; // Re-throw to exit bundle command
-      }
-    }
-
     const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
-
-    // Install signal handlers for graceful shutdown in production
-    if (isProduction) {
-      await installSignalHandlers(moduleSystem);
-    }
 
     const bundleOptions = createBundleOptions(input, options, config, baseDir);
 
@@ -153,7 +119,7 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
   }
 }
 
-async function createModuleSystem(baseDir: string, config: SomonConfig, isProduction = false) {
+async function createModuleSystem(baseDir: string, config: SomonConfig, _isProduction = false) {
   const { ModuleSystem } = await import('../module-system');
   return new ModuleSystem({
     resolution: {
@@ -167,43 +133,7 @@ async function createModuleSystem(baseDir: string, config: SomonConfig, isProduc
         }
       : undefined,
     compilation: config.moduleSystem?.compilation,
-    // Enforce production features when in production mode
-    metrics: isProduction || config.moduleSystem?.metrics,
-    circuitBreakers: isProduction || config.moduleSystem?.circuitBreakers,
-    logger: isProduction || config.moduleSystem?.logger,
-    managementServer: isProduction || config.moduleSystem?.managementServer,
-    managementPort: config.moduleSystem?.managementPort,
-    // Production resource limits and timeouts
-    resourceLimits: isProduction
-      ? {
-          maxMemoryBytes: config.moduleSystem?.resourceLimits?.maxMemoryBytes,
-          maxFileHandles: config.moduleSystem?.resourceLimits?.maxFileHandles ?? 1000,
-          maxCachedModules: config.moduleSystem?.resourceLimits?.maxCachedModules ?? 10000,
-          checkInterval: config.moduleSystem?.resourceLimits?.checkInterval ?? 5000,
-        }
-      : config.moduleSystem?.resourceLimits,
-    operationTimeout: isProduction
-      ? (config.moduleSystem?.operationTimeout ?? 120000)
-      : config.moduleSystem?.operationTimeout,
   });
-}
-
-/**
- * Install signal handlers for graceful shutdown
- * Ensures proper cleanup on SIGTERM, SIGINT, SIGHUP
- */
-async function installSignalHandlers(moduleSystem: ModuleSystem): Promise<void> {
-  const { SignalHandler } = await import('../module-system');
-  const signalHandler = new SignalHandler({
-    shutdownTimeout: 30000,
-  });
-
-  // Register module system shutdown
-  signalHandler.register(async () => {
-    await moduleSystem.shutdown();
-  });
-
-  signalHandler.install();
 }
 
 function createBundleOptions(
@@ -462,26 +392,6 @@ export function createProgram(): Command {
           return;
         }
 
-        // Validate production environment if --production flag is set
-        if (merged.production || process.env.NODE_ENV === 'production') {
-          const baseDir = path.dirname(path.resolve(input));
-          const outputFile =
-            merged.output ||
-            (merged.outDir
-              ? path.join(
-                  path.resolve(baseDir, merged.outDir),
-                  path.basename(input).replace(/\.som$/, '.js')
-                )
-              : input.replace(/\.som$/, '.js'));
-
-          try {
-            validateProductionEnvironment(outputFile, [input]);
-          } catch (error) {
-            handleCliFailure(error, 'Production validation failed:');
-            return;
-          }
-        }
-
         const shouldWatch = !!(merged.watch || merged.compileOnSave);
 
         const compileOnce = (): boolean => {
@@ -641,17 +551,6 @@ export function createProgram(): Command {
         const baseDir = path.dirname(path.resolve(input));
         const config = loadConfig(baseDir);
         const isProduction = options.production || process.env.NODE_ENV === 'production';
-
-        // Validate production environment if --production flag is set
-        if (isProduction) {
-          const compiledFilePath = createRunOutputPath(input, baseDir);
-          try {
-            validateProductionEnvironment(compiledFilePath, [input]);
-          } catch (error) {
-            handleCliFailure(error, 'Production validation failed:');
-            return;
-          }
-        }
 
         // Create module system and bundle the file with all dependencies
         const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
@@ -883,22 +782,6 @@ export function createProgram(): Command {
         console.error('Resolve error:', error instanceof Error ? error.message : error);
         process.exit(1);
       }
-    });
-
-  // Serve command for management server
-  program
-    .command('serve')
-    .description('Start the management server for health checks and metrics')
-    .option('-p, --port <port>', 'Port to listen on', '8080')
-    .option('-c, --config <file>', 'Path to configuration file')
-    .option('--production', 'Enable production mode with all safety features')
-    .option('--json', 'Use structured JSON logging')
-    .action(async _options => {
-      const { createServeCommand } = await import('./serve');
-      const serveCommand = createServeCommand();
-      await serveCommand.parseAsync([process.argv[0], process.argv[1], ...process.argv.slice(3)], {
-        from: 'user',
-      });
     });
 
   return program;
