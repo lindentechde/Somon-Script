@@ -111,6 +111,7 @@ describe('Error Handling Tests', () => {
       expect(result.errors[0].message).toContain('not assignable');
     });
 
+    // TODO(type-checker): implement symbol-table lookup for undefined references.
     test.skip('should detect undefined variables', () => {
       const undefinedVar = 'чоп.сабт(undefined_variable);';
       const lexer = new Lexer(undefinedVar);
@@ -124,6 +125,7 @@ describe('Error Handling Tests', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
+    // TODO(type-checker): arity + argument-type checking is not implemented yet.
     test.skip('should detect function call with wrong arguments', () => {
       const wrongArgs = `
         функсия тест(а: сатр, б: рақам): холӣ {
@@ -142,7 +144,7 @@ describe('Error Handling Tests', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    test.skip('should provide detailed error locations', () => {
+    test('should provide detailed error locations', () => {
       const errorCode = `тағйирёбанда ном: сатр = "test";
 тағйирёбанда рақам: рақам = "not a number";`;
       const lexer = new Lexer(errorCode);
@@ -188,6 +190,7 @@ describe('Error Handling Tests', () => {
       expect(result.code).toBe('');
     });
 
+    // TODO(parser): recovery inside nested function bodies does not collect errors.
     test.skip('should handle nested errors properly', () => {
       const nestedError = `
         функсия outer() {
@@ -220,6 +223,7 @@ describe('Error Handling Tests', () => {
       // expect(result.code).toContain('123');
     });
 
+    // TODO(error-aggregator): suggestion synthesis for typo'd keywords is not wired.
     test.skip('should provide helpful suggestions in error messages', () => {
       const typoError = 'тағйирёбанд ном = "test";'; // Missing 'а' in тағйирёбанда
 

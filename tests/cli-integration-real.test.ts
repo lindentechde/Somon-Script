@@ -14,16 +14,22 @@ describe('CLI Integration - Real Coverage', () => {
   let cliPath: string;
 
   beforeAll(() => {
-    // Determine repository root dynamically (works in CI, devcontainer, and local environments)
+    // Determine repository root dynamically (works in CI, devcontainer, and local environments).
     const repoRoot = path.resolve(__dirname, '..');
-
-    // Build the project first
-    try {
-      execSync('npm run build', { stdio: 'pipe', cwd: repoRoot });
-    } catch (error) {
-      console.warn('Build failed, tests may not work correctly');
-    }
     cliPath = path.join(repoRoot, 'dist', 'cli.js');
+
+    // Do NOT rebuild here. Multiple jest workers running this suite in parallel
+    // used to invoke `npm run build`, which starts with `npm run clean` that
+    // `fs.rmSync`s `dist/`. Under `--coverage` (slower workers), one worker
+    // would delete `dist/` while another's `execSync(node dist/cli.js ...)` was
+    // starting — producing ENOENT flakes in ~20 tests. The suite now assumes
+    // `dist/` is already built by the caller (`npm test` runs `npm run build`
+    // before this file via the test:ci / default jest config).
+    if (!fs.existsSync(cliPath)) {
+      throw new Error(
+        `cli-integration-real: dist/cli.js is missing. Run 'npm run build' before 'npm test'.`
+      );
+    }
   });
 
   beforeEach(() => {
