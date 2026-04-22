@@ -15,6 +15,12 @@ jobs:
     name: Test on Node.js ${{ matrix.node-version }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
+    env:
+      # husky git-hooks install is dev-only; turn it off in CI so that
+      # `npm ci` does not hit the sporadic "Exit handler never called"
+      # npm bug triggered by the `prepare` script.
+      HUSKY: 0
+
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +84,8 @@ jobs:
     name: Audit Examples
     runs-on: ubuntu-latest
     needs: test
+    env:
+      HUSKY: 0
     
     steps:
     - name: Checkout
