@@ -158,12 +158,17 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
   return errors;
 }
 
+const KNOWN_MODULE_SYSTEM_TOP_KEYS: ReadonlySet<string> = new Set([
+  'resolution',
+  'loading',
+  'compilation',
+]);
+
 function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
-  const knownTop = ['resolution', 'loading', 'compilation'];
 
   for (const key of Object.keys(config)) {
-    if (!knownTop.includes(key)) {
+    if (!KNOWN_MODULE_SYSTEM_TOP_KEYS.has(key)) {
       errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
     }
   }
