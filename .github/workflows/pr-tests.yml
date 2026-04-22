@@ -12,12 +12,13 @@ permissions:
 
 jobs:
   test:
-    name: Test on Node.js ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
-    
+    name: Test on Node.js ${{ matrix.node-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [20.x, 22.x, 23.x, 24.x]
     
     steps:
@@ -46,7 +47,7 @@ jobs:
       run: npm run test:ci
       
     - name: Upload coverage reports to Codecov
-      if: matrix.node-version == '20.x'
+      if: matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -57,7 +58,7 @@ jobs:
         verbose: true
         
     - name: Comment PR with test results
-      if: always() && matrix.node-version == '20.x'
+      if: always() && matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest'
       continue-on-error: true
       uses: actions/github-script@v7
       with:
