@@ -219,6 +219,12 @@ export class CodeGenerator {
     'манъиВасеъшавӣ',
     'мӯҳр',
     'танзимиПрототип',
+    // Map / Set methods
+    'бозгирифтан',
+    'гузоштан',
+    'дорадКалид',
+    'ҳаҷм',
+    'нобудКардан',
   ]);
 
   /**
@@ -256,6 +262,13 @@ export class CodeGenerator {
 
     // Error handling
     ['Хато', 'Error'],
+
+    // Map / Set methods
+    ['бозгирифтан', 'get'],
+    ['гузоштан', 'set'],
+    ['дорадКалид', 'has'],
+    ['ҳаҷм', 'size'],
+    ['нобудКардан', 'delete'],
 
     // Array methods
     ['рӯйхат', 'Array'],
