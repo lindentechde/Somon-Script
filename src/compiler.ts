@@ -75,52 +75,88 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
 
   try {
     const { ast, parserErrors } = parseSource(source);
-    // Parser errors are recoverable diagnostics — parser.synchronize() keeps
-    // walking and emits a best-effort AST. Surface them as warnings in the
-    // default mode so the CLI/audit doesn't treat a partially-parseable
-    // example as a hard failure. Strict mode promotes them to fatal errors.
-    if (options.strict) {
-      errors.push(...parserErrors);
-      if (parserErrors.length > 0) {
-        return { code: '', errors, warnings };
-      }
-    } else {
-      warnings.push(...parserErrors);
+
+    if (routeParserErrors(parserErrors, options, errors, warnings)) {
+      return { code: '', errors, warnings };
     }
 
-    if (options.typeCheck !== false) {
-      const result = runTypeCheck(source, ast);
-      errors.push(...result.errors);
-      warnings.push(...result.warnings);
-
-      if (options.strict && result.errors.length > 0) {
-        return { code: '', errors, warnings };
-      }
+    if (runTypeCheckStage(ast, source, options, errors, warnings)) {
+      return { code: '', errors, warnings };
     }
 
-    let code = new CodeGenerator().generate(ast);
-    const transpileResult = transpile(code, options);
-    code = transpileResult.code;
-    let map = transpileResult.map;
-
-    if (options.sourceMap && !map) {
-      map = generateIdentityMap(code);
-    }
-
-    if (options.minify) {
-      ({ code, map } = minifyCode(code, map, options.sourceMap));
-    }
-
-    return {
-      code,
-      sourceMap: options.sourceMap && map ? JSON.stringify(map) : undefined,
-      errors,
-      warnings,
-    };
+    return emitCode(ast, options, errors, warnings);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
     return { code: '', errors, warnings };
   }
+}
+
+/**
+ * Parser errors are recoverable diagnostics — `parser.synchronize()` keeps
+ * walking and emits a best-effort AST. In the default mode they become
+ * warnings so the CLI/audit doesn't treat a partially-parseable example as a
+ * hard failure. Strict mode promotes them to fatal errors.
+ *
+ * Returns true when compilation must stop (strict mode + at least one parser
+ * error).
+ */
+function routeParserErrors(
+  parserErrors: string[],
+  options: CompileOptions,
+  errors: string[],
+  warnings: string[]
+): boolean {
+  if (!options.strict) {
+    warnings.push(...parserErrors);
+    return false;
+  }
+  errors.push(...parserErrors);
+  return parserErrors.length > 0;
+}
+
+/**
+ * Runs the type-check stage unless explicitly disabled. Returns true when
+ * strict-mode type errors should abort emission.
+ */
+function runTypeCheckStage(
+  ast: ReturnType<Parser['parse']>,
+  source: string,
+  options: CompileOptions,
+  errors: string[],
+  warnings: string[]
+): boolean {
+  if (options.typeCheck === false) return false;
+  const result = runTypeCheck(source, ast);
+  errors.push(...result.errors);
+  warnings.push(...result.warnings);
+  return Boolean(options.strict) && result.errors.length > 0;
+}
+
+function emitCode(
+  ast: ReturnType<Parser['parse']>,
+  options: CompileOptions,
+  errors: string[],
+  warnings: string[]
+): CompileResult {
+  let code = new CodeGenerator().generate(ast);
+  const transpileResult = transpile(code, options);
+  code = transpileResult.code;
+  let map = transpileResult.map;
+
+  if (options.sourceMap && !map) {
+    map = generateIdentityMap(code);
+  }
+
+  if (options.minify) {
+    ({ code, map } = minifyCode(code, map, options.sourceMap));
+  }
+
+  return {
+    code,
+    sourceMap: options.sourceMap && map ? JSON.stringify(map) : undefined,
+    errors,
+    warnings,
+  };
 }
 
 function parseSource(source: string) {
