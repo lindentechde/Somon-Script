@@ -17,7 +17,7 @@ module.exports = {
     'no-console': 'off', // Allow console for CLI tool
     'prefer-const': 'error',
     'no-var': 'error',
-    'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
 
     // SomonScript specific rules
     'no-irregular-whitespace': 'off', // Allow Cyrillic characters
@@ -26,7 +26,10 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': ['error', { ignoreRestArgs: false }],
 
     // TypeScript unused vars rule with underscore ignore pattern
-    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      { argsIgnorePattern: '^_', caughtErrors: 'none' },
+    ],
 
     // Code quality rules
     complexity: ['warn', 15],
