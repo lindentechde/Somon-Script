@@ -95,12 +95,16 @@ export class ModuleResolver {
   }
 
   private resolveRelative(specifier: string, fromDir: string): ResolvedModule {
+    // Relative imports with `..` are legitimate (sibling folders, parent-project code),
+    // so we do not confine them to baseUrl. Absolute-path and package.json-main
+    // traversal are handled separately in `resolveAbsolute` / `tryPackageJsonMain`.
     const targetPath = path.resolve(fromDir, specifier);
     return this.resolveFile(targetPath, false);
   }
 
   private resolveAbsolute(specifier: string): ResolvedModule {
     const targetPath = path.resolve(this.options.baseUrl, specifier.slice(1));
+    this.assertInsideBaseUrl(targetPath, specifier);
     return this.resolveFile(targetPath, false);
   }
 
@@ -110,6 +114,9 @@ export class ModuleResolver {
         for (const mapping of mappings) {
           const mappedSpecifier = this.applyMapping(specifier, pattern, mapping);
           const targetPath = path.resolve(this.options.baseUrl, mappedSpecifier);
+          if (!this.isInsideDir(targetPath, this.options.baseUrl)) {
+            continue;
+          }
 
           try {
             return this.resolveFile(targetPath, false);
@@ -226,6 +233,10 @@ export class ModuleResolver {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     if (packageJson.main) {
       const mainPath = path.resolve(targetPath, packageJson.main);
+      // Confine package main to its own directory — reject "main": "../../etc/passwd"
+      if (!this.isInsideDir(mainPath, targetPath)) {
+        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+      }
       return this.resolveFile(mainPath, isExternal, packageName);
     }
 
@@ -346,5 +357,33 @@ export class ModuleResolver {
 
     // If we get here, assume it's a project-relative path like /lib/utils
     return false;
+  }
+
+  /**
+   * Return true if `candidate` resolves to a path that is equal to, or inside, `directory`.
+   * Both arguments are normalised with `path.resolve` before comparison to collapse ".."
+   * and mixed separators. This is the canonical check to prevent path-traversal through
+   * user-controlled inputs (package.json "main", import specifiers, path mappings).
+   */
+  private isInsideDir(candidate: string, directory: string): boolean {
+    const resolvedCandidate = path.resolve(candidate);
+    const resolvedDir = path.resolve(directory);
+    if (resolvedCandidate === resolvedDir) return true;
+    const withSep = resolvedDir.endsWith(path.sep) ? resolvedDir : resolvedDir + path.sep;
+    return resolvedCandidate.startsWith(withSep);
+  }
+
+  /**
+   * Assert that a resolved import target stays inside baseUrl. Imports with `..` that
+   * climb out of the project tree are rejected — they have no legitimate use and can
+   * be exploited to read arbitrary files via the ModuleLoader.
+   */
+  private assertInsideBaseUrl(absolutePath: string, specifier: string): void {
+    if (!this.isInsideDir(absolutePath, this.options.baseUrl)) {
+      throw new Error(
+        `Module specifier '${specifier}' resolves outside baseUrl '${this.options.baseUrl}'. ` +
+          `Relative imports must stay inside the project tree.`
+      );
+    }
   }
 }

@@ -596,7 +596,8 @@ describe('Module System', () => {
 
       try {
         const bundle = await moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' });
-        expect(bundle.code).toContain("require('dep.som')");
+        // Bundler emits via JSON.stringify → always double-quoted, always safely escaped.
+        expect(bundle.code).toContain('require("dep.som")');
         expect(compileSpy).toHaveBeenCalled();
       } finally {
         compileSpy.mockRestore();

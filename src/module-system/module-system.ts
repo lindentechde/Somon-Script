@@ -1341,11 +1341,7 @@ export class ModuleSystem {
     const doubleQuotePattern = /require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
     const templatePattern = /require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
 
-    const processMatch = (
-      match: string,
-      spec: string,
-      quote: 'single' | 'double' | 'template'
-    ): string => {
+    const processMatch = (match: string, spec: string): string => {
       if (!spec || spec.length === 0 || spec.length > 500) {
         return match;
       }
@@ -1393,18 +1389,19 @@ export class ModuleSystem {
         return match;
       }
 
-      const sanitizedKey = resolved.key.replaceAll(/['"`\\]/g, '');
-      if (quote === 'double') {
-        return `require("${sanitizedKey}")`;
-      }
-      return `require('${sanitizedKey}')`;
+      // JSON.stringify produces a properly-escaped double-quoted JS string literal
+      // (handles ", \, \n, \r, \t, U+2028, U+2029, control chars). We do not rely
+      // on the inbound key shape — if something weird slipped in via filenames,
+      // emission stays syntactically valid.
+      const safeLiteral = JSON.stringify(resolved.key);
+      return `require(${safeLiteral})`;
     };
 
     let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec, 'single')
+      processMatch(match, spec)
     );
     result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec, 'double')
+      processMatch(match, spec)
     );
     result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {
@@ -1412,7 +1409,7 @@ export class ModuleSystem {
           `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
         );
       }
-      return processMatch(match, spec, 'template');
+      return processMatch(match, spec);
     });
 
     return result;
