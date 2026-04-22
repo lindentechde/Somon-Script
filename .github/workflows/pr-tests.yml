@@ -12,12 +12,22 @@ permissions:
 
 jobs:
   test:
-    name: Test on Node.js ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
-    
+    # Keep the canonical ubuntu run as "Test on Node.js 24.x" so that the required
+    # status check configured in branch protection (which was set before the OS
+    # matrix was added) still matches by name. Non-ubuntu runs carry the OS suffix.
+    name: Test on Node.js ${{ matrix.node-version }}${{ matrix.os != 'ubuntu-latest' && format(' / {0}', matrix.os) || '' }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      # husky git-hooks install is dev-only; turn it off in CI so that
+      # `npm ci` does not hit the sporadic "Exit handler never called"
+      # npm bug triggered by the `prepare` script.
+      HUSKY: 0
+
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [20.x, 22.x, 23.x, 24.x]
     
     steps:
@@ -46,7 +56,7 @@ jobs:
       run: npm run test:ci
       
     - name: Upload coverage reports to Codecov
-      if: matrix.node-version == '20.x'
+      if: matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -57,7 +67,7 @@ jobs:
         verbose: true
         
     - name: Comment PR with test results
-      if: always() && matrix.node-version == '20.x'
+      if: always() && matrix.node-version == '20.x' && matrix.os == 'ubuntu-latest'
       continue-on-error: true
       uses: actions/github-script@v7
       with:
@@ -77,6 +87,8 @@ jobs:
     name: Audit Examples
     runs-on: ubuntu-latest
     needs: test
+    env:
+      HUSKY: 0
     
     steps:
     - name: Checkout

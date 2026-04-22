@@ -966,9 +966,13 @@ export class Parser {
         } else if (this.matchBuiltinIdentifier()) {
           name = this.previous();
         } else {
-          throw new Error(
+          // Collect-and-continue: the outer statement catch no longer covers this
+          // path in every call chain (unary -> expressionStatement can reach us
+          // without the wrapper), so a throw here would escape the pipeline.
+          this.errors.push(
             `Expected property name after '.' at line ${this.peek().line}, column ${this.peek().column}`
           );
+          return expr;
         }
 
         expr = {

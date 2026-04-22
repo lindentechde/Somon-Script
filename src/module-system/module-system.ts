@@ -7,13 +7,7 @@ import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
-import { ModuleSystemMetrics, ModuleSystemStats, SystemHealth } from './metrics';
-import { CircuitBreakerManager } from './circuit-breaker';
-import { Logger } from './logger';
-import { RuntimeConfigManager, ManagementServer } from './runtime-config';
-import { version as packageVersion } from '../../package.json';
-import { ResourceLimiter, ResourceLimits } from './resource-limiter';
-import { withTimeout } from './async-timeout';
+import { moduleSystemLogger as logger } from './logger';
 import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
@@ -37,14 +31,6 @@ export interface ModuleSystemOptions {
   resolution?: ModuleResolutionOptions;
   loading?: ModuleLoadOptions;
   compilation?: CompilerOptions;
-  // Production systems
-  metrics?: boolean;
-  circuitBreakers?: boolean;
-  logger?: boolean;
-  managementServer?: boolean;
-  managementPort?: number;
-  resourceLimits?: ResourceLimits;
-  operationTimeout?: number; // Default timeout for async operations in ms
 }
 
 export interface CompiledModule {
@@ -97,87 +83,16 @@ export class ModuleSystem {
   private readonly registry: ModuleRegistry;
   private readonly activeWatchers = new Set<FSWatcher>();
   private readonly defaultCompilation: CompilerOptions;
-
-  // Production systems
-  private readonly metrics?: ModuleSystemMetrics;
-  private readonly circuitBreakers?: CircuitBreakerManager;
-  private readonly logger?: Logger;
-  private readonly configManager?: RuntimeConfigManager;
-  private readonly managementServer?: ManagementServer;
-  private readonly resourceLimiter?: ResourceLimiter;
-  private readonly operationTimeout: number;
+  private readonly logger = logger;
 
   constructor(options: ModuleSystemOptions = {}) {
     // Validate configuration upfront before initializing components
     this.validateConfiguration(options);
 
     this.resolver = new ModuleResolver(options.resolution);
-    this.operationTimeout = options.operationTimeout ?? 120000; // Default 2 minutes
-
-    // Initialize production systems if requested
-    if (options.metrics) {
-      this.metrics = new ModuleSystemMetrics();
-    }
-
-    if (options.circuitBreakers) {
-      this.circuitBreakers = new CircuitBreakerManager();
-    }
-
-    if (options.logger) {
-      this.logger = new Logger('ModuleSystem');
-    }
-
-    if (options.resourceLimits) {
-      this.resourceLimiter = new ResourceLimiter(options.resourceLimits);
-      this.resourceLimiter.onWarning((usage, limit) => {
-        if (this.logger) {
-          this.logger.warn('Resource limit warning', { usage, limit });
-        } else {
-          console.warn(`Resource warning: ${limit} at ${JSON.stringify(usage)}`);
-        }
-      });
-      this.resourceLimiter.start();
-
-      if (this.logger) {
-        this.logger.info('Resource limiter started', {
-          maxMemoryBytes: options.resourceLimits.maxMemoryBytes,
-          maxFileHandles: options.resourceLimits.maxFileHandles,
-          maxCachedModules: options.resourceLimits.maxCachedModules,
-          checkInterval: options.resourceLimits.checkInterval,
-        });
-      }
-    }
-
-    if (options.managementServer && this.metrics && this.circuitBreakers) {
-      this.configManager = new RuntimeConfigManager();
-      this.managementServer = new ManagementServer(
-        this.metrics,
-        this.circuitBreakers,
-        this.configManager
-      );
-      // Async start will be called separately
-    }
-
-    // Initialize loader with production systems
-    this.loader = new ModuleLoader(
-      this.resolver,
-      options.loading || {},
-      this.metrics,
-      this.circuitBreakers
-    );
-
+    this.loader = new ModuleLoader(this.resolver, options.loading || {});
     this.registry = new ModuleRegistry();
     this.defaultCompilation = options.compilation ?? {};
-
-    if (this.logger) {
-      this.logger.info('ModuleSystem initialized with production features', {
-        metrics: !!this.metrics,
-        circuitBreakers: !!this.circuitBreakers,
-        managementServer: !!this.managementServer,
-        resourceLimiter: !!this.resourceLimiter,
-        operationTimeout: this.operationTimeout,
-      });
-    }
   }
 
   /**
@@ -253,10 +168,6 @@ export class ModuleSystem {
     this.validateResolutionOptions(options, errors);
     this.validateLoaderOptions(options, errors);
     this.validateCompilationOptions(options, errors);
-    this.validateManagementServer(options, errors);
-    this.validateManagementPort(options, errors);
-    this.validateOperationTimeout(options, errors);
-    this.validateResourceLimits(options, errors);
 
     if (errors.length > 0) {
       throw new Error(
@@ -409,89 +320,6 @@ export class ModuleSystem {
     }
   }
 
-  private validateManagementServer(options: ModuleSystemOptions, errors: string[]): void {
-    if (options.managementServer) {
-      if (!options.metrics) {
-        errors.push('managementServer requires metrics to be enabled. Set options.metrics = true.');
-      }
-      if (!options.circuitBreakers) {
-        errors.push(
-          'managementServer requires circuitBreakers to be enabled. Set options.circuitBreakers = true.'
-        );
-      }
-    }
-  }
-
-  private validateManagementPort(options: ModuleSystemOptions, errors: string[]): void {
-    if (options.managementPort !== undefined) {
-      if (
-        !Number.isInteger(options.managementPort) ||
-        options.managementPort < 1 ||
-        options.managementPort > 65535
-      ) {
-        errors.push(
-          `managementPort must be an integer between 1 and 65535, got: ${options.managementPort}`
-        );
-      }
-    }
-  }
-
-  private validateOperationTimeout(options: ModuleSystemOptions, errors: string[]): void {
-    if (options.operationTimeout !== undefined) {
-      if (
-        !Number.isInteger(options.operationTimeout) ||
-        options.operationTimeout < 1000 ||
-        options.operationTimeout > 600000
-      ) {
-        errors.push(
-          `operationTimeout must be between 1000ms (1s) and 600000ms (10min), got: ${options.operationTimeout}ms`
-        );
-      }
-    }
-  }
-
-  private validateResourceLimits(options: ModuleSystemOptions, errors: string[]): void {
-    if (!options.resourceLimits) return;
-
-    const limits = options.resourceLimits;
-
-    if (limits.maxMemoryBytes !== undefined) {
-      if (!Number.isInteger(limits.maxMemoryBytes) || limits.maxMemoryBytes < 1024 * 1024) {
-        errors.push(
-          `resourceLimits.maxMemoryBytes must be at least 1MB (1048576 bytes), got: ${limits.maxMemoryBytes}`
-        );
-      }
-    }
-
-    if (limits.maxFileHandles !== undefined) {
-      if (!Number.isInteger(limits.maxFileHandles) || limits.maxFileHandles < 1) {
-        errors.push(
-          `resourceLimits.maxFileHandles must be a positive integer, got: ${limits.maxFileHandles}`
-        );
-      }
-    }
-
-    if (limits.maxCachedModules !== undefined) {
-      if (!Number.isInteger(limits.maxCachedModules) || limits.maxCachedModules < 1) {
-        errors.push(
-          `resourceLimits.maxCachedModules must be a positive integer, got: ${limits.maxCachedModules}`
-        );
-      }
-    }
-
-    if (limits.checkInterval !== undefined) {
-      if (
-        !Number.isInteger(limits.checkInterval) ||
-        limits.checkInterval < 100 ||
-        limits.checkInterval > 60000
-      ) {
-        errors.push(
-          `resourceLimits.checkInterval must be between 100ms and 60000ms, got: ${limits.checkInterval}ms`
-        );
-      }
-    }
-  }
-
   private validateLoaderOptions(options: ModuleSystemOptions, errors: string[]): void {
     if (!options.loading) return;
 
@@ -546,24 +374,8 @@ export class ModuleSystem {
    * Load a module and all its dependencies
    */
   async loadModule(specifier: string, fromFile: string): Promise<LoadedModule> {
-    // Check resource limits before loading
-    if (this.resourceLimiter && !this.resourceLimiter.canLoadModule()) {
-      throw new Error('Module cache limit reached - cannot load more modules');
-    }
-
     try {
-      const loadPromise = this.loader.load(specifier, fromFile);
-
-      // Apply timeout protection
-      const module = await withTimeout(loadPromise, {
-        timeout: this.operationTimeout,
-        operation: `loadModule(${specifier})`,
-      });
-
-      if (this.resourceLimiter) {
-        this.resourceLimiter.incrementModules();
-      }
-
+      const module = await this.loader.load(specifier, fromFile);
       this.registerAllLoadedModules();
       return module;
     } catch (error) {
@@ -859,11 +671,6 @@ export class ModuleSystem {
   clearCache(): void {
     this.loader.clearCache();
     this.registry.clear();
-
-    // Update resource limiter
-    if (this.resourceLimiter) {
-      this.resourceLimiter.setModuleCount(0);
-    }
   }
 
   /**
@@ -877,116 +684,13 @@ export class ModuleSystem {
   }
 
   /**
-   * Gracefully shutdown the module system
-   * - Stops resource limiter
-   * - Stops all file watchers
-   * - Stops management server
-   * - Clears all caches
-   * - Times out after 30 seconds to prevent hanging
+   * Gracefully shutdown: stop watchers, clear caches.
    */
   async shutdown(): Promise<void> {
-    if (this.logger) {
-      this.logger.info('Shutting down ModuleSystem');
-    }
-
-    const shutdownPromise = this.performShutdownSequence();
-    await this.executeWithTimeout(shutdownPromise, 30000, 'Shutdown');
-
-    if (this.logger) {
-      this.logger.info('ModuleSystem shutdown complete');
-    }
-  }
-
-  private async performShutdownSequence(): Promise<void> {
-    await this.shutdownResourceLimiter();
-    await this.shutdownWatchers();
-    await this.shutdownCircuitBreakers();
-    await this.shutdownManagementServerSafely();
-    await this.shutdownClearCaches();
-  }
-
-  private async shutdownResourceLimiter(): Promise<void> {
-    try {
-      if (this.resourceLimiter) {
-        this.resourceLimiter.stop();
-        if (this.logger) {
-          this.logger.info('Resource limiter stopped');
-        }
-      }
-    } catch (error) {
-      this.logShutdownError('resource limiter', error);
-    }
-  }
-
-  private async shutdownWatchers(): Promise<void> {
     try {
       await this.stopWatching();
     } catch (error) {
-      this.logShutdownError('watchers', error);
-    }
-  }
-
-  private async shutdownCircuitBreakers(): Promise<void> {
-    try {
-      if (this.circuitBreakers) {
-        this.circuitBreakers.shutdown();
-        if (this.logger) {
-          this.logger.info('Circuit breakers shut down');
-        }
-      }
-    } catch (error) {
-      this.logShutdownError('circuit breakers', error);
-    }
-  }
-
-  private async shutdownManagementServerSafely(): Promise<void> {
-    try {
-      await this.stopManagementServer();
-    } catch (error) {
-      this.logShutdownError('management server', error);
-    }
-  }
-
-  private async shutdownClearCaches(): Promise<void> {
-    try {
-      this.clearCache();
-    } catch (error) {
-      this.logShutdownError('caches', error);
-    }
-  }
-
-  private logShutdownError(component: string, error: unknown): void {
-    const message = error instanceof Error ? error.message : String(error);
-    if (this.logger) {
-      this.logger.error(`Error stopping ${component} during shutdown`, { error: message });
-    }
-  }
-
-  private async executeWithTimeout(
-    promise: Promise<void>,
-    timeoutMs: number,
-    operation: string
-  ): Promise<void> {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeoutPromise = new Promise<void>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`${operation} timeout after ${timeoutMs / 1000} seconds`)),
-        timeoutMs
-      );
-    });
-
-    try {
-      await Promise.race([promise, timeoutPromise]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (this.logger) {
-        this.logger.error(`${operation} failed or timed out`, { error: message });
-      }
-      throw error;
-    } finally {
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
+      logger.warn('Error stopping watchers during shutdown', { error });
     }
   }
 
@@ -1637,11 +1341,7 @@ export class ModuleSystem {
     const doubleQuotePattern = /require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
     const templatePattern = /require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
 
-    const processMatch = (
-      match: string,
-      spec: string,
-      quote: 'single' | 'double' | 'template'
-    ): string => {
+    const processMatch = (match: string, spec: string): string => {
       if (!spec || spec.length === 0 || spec.length > 500) {
         return match;
       }
@@ -1689,18 +1389,19 @@ export class ModuleSystem {
         return match;
       }
 
-      const sanitizedKey = resolved.key.replaceAll(/['"`\\]/g, '');
-      if (quote === 'double') {
-        return `require("${sanitizedKey}")`;
-      }
-      return `require('${sanitizedKey}')`;
+      // JSON.stringify produces a properly-escaped double-quoted JS string literal
+      // (handles ", \, \n, \r, \t, U+2028, U+2029, control chars). We do not rely
+      // on the inbound key shape — if something weird slipped in via filenames,
+      // emission stays syntactically valid.
+      const safeLiteral = JSON.stringify(resolved.key);
+      return `require(${safeLiteral})`;
     };
 
     let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec, 'single')
+      processMatch(match, spec)
     );
     result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec, 'double')
+      processMatch(match, spec)
     );
     result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {
@@ -1708,7 +1409,7 @@ export class ModuleSystem {
           `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
         );
       }
-      return processMatch(match, spec, 'template');
+      return processMatch(match, spec);
     });
 
     return result;
@@ -1885,71 +1586,6 @@ export class ModuleSystem {
     const nextMap = sourceMaps && out?.map ? (out.map as RawSourceMap) : map;
 
     return { code: nextCode, map: nextMap };
-  }
-
-  /**
-   * Start management server for production monitoring
-   */
-  async startManagementServer(port?: number): Promise<number | null> {
-    if (!this.managementServer) {
-      return null;
-    }
-    return await this.managementServer.start(port || 8080);
-  }
-
-  /**
-   * Stop management server
-   */
-  async stopManagementServer(): Promise<void> {
-    if (this.managementServer) {
-      await this.managementServer.stop();
-    }
-  }
-
-  /**
-   * Get production metrics
-   */
-  getMetrics(): ModuleSystemStats | null {
-    if (!this.metrics) return null;
-
-    const stats = this.registry.getStatistics();
-    const resourceUsage = this.resourceLimiter?.getUsage();
-
-    return this.metrics.getStats(
-      stats.totalModules,
-      resourceUsage?.memoryUsed ?? 0,
-      resourceUsage?.memoryLimit ?? 1024 * 1024 * 1024
-    );
-  }
-
-  /**
-   * Get system health status
-   */
-  async getHealth(): Promise<SystemHealth> {
-    if (!this.metrics) {
-      const timestamp = Date.now();
-      return {
-        status: 'healthy',
-        uptime: process.uptime(),
-        version: packageVersion,
-        timestamp,
-        checks: [
-          {
-            name: 'metrics',
-            status: 'warn',
-            message: 'Metrics collection disabled; reporting runtime defaults only.',
-            duration: 0,
-            timestamp,
-          },
-        ],
-      };
-    }
-
-    const stats = this.registry.getStatistics();
-    return await this.metrics.performHealthChecks(
-      stats.totalModules,
-      1024 * 1024 * 1024 // Default 1GB limit
-    );
   }
 
   /**

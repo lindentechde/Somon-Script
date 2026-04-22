@@ -39,7 +39,6 @@ const watchMock = chokidarModule.watch;
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import packageJson from '../package.json';
 import {
   ModuleResolver,
   ModuleLoader,
@@ -233,23 +232,6 @@ describe('Module System', () => {
       expect(() => {
         loader.loadSync('./main', tempDir);
       }).toThrow();
-    });
-  });
-
-  describe('production features', () => {
-    test('reports neutral health when metrics disabled', async () => {
-      const health = await moduleSystem.getHealth();
-
-      expect(health.status).toBe('healthy');
-      expect(health.version).toBe(packageJson.version);
-      expect(health.checks).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            name: 'metrics',
-            status: 'warn',
-          }),
-        ])
-      );
     });
   });
 
@@ -614,7 +596,8 @@ describe('Module System', () => {
 
       try {
         const bundle = await moduleSystem.bundle({ entryPoint: entryPath, format: 'commonjs' });
-        expect(bundle.code).toContain("require('dep.som')");
+        // Bundler emits via JSON.stringify → always double-quoted, always safely escaped.
+        expect(bundle.code).toContain('require("dep.som")');
         expect(compileSpy).toHaveBeenCalled();
       } finally {
         compileSpy.mockRestore();

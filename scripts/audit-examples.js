@@ -187,5 +187,11 @@ fs.writeFileSync(
 
 console.log('\n📄 Detailed report saved to example-audit-report.json');
 
-// Exit with appropriate code
-process.exit(results.failing.length > 0 ? 1 : 0);
+// Exit with appropriate code.
+// Partial examples previously did not fail CI, which is how the 9 runtime
+// class-codegen regressions shipped for a while. Gate on partial as well,
+// with AUDIT_EXAMPLES_ALLOW_PARTIAL=1 as an explicit escape hatch for local
+// experiments where a partial is expected.
+const allowPartial = process.env.AUDIT_EXAMPLES_ALLOW_PARTIAL === '1';
+const hasFailures = results.failing.length > 0 || (!allowPartial && results.partial.length > 0);
+process.exit(hasFailures ? 1 : 0);

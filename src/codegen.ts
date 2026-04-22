@@ -54,6 +54,181 @@ export class CodeGenerator {
   private indentLevel: number = 0;
   private readonly indentSize: number = 2;
   private importCounter: number = 0;
+  private readonly errors: string[] = [];
+
+  // Static — allocated once for the class, not rebuilt per member expression.
+  // O(1) membership test via Set replaces the previous O(n) Array.includes.
+  private static readonly COMMON_METHODS: ReadonlySet<string> = new Set([
+    // Console methods
+    'сабт',
+    'хато',
+    'огоҳӣ',
+    'маълумот',
+    'исфти',
+    'тасдиқ',
+    'ҷадвал',
+    'гуруҳ',
+    'гуруҳОхир',
+    'гуруҳПӯшида',
+    'вақт',
+    'вақтОхир',
+    'вақтСабт',
+    'қайд',
+    'қайдАсл',
+    'полиз',
+    'феҳрист',
+    'xmlФеҳрист',
+    'пайҷо',
+    // Array methods
+    'дарозӣ',
+    'дар',
+    'пайвастан',
+    'нусхаДарДохил',
+    'воридот',
+    'ҳама',
+    'пурКардан',
+    'филтр',
+    'кофтан',
+    'индексиЁфтан',
+    'охиринЁфтан',
+    'индексиОхиринЁфтан',
+    'ҳамвор',
+    'ҳамворХарита',
+    'бароиҲар',
+    'аз',
+    'дорад',
+    'индекси',
+    'рӯйхатАст',
+    'пайвастКардан',
+    'калидҳо',
+    'индексиОхирин',
+    'харита',
+    'азАргументҳо',
+    'баровардан',
+    'илова',
+    'пуш',
+    'ҷамъбаст',
+    'ҷамъбастАзРост',
+    'баргардон',
+    'ҳазфиАввал',
+    'буридан',
+    'баъзе',
+    'тартиб',
+    'пайваст',
+    'баСатриМаҳаллӣ',
+    'баБаргардон',
+    'баТартиб',
+    'баПайваст',
+    'баСатр',
+    'иловаБаАввал',
+    'қиматҳо',
+    'бо',
+    // String methods
+    'дарозииСатр',
+    'аломатДар',
+    'кодиАломатДар',
+    'нуқтаиКодДар',
+    'анҷомБо',
+    'азКодиАломат',
+    'азНуқтаиКод',
+    'муқоисаиМаҳаллӣ',
+    'мувофиқат',
+    'мувофиқатҲама',
+    'муқаррарӣ',
+    'пурКарданОхир',
+    'пурКарданАввал',
+    'хоми',
+    'такрор',
+    'ҷойивазкунӣ',
+    'ҷойгузин',
+    'ҷойивазкунӣҲама',
+    'ҷустуҷӯ',
+    'ҷудокунӣ',
+    'оғозБо',
+    'қисмат',
+    'хурдМаҳаллӣ',
+    'калонМаҳаллӣ',
+    'хурд',
+    'калон',
+    'тозаКардан',
+    'тозаКарданОхир',
+    'тозаКарданАввал',
+    'қиматиАслӣ',
+    // Math methods
+    'Е',
+    'ЛН10',
+    'ЛН2',
+    'ЛОГ10Е',
+    'ЛОГ2Е',
+    'ПИ',
+    'РЕША1_2',
+    'РЕША2',
+    'мутлақ',
+    'арккосинус',
+    'арккосинусГиперболӣ',
+    'арксинус',
+    'арксинусГиперболӣ',
+    'арктангенс',
+    'арктангенс2',
+    'арктангенсГиперболӣ',
+    'решаиКубӣ',
+    'боло',
+    'clz32',
+    'косинус',
+    'косинусГиперболӣ',
+    'экспонента',
+    'expm1',
+    'поён',
+    'fround',
+    'гипотенуза',
+    'imul',
+    'логарифм',
+    'логарифм10',
+    'логарифм1п',
+    'логарифм2',
+    'ҳаддиАксар',
+    'ҳаддиАқал',
+    'қувват',
+    'тасодуфӣ',
+    'дузкунӣ',
+    'аломат',
+    'синус',
+    'синусГиперболӣ',
+    'дуръшака',
+    'тангенс',
+    'тангенсГиперболӣ',
+    'бириданАдад',
+    // Object methods
+    'таъин',
+    'сохтан',
+    'муайянХосиятҳо',
+    'муайянХосият',
+    'яхКардан',
+    'азВоридот',
+    'тавсифиХосият',
+    'тавсифиХосиятҳо',
+    'номҳоиХосият',
+    'рамзҳоиХосият',
+    'прототип',
+    'гурӯҳбандӣ',
+    'дорадХосият',
+    'аст',
+    'васеъшаванда',
+    'яхшуда',
+    'мӯҳршуда',
+    'манъиВасеъшавӣ',
+    'мӯҳр',
+    'танзимиПрототип',
+  ]);
+
+  /**
+   * Return diagnostics collected during generation. Codegen follows the same
+   * never-throw contract as the rest of the pipeline — unknown AST nodes are
+   * recorded here rather than thrown.
+   */
+  getErrors(): string[] {
+    return [...this.errors];
+  }
 
   // Mapping of Tajik built-in functions to JavaScript equivalents
   private readonly builtinMappings: Map<string, string> = new Map([
@@ -396,8 +571,11 @@ export class CodeGenerator {
         return this.indent('break;');
       case 'ContinueStatement':
         return this.indent('continue;');
-      default:
-        throw new Error(`Unknown statement type: ${node.type}`);
+      default: {
+        const unknown = node as { type?: string };
+        this.errors.push(`Unknown statement type: ${unknown.type ?? 'unknown'}`);
+        return '';
+      }
     }
   }
 
@@ -742,7 +920,9 @@ export class CodeGenerator {
   }
 
   private handleUnknownExpression(node: Expression): string {
-    throw new Error(`Unknown expression type: ${node.type}`);
+    const unknown = node as { type?: string };
+    this.errors.push(`Unknown expression type: ${unknown.type ?? 'unknown'}`);
+    return '';
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
@@ -1044,13 +1224,6 @@ export class CodeGenerator {
   /**
    * Check if object looks like a user class instance
    */
-  private looksLikeClassInstance(node: MemberExpression): boolean {
-    return (
-      node.object.type === 'Identifier' &&
-      /^[а-яё]/.test((node.object as Identifier).name) &&
-      (node.object as Identifier).name.includes('_')
-    );
-  }
 
   /**
    * Try to map property name based on context
@@ -1066,171 +1239,13 @@ export class CodeGenerator {
       return property;
     }
 
-    const commonMethods = [
-      // Console methods (basic and camelCase)
-      'сабт',
-      'хато',
-      'огоҳӣ',
-      'маълумот',
-      'исфти',
-      'тасдиқ',
-      'ҷадвал',
-      'гуруҳ',
-      'гуруҳОхир',
-      'гуруҳПӯшида',
-      'вақт',
-      'вақтОхир',
-      'вақтСабт',
-      'қайд',
-      'қайдАсл',
-      'полиз',
-      'феҳрист',
-      'xmlФеҳрист',
-      'пайҷо',
-      // Array methods
-      'дарозӣ',
-      'дар',
-      'пайвастан',
-      'нусхаДарДохил',
-      'воридот',
-      'ҳама',
-      'пурКардан',
-      'филтр',
-      'кофтан',
-      'индексиЁфтан',
-      'охиринЁфтан',
-      'индексиОхиринЁфтан',
-      'ҳамвор',
-      'ҳамворХарита',
-      'бароиҲар',
-      'аз',
-      'дорад',
-      'индекси',
-      'рӯйхатАст',
-      'пайвастКардан',
-      'калидҳо',
-      'индексиОхирин',
-      'харита',
-      'азАргументҳо',
-      'баровардан',
-      'илова',
-      'пуш',
-      'ҷамъбаст',
-      'ҷамъбастАзРост',
-      'баргардон',
-      'ҳазфиАввал',
-      'буридан',
-      'баъзе',
-      'тартиб',
-      'пайваст',
-      'баСатриМаҳаллӣ',
-      'баБаргардон',
-      'баТартиб',
-      'баПайваст',
-      'баСатр',
-      'иловаБаАввал',
-      'қиматҳо',
-      'бо',
-      // String methods
-      'дарозииСатр',
-      'аломатДар',
-      'кодиАломатДар',
-      'нуқтаиКодДар',
-      'анҷомБо',
-      'азКодиАломат',
-      'азНуқтаиКод',
-      'муқоисаиМаҳаллӣ',
-      'мувофиқат',
-      'мувофиқатҲама',
-      'муқаррарӣ',
-      'пурКарданОхир',
-      'пурКарданАввал',
-      'хоми',
-      'такрор',
-      'ҷойивазкунӣ',
-      'ҷойгузин',
-      'ҷойивазкунӣҲама',
-      'ҷустуҷӯ',
-      'ҷудокунӣ',
-      'оғозБо',
-      'қисмат',
-      'хурдМаҳаллӣ',
-      'калонМаҳаллӣ',
-      'хурд',
-      'калон',
-      'тозаКардан',
-      'тозаКарданОхир',
-      'тозаКарданАввал',
-      'қиматиАслӣ',
-      // Math methods
-      'Е',
-      'ЛН10',
-      'ЛН2',
-      'ЛОГ10Е',
-      'ЛОГ2Е',
-      'ПИ',
-      'РЕША1_2',
-      'РЕША2',
-      'мутлақ',
-      'арккосинус',
-      'арккосинусГиперболӣ',
-      'арксинус',
-      'арксинусГиперболӣ',
-      'арктангенс',
-      'арктангенс2',
-      'арктангенсГиперболӣ',
-      'решаиКубӣ',
-      'боло',
-      'clz32',
-      'косинус',
-      'косинусГиперболӣ',
-      'экспонента',
-      'expm1',
-      'поён',
-      'fround',
-      'гипотенуза',
-      'imul',
-      'логарифм',
-      'логарифм10',
-      'логарифм1п',
-      'логарифм2',
-      'ҳаддиАксар',
-      'ҳаддиАқал',
-      'қувват',
-      'тасодуфӣ',
-      'дузкунӣ',
-      'аломат',
-      'синус',
-      'синусГиперболӣ',
-      'дуръшака',
-      'тангенс',
-      'тангенсГиперболӣ',
-      'бириданАдад',
-      // Object methods
-      'таъин',
-      'сохтан',
-      'муайянХосиятҳо',
-      'муайянХосият',
-      'яхКардан',
-      'азВоридот',
-      'тавсифиХосият',
-      'тавсифиХосиятҳо',
-      'номҳоиХосият',
-      'рамзҳоиХосият',
-      'прототип',
-      'гурӯҳбандӣ',
-      'дорадХосият',
-      'аст',
-      'васеъшаванда',
-      'яхшуда',
-      'мӯҳршуда',
-      'манъиВасеъшавӣ',
-      'мӯҳр',
-      'танзимиПрототип',
-    ];
-
-    const shouldMap =
-      objectMapped || (!this.looksLikeClassInstance(node) && commonMethods.includes(propertyName));
+    // Always map if the property is a recognised Tajik builtin method name.
+    // The previous `looksLikeClassInstance` heuristic (lowercase Cyrillic +
+    // underscore) created asymmetry with MethodDefinition emission: a class
+    // method declared as `илова` emits `push`, but a call on `list_name.илова`
+    // would not — runtime "not a function". Consistency beats the heuristic:
+    // if the user names a class method after a builtin, both sides rewrite.
+    const shouldMap = objectMapped || CodeGenerator.COMMON_METHODS.has(propertyName);
     return shouldMap ? mappedProperty : property;
   }
 
@@ -1461,8 +1476,16 @@ export class CodeGenerator {
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
-    const methodName =
-      node.kind === 'constructor' ? 'constructor' : this.generateIdentifier(node.key);
+    // Keep symmetry with `mapPropertyName`: a call-site `obj.маълумот()` may rewrite
+    // to `obj.info()` via the builtin map, so the declaration must agree. Without
+    // this, the class emits `маълумот()` while every call emits `info()` and the
+    // runtime hits "not a function". Bug covered examples 10/11/12/13/17/20/24/27/36.
+    const rawName = this.generateIdentifier(node.key);
+    const mappedMethodName =
+      CodeGenerator.COMMON_METHODS.has(rawName) && this.builtinMappings.has(rawName)
+        ? (this.builtinMappings.get(rawName) as string)
+        : rawName;
+    const methodName = node.kind === 'constructor' ? 'constructor' : mappedMethodName;
     const isStatic = node.static ? 'static ' : '';
     // Note: JavaScript doesn't support abstract methods, so we skip them entirely
 
@@ -1551,8 +1574,11 @@ export class CodeGenerator {
         return this.generateArrayPattern(node);
       case 'ObjectPattern':
         return this.generateObjectPattern(node);
-      default:
-        throw new Error('Unknown pattern type');
+      default: {
+        const unknown = node as { type?: string };
+        this.errors.push(`Unknown pattern type: ${unknown.type ?? 'unknown'}`);
+        return '';
+      }
     }
   }
 

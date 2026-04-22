@@ -123,20 +123,6 @@ export interface ModuleSystemConfig {
   };
   // Optional: delegate to compiler options used during module compilation if needed
   compilation?: CompilerOptions;
-  // Production features
-  metrics?: boolean;
-  circuitBreakers?: boolean;
-  logger?: boolean;
-  managementServer?: boolean;
-  managementPort?: number;
-  // Production resource management
-  resourceLimits?: {
-    maxMemoryBytes?: number;
-    maxFileHandles?: number;
-    maxCachedModules?: number;
-    checkInterval?: number;
-  };
-  operationTimeout?: number;
 }
 
 export interface BundleConfig {
@@ -172,21 +158,17 @@ function validateModuleSystem(config: unknown, basePath = 'moduleSystem'): Confi
   return errors;
 }
 
+const KNOWN_MODULE_SYSTEM_TOP_KEYS: ReadonlySet<string> = new Set([
+  'resolution',
+  'loading',
+  'compilation',
+]);
+
 function validateModuleSystemTopLevel(config: object, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
-  const knownTop = [
-    'resolution',
-    'loading',
-    'compilation',
-    'metrics',
-    'circuitBreakers',
-    'logger',
-    'managementServer',
-    'managementPort',
-  ];
 
   for (const key of Object.keys(config)) {
-    if (!knownTop.includes(key)) {
+    if (!KNOWN_MODULE_SYSTEM_TOP_KEYS.has(key)) {
       errors.push({ path: `${basePath}.${key}`, message: `unknown property` });
     }
   }

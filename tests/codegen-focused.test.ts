@@ -88,7 +88,7 @@ describe('CodeGenerator - Core Coverage Tests', () => {
       expect(result).toBe('');
     });
 
-    test('should handle malformed AST nodes', () => {
+    test('should collect errors for malformed AST nodes (never-throw contract)', () => {
       const program: any = {
         type: 'Program',
         body: [
@@ -102,9 +102,12 @@ describe('CodeGenerator - Core Coverage Tests', () => {
         column: 1,
       };
 
-      expect(() => {
-        generator.generate(program);
-      }).toThrow('Unknown statement type: InvalidStatement');
+      expect(() => generator.generate(program)).not.toThrow();
+      expect(generator.getErrors()).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Unknown statement type: InvalidStatement'),
+        ])
+      );
     });
   });
 
