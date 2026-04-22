@@ -35,8 +35,8 @@ jest.mock('chokidar', () => {
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import * as cliProgram from '../src/cli/program';
+import { canonicalTmpDir } from './helpers/paths';
 
 const { createProgram, compileFile } = cliProgram;
 
@@ -47,9 +47,7 @@ const { createProgram, compileFile } = cliProgram;
  * We stub process.exit and console to keep the test runner alive and to assert outputs.
  */
 
-// TODO(windows-ci): this suite uses Windows 8.3 short paths and npm init in a temp
-// directory; it needs explicit long-path handling before it can pass on win32.
-(process.platform === 'win32' ? describe.skip : describe)('CLI Program (in-process)', () => {
+describe('CLI Program (in-process)', () => {
   let tempDir: string;
   let originalCwd: string;
   let originalExitCode: number | undefined;
@@ -59,7 +57,7 @@ const { createProgram, compileFile } = cliProgram;
   let skipCleanup = false;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-cli-program-'));
+    tempDir = canonicalTmpDir('somon-cli-program-');
     originalCwd = process.cwd();
     originalExitCode = process.exitCode;
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});

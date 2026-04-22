@@ -1,22 +1,16 @@
-import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { buildCliOnce, canonicalTmpDir, runCli } from './helpers/paths';
 
-// TODO(windows-ci): uses execSync + temp dirs with Windows 8.3 short names;
-// several assertions compare stderr text that differs between platforms.
-(process.platform === 'win32' ? describe.skip : describe)('CLI Integration Tests', () => {
+describe('CLI Integration Tests', () => {
   let tempDir: string;
-  let cliPath: string;
 
   beforeAll(() => {
-    // Build the project first
-    execSync('npm run build', { stdio: 'pipe' });
-    cliPath = path.join(__dirname, '..', 'dist', 'cli.js');
+    buildCliOnce();
   });
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-test-'));
+    tempDir = canonicalTmpDir('somon-test-');
   });
 
   afterEach(() => {
@@ -32,9 +26,7 @@ import * as os from 'os';
 
       fs.writeFileSync(inputFile, 'чоп.сабт("Салом ҷаҳон!");');
 
-      const result = execSync(`node "${cliPath}" compile "${inputFile}" -o "${outputFile}"`, {
-        encoding: 'utf-8',
-      });
+      const result = runCli(['compile', inputFile, '-o', outputFile]);
 
       expect(fs.existsSync(outputFile)).toBe(true);
       expect(result).toContain('Compiled');
@@ -49,11 +41,9 @@ import * as os from 'os';
       fs.writeFileSync(inputFile, 'invalid syntax here');
 
       try {
-        execSync(`node "${cliPath}" compile "${inputFile}"`, { stdio: 'pipe' });
-        // If we reach here, the command succeeded when it should have failed
+        runCli(['compile', inputFile], { stdio: 'pipe' });
         throw new Error('Expected compilation to fail but it succeeded');
       } catch (error: any) {
-        // Expect the command to exit with non-zero status
         expect(error.status).not.toBe(0);
       }
     });
@@ -62,7 +52,7 @@ import * as os from 'os';
       const nonExistentFile = path.join(tempDir, 'nonexistent.som');
 
       expect(() => {
-        execSync(`node "${cliPath}" compile "${nonExistentFile}"`, { stdio: 'pipe' });
+        runCli(['compile', nonExistentFile], { stdio: 'pipe' });
       }).toThrow();
     });
 
@@ -70,9 +60,7 @@ import * as os from 'os';
       const inputFile = path.join(tempDir, 'typed.som');
       fs.writeFileSync(inputFile, 'тағйирёбанда ном: сатр = "Аҳмад";');
 
-      const result = execSync(`node "${cliPath}" compile "${inputFile}" --strict`, {
-        encoding: 'utf-8',
-      });
+      const result = runCli(['compile', inputFile, '--strict']);
 
       expect(result).toContain('Compiled');
     });
@@ -83,9 +71,7 @@ import * as os from 'os';
 
       fs.writeFileSync(inputFile, 'чоп.сабт("Test");');
 
-      execSync(`node "${cliPath}" compile "${inputFile}" -o "${outputFile}" --source-map`, {
-        stdio: 'pipe',
-      });
+      runCli(['compile', inputFile, '-o', outputFile, '--source-map'], { stdio: 'pipe' });
 
       expect(fs.existsSync(outputFile)).toBe(true);
       // Note: Source map generation may not be fully implemented yet
@@ -98,9 +84,7 @@ import * as os from 'os';
       const inputFile = path.join(tempDir, 'run-test.som');
       fs.writeFileSync(inputFile, 'чоп.сабт("Running test");');
 
-      const result = execSync(`node "${cliPath}" run "${inputFile}"`, {
-        encoding: 'utf-8',
-      });
+      const result = runCli(['run', inputFile]);
 
       expect(result).toContain('Running test');
     });
@@ -110,7 +94,7 @@ import * as os from 'os';
       fs.writeFileSync(inputFile, 'invalid_function_call();');
 
       expect(() => {
-        execSync(`node "${cliPath}" run "${inputFile}"`, { stdio: 'pipe' });
+        runCli(['run', inputFile], { stdio: 'pipe' });
       }).toThrow();
     });
   });
@@ -120,10 +104,7 @@ import * as os from 'os';
       const projectName = 'test-project';
       const projectPath = path.join(tempDir, projectName);
 
-      const result = execSync(`node "${cliPath}" init "${projectName}"`, {
-        cwd: tempDir,
-        encoding: 'utf-8',
-      });
+      const result = runCli(['init', projectName], { cwd: tempDir });
 
       expect(result).toContain('Created SomonScript project');
       expect(fs.existsSync(projectPath)).toBe(true);
@@ -145,18 +126,12 @@ import * as os from 'os';
       fs.mkdirSync(projectPath);
 
       expect(() => {
-        execSync(`node "${cliPath}" init "${projectName}"`, {
-          cwd: tempDir,
-          stdio: 'pipe',
-        });
+        runCli(['init', projectName], { cwd: tempDir, stdio: 'pipe' });
       }).toThrow();
     });
 
     test('should use default project name', () => {
-      const result = execSync(`node "${cliPath}" init`, {
-        cwd: tempDir,
-        encoding: 'utf-8',
-      });
+      const result = runCli(['init'], { cwd: tempDir });
 
       expect(result).toContain('somon-project');
       expect(fs.existsSync(path.join(tempDir, 'somon-project'))).toBe(true);
@@ -165,12 +140,12 @@ import * as os from 'os';
 
   describe('version and help', () => {
     test('should display version', () => {
-      const result = execSync(`node "${cliPath}" --version`, { encoding: 'utf-8' });
+      const result = runCli(['--version']);
       expect(result).toMatch(/\d+\.\d+\.\d+/);
     });
 
     test('should display help', () => {
-      const result = execSync(`node "${cliPath}" --help`, { encoding: 'utf-8' });
+      const result = runCli(['--help']);
       expect(result).toContain('SomonScript compiler');
       expect(result).toContain('compile');
       expect(result).toContain('run');

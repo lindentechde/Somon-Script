@@ -8,21 +8,14 @@ const baseConfig = {
 
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json'],
-  // On Windows CI several CLI/integration suites are skipped (see
-  // tests/cli-*.test.ts TODO(windows-ci) markers), which would otherwise
-  // drop coverage below thresholds and mask the real signal. Skip the
-  // coverage gate on win32.
-  coverageThreshold:
-    process.platform === 'win32'
-      ? undefined
-      : {
-          global: {
-            branches: 55,
-            functions: 75,
-            lines: 68,
-            statements: 68,
-          },
-        },
+  coverageThreshold: {
+    global: {
+      branches: 55,
+      functions: 75,
+      lines: 68,
+      statements: 68,
+    },
+  },
   testTimeout: 10000,
   verbose: true,
   maxWorkers: 1,
