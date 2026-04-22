@@ -12,7 +12,10 @@ permissions:
 
 jobs:
   test:
-    name: Test on Node.js ${{ matrix.node-version }} / ${{ matrix.os }}
+    # Keep the canonical ubuntu run as "Test on Node.js 24.x" so that the required
+    # status check configured in branch protection (which was set before the OS
+    # matrix was added) still matches by name. Non-ubuntu runs carry the OS suffix.
+    name: Test on Node.js ${{ matrix.node-version }}${{ matrix.os == 'ubuntu-latest' && '' || format(' / {0}', matrix.os) }}
     runs-on: ${{ matrix.os }}
 
     env:
