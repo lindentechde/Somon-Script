@@ -1555,7 +1555,7 @@ export class Parser {
     if (this.check(type)) return this.advance();
 
     const token = this.peek();
-    const errorMsg = `${message}. Got '${token.value}' at line ${token.line}, column ${token.column}`;
+    const errorMsg = `Unexpected token '${token.value}' at line ${token.line}, column ${token.column} (${message})`;
     this.errors.push(errorMsg);
 
     // Try to recover by returning a dummy token

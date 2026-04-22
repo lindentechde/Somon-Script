@@ -74,7 +74,19 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
   const warnings: string[] = [];
 
   try {
-    const ast = parseSource(source);
+    const { ast, parserErrors } = parseSource(source);
+    // Parser errors are recoverable diagnostics — parser.synchronize() keeps
+    // walking and emits a best-effort AST. Surface them as warnings in the
+    // default mode so the CLI/audit doesn't treat a partially-parseable
+    // example as a hard failure. Strict mode promotes them to fatal errors.
+    if (options.strict) {
+      errors.push(...parserErrors);
+      if (parserErrors.length > 0) {
+        return { code: '', errors, warnings };
+      }
+    } else {
+      warnings.push(...parserErrors);
+    }
 
     if (options.typeCheck !== false) {
       const result = runTypeCheck(source, ast);
@@ -114,7 +126,12 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
 function parseSource(source: string) {
   const lexer = new Lexer(source);
   const tokens = lexer.tokenize();
-  return new Parser(tokens).parse();
+  const parser = new Parser(tokens);
+  const ast = parser.parse();
+  const parserErrors = parser
+    .getErrors()
+    .map(err => (err.startsWith('Parse error') ? err : `Parse error: ${err}`));
+  return { ast, parserErrors };
 }
 
 function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>) {
