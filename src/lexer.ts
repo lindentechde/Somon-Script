@@ -275,6 +275,11 @@ export class Lexer {
       return this.nextToken();
     }
 
+    if (char === '/' && this.peek() === '*') {
+      this.skipBlockComment();
+      return this.nextToken();
+    }
+
     switch (char) {
       case '+':
         return this.handlePlusOperator();
@@ -546,6 +551,25 @@ export class Lexer {
 
     // Skip until end of line
     while (!this.isAtEnd() && this.currentChar() !== '\n') {
+      this.advance();
+    }
+  }
+
+  private skipBlockComment(): void {
+    // Skip the '/*'
+    this.advance();
+    this.advance();
+
+    while (!this.isAtEnd()) {
+      if (this.currentChar() === '*' && this.peek() === '/') {
+        this.advance();
+        this.advance();
+        return;
+      }
+      if (this.currentChar() === '\n') {
+        this.line++;
+        this.column = 1;
+      }
       this.advance();
     }
   }

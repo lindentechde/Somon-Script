@@ -27,7 +27,7 @@ import {
   TypeAnnotation,
   UniqueType,
 } from './types';
-import { PropertyDefinition, MethodDefinition } from './ast';
+import { PropertyDefinition, MethodDefinition, ExpressionStatement } from './ast';
 
 /**
  * Represents a type checking error or warning
@@ -49,6 +49,9 @@ export const TypeCheckErrorCode = {
   ClassNotFound: 'CLASS_NOT_FOUND',
   InvalidExtends: 'INVALID_EXTENDS',
   CircularInheritance: 'CIRCULAR_INHERITANCE',
+  UndefinedIdentifier: 'UNDEFINED_IDENTIFIER',
+  ArgumentCountMismatch: 'ARGUMENT_COUNT_MISMATCH',
+  ArgumentTypeMismatch: 'ARGUMENT_TYPE_MISMATCH',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -74,6 +77,9 @@ export interface Type {
   returnType?: Type;
   baseType?: Type;
   typeParameters?: Type[]; // For generic types like Map<K,V>, Set<T>
+  paramTypes?: Type[]; // Parameter types for function types
+  paramNames?: string[]; // Parameter names for function types
+  paramOptional?: boolean[]; // Which params are marked optional (suffix `?`)
 }
 
 /**
@@ -89,6 +95,50 @@ export interface PropertyType {
  * Provides comprehensive type checking with Tajik Cyrillic type annotations
  */
 export class TypeChecker {
+  private static readonly BUILTIN_VALUE_NAMES: ReadonlySet<string> = new Set([
+    // Tajik builtin globals (also present in codegen's builtinMappings)
+    'чоп',
+    'математика',
+    'Риёзӣ',
+    'объект',
+    'сатрМетодҳо',
+    'хато',
+    'рӯйхат',
+    // Tajik literal keywords that surface as Identifier expressions
+    'беқимат', // undefined
+    'холӣ', // null (also a primitive type name)
+    'дуруст', // true
+    'нодуруст', // false
+    'ин', // this
+    // Latin/JS builtins the generated code or examples reference by name
+    'console',
+    'Math',
+    'Object',
+    'Array',
+    'Date',
+    'JSON',
+    'Map',
+    'Set',
+    'Promise',
+    'Error',
+    'RegExp',
+    'Number',
+    'Boolean',
+    'String',
+    'Symbol',
+    'undefined',
+    'null',
+    'NaN',
+    'Infinity',
+    'parseInt',
+    'parseFloat',
+    'isNaN',
+    'isFinite',
+    'globalThis',
+    'this',
+    'arguments',
+  ]);
+
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
   private symbolTable: Map<string, Type> = new Map();
@@ -155,8 +205,59 @@ export class TypeChecker {
         this.collectTypeAlias(statement as TypeAlias);
       } else if (statement.type === 'ClassDeclaration') {
         this.collectClass(statement as ClassDeclaration);
+      } else if (statement.type === 'ImportDeclaration') {
+        this.collectImport(statement as import('./ast').ImportDeclaration);
+      } else if (statement.type === 'FunctionDeclaration') {
+        this.hoistFunctionDeclaration(statement as FunctionDeclaration);
+      } else if (statement.type === 'ExportDeclaration') {
+        const decl = (statement as import('./ast').ExportDeclaration).declaration;
+        if (decl?.type === 'FunctionDeclaration') {
+          this.hoistFunctionDeclaration(decl as FunctionDeclaration);
+        }
       }
     }
+  }
+
+  private collectImport(importDecl: import('./ast').ImportDeclaration): void {
+    // Register imported local names as 'unknown' so references don't trip the
+    // undefined-identifier diagnostic. Cross-module type inference isn't wired.
+    for (const spec of importDecl.specifiers) {
+      this.symbolTable.set(spec.local.name, { kind: 'unknown' });
+    }
+  }
+
+  private hoistFunctionDeclaration(funcDecl: FunctionDeclaration): void {
+    const { paramTypes, paramNames, paramOptional } = this.extractFunctionParams(funcDecl);
+    const returnType: Type = funcDecl.returnType
+      ? this.resolveTypeNode(funcDecl.returnType.typeAnnotation)
+      : { kind: 'unknown' };
+    this.symbolTable.set(funcDecl.name.name, {
+      kind: 'function',
+      name: funcDecl.name.name,
+      returnType,
+      paramTypes,
+      paramNames,
+      paramOptional,
+    });
+  }
+
+  private extractFunctionParams(funcDecl: FunctionDeclaration): {
+    paramTypes: Type[];
+    paramNames: string[];
+    paramOptional: boolean[];
+  } {
+    const paramTypes: Type[] = [];
+    const paramNames: string[] = [];
+    const paramOptional: boolean[] = [];
+    for (const param of funcDecl.params) {
+      const paramType: Type = param.typeAnnotation
+        ? this.resolveTypeNode(param.typeAnnotation.typeAnnotation)
+        : { kind: 'unknown' };
+      paramTypes.push(paramType);
+      paramNames.push(param.name.name);
+      paramOptional.push(Boolean(param.optional));
+    }
+    return { paramTypes, paramNames, paramOptional };
   }
 
   private collectInterface(interfaceDecl: InterfaceDeclaration): void {
@@ -247,6 +348,14 @@ export class TypeChecker {
       case 'ClassDeclaration':
         this.checkClassDeclaration(statement as ClassDeclaration);
         break;
+      case 'ExpressionStatement':
+        this.inferExpressionType((statement as ExpressionStatement).expression);
+        break;
+      case 'ExportDeclaration': {
+        const inner = (statement as import('./ast').ExportDeclaration).declaration;
+        if (inner) this.checkStatement(inner);
+        break;
+      }
       // Add more statement types as needed
     }
   }
@@ -266,8 +375,10 @@ export class TypeChecker {
       inferredType = this.inferExpressionType(varDecl.init, declaredType);
     }
 
-    // Type checking
-    if (declaredType && inferredType) {
+    // Type checking — skip when the inferred type is 'unknown' to avoid
+    // cascading false positives from expressions whose inference isn't wired
+    // (e.g., BinaryExpression, complex member accesses).
+    if (declaredType && inferredType && inferredType.kind !== 'unknown') {
       if (!this.isAssignable(inferredType, declaredType)) {
         this.addError(
           TypeCheckErrorCode.TypeMismatch,
@@ -335,34 +446,38 @@ export class TypeChecker {
   }
 
   private checkFunctionDeclaration(funcDecl: FunctionDeclaration): void {
-    // Create new scope for function parameters
-    const savedSymbols = new Map(this.symbolTable);
+    const { paramTypes, paramNames, paramOptional } = this.extractFunctionParams(funcDecl);
 
-    // Add parameters to symbol table
-    for (const param of funcDecl.params) {
-      if (param.typeAnnotation) {
-        const annotation: TypeAnnotation = param.typeAnnotation;
-        const paramType = this.resolveTypeNode(annotation.typeAnnotation);
-        this.symbolTable.set(param.name.name, paramType);
-      }
-    }
-
-    // Check function body (simplified - would need full statement checking)
-    // For now, just restore symbol table
-    this.symbolTable = savedSymbols;
-
-    // Store function type with return type
     const returnTypeAnnotation: TypeAnnotation | undefined = funcDecl.returnType;
-    const returnType = returnTypeAnnotation
+    const returnType: Type = returnTypeAnnotation
       ? this.resolveTypeNode(returnTypeAnnotation.typeAnnotation)
       : { kind: 'unknown' };
 
     const functionType: Type = {
       kind: 'function',
       name: funcDecl.name.name,
-      returnType: returnType,
+      returnType,
+      paramTypes,
+      paramNames,
+      paramOptional,
     };
+
+    // Register the function BEFORE walking the body so recursion resolves.
     this.symbolTable.set(funcDecl.name.name, functionType);
+
+    // Create new scope for function parameters and check the body.
+    const savedSymbols = new Map(this.symbolTable);
+    for (let i = 0; i < funcDecl.params.length; i++) {
+      this.symbolTable.set(paramNames[i], paramTypes[i]);
+    }
+
+    if (funcDecl.body && Array.isArray(funcDecl.body.body)) {
+      for (const stmt of funcDecl.body.body) {
+        this.checkStatement(stmt);
+      }
+    }
+
+    this.symbolTable = savedSymbols;
   }
 
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
@@ -436,6 +551,8 @@ export class TypeChecker {
 
     const declaredType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
     const inferredType = this.inferExpressionType(prop.value);
+
+    if (inferredType.kind === 'unknown') return;
 
     if (!this.isAssignable(inferredType, declaredType)) {
       this.addError(
@@ -669,7 +786,18 @@ export class TypeChecker {
   }
 
   private inferIdentifierType(identifier: Identifier): Type {
-    return this.symbolTable.get(identifier.name) || { kind: 'unknown' };
+    const sym = this.symbolTable.get(identifier.name);
+    if (sym) return sym;
+    if (TypeChecker.BUILTIN_VALUE_NAMES.has(identifier.name)) {
+      return { kind: 'unknown' };
+    }
+    this.addError(
+      TypeCheckErrorCode.UndefinedIdentifier,
+      `Variable '${identifier.name}' is not defined`,
+      identifier.line,
+      identifier.column
+    );
+    return { kind: 'unknown' };
   }
 
   private inferTupleTypeFromTarget(arrayExpr: ArrayExpression, targetTypes: Type[]): Type {
@@ -796,12 +924,70 @@ export class TypeChecker {
   private inferCallType(callExpr: CallExpression): Type {
     if (callExpr.callee && callExpr.callee.type === 'Identifier') {
       const functionName = (callExpr.callee as Identifier).name;
-      const functionType = this.symbolTable.get(functionName);
-      if (functionType && functionType.kind === 'function' && functionType.returnType) {
-        return functionType.returnType;
+      // Route through inferIdentifierType so undefined callees produce a
+      // single UndefinedIdentifier diagnostic instead of silently unknown.
+      const functionType = this.symbolTable.get(functionName)
+        ? this.symbolTable.get(functionName)!
+        : this.inferIdentifierType(callExpr.callee as Identifier);
+      if (functionType.kind === 'function') {
+        this.validateCallArguments(callExpr, functionType);
+        return functionType.returnType ?? { kind: 'unknown' };
       }
+      // Still evaluate args so nested undefined identifiers are flagged.
+      callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
+    } else if (callExpr.callee) {
+      // Type-check non-identifier callees (e.g., member expressions) so
+      // arguments still trigger undefined-variable detection.
+      callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
     }
     return { kind: 'unknown' };
+  }
+
+  private validateCallArguments(callExpr: CallExpression, functionType: Type): void {
+    const paramTypes = functionType.paramTypes;
+    if (!paramTypes) {
+      // Still walk args so nested undefined identifiers are detected.
+      callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
+      return;
+    }
+
+    const optional = functionType.paramOptional ?? paramTypes.map(() => false);
+    const requiredCount = optional.filter(o => !o).length;
+    const actual = callExpr.arguments.length;
+
+    if (actual < requiredCount || actual > paramTypes.length) {
+      const expectedStr =
+        requiredCount === paramTypes.length
+          ? `${paramTypes.length}`
+          : `${requiredCount}-${paramTypes.length}`;
+      this.addError(
+        TypeCheckErrorCode.ArgumentCountMismatch,
+        `Function '${functionType.name ?? 'anonymous'}' expected ${expectedStr} argument(s) but got ${actual}`,
+        callExpr.line,
+        callExpr.column
+      );
+    }
+
+    const checkCount = Math.min(callExpr.arguments.length, paramTypes.length);
+    for (let i = 0; i < checkCount; i++) {
+      const argType = this.inferExpressionType(callExpr.arguments[i], paramTypes[i]);
+      const paramType = paramTypes[i];
+      if (argType.kind === 'unknown' || paramType.kind === 'unknown') continue;
+      if (!this.isAssignable(argType, paramType)) {
+        const argNode = callExpr.arguments[i];
+        this.addError(
+          TypeCheckErrorCode.ArgumentTypeMismatch,
+          `Argument ${i + 1} of '${functionType.name ?? 'anonymous'}' expected type '${this.typeToString(paramType)}' but got '${this.typeToString(argType)}'`,
+          argNode.line ?? callExpr.line,
+          argNode.column ?? callExpr.column
+        );
+      }
+    }
+
+    // Still evaluate any extra arguments so nested diagnostics fire.
+    for (let i = checkCount; i < callExpr.arguments.length; i++) {
+      this.inferExpressionType(callExpr.arguments[i]);
+    }
   }
 
   private inferNewExpressionType(newExpr: NewExpression): Type {

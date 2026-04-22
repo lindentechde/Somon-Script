@@ -111,8 +111,7 @@ describe('Error Handling Tests', () => {
       expect(result.errors[0].message).toContain('not assignable');
     });
 
-    // TODO(type-checker): implement symbol-table lookup for undefined references.
-    test.skip('should detect undefined variables', () => {
+    test('should detect undefined variables', () => {
       const undefinedVar = 'чоп.сабт(undefined_variable);';
       const lexer = new Lexer(undefinedVar);
       const tokens = lexer.tokenize();
@@ -125,8 +124,7 @@ describe('Error Handling Tests', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    // TODO(type-checker): arity + argument-type checking is not implemented yet.
-    test.skip('should detect function call with wrong arguments', () => {
+    test('should detect function call with wrong arguments', () => {
       const wrongArgs = `
         функсия тест(а: сатр, б: рақам): холӣ {
           чоп.сабт(а + б);
@@ -190,8 +188,7 @@ describe('Error Handling Tests', () => {
       expect(result.code).toBe('');
     });
 
-    // TODO(parser): recovery inside nested function bodies does not collect errors.
-    test.skip('should handle nested errors properly', () => {
+    test('should handle nested errors properly', () => {
       const nestedError = `
         функсия outer() {
           функсия inner() {
@@ -223,11 +220,10 @@ describe('Error Handling Tests', () => {
       // expect(result.code).toContain('123');
     });
 
-    // TODO(error-aggregator): suggestion synthesis for typo'd keywords is not wired.
-    test.skip('should provide helpful suggestions in error messages', () => {
+    test('should provide helpful suggestions in error messages', () => {
       const typoError = 'тағйирёбанд ном = "test";'; // Missing 'а' in тағйирёбанда
 
-      const result = compile(typoError);
+      const result = compile(typoError, { strict: true });
 
       expect(result.errors.length).toBeGreaterThan(0);
       // Error message should be helpful
@@ -282,6 +278,101 @@ describe('Error Handling Tests', () => {
 
       // Should either compile successfully or fail gracefully
       expect(Array.isArray(result.errors)).toBe(true);
+    });
+  });
+
+  describe('Type Checker Diagnostics', () => {
+    test('builtin globals are not flagged as undefined', () => {
+      const sources = [
+        'чоп.сабт("x");',
+        'тағйирёбанда m = Math.max(1, 2);',
+        'тағйирёбанда ok = Array.isArray([1, 2]);',
+      ];
+      for (const src of sources) {
+        const lexer = new Lexer(src);
+        const tokens = lexer.tokenize();
+        const parser = new Parser(tokens);
+        const ast = parser.parse();
+        const typeChecker = new TypeChecker();
+
+        const result = typeChecker.check(ast);
+        const undefinedErrors = result.errors.filter(e => e.code === 'UNDEFINED_IDENTIFIER');
+        expect(undefinedErrors).toEqual([]);
+      }
+    });
+
+    test('undefined function call reports exactly one error, no argument diagnostics cascade', () => {
+      const src = 'undef(1, 2, 3);';
+      const lexer = new Lexer(src);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      const typeChecker = new TypeChecker();
+
+      const result = typeChecker.check(ast);
+      const codes = result.errors.map(e => e.code);
+      expect(codes).toEqual(['UNDEFINED_IDENTIFIER']);
+    });
+
+    test('detects argument count mismatch', () => {
+      const src = `
+        функсия f(x: рақам, y: сатр): холӣ {
+          чоп.сабт(x);
+          чоп.сабт(y);
+        }
+        f(1);
+      `;
+      const lexer = new Lexer(src);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      const typeChecker = new TypeChecker();
+
+      const result = typeChecker.check(ast);
+      const arityErrors = result.errors.filter(e => e.code === 'ARGUMENT_COUNT_MISMATCH');
+      expect(arityErrors.length).toBe(1);
+      expect(arityErrors[0].message).toContain('expected 2');
+      expect(arityErrors[0].message).toContain('got 1');
+    });
+
+    test('detects argument type mismatch at position 0', () => {
+      const src = `
+        функсия f(x: рақам, y: сатр): холӣ {
+          чоп.сабт(x);
+          чоп.сабт(y);
+        }
+        f("a", "b");
+      `;
+      const lexer = new Lexer(src);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      const typeChecker = new TypeChecker();
+
+      const result = typeChecker.check(ast);
+      const typeMismatches = result.errors.filter(e => e.code === 'ARGUMENT_TYPE_MISMATCH');
+      expect(typeMismatches.length).toBe(1);
+      expect(typeMismatches[0].message).toContain('Argument 1');
+    });
+
+    test('matching call produces no argument diagnostics', () => {
+      const src = `
+        функсия add(a: рақам, b: рақам): рақам {
+          бозгашт a + b;
+        }
+        тағйирёбанда x = add(1, 2);
+      `;
+      const lexer = new Lexer(src);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+      const typeChecker = new TypeChecker();
+
+      const result = typeChecker.check(ast);
+      const argErrors = result.errors.filter(
+        e => e.code === 'ARGUMENT_TYPE_MISMATCH' || e.code === 'ARGUMENT_COUNT_MISMATCH'
+      );
+      expect(argErrors).toEqual([]);
     });
   });
 });

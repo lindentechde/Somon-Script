@@ -350,7 +350,10 @@ export class CompilationErrorAggregator {
     const suggestions: Record<string, string> = {
       CIRCULAR_DEP: 'Refactor to remove circular dependency or use dynamic imports',
       UNDEFINED_VAR: 'Check variable name spelling or ensure it is declared',
+      UNDEFINED_IDENTIFIER: 'Declare the variable with тағйирёбанда/собит, or check the spelling',
       TYPE_MISMATCH: 'Ensure types match or add explicit type conversion',
+      ARGUMENT_COUNT_MISMATCH: 'Match the argument count to the function signature',
+      ARGUMENT_TYPE_MISMATCH: 'Convert the argument to the expected parameter type',
       MISSING_MODULE: 'Run npm install or check the module path',
       SYNTAX_ERROR: 'Check for missing semicolons, brackets, or quotes',
       PERMISSION_DENIED: 'Check file permissions or run with appropriate privileges',
