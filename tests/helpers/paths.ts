@@ -35,23 +35,33 @@ export function runCli(args: string[], opts: ExecFileSyncOptions = {}): string {
   return typeof result === 'string' ? result : result.toString('utf-8');
 }
 
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 let cachedCliPath: string | undefined;
 
 /**
- * Run `npm run build` once per Jest worker and return the resolved CLI path.
+ * Resolve the CLI path, building it only when `dist/cli.js` is missing.
+ *
+ * The CI pipeline runs `npm run build` as its own step before tests, so the
+ * usual path is a pure existence check. When invoked locally without a
+ * prior build, it falls back to `npm run build` — always with an explicit
+ * `cwd: PROJECT_ROOT` so a leaked `process.chdir(tempDir)` from a prior
+ * test can't misdirect npm into a deleted temp directory (the Windows CI
+ * regression that blocked the original migration).
  *
  * On Windows `npm` is a `.cmd` shim, so we need `shell: true` there;
  * elsewhere we call the binary directly.
  */
 export function buildCliOnce(): string {
   if (cachedCliPath) return cachedCliPath;
-  const useShell = process.platform === 'win32';
-  execFileSync('npm', ['run', 'build'], {
-    stdio: 'pipe',
-    shell: useShell,
-  });
+  if (!fs.existsSync(CLI_PATH)) {
+    execFileSync('npm', ['run', 'build'], {
+      stdio: 'pipe',
+      shell: process.platform === 'win32',
+      cwd: PROJECT_ROOT,
+    });
+  }
   cachedCliPath = CLI_PATH;
-  return CLI_PATH;
+  return cachedCliPath;
 }
 
 /** Absolute path to the built CLI (no build is triggered). */

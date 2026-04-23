@@ -70,13 +70,27 @@ describe('CLI Program (in-process)', () => {
   // Config loader behavior is covered in tests/config.test.ts.
 
   afterEach(() => {
-    // Cleanup temp dir
-    if (!skipCleanup && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+    // Restore cwd FIRST — on Windows, rmSync on the current working
+    // directory raises EBUSY, which would throw and leave the next suite
+    // with a stale cwd pointing at a deleted temp dir.
+    try {
+      process.chdir(originalCwd);
+    } catch {
+      // originalCwd may itself be gone in pathological cases; swallow and
+      // keep going so we still restore spies and exit code.
     }
 
-    // Restore cwd
-    process.chdir(originalCwd);
+    // Cleanup temp dir
+    if (!skipCleanup && fs.existsSync(tempDir)) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        // Windows occasionally keeps file handles open briefly after a
+        // subprocess exits; the OS will reclaim the temp dir, and a failed
+        // cleanup here must not break subsequent suites.
+      }
+    }
+
     // Reset any exit code left by CLI handlers during tests
     process.exitCode = originalExitCode ?? 0;
     consoleLogSpy.mockRestore();
