@@ -50,7 +50,11 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
 
   const advancedExamples = exampleFiles.filter(f => /^[12][0-9]-/.test(path.basename(f)));
 
-  const moduleExamples = exampleFiles.filter(f => f.includes('modules/'));
+  // `path.join` on Windows emits '\\' as the separator, so a bare '/' match
+  // would produce an empty array on win32 and trip test.each.
+  const moduleExamples = exampleFiles.filter(
+    f => f.includes(`modules${path.sep}`) || f.includes('modules/')
+  );
 
   const testExamples = exampleFiles.filter(
     f => path.basename(f).startsWith('test-') || path.basename(f).includes('comprehensive')
