@@ -93,3 +93,7 @@ example-audit-report.json
 
 # Gitnexus
 .gitnexus/
+
+# AI agent configs
+AGENTS.md
+CLAUDE.md
