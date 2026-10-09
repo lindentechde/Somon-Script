@@ -270,7 +270,43 @@ describe('migrate: names that SomonScript reserves', () => {
   });
 });
 
+/** Every feature probe of migrate.ts. */
+const ALL_FEATURES = [
+  'declare',
+  'declareModule',
+  'declareGlobal',
+  'override',
+  'accessor',
+  'using',
+  'decorators',
+  'importType',
+  'typeSpecifier',
+  'exportType',
+  'overloads',
+  'methodOverloads',
+  'optionalMethod',
+  'thisParam',
+  'classIndexSignature',
+  'callSignature',
+  'constructSignature',
+  'accessorSignature',
+  'catchType',
+  'bigintType',
+  'variance',
+  'dynamicImport',
+  'exportStarAs',
+  'computedMember',
+  'stringMember',
+  'exportDefaultFunction',
+  'exportDefaultClass',
+  'importMeta',
+];
+
 describe('migrate: constructs without a SomonScript form', () => {
+  // As if the compiler supported none of them, whatever this version supports
+  beforeAll(() => ALL_FEATURES.forEach(feature => setFeatureSupport(feature, false)));
+  afterAll(() => ALL_FEATURES.forEach(feature => setFeatureSupport(feature, undefined)));
+
   test('type-only constructs are left out with a warning', () => {
     const result = migrate(
       [
@@ -373,9 +409,7 @@ describe('migrate: constructs without a SomonScript form', () => {
       expect(warnings.some(warning => warning.includes(message))).toBe(true);
     }
     // When the result does not compile, the last warning says so
-    expect(messages('function d(...a: any[]) {}\n@d class A {}').pop()).toContain(
-      'the result does not compile yet'
-    );
+    expect(messages('with (Math) {}').pop()).toContain('the result does not compile yet');
   });
 
   test('a bigint type keeps its English name while калонрақам is not a type', () => {

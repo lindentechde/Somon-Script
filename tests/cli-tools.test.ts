@@ -274,12 +274,12 @@ describe('somon fmt / migrate (CLI)', () => {
   });
 
   test('migrate --stdout and warnings on stderr', () => {
-    const file = path.join(dir, 'over.ts');
-    fs.writeFileSync(file, 'function f(a: string): void;\nfunction f(a: any) {}\n');
+    const file = path.join(dir, 'old.ts');
+    fs.writeFileSync(file, 'var x: number = 1;\n');
     const result = cli(['migrate', file, '--stdout']);
     expect(result.status).toBe(0);
-    expect(result.stdout).toBe('функсия f(a: ҳар) {}\n');
-    expect(result.stderr).toContain('over.ts:1:1: warning: an overload signature');
+    expect(result.stdout).toBe('тағ x: рақам = 1;\n');
+    expect(result.stderr).toContain("old.ts:1:1: warning: 'var' became 'тағ'");
   });
 });
 
