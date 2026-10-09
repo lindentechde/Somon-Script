@@ -52,7 +52,9 @@
 
 ```som
 кун { і++; } то (і < 10);               // do { i++; } while (i < 10);
-барои интизор (собит х аз ҷараён) { }   // for await (const x of stream) { }
+ҳамзамон функсия хондан(ҷараён: AsyncIterable<сатр>) {
+    барои интизор (собит х аз ҷараён) { }   // for await (const x of stream) { }
+}
 ```
 
 `кун` is a keyword only before `{`. Labels work as in JavaScript:
