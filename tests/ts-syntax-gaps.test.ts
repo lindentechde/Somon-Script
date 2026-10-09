@@ -679,3 +679,80 @@ describe('`гирифтан` bindings', () => {
     );
   });
 });
+
+describe('anonymous default exports', () => {
+  /** What a CommonJS module compiled from `source` exports as `default`. */
+  async function defaultExport(source: string): Promise<unknown> {
+    const result = compile(source, { strict: true });
+    expect(result.errors).toEqual([]);
+    const module = { exports: {} as Record<string, unknown> };
+    new Function('module', 'exports', result.code)(module, module.exports);
+    return module.exports.default;
+  }
+
+  test('functions, async generators and classes without a name, in CommonJS', async () => {
+    const double = (await defaultExport(
+      'содир пешфарз функсия (х: рақам): рақам { бозгашт х * 2; }'
+    )) as (x: number) => number;
+    expect(double(21)).toBe(42);
+    const generate = (await defaultExport(
+      'содир пешфарз ҳамзамон функсия* (): AsyncGenerator<рақам> { ҳосил 1; ҳосил 2; }'
+    )) as () => AsyncGenerator<number>;
+    const values: number[] = [];
+    for await (const value of generate()) values.push(value);
+    expect(values).toEqual([1, 2]);
+    const Point = (await defaultExport(
+      'содир пешфарз синф { х = 1; дубора(): рақам { бозгашт ин.х * 2; } }'
+    )) as new () => { дубора(): number };
+    expect(new Point().дубора()).toBe(2);
+    const Shape = (await defaultExport(
+      'синф Асос { ном = "асос"; }\nсодир пешфарз мавҳум синф мерос Асос { мавҳум масоҳат(): рақам; }'
+    )) as new () => { ном: string };
+    expect(Shape.prototype).toBeDefined();
+    const identity = (await defaultExport('содир пешфарз функсия <Т>(х: Т): Т { бозгашт х; }')) as (
+      x: string
+    ) => string;
+    expect(identity('ҳамон')).toBe('ҳамон');
+  });
+
+  test('ES modules and TypeScript keep `export default function` / `class`', () => {
+    const source = [
+      'содир пешфарз ҳамзамон функсия* () { ҳосил 1; }',
+      'содир пешфарз функсия (х: рақам) { бозгашт х; }',
+      'содир пешфарз мавҳум синф мерос Асос { }',
+    ];
+    expect(compile(source[0], { module: 'esm', typeCheck: false }).code).toBe(
+      'export default async function* () {\n  yield 1;\n};'
+    );
+    expect(compile(source[1], { module: 'esm', typeCheck: false }).code).toBe(
+      'export default function(х) {\n  return х;\n};'
+    );
+    expect(compile(source[1], { typeCheck: false }).code).toBe(
+      'module.exports.default = function(х) {\n  return х;\n};'
+    );
+    expect(typescriptOf(source[1])).toBe('export default function(х: number) {\n  return х;\n};');
+    expect(typescriptOf(`синф Асос {}\n${source[2]}`)).toBe(
+      'class Асос {}\nexport default abstract class extends Асос {};'
+    );
+    expect(compile(source[1], { checker: 'typescript', strict: true }).errors).toEqual([]);
+  });
+
+  test('decorated, and named ones stay declarations', () => {
+    const [decorated] = parseOk('содир пешфарз @д синф {}') as Array<{
+      declaration: ExpressionStatement;
+    }>;
+    expect(decorated.declaration.expression).toMatchObject({
+      type: 'ClassExpression',
+      decorators: [{ type: 'Decorator' }],
+    });
+    const [before] = parseOk('@д содир пешфарз синф {}') as Array<{
+      declaration: ExpressionStatement;
+    }>;
+    expect(before.declaration.expression).toMatchObject({ decorators: [{ type: 'Decorator' }] });
+    expect(
+      parseOk('содир пешфарз функсия ф() {}\nсодир пешфарз синф К {}').map(
+        statement => (statement as unknown as { declaration: Statement }).declaration.type
+      )
+    ).toEqual(['FunctionDeclaration', 'ClassDeclaration']);
+  });
+});

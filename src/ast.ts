@@ -542,6 +542,8 @@ export interface ClassDeclaration extends Statement {
 export interface ClassExpression extends Expression {
   type: 'ClassExpression';
   name?: Identifier;
+  /** `содир пешфарз мавҳум синф { … }`: an abstract class without a name. */
+  abstract?: boolean;
   /** `синф<Т> { … }` */
   typeParameters?: TypeParameter[];
   superClass?: Identifier;

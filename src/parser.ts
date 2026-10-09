@@ -831,17 +831,31 @@ export class Parser {
    */
   private decoratedStatement(): Statement | null {
     const decorators = this.parseDecorators();
-    const statement = this.statement();
-    const target =
+    return this.decorate(decorators, this.statement());
+  }
+
+  /**
+   * Gives `decorators` to the class `statement` declares (also when it
+   * exports it, `содир [пешфарз] синф`, or a class expression as the default
+   * export); anywhere else they are an error.
+   */
+  private decorate(decorators: Decorator[], statement: Statement | null): Statement | null {
+    let target =
       statement?.type === 'ExportDeclaration'
         ? (statement as ExportDeclaration).declaration
         : statement;
-    if (target?.type !== 'ClassDeclaration' || (target as ClassDeclaration).declare) {
+    if (target?.type === 'ExpressionStatement') {
+      target = (target as ExpressionStatement).expression;
+    }
+    const isClass =
+      target?.type === 'ClassExpression' ||
+      (target?.type === 'ClassDeclaration' && !(target as ClassDeclaration).declare);
+    if (!isClass) {
       this.reportInvalidDecorators(decorators);
       return statement;
     }
-    const classDecl = target as ClassDeclaration;
-    classDecl.decorators = [...decorators, ...(classDecl.decorators ?? [])];
+    const classNode = target as ClassDeclaration | ClassExpression;
+    classNode.decorators = [...decorators, ...(classNode.decorators ?? [])];
     return statement;
   }
 
@@ -3646,16 +3660,7 @@ export class Parser {
     const kind = typeOnly ? { exportKind: 'type' as const } : {};
 
     // Handle: содир пешфарз <declaration>
-    if (this.match(TokenType.ПЕШФАРЗ)) {
-      const declaration = this.exportedStatement();
-      return {
-        type: 'ExportDeclaration',
-        declaration: declaration!,
-        default: true,
-        line: exportToken.line,
-        column: exportToken.column,
-      };
-    }
+    if (this.match(TokenType.ПЕШФАРЗ)) return this.defaultExport(exportToken);
 
     // Handle: содир { name1, name2 }
     if (this.match(TokenType.LEFT_BRACE)) {
@@ -3751,6 +3756,74 @@ export class Parser {
       line: exportToken.line,
       column: exportToken.column,
     };
+  }
+
+  /** `содир пешфарз <declaration or expression>`, after `пешфарз`. */
+  private defaultExport(exportToken: Token): ExportDeclaration {
+    const declaration = this.anonymousDefaultExport() ?? this.exportedStatement();
+    return {
+      type: 'ExportDeclaration',
+      declaration: declaration!,
+      default: true,
+      line: exportToken.line,
+      column: exportToken.column,
+    };
+  }
+
+  /**
+   * `содир пешфарз функсия () {}`, `… ҳамзамон функсия* () {}`,
+   * `… [мавҳум] синф [мерос А] {}`, also decorated: a function or class
+   * without a name, as an expression statement (`export default function () {}`
+   * in ES modules, `module.exports.default = …` in CommonJS). Null when the
+   * declaration has a name.
+   */
+  private anonymousDefaultExport(): Statement | null {
+    if (this.check(TokenType.AT)) {
+      const decorators = this.parseDecorators();
+      const exported = this.anonymousDefaultExport() ?? this.statement();
+      return this.decorate(decorators, exported);
+    }
+    const start = this.peek();
+    let expression: Expression | undefined;
+    const asyncOffset = this.isAsyncFunctionStart() ? 1 : 0;
+    if (this.check(TokenType.ФУНКСИЯ) || asyncOffset) {
+      if (!this.isAnonymousFunctionHead(asyncOffset + 1)) return null;
+      this.current += asyncOffset;
+      const func = this.parseFunctionExpression(this.advance());
+      if (asyncOffset) func.async = true;
+      expression = { ...func, line: start.line, column: start.column };
+    } else {
+      const abstract = this.checkSequence(TokenType.МАВҲУМ, TokenType.СИНФ) ? 1 : 0;
+      if (!this.check(abstract ? TokenType.МАВҲУМ : TokenType.СИНФ)) return null;
+      if (!Parser.ANONYMOUS_CLASS_FOLLOWERS.has(this.tokens[this.current + abstract + 1]?.type)) {
+        return null;
+      }
+      this.current += abstract;
+      const classExpression = this.parseClassExpression(this.advance());
+      if (abstract) classExpression.abstract = true;
+      expression = { ...classExpression, line: start.line, column: start.column };
+    }
+    return {
+      type: 'ExpressionStatement',
+      expression,
+      line: start.line,
+      column: start.column,
+    } as ExpressionStatement;
+  }
+
+  /** Tokens after `синф` that start a class without a name. */
+  private static readonly ANONYMOUS_CLASS_FOLLOWERS: ReadonlySet<TokenType | undefined> = new Set([
+    TokenType.LEFT_BRACE,
+    TokenType.МЕРОС,
+    TokenType.ТАТБИҚ,
+    TokenType.LESS_THAN,
+  ]);
+
+  /** `функсия` at `offset` has no name: `(`, `<` or `*` and then `(` / `<` follow. */
+  private isAnonymousFunctionHead(offset: number): boolean {
+    let next = this.tokens[this.current + offset]?.type;
+    if (next === TokenType.MULTIPLY) next = this.tokens[this.current + offset + 1]?.type;
+    return next === TokenType.LEFT_PAREN || next === TokenType.LESS_THAN;
   }
 
   /** The statement after `содир` / `содир пешфарз`; a lone `;` exports nothing. */
