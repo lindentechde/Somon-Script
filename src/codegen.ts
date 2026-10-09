@@ -2321,13 +2321,20 @@ export class CodeGenerator {
   private generateArguments(args: Expression[] | undefined): string {
     const list = args ?? [];
     return list
-      .map((arg, index) => {
-        if (arg.type === 'SpreadElement') return this.generateSpreadElement(arg as SpreadElement);
-        const code = this.generateExpression(arg, PREC.ASSIGNMENT);
-        // `ф((а < б), в > (г))`, not the call `ф(а<б, в>(г))`
-        return index < list.length - 1 && this.isTypeArgumentLike(arg) ? `(${code})` : code;
-      })
+      .map((arg, index) => this.generateListElement(arg, index < list.length - 1))
       .join(', ');
+  }
+
+  /**
+   * An element of an argument list, array or sequence; `beforeAnother` when
+   * more elements follow: `ф((а < б), в > (г))`, not the call `ф(а<б, в>(г))`.
+   */
+  private generateListElement(element: Expression, beforeAnother: boolean): string {
+    if (element.type === 'SpreadElement') {
+      return this.generateSpreadElement(element as SpreadElement);
+    }
+    const code = this.generateExpression(element, PREC.ASSIGNMENT);
+    return beforeAnother && this.isTypeArgumentLike(element) ? `(${code})` : code;
   }
 
   private generateAssignmentExpression(node: AssignmentExpression): string {
@@ -2437,8 +2444,9 @@ export class CodeGenerator {
 
   private generateArrayExpression(node: ArrayExpression): string {
     // Holes stay holes: `[1, , 3]`, and `[1, ,]` keeps its trailing one
-    const elements = node.elements.map(element =>
-      element ? this.generateArguments([element]) : ''
+    const last = node.elements.length - 1;
+    const elements = node.elements.map((element, index) =>
+      element ? this.generateListElement(element, index < last) : ''
     );
     const trailingHole = node.elements.length > 0 && !node.elements[node.elements.length - 1];
     return `[${elements.join(', ')}${trailingHole ? ',' : ''}]`;
