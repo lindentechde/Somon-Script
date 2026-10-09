@@ -174,9 +174,12 @@ describe('LSP analysis: diagnostics', () => {
       });
       // Not "Cannot find module './math.js'" (TS2307): the call is checked against math.som
       expect(analysis.diagnostics).toHaveLength(1);
-      expect(analysis.diagnostics[0].message).toMatch(
-        /^Type error \[TS2345\]: Argument of type 'сатр' is not assignable to parameter of type 'рақам'\./
-      );
+      // The code is the diagnostic's code; the source line is not repeated in the message
+      expect(analysis.diagnostics[0]).toMatchObject({
+        code: 'TS2345',
+        message: "Argument of type 'сатр' is not assignable to parameter of type 'рақам'.",
+        severity: DiagnosticSeverity.Error,
+      });
       expect(covered(text, analysis.diagnostics[0].range)).toBe('"2"');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -192,6 +195,30 @@ describe('LSP analysis: diagnostics', () => {
     expect(at('x.som(2,5): error TS1').range.start).toEqual({ line: 1, character: 4 });
     expect(at('x.som:2:5 - error').range.start).toEqual({ line: 1, character: 4 });
     expect(at('Somewhere on line 2, column 1').message).toBe('Somewhere on');
+    // Type errors of the compiler: the code is the diagnostic's, the quoted source line goes
+    const typeError = at(
+      "Type error [TS2322] at line 2, column 5: Type 'сатр' is wrong.\n> тағ б = 2;"
+    );
+    expect(typeError).toMatchObject({
+      code: 'TS2322',
+      message: "Type 'сатр' is wrong.",
+      range: { start: { line: 1, character: 4 } },
+    });
+    expect(at('Type warning [UNUSED] at line 1, column 5: Unused.\n> тағ а = 1;')).toMatchObject({
+      code: 'UNUSED',
+      message: 'Unused.',
+    });
+    expect(at('Target error at line 1, column 1: Too new.\n> тағ а = 1;')).not.toHaveProperty(
+      'code'
+    );
+    expect(at('Target error at line 1, column 1: Too new.\n> тағ а = 1;').message).toBe(
+      'Target error: Too new.'
+    );
+    // A message without a position: on the first line, still without the source line
+    expect(at('Parse error: Unknown thing\n> тағ а = 1;')).toMatchObject({
+      message: 'Unknown thing',
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 10 } },
+    });
     const unplaced = at('No position here');
     expect(unplaced.message).toBe('No position here');
     expect(unplaced.range.start).toEqual({ line: 0, character: 0 });

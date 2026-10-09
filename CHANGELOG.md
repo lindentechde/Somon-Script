@@ -116,6 +116,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon run --module esm prog.txt` wrote the entry as `prog.txt`, which Node.js does not run as an ES module; an entry not named `.som`, `.js` or `.mjs` is written as `prog.txt.js`.
 * The package exports the module system (`ModuleSystem`, `ModuleResolver`, `ModuleLoader`, `ModuleRegistry`, the timeout helpers and their types), as `docs/module-system.md` shows; `import { ModuleSystem } from '@lindentech/somon-script'` was `undefined`.
 * `somon lsp` with `compilerOptions.checker: 'typescript'` reported every relative import as "Cannot find module './м.js'" (TS2307): the document's path did not reach the TypeScript checker, so imports were resolved from the working directory. Imported modules are now found and checked.
+* `somon lsp`: diagnostics of the TypeScript checker repeated the source line (`> …`) and the `Type error [TS2322]:` prefix in their message; the code is now the diagnostic's `code`, as for the SomonScript checker's diagnostics.
 
 ## 0.4.0 (2026-10-09)
 

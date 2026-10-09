@@ -192,9 +192,14 @@ function checkerDiagnostic(
 
 const typeDiagnostic = checkerDiagnostic;
 
+/** `Type error [TS2322]: …`: the code goes to the diagnostic's code. */
+const TYPE_PROBLEM = /^Type (?:error|warning) \[([\w-]+)\]:\s*/;
+
 /**
  * A diagnostic for a compiler message, placed at the position the message
- * gives (which is removed from its text), else on the first line.
+ * gives (which is removed from its text), else on the first line. A type
+ * error's code becomes the diagnostic's code, and the source line the
+ * compiler quotes after it (`\n> …`) is dropped: the editor shows the line.
  */
 export function messageDiagnostic(
   document: TextDocument,
@@ -202,14 +207,18 @@ export function messageDiagnostic(
   message: string,
   severity = DiagnosticSeverity.Error
 ): Diagnostic {
-  const position = findPosition(message);
-  if (!position) return diagnostic(lineRange(document, 0), message.trim(), severity);
-  const offset = document.offsetFromCompiler(position.line, position.column);
-  const text = message
-    .replace(position.text, '')
-    .replace(/^Parse error: /, '')
-    .trim();
-  return diagnostic(rangeAt(document, tokens, offset), text, severity);
+  const snippet = message.lastIndexOf('\n> ');
+  let text = snippet === -1 ? message : message.slice(0, snippet);
+  const position = findPosition(text);
+  if (position) text = text.replace(position.text, '');
+  text = text.replace(/^Parse error: /, '').trim();
+  const range = position
+    ? rangeAt(document, tokens, document.offsetFromCompiler(position.line, position.column))
+    : lineRange(document, 0);
+  const problem = TYPE_PROBLEM.exec(text);
+  return problem
+    ? diagnostic(range, text.slice(problem[0].length), severity, problem[1])
+    : diagnostic(range, text, severity);
 }
 
 function findPosition(message: string): { line: number; column: number; text: string } | undefined {
