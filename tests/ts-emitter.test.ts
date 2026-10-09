@@ -4,6 +4,7 @@
  */
 import ts from 'typescript';
 import { CodeGenerator } from '../src/codegen';
+import { compile } from '../src/compiler';
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { originalPosition, TsEmitter, TYPE_NAMES } from '../src/ts-emitter';
@@ -242,6 +243,19 @@ describe('TypeScript emitter: declarations', () => {
     expect(code).toContain('  export namespace Дарунӣ {\n    export let х = 1;\n  }');
     expect(code).toContain('  function ғ() {}\n  ғ();');
     expect(emit('номфазо Холӣ {}')).toBe('namespace Холӣ {}');
+  });
+
+  test('a namespace declaration that binds a built-in member name and another name', () => {
+    // `х` is exported as it is; `илова` also as `push`, the name `Н.илова` is read by
+    expect(emit('номфазо Н {\n  содир собит илова = 1, х = 2;\n}')).toBe(
+      'namespace Н {\n  export const илова = 1, х = 2;\n  export const push = илова;\n}'
+    );
+    // The TypeScript checker sees both members
+    expect(
+      compile('номфазо Н { содир собит илова = 1, х = 2; }\nчоп.сабт(Н.х, Н.илова);', {
+        checker: 'typescript',
+      }).errors
+    ).toEqual([]);
   });
 
   test('functions keep type parameters, parameter types and return types', () => {

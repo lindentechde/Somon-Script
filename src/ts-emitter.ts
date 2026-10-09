@@ -625,25 +625,28 @@ export class TsEmitter extends CodeGenerator {
     }
     const code = this.generateStatement(stmt);
     const names = this.declaredNamesOf(stmt);
-    if (names.every(name => translateMemberName(name) === name)) {
-      return CodeGenerator.prefixDeclaration(code, 'export ');
-    }
+    const translated = names.filter(name => translateMemberName(name) !== name);
+    // Names read as written are exported as they are; one declaration may also
+    // bind names of built-in members (`содир собит илова = 1, х = 2;`)
+    const exported =
+      translated.length < names.length ? CodeGenerator.prefixDeclaration(code, 'export ') : code;
     // An overload signature is exported, if at all, with its implementation
-    if (stmt.type === 'FunctionSignature' && !flagged.declare) return code;
+    if (translated.length === 0 || (stmt.type === 'FunctionSignature' && !flagged.declare)) {
+      return exported;
+    }
     // A member named like a built-in member is read as its JavaScript name: `Н.push`
-    const aliases = names
+    const aliases = translated
       .filter(name => !aliased.has(name))
       .flatMap(name => {
         aliased.add(name);
         return this.namespaceAliases(stmt, name, translateMemberName(name));
       })
       .map(line => this.indent(line));
-    return [code, ...aliases].join('\n');
+    return [exported, ...aliases].join('\n');
   }
 
   /** Exports of `name` as `alias` from a namespace, with the meanings (value, type) it has. */
   private namespaceAliases(stmt: Statement, name: string, alias: string): string[] {
-    if (name === alias) return [];
     const generic = stmt as ClassDeclaration | InterfaceDeclaration | TypeAlias;
     const params = generic.typeParameters ?? [];
     const typeParameters = this.typeParametersText(params);

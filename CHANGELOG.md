@@ -119,6 +119,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon lsp`: diagnostics of the TypeScript checker repeated the source line (`> …`) and the `Type error [TS2322]:` prefix in their message; the code is now the diagnostic's `code`, as for the SomonScript checker's diagnostics.
 * The lexer placed the spread/rest token `...` after itself (three columns too far right): errors about it pointed past it (`Unexpected token '...' at line 1, column 12` for `тағ х = ...;`), and in `somon lsp` a rest parameter's name spanned `...`'s columns (`р: ` for `...р: рақам[]`).
 * `somon lsp`'s outline listed index signatures (`[к: сатр]: Т`) of interfaces and classes, and computed names (`[Symbol.iterator]`) of interfaces, as members named `__computed__` and `__computed_name__`, the parser's placeholders; they are left out, as computed class members already were.
+* With the TypeScript checker, a namespace member declared in one `содир` declaration with a member named like a built-in member (`номфазо Н { содир собит илова = 1, х = 2; }`) was not exported: `Н.х` was the error TS2339. The TypeScript emitter exports such a declaration, and the built-in name also under its JavaScript name.
 
 ## 0.4.0 (2026-10-09)
 
