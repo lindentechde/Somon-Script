@@ -2355,13 +2355,22 @@ export class CodeGenerator {
     let result = this.indent('try ') + this.generateBlockStatement(node.block);
 
     if (node.handler) {
-      const param = node.handler.param;
+      const { param, typeAnnotation } = node.handler;
+      const names: string[] = [];
+      this.collectPatternNames(param, names);
       // A parameterless catch stays parameterless (ES2019) so it cannot shadow
       // an outer variable such as `error`.
-      result += param
-        ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param, true))}) `
-        : ' catch ';
-      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []);
+      if (param) {
+        const binding = this.withScope(names, () =>
+          param.type === 'Identifier'
+            ? this.generateIdentifier(param, true)
+            : this.generatePattern(param)
+        );
+        result += ` catch (${binding}${this.typeAnnotationText(typeAnnotation)}) `;
+      } else {
+        result += ' catch ';
+      }
+      result += this.generateBlockStatement(node.handler.body, names);
     }
 
     if (node.finalizer) {

@@ -488,7 +488,10 @@ export interface TryStatement extends Statement {
 
 export interface CatchClause extends ASTNode {
   type: 'CatchClause';
-  param?: Identifier;
+  /** The binding: a name or a destructuring pattern, `гирифтан ({ message })`. */
+  param?: Identifier | ArrayPattern | ObjectPattern;
+  /** `гирифтан (е: ношинос)`: `ношинос` or `ҳар` (unknown / any), as TypeScript allows. */
+  typeAnnotation?: TypeAnnotation;
   body: BlockStatement;
 }
 

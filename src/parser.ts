@@ -4106,17 +4106,15 @@ export class Parser {
 
     let handler: CatchClause | undefined = undefined;
     if (this.match(TokenType.ГИРИФТАН)) {
-      let param: Identifier | undefined = undefined;
+      let param: CatchClause['param'];
+      let typeAnnotation: TypeAnnotation | undefined;
       // The binding is optional, as in `catch { … }` (ES2019).
       if (this.match(TokenType.LEFT_PAREN)) {
-        if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
-          const paramToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
-          param = {
-            type: 'Identifier',
-            name: paramToken.value,
-            line: paramToken.line,
-            column: paramToken.column,
-          };
+        // A name or, as in JavaScript, a pattern: `гирифтан ({ message })`
+        param = this.parsePattern();
+        if (this.match(TokenType.COLON)) {
+          typeAnnotation = this.typeAnnotation();
+          this.checkCatchType(typeAnnotation);
         }
         this.consume(TokenType.RIGHT_PAREN, "Expected ')' after catch parameter");
       }
@@ -4126,6 +4124,7 @@ export class Parser {
       handler = {
         type: 'CatchClause',
         param,
+        ...(typeAnnotation && { typeAnnotation }),
         body,
         line: this.previous().line,
         column: this.previous().column,
@@ -4146,6 +4145,21 @@ export class Parser {
       line: tryToken.line,
       column: tryToken.column,
     };
+  }
+
+  /** TypeScript's TS1196: a catch binding is typed only `ношинос` or `ҳар` (`unknown`, `any`). */
+  private checkCatchType(annotation: TypeAnnotation): void {
+    const type = annotation.typeAnnotation;
+    const name =
+      type.type === 'PrimitiveType'
+        ? (type as PrimitiveType).name
+        : type.type === 'GenericType' && !(type as GenericType).typeParameters
+          ? (type as GenericType).name.name
+          : undefined;
+    if (name && ['ҳар', 'ношинос', 'any', 'unknown'].includes(name)) return;
+    this.errors.push(
+      `Catch clause variable type annotation must be 'ҳар' or 'ношинос' if specified at line ${type.line}, column ${type.column}`
+    );
   }
 
   private throwStatement(): ThrowStatement {

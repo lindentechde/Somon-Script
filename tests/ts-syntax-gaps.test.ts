@@ -628,3 +628,54 @@ describe('call and construct signatures', () => {
     ]);
   });
 });
+
+describe('`гирифтан` bindings', () => {
+  test('typed `ношинос` or `ҳар`, or destructured', async () => {
+    expect(
+      await run(
+        [
+          'кӯшиш {',
+          '    партофтан нав Хато("як");',
+          '} гирифтан (е: ношинос) {',
+          '    агар (е instanceof Хато) чоп.сабт(е.message);',
+          '}',
+          'кӯшиш {',
+          '    партофтан нав Хато("ду");',
+          '} гирифтан (е: ҳар) {',
+          '    чоп.сабт(е.message);',
+          '}',
+          'кӯшиш {',
+          '    партофтан { рамз: 3, ном: "се" };',
+          '} гирифтан ({ рамз, ном }: ҳар) {',
+          '    чоп.сабт(рамз, ном);',
+          '}',
+          'кӯшиш {',
+          '    партофтан [4, 5];',
+          '} гирифтан ([а, б]: ҳар) {',
+          '    чоп.сабт(а + б);',
+          '}',
+        ].join('\n')
+      )
+    ).toEqual(['як', 'ду', '3 се', '9']);
+  });
+
+  test('any other type is an error, as in TypeScript', () => {
+    expect(errorsOf('кӯшиш {} гирифтан (е: сатр) {}')).toEqual([
+      "Catch clause variable type annotation must be 'ҳар' or 'ношинос' if specified at line 1, column 23",
+    ]);
+    expect(errorsOf('кӯшиш {} гирифтан (е: Хато) {}')).toHaveLength(1);
+    expect(errorsOf('кӯшиш {} гирифтан (е: unknown) {}\nкӯшиш {} гирифтан (е: any) {}')).toEqual(
+      []
+    );
+  });
+
+  test('the TypeScript output keeps the type, the JavaScript output drops it', () => {
+    const source = 'кӯшиш {} гирифтан (е: ношинос) {}\nкӯшиш {} гирифтан ({ message }: ҳар) {}';
+    expect(typescriptOf(source)).toBe(
+      'try {} catch (е: unknown) {}\ntry {} catch ({message}: any) {}'
+    );
+    expect(compile(source, { typeCheck: false }).code).toBe(
+      'try {} catch (е) {}\ntry {} catch ({message}) {}'
+    );
+  });
+});

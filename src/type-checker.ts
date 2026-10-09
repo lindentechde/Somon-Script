@@ -1876,7 +1876,11 @@ export class TypeChecker {
       this.invalidateAssignedIn(statement.block);
       const handlerEntry = this.narrowed;
       this.withScope(() => {
-        if (handler.param) this.bindPatternTypes(handler.param, UNKNOWN);
+        // `гирифтан (е: ношинос)` / `(е: ҳар)` types the binding; untyped it is not checked
+        const type = handler.typeAnnotation
+          ? this.resolveTypeNode(handler.typeAnnotation.typeAnnotation)
+          : UNKNOWN;
+        if (handler.param) this.bindPatternTypes(handler.param, type);
         this.checkStatements(handler.body.body);
       });
       if (!this.alwaysExits(handler.body)) {

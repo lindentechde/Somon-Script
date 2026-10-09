@@ -162,6 +162,17 @@ every operator and statement.
 }
 ```
 
+As in TypeScript, the binding may be typed `ношинос` (unknown) or `ҳар` (any)
+and nothing else, or be a destructuring pattern:
+
+```som
+кӯшиш {
+    партофтан нав Хато("Хатогӣ");
+} гирифтан (е: ношинос) {
+    агар (е instanceof Хато) чоп.хато(е.message);
+}
+```
+
 ---
 
 ## Type System
