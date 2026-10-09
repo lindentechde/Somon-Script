@@ -399,32 +399,15 @@ export class ModuleRegistry {
   }
 
   /**
-   * The dependencies of a node of the graph that are nodes too. A dependency that is a
-   * raw specifier (from a hand-built module's `resolvedDependencies`) is matched with
-   * the registered modules.
+   * The dependencies of a node of the graph that are still nodes (not removed since).
+   * Dependencies are module ids: the loader's resolved ids, or specifiers of a
+   * hand-built module matched with the registered modules when it was registered.
    */
   private getResolvedDependencies(moduleId: string): string[] {
     // Called for nodes of the graph only
-    const node = this.dependencyGraph.get(moduleId)!;
-
-    const module = this.modules.get(moduleId);
-    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
-
-    const resolved: string[] = [];
-    for (const dep of node.dependencies) {
-      // Try to resolve if it's a raw specifier
-      if (!path.isAbsolute(dep) && !dep.startsWith('external:')) {
-        const resolvedId = this.resolveSpecifierToModuleId(dep, moduleDir);
-        if (resolvedId && this.dependencyGraph.has(resolvedId)) {
-          resolved.push(resolvedId);
-        }
-      } else if (this.dependencyGraph.has(dep)) {
-        // Already resolved
-        resolved.push(dep);
-      }
-    }
-
-    return resolved;
+    return this.dependencyGraph
+      .get(moduleId)!
+      .dependencies.filter(dep => this.dependencyGraph.has(dep));
   }
 
   // Resolve a raw specifier to a module ID
