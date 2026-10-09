@@ -147,6 +147,73 @@ const translations: Translations = {
         resolveError: 'Ошибка разрешения:',
       },
     },
+    fmt: {
+      name: 'формат',
+      description: 'Отформатировать файлы SomonScript в едином стиле',
+      usage: '[параметры] <файлы или каталоги...>',
+      args: {
+        paths: 'Файлы .som или каталоги, в которых их искать',
+      },
+      options: {
+        check: 'Только сообщить о неотформатированных файлах (код выхода 1, если они есть)',
+        write: 'Записать отформатированный код в файлы (по умолчанию)',
+        stdout: 'Вывести отформатированный код вместо записи',
+        indent: 'Пробелов на уровень отступа (по умолчанию fmt.indent из somon.config.json или 4)',
+      },
+      messages: {
+        formatted: (file: string) => `Отформатирован ${file}`,
+        wouldReformat: (file: string) => `Не отформатирован: ${file}`,
+        failed: (file: string) => `Не удалось отформатировать ${file}:`,
+        summary: (changed: number, total: number) => `Изменено файлов: ${changed} из ${total}`,
+        checkPassed: (total: number) => `Все файлы (${total}) отформатированы`,
+        checkFailed: (changed: number) => `Не отформатировано файлов: ${changed}`,
+        noFiles: 'Файлы .som не найдены',
+        pathNotFound: (path: string) => `Ошибка: '${path}' не существует`,
+        invalidIndent: (value: string) =>
+          `Ошибка: --indent должен быть целым числом от 1 до 16, получено '${value}'`,
+      },
+    },
+    repl: {
+      name: 'интерактив',
+      description: 'Запустить интерактивный сеанс SomonScript',
+      messages: {
+        banner: (version: string) =>
+          `SomonScript ${version}. Введите .help (.ёрӣ) для справки, .exit (.баромад) для выхода.`,
+        help: [
+          '.ёрӣ, .help        Показать эту справку',
+          '.баромад, .exit    Выйти из сеанса',
+          '.пок, .clear       Забыть все объявления и текущий ввод',
+          '.js                Показать JavaScript, скомпилированный из последнего ввода',
+          '',
+          'Ввод продолжается на следующей строке, пока открыта скобка, блок или шаблон.',
+          'Объявления видны в следующих вводах; интизор работает на верхнем уровне.',
+        ].join('\n'),
+        cleared: 'Контекст очищен.',
+        noCompiledCode: 'Пока ничего не скомпилировано.',
+        exitHint: '(Чтобы выйти, нажмите Ctrl+C ещё раз или введите .exit)',
+        error: 'Ошибка:',
+      },
+    },
+    migrate: {
+      name: 'миграция',
+      description: 'Преобразовать файлы TypeScript в SomonScript',
+      usage: '[параметры] <файл.ts или каталог>',
+      args: {
+        input: 'Файл .ts или каталог с файлами .ts',
+      },
+      options: {
+        output: 'Выходной файл или выходной каталог для каталога',
+        stdout: 'Вывести код SomonScript вместо записи файлов',
+      },
+      messages: {
+        migrated: (input: string, output: string) => `'${input}' преобразован в '${output}'`,
+        warning: 'предупреждение:',
+        failed: (file: string) => `Не удалось преобразовать ${file}:`,
+        noFiles: (input: string) => `В '${input}' не найдены файлы TypeScript`,
+        summary: (files: number, warnings: number) =>
+          `Преобразовано файлов: ${files}, предупреждений: ${warnings}`,
+      },
+    },
   },
   common: {
     version: 'вывести номер версии',

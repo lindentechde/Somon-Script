@@ -147,6 +147,73 @@ const translations: Translations = {
         resolveError: 'Resolve error:',
       },
     },
+    fmt: {
+      name: 'fmt',
+      description: 'Format SomonScript files in the canonical style',
+      usage: '[options] <files or directories...>',
+      args: {
+        paths: '.som files, or directories to search for them',
+      },
+      options: {
+        check: 'Only report files that are not formatted (exit code 1 if any)',
+        write: 'Write the formatted code back to the files (the default)',
+        stdout: 'Print the formatted code instead of writing it',
+        indent: 'Spaces per indentation level (default: fmt.indent from somon.config.json, or 4)',
+      },
+      messages: {
+        formatted: (file: string) => `Formatted ${file}`,
+        wouldReformat: (file: string) => `Not formatted: ${file}`,
+        failed: (file: string) => `Cannot format ${file}:`,
+        summary: (changed: number, total: number) => `${changed} of ${total} file(s) changed`,
+        checkPassed: (total: number) => `All ${total} file(s) are formatted`,
+        checkFailed: (changed: number) => `${changed} file(s) are not formatted`,
+        noFiles: 'No .som files found',
+        pathNotFound: (path: string) => `Error: '${path}' does not exist`,
+        invalidIndent: (value: string) =>
+          `Error: --indent must be an integer from 1 to 16, got '${value}'`,
+      },
+    },
+    repl: {
+      name: 'repl',
+      description: 'Start an interactive SomonScript session',
+      messages: {
+        banner: (version: string) =>
+          `SomonScript ${version}. Type .help (.ёрӣ) for help, .exit (.баромад) to quit.`,
+        help: [
+          '.ёрӣ, .help        Show this help',
+          '.баромад, .exit    Leave the REPL',
+          '.пок, .clear       Forget all declarations and the current input',
+          '.js                Show the JavaScript compiled from the last input',
+          '',
+          'An input continues on the next line while a bracket, block or template is open.',
+          'Declarations stay visible in later inputs; интизор works at the top level.',
+        ].join('\n'),
+        cleared: 'Context cleared.',
+        noCompiledCode: 'Nothing has been compiled yet.',
+        exitHint: '(To exit, press Ctrl+C again or type .exit)',
+        error: 'Error:',
+      },
+    },
+    migrate: {
+      name: 'migrate',
+      description: 'Convert TypeScript files to SomonScript',
+      usage: '[options] <file.ts or directory>',
+      args: {
+        input: 'A .ts file, or a directory of .ts files',
+      },
+      options: {
+        output: 'Output file, or output directory for a directory input',
+        stdout: 'Print the SomonScript code instead of writing files',
+      },
+      messages: {
+        migrated: (input: string, output: string) => `Migrated '${input}' to '${output}'`,
+        warning: 'warning:',
+        failed: (file: string) => `Cannot migrate ${file}:`,
+        noFiles: (input: string) => `No TypeScript files found in '${input}'`,
+        summary: (files: number, warnings: number) =>
+          `${files} file(s) migrated, ${warnings} warning(s)`,
+      },
+    },
   },
   common: {
     version: 'output the version number',

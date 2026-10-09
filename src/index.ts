@@ -26,3 +26,11 @@ export { compile } from './compiler';
 export type { CompileOptions, CompileResult } from './compiler';
 export { TARGETS, DEFAULT_TARGET, BUNDLE_FORMATS, defaultLib, typeScriptLibNames } from './targets';
 export type { Target, BundleFormat } from './targets';
+
+// Developer tools: formatter, TypeScript migration and REPL
+export { format, FormatError } from './tools/format';
+export type { FormatOptions } from './tools/format';
+export { migrate, MigrateError } from './tools/migrate';
+export type { MigrateOptions, MigrateResult, MigrateWarning } from './tools/migrate';
+export { Repl } from './tools/repl';
+export type { ReplOptions, ReplMessages } from './tools/repl';

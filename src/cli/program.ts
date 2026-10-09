@@ -31,6 +31,7 @@ import {
   validateLib,
 } from '../targets';
 import { LANGUAGES, t, type Translations } from './i18n';
+import { registerToolCommands } from './tool-commands';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
   let currentDir = __dirname;
@@ -915,6 +916,9 @@ export function createProgram(): Command {
         handleCliFailure(error, messages.resolveError);
       }
     });
+
+  // Developer tools: fmt, repl, migrate
+  registerToolCommands((name, key, alias) => defineCommand(program, name, key, alias), pkg.version);
 
   return program;
 }

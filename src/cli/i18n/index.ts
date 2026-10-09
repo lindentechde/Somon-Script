@@ -150,6 +150,62 @@ export interface Translations {
         resolveError: string;
       };
     };
+    fmt: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        paths: string;
+      };
+      options: {
+        check: string;
+        write: string;
+        stdout: string;
+        indent: string;
+      };
+      messages: {
+        formatted: (_file: string) => string;
+        wouldReformat: (_file: string) => string;
+        failed: (_file: string) => string;
+        summary: (_changed: number, _total: number) => string;
+        checkPassed: (_total: number) => string;
+        checkFailed: (_changed: number) => string;
+        noFiles: string;
+        pathNotFound: (_path: string) => string;
+        invalidIndent: (_value: string) => string;
+      };
+    };
+    repl: {
+      name: string;
+      description: string;
+      messages: {
+        banner: (_version: string) => string;
+        help: string;
+        cleared: string;
+        noCompiledCode: string;
+        exitHint: string;
+        error: string;
+      };
+    };
+    migrate: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        input: string;
+      };
+      options: {
+        output: string;
+        stdout: string;
+      };
+      messages: {
+        migrated: (_input: string, _output: string) => string;
+        warning: string;
+        failed: (_file: string) => string;
+        noFiles: (_input: string) => string;
+        summary: (_files: number, _warnings: number) => string;
+      };
+    };
   };
   common: {
     version: string;
