@@ -350,12 +350,13 @@ typeof қимат;                 // typeof
   "compilerOptions": {
     "target": "es2020",
     "sourceMap": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true
+    "strict": true
   }
 }
 ```
+
+`strict` makes type errors fatal and turns on null checks and unknown-member
+errors (see [Strict Mode](../../llm-guide/03-types.md#strict-mode---strict)).
 
 #### CLI Commands
 

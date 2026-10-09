@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## Unreleased
+
+### ⚠ Breaking Changes
+
+* `--strict` (`compile(source, { strict: true })`) checks for `холӣ`/`беқимат` like TypeScript's `strictNullChecks`: they are only assignable to types that include them, and a value that may be `холӣ`/`беқимат` can't be dereferenced or computed with until a check (`!== холӣ`, `агар (х)`, an early `бозгашт`, …) narrows it. `Array` `.баровардан()`/`.ҳазфиАввал()`/`.дар()`/`.кофтан()`/`.охиринЁфтан()`, `String` `.дар()` and `Map` `.бозгирифтан()` return `Т | беқимат`, and optional parameters and properties include `беқимат`. Programs compiled with `--strict` may need such checks.
+* Reading a member that an array, string, number, `Map`, `Set`, `Promise`, class, interface or object type doesn't have is reported (`PROPERTY_NOT_FOUND`): an error with `--strict`, a warning otherwise. `с.дорад(1)` on a `Set` (`includes`) now points to `дорадКалид` (`has`).
+
+### ✨ Features
+
+* Destructuring patterns in `барои … аз` / `барои … дар` heads: `барои (собит [к, в] аз объект.воридот(о))`.
+* `нав Map<сатр, рақам>()` keeps its type arguments, and `ном?: сатр` class fields are optional.
+* `examples/leetcode`: solutions to LeetCode's Top 100 Liked problems with their own tests (`npm run test:leetcode`).
+
+### 🐛 Bug Fixes
+
+* Generated JavaScript indents the first statement of nested blocks, single-statement bodies, bare blocks, class members and `интихоб` cases correctly.
+* A name declared twice in a `барои` head pattern is a compile error instead of a SyntaxError at run time.
+* The docs list the `Map`/`Set` aliases and only valid `compilerOptions`.
+
 ## 0.4.0 (2026-10-09)
 
 ### ⚠ Breaking Changes

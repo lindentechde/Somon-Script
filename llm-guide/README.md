@@ -31,6 +31,7 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
 - **[10-async.md](10-async.md)** - Async/await and promises
 - **[11-classes.md](11-classes.md)** - Object-oriented programming
 - **[12-examples.md](12-examples.md)** - Common patterns and examples
+- **[13-map-set.md](13-map-set.md)** - Map and Set (`дорадКалид`, not `дорад`)
 
 ---
 
