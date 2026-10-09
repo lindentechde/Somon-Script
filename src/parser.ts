@@ -3657,7 +3657,14 @@ export class Parser {
       }
     }
 
-    return null;
+    if (isExported) {
+      const token = this.peek();
+      throw new Error(
+        `Expected a declaration after 'содир' at line ${token.line}, column ${token.column}`
+      );
+    }
+    // Any other statement runs inside the namespace's function body
+    return this.statement();
   }
 
   private parseSwitchCaseConsequent(): Statement[] {

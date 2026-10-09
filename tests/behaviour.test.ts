@@ -107,6 +107,11 @@ const cases: Array<[string, string, string[]]> = [
     ['1 2 3'],
   ],
   [
+    'statements inside a namespace body',
+    'номфазо Н {\n  тағ а = 1;\n  чоп.сабт("дар", а);\n  содир собит б = а + 1;\n}\nчоп.сабт(Н.б);',
+    ['дар 1', '2'],
+  ],
+  [
     'expressions spanning several lines',
     'тағ а = 1 +\n  2;\nчоп.сабт(а, [1, 2, 3]\n  .map(х => х * 2)\n  .join(","));',
     ['3 2,4,6'],
