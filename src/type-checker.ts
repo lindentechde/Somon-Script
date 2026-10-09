@@ -22,6 +22,7 @@ import {
   PropertySignature,
   Statement,
   TupleType,
+  FunctionType,
   TypeAlias,
   TypeNode,
   UnionType,
@@ -564,22 +565,8 @@ export class TypeChecker {
       interfaceType.indexType ??= parent.indexType;
       interfaceType.open ||= parent.open;
     }
-    if (!interfaceDecl.extends && this.hasUnparsedExtendsClause(interfaceDecl)) {
-      interfaceType.open = true;
-    }
 
     this.collectPropertySignatures(interfaceDecl.body.properties, interfaceType);
-  }
-
-  /**
-   * Parsers that don't record `InterfaceDeclaration.extends` still leave the
-   * `мерос` clause in the header text; the inherited members are then unknown.
-   */
-  private hasUnparsedExtendsClause(interfaceDecl: InterfaceDeclaration): boolean {
-    const header = this.sourceLines.slice(interfaceDecl.line - 1, interfaceDecl.line + 1);
-    const text = header.join('\n').slice(Math.max(interfaceDecl.column - 1, 0));
-    const brace = text.indexOf('{');
-    return /(^|[\s>])мерос\s/.test(brace === -1 ? text : text.slice(0, brace));
   }
 
   private collectPropertySignatures(signatures: PropertySignature[], target: Type): void {
@@ -1076,6 +1063,18 @@ export class TypeChecker {
         return this.resolveObjectType(typeNode as ObjectType);
       case 'Identifier':
         return this.resolveIdentifierType(typeNode as Identifier);
+      case 'FunctionType': {
+        const fnType = typeNode as FunctionType;
+        return this.buildFunctionType(undefined, {
+          params: fnType.parameters,
+          returnType: {
+            type: 'TypeAnnotation',
+            typeAnnotation: fnType.returnType,
+            line: 0,
+            column: 0,
+          },
+        });
+      }
       default:
         return UNKNOWN;
     }

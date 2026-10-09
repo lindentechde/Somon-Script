@@ -1,4 +1,4 @@
-import { ASTNode, Identifier, Statement } from './ast';
+import { ASTNode, Identifier, Parameter, Statement } from './ast';
 
 // Type system AST nodes
 export interface TypeAnnotation extends ASTNode {
@@ -18,6 +18,13 @@ export interface PrimitiveType extends TypeNode {
 export interface ArrayType extends TypeNode {
   type: 'ArrayType';
   elementType: TypeNode;
+}
+
+/** `(а: рақам, б?: сатр, ...в: рақам[]) => мантиқӣ` */
+export interface FunctionType extends TypeNode {
+  type: 'FunctionType';
+  parameters: Parameter[];
+  returnType: TypeNode;
 }
 
 export interface UnionType extends TypeNode {

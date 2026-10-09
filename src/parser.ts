@@ -40,6 +40,7 @@ import {
   IntersectionType,
   GenericType,
   TupleType,
+  FunctionType,
   InterfaceDeclaration,
   PropertySignature,
   TypeParameter,
@@ -2628,10 +2629,39 @@ export class Parser {
   }
 
   private parseParenthesizedOrArrayType(): TypeNode | undefined {
-    if (!this.match(TokenType.LEFT_PAREN)) return undefined;
+    if (!this.check(TokenType.LEFT_PAREN)) return undefined;
+    if (this.isFunctionTypeStart()) return this.parseFunctionType();
+    this.advance();
     const type = this.parseType();
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after type");
     return type;
+  }
+
+  /** At `(`: does the matching `)` precede `=>`? Then this is a function type. */
+  private isFunctionTypeStart(): boolean {
+    let depth = 0;
+    for (let i = this.current; i < this.tokens.length; i++) {
+      const type = this.tokens[i].type;
+      if (type === TokenType.LEFT_PAREN) depth++;
+      else if (type === TokenType.RIGHT_PAREN && --depth === 0) {
+        return this.tokens[i + 1]?.type === TokenType.ARROW;
+      } else if (type === TokenType.EOF) return false;
+    }
+    return false;
+  }
+
+  /** `(а: рақам, ...б: сатр[]) => мантиқӣ` */
+  private parseFunctionType(): FunctionType {
+    const openParen = this.advance();
+    const parameters = this.parseParameterList("Expected ')' after function type parameters");
+    this.consume(TokenType.ARROW, "Expected '=>' in function type");
+    return {
+      type: 'FunctionType',
+      parameters,
+      returnType: this.parseType(),
+      line: openParen.line,
+      column: openParen.column,
+    };
   }
 
   private parseUniqueType(): TypeNode | undefined {
@@ -2772,11 +2802,23 @@ export class Parser {
     return genericType;
   }
 
+  /** Named tuple members (`[х: рақам, у: рақам]`): the label is documentation only. */
+  private skipTupleMemberLabel(): void {
+    if (
+      this.peekNext()?.type === TokenType.COLON &&
+      (this.check(TokenType.IDENTIFIER) || this.isBuiltinIdentifierType(this.peek().type))
+    ) {
+      this.advance();
+      this.advance(); // ':'
+    }
+  }
+
   private parseTupleType(): TypeNode | undefined {
     if (!this.match(TokenType.LEFT_BRACKET)) return undefined;
     const types: TypeNode[] = [];
     if (!this.check(TokenType.RIGHT_BRACKET)) {
       do {
+        this.skipTupleMemberLabel();
         types.push(this.unionType());
       } while (this.match(TokenType.COMMA));
     }
@@ -2924,18 +2966,23 @@ export class Parser {
     return typeParameters;
   }
 
-  private parseInterfaceExtendsClause(): void {
+  /** `мерос А, Б<Т>` — the parent interfaces, or undefined without a clause. */
+  private parseInterfaceExtendsClause(): TypeNode[] | undefined {
     if (!this.match(TokenType.МЕРОС)) {
-      return;
+      return undefined;
     }
 
-    if (this.check(TokenType.IDENTIFIER)) {
-      this.advance();
-    } else if (!this.matchBuiltinIdentifier()) {
-      throw new Error(
-        `Expected interface name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
-      );
-    }
+    const parents: TypeNode[] = [];
+    do {
+      const parent = this.parseGenericOrIdentifierType();
+      if (!parent) {
+        throw new Error(
+          `Expected interface name after 'мерос' at line ${this.peek().line}, column ${this.peek().column}`
+        );
+      }
+      parents.push(parent);
+    } while (this.match(TokenType.COMMA));
+    return parents;
   }
 
   private parseInterfaceProperties(): PropertySignature[] {
@@ -2953,7 +3000,7 @@ export class Parser {
     const name = this.parseImportOrExportName('Expected interface name');
     const typeParameters = this.parseTypeParameters();
 
-    this.parseInterfaceExtendsClause();
+    const parents = this.parseInterfaceExtendsClause();
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after interface name");
 
     const properties = this.parseInterfaceProperties();
@@ -2968,6 +3015,7 @@ export class Parser {
         column: name.column,
       },
       typeParameters,
+      extends: parents,
       body: {
         type: 'InterfaceBody',
         properties,
@@ -3317,12 +3365,25 @@ export class Parser {
       return this.constructorMethod(accessibility, isStatic);
     }
 
+    // `ҳамзамон ном() {…}` — unless `ҳамзамон` is itself the member name
+    const isAsync =
+      this.check(TokenType.ҲАМЗАМОН) &&
+      this.peekNext()?.type !== TokenType.LEFT_PAREN &&
+      this.peekNext()?.type !== TokenType.COLON &&
+      this.peekNext()?.type !== TokenType.ASSIGN &&
+      this.match(TokenType.ҲАМЗАМОН);
+
     const nameToken = this.parseMemberName();
 
     if (this.check(TokenType.LEFT_PAREN)) {
-      return this.classMethod(nameToken, accessibility, isStatic, isAbstract);
+      return this.classMethod(nameToken, accessibility, isStatic, isAbstract, isAsync);
     }
 
+    if (isAsync) {
+      throw new Error(
+        `Expected method after 'ҳамзамон' at line ${nameToken.line}, column ${nameToken.column}`
+      );
+    }
     return this.classProperty(nameToken, accessibility, isStatic);
   }
 
@@ -3366,7 +3427,8 @@ export class Parser {
     nameToken: Token,
     accessibility?: string,
     isStatic?: boolean,
-    isAbstract?: boolean
+    isAbstract?: boolean,
+    isAsync?: boolean
   ): MethodDefinition {
     const accessVar: 'public' | 'private' | 'protected' | undefined =
       accessibility === 'public' || accessibility === 'private' || accessibility === 'protected'
@@ -3411,6 +3473,7 @@ export class Parser {
         params: params,
         body: body,
         returnType,
+        async: isAsync || undefined,
         line: nameToken.line,
         column: nameToken.column,
       },
