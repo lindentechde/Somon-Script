@@ -237,6 +237,18 @@ describe('bundle formats', () => {
     });
   });
 
+  test('a project compiled to ES modules gets an esm bundle of CommonJS modules', async () => {
+    const system = new ModuleSystem({
+      resolution: { baseUrl: dir },
+      compilation: { module: 'esm' },
+    });
+    const { code } = await system.bundle({ entryPoint: path.join(dir, 'main.som') });
+    expect(code).not.toMatch(/\bmodule\.exports = entryModule/);
+    const { stdout, exports } = importEsm(code);
+    expect(stdout).toBe(EXPECTED_LOG);
+    expect(exports).toMatchObject({ натиҷа: 5, callҷамъ: 9 });
+  });
+
   test('iife stores the exports in a global and needs no require or module', async () => {
     const { code } = await bundle('iife', { globalName: 'Мо.китоб' });
     const { lines, context } = runScript(code);

@@ -135,10 +135,14 @@ export function normalizeLib(lib: readonly string[]): string[] {
   return [...new Set(lib.map(name => name.trim().toLowerCase()).filter(name => name.length > 0))];
 }
 
+/** The esnext lib parts of TypeScript before 5.7 that hold ES2024 APIs. */
+const ES2024_IN_ESNEXT = ['esnext.object', 'esnext.collection', 'esnext.promise'];
+
 /**
  * The libs used for `target` when `lib` is not set, as in TypeScript: the
  * target's ECMAScript lib (the newest one TypeScript ships, at most the
- * target) and the DOM.
+ * target) and the DOM. For es2024 without an es2024 lib (TypeScript 5.4 to
+ * 5.6) that is es2023 and the esnext parts with ES2024's APIs.
  */
 export function defaultLib(target: Target): string[] {
   const known = new Set(typeScriptLibNames());
@@ -153,6 +157,11 @@ export function defaultLib(target: Target): string[] {
   if (targetAtLeast(target, 'es2015')) lib.push('dom.iterable');
   if (targetAtLeast(target, 'es2018') && known.has('dom.asynciterable')) {
     lib.push('dom.asynciterable');
+  }
+  // Before TypeScript 5.7 ships an es2024 lib, what ES2024 added is in esnext
+  // parts: Object.groupBy, Map.groupBy and Promise.withResolvers
+  if (target === 'es2024' && esLib !== 'es2024') {
+    lib.push(...ES2024_IN_ESNEXT.filter(name => known.has(name)));
   }
   return lib;
 }

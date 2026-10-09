@@ -88,8 +88,9 @@ export interface BundleOptions {
   /**
    * 'commonjs' (default): `module.exports` is the entry's exports. 'esm': an ES
    * module that exports them (`export`), modules not in the bundle are
-   * imported. 'iife': a script for browsers without `require` or `module`
-   * that stores them in `globalThis[globalName]`.
+   * imported; the default when the compilation's `module` is 'esm'. 'iife': a
+   * script for browsers without `require` or `module` that stores them in
+   * `globalThis[globalName]`.
    */
   format?: BundleFormat;
   /** For 'iife': the global, or dotted path of globals, that receives the entry's exports. */
@@ -395,6 +396,7 @@ export class ModuleSystem {
       'watch',
       'compileOnSave',
       'experimentalDecorators',
+      'declaration',
     ];
     for (const option of booleanOptions) {
       if (compilation[option] !== undefined && typeof compilation[option] !== 'boolean') {
@@ -661,16 +663,22 @@ export class ModuleSystem {
    * Bundle modules into a single file
    */
   async bundle(options: BundleOptions): Promise<BundleOutput> {
-    const format = options.format ?? 'commonjs';
+    // A project that compiles to ES modules gets an ES module bundle by default
+    const format =
+      options.format ?? (this.resolveCompilationOptions().module === 'esm' ? 'esm' : 'commonjs');
     this.validateBundleOptions(options, format);
     // The whole bundle is minified once at the end. Minifying modules as well would
     // escape non-ASCII import paths, which the require rewriter cannot match.
     const minify = options.minify ?? this.resolveCompilationOptions().minify;
     // Modules keep their syntax (checked against the target): the whole bundle is
-    // lowered once, so TypeScript's helpers appear once.
+    // lowered once, so TypeScript's helpers appear once. Every format keeps
+    // CommonJS modules in the bundle's module table (an esm bundle exports the
+    // entry's exports around it), so they compile to CommonJS whatever the
+    // configured `module` is.
     const compilationOverrides: Partial<ModuleCompilationOptions> = {
       minify: false,
       downlevel: false,
+      module: 'commonjs',
     };
     if (options.sourceMaps !== undefined) {
       compilationOverrides.sourceMap = options.sourceMaps;
@@ -1041,6 +1049,15 @@ export class ModuleSystem {
     }
     if (config.downlevel !== undefined) {
       options.downlevel = config.downlevel;
+    }
+    if (config.module !== undefined) {
+      options.module = config.module;
+    }
+    if (config.checker !== undefined) {
+      options.checker = config.checker;
+    }
+    if (config.locale !== undefined) {
+      options.locale = config.locale;
     }
 
     return options;
@@ -1700,7 +1717,11 @@ export class ModuleSystem {
   }): { success: boolean } {
     const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
     try {
-      const compileResult = compileSource(module.source, this.toPipelineOptions(compilationConfig));
+      const compileResult = compileSource(module.source, {
+        ...this.toPipelineOptions(compilationConfig),
+        // The TypeScript checker resolves the module's imports from its location
+        filePath: module.resolvedPath,
+      });
 
       // Handle compilation errors
       if (compileResult.errors.length > 0) {

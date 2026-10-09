@@ -25,7 +25,22 @@ export interface CompilerOptions {
   compileOnSave?: boolean;
   /** TypeScript's legacy decorators, which may decorate parameters too. */
   experimentalDecorators?: boolean;
+  /** Module format of the output: 'commonjs' (default) or 'esm'. */
+  module?: 'commonjs' | 'esm';
+  /** Type checker: 'somon' (default) or 'typescript'. */
+  checker?: 'somon' | 'typescript';
+  /** Language of the TypeScript checker's diagnostics: 'en' (default), 'ru' or 'tj'. */
+  locale?: 'en' | 'ru' | 'tj';
+  /** Also write a TypeScript declaration file (`.d.ts`) next to the output. */
+  declaration?: boolean;
 }
+
+/** Allowed values of the compiler options that take one of a few strings. */
+const ENUM_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  module: ['commonjs', 'esm'],
+  checker: ['somon', 'typescript'],
+  locale: ['en', 'ru', 'tj'],
+};
 
 export interface SomonConfig {
   compilerOptions?: CompilerOptions;
@@ -97,6 +112,19 @@ function validateTargetOptions(options: UnknownRecord, path: string): ConfigVali
   return errors;
 }
 
+/** Options that take one of a few strings (`module`, `checker`, `locale`). */
+function validateEnumOptions(options: UnknownRecord, path: string): ConfigValidationError[] {
+  return Object.entries(ENUM_OPTIONS)
+    .filter(([option, values]) => {
+      const value = options[option];
+      return value !== undefined && (typeof value !== 'string' || !values.includes(value));
+    })
+    .map(([option, values]) => ({
+      path: `${path}.${option}`,
+      message: `must be one of: ${values.join(', ')}`,
+    }));
+}
+
 function validateCompilerOptions(
   options: unknown,
   path = 'compilerOptions'
@@ -110,6 +138,8 @@ function validateCompilerOptions(
   // Validate target, lib and useDefineForClassFields
   errors.push(...validateTargetOptions(options, path));
 
+  errors.push(...validateEnumOptions(options, path));
+
   // Validate boolean options
   const booleanOptions = [
     'sourceMap',
@@ -119,6 +149,7 @@ function validateCompilerOptions(
     'watch',
     'compileOnSave',
     'experimentalDecorators',
+    'declaration',
   ];
   for (const option of booleanOptions) {
     if (options[option] !== undefined && typeof options[option] !== 'boolean') {
@@ -154,6 +185,10 @@ function validateCompilerOptions(
     'watch',
     'compileOnSave',
     'experimentalDecorators',
+    'module',
+    'checker',
+    'locale',
+    'declaration',
   ];
   for (const key of Object.keys(options)) {
     if (!knownOptions.includes(key)) {

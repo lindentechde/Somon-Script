@@ -14,7 +14,7 @@ import {
   type Target,
   type TargetDiagnostic,
 } from './targets';
-import { TypeChecker } from './type-checker';
+import { TypeChecker, type TypeCheckError } from './type-checker';
 
 /**
  * Configuration flags that control how SomonScript source is transformed into JavaScript.
@@ -90,6 +90,22 @@ export interface CompileOptions {
    * inside an async function (as the REPL does).
    */
   topLevelAwait?: boolean;
+  /**
+   * Type checker: SomonScript's own (`somon`, the default) or the TypeScript
+   * compiler (`typescript`), which checks the program with TypeScript's full
+   * semantics, including imported `.som` modules and `.d.ts` typings.
+   */
+  checker?: 'somon' | 'typescript';
+  /** Language of the TypeScript checker's diagnostics: English (default), Russian or Tajik. */
+  locale?: 'en' | 'ru' | 'tj';
+  /** Also produce a TypeScript declaration file (`CompileResult.declaration`). */
+  declaration?: boolean;
+  /**
+   * Path of the source file. The TypeScript checker (and `declaration`)
+   * resolve imports and node_modules typings from it; defaults to
+   * `source.som` in the current directory.
+   */
+  filePath?: string;
 }
 
 /**
@@ -109,6 +125,8 @@ export interface CompileResult {
   errors: string[];
   /** Diagnostics that highlight potential problems but do not stop emission. */
   warnings: string[];
+  /** TypeScript declarations (`.d.ts` text) when `declaration` is enabled and code was emitted. */
+  declaration?: string;
 }
 
 /**
@@ -142,11 +160,16 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
       return { code: '', errors, warnings };
     }
 
-    if (runTypeCheckStage(ast, source, options, errors, warnings)) {
+    const typeScript = runTypeScriptStage(ast, source, options);
+    if (runTypeCheckStage(ast, source, options, { errors, warnings }, typeScript?.errors)) {
       return { code: '', errors, warnings };
     }
 
-    return emitCode(ast, options, errors, warnings, source);
+    const result = emitCode(ast, options, errors, warnings, source);
+    if (typeScript?.declaration !== undefined && result.code !== '') {
+      result.declaration = typeScript.declaration;
+    }
+    return result;
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
     return { code: '', errors, warnings };
@@ -184,20 +207,58 @@ function routeParserErrors(parserErrors: string[], errors: string[]): boolean {
 
 /**
  * Runs the type-check stage unless explicitly disabled. Returns true when
- * strict-mode type errors should abort emission.
+ * strict-mode type errors should abort emission. With `checker: 'typescript'`
+ * it reports `typeScriptErrors`, the TypeScript stage's findings.
  */
 function runTypeCheckStage(
   ast: ReturnType<Parser['parse']>,
   source: string,
   options: CompileOptions,
-  errors: string[],
-  warnings: string[]
+  { errors, warnings }: { errors: string[]; warnings: string[] },
+  typeScriptErrors: TypeCheckError[] | undefined
 ): boolean {
   if (options.typeCheck === false) return false;
-  const result = runTypeCheck(source, ast, Boolean(options.strict));
+  const result =
+    options.checker === 'typescript'
+      ? { errors: (typeScriptErrors ?? []).map(formatTypeError), warnings: [] }
+      : runTypeCheck(source, ast, Boolean(options.strict));
   errors.push(...result.errors);
   warnings.push(...result.warnings);
   return Boolean(options.strict) && result.errors.length > 0;
+}
+
+/**
+ * The TypeScript compiler's part: type errors (with `checker: 'typescript'`)
+ * and declarations (`declaration`). Loaded only when needed.
+ */
+function runTypeScriptStage(
+  ast: ReturnType<Parser['parse']>,
+  source: string,
+  options: CompileOptions
+): { errors: TypeCheckError[]; declaration?: string } | undefined {
+  const typeCheck = options.typeCheck !== false && options.checker === 'typescript';
+  if (!typeCheck && !options.declaration) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { checkWithTypeScript } = require('./tsc-checker') as typeof import('./tsc-checker');
+  const [result] = checkWithTypeScript(
+    [{ fileName: options.filePath ?? 'source.som', source, ast }],
+    {
+      strict: options.strict,
+      target: options.target,
+      lib: options.lib,
+      useDefineForClassFields: options.useDefineForClassFields,
+      experimentalDecorators: options.experimentalDecorators,
+      locale: options.locale,
+      declaration: options.declaration,
+      typeCheck,
+    }
+  );
+  return result;
+}
+
+/** A type error in the format the compiler reports it. */
+export function formatTypeError(err: TypeCheckError): string {
+  return `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`;
 }
 
 function emitCode(
@@ -266,10 +327,7 @@ function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: 
   const checker = new TypeChecker(source, { strict });
   const result = checker.check(ast);
   return {
-    errors: result.errors.map(
-      err =>
-        `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`
-    ),
+    errors: result.errors.map(formatTypeError),
     warnings: result.warnings.map(
       warn =>
         `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`
