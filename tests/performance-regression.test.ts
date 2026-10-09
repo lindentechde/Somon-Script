@@ -215,7 +215,7 @@ describePerf('Performance Regression Tests', () => {
           };
         }
         
-        интерфейс Admin мерос_мебарад User {
+        интерфейс Admin мерос User {
           role: сатр;
           permissions: сатр[];
         }

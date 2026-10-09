@@ -5,7 +5,7 @@
     "minify": false,
     "noTypeCheck": false,
     "strict": false,
-    "outDir": "dist",
+    "outDir": "examples/dist",
     "watch": false,
     "compileOnSave": false
   }
