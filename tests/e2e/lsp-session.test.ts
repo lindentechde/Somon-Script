@@ -71,7 +71,9 @@ describe('somon lsp: an editing session (spawned)', () => {
   afterEach(() => {
     client?.kill();
     client = undefined;
-    fs.rmSync(dir, { recursive: true, force: true });
+    // A killed server can still be in the directory for a moment (Windows refuses to
+    // remove a process's working directory), so the removal is retried
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
 
   test('strict TypeScript checking, editing, navigation across files, formatting', async () => {

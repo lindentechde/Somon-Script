@@ -64,7 +64,9 @@ describe('somon lsp (spawned)', () => {
   });
   afterEach(() => {
     child?.kill();
-    fs.rmSync(dir, { recursive: true, force: true });
+    // A killed server can still be in the directory for a moment (Windows refuses to
+    // remove a process's working directory), so the removal is retried
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   });
 
   test('a full session: initialize, diagnostics, hover, completion, definition, shutdown', async () => {
