@@ -51,8 +51,10 @@ skips an existing tag, so after a partial failure use **Re-run failed jobs**.
 Start it from the Actions tab with a `MAJOR.MINOR.PATCH` version and choose
 whether to publish to npm/JSR and create a tag. It sets the version, builds and
 tests, publishes, then commits the version bump to the branch, tags it and
-creates the GitHub release. Every step skips work that already happened, so a
-failed run can be started again with the same version.
+creates the GitHub release with the packed `.tgz` attached. Since the version
+bump is committed only after publishing, JSR is published with `--allow-dirty`.
+Every step skips work that already happened, so a failed run can be started
+again with the same version.
 
 ## Required Secrets
 

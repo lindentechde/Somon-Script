@@ -85,8 +85,12 @@ jobs:
       - name: Build and test
         run: npm run test:ci
 
+      # Packed outside the checkout: `npm publish` rebuilds via prepublishOnly,
+      # and the clean step of that build deletes *.tgz from the repository root.
       - name: Create package
-        run: npm pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          npm pack --pack-destination "$RUNNER_TEMP/package"
 
       - name: Publish to NPM
         if: env.PUBLISH_NPM == 'true'
@@ -105,7 +109,9 @@ jobs:
           if curl -fsS "https://jsr.io/${JSR_PACKAGE}/meta.json" | jq -e --arg v "$VERSION" '.versions[$v]' >/dev/null 2>&1; then
             echo "${JSR_PACKAGE}@${VERSION} is already on JSR, skipping publish"
           else
-            npx jsr publish
+            # `npm version` has modified the version files, which are committed
+            # only after publishing; without --allow-dirty JSR refuses the tree.
+            npx jsr publish --allow-dirty
           fi
 
       - name: Commit version update
@@ -164,7 +170,7 @@ jobs:
           name: 'SomonScript v${{ env.VERSION }}'
           body_path: ${{ steps.release_notes.outputs.path }}
           files: |
-            *.tgz
+            ${{ runner.temp }}/package/*.tgz
           draft: false
           prerelease: false
 
