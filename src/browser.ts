@@ -86,13 +86,10 @@ export function compile(source: string, options: BrowserCompileOptions = {}): Br
   try {
     const parser = new Parser(new Lexer(source).tokenize());
     program = parser.parse();
-    errors.push(
-      ...parser
-        .getErrors()
-        .map(error => (error.startsWith('Parse error') ? error : `Parse error: ${error}`))
-    );
+    errors.push(...parser.getErrors().map(error => `Parse error: ${error}`));
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    // The lexer reports a problem with an Error; the parser collects its own
+    errors.push((error as Error).message);
     return fail();
   }
   if (errors.length > 0) return fail();
@@ -171,11 +168,11 @@ function lower(
 }
 
 /**
- * `ts.ScriptTarget` of a target: 'es2017' → ES2017, 'esnext' → ESNext. A
- * target newer than the loaded TypeScript knows uses the newest older one.
+ * `ts.ScriptTarget` of a target: 'es2017' → ES2017. A target newer than the
+ * loaded TypeScript knows uses the newest older one. Never 'esnext', which
+ * needs no lowering but of what no runtime runs (lowered as for es2024).
  */
 function scriptTargetOf(ts: TypeScriptApi, target: string): number {
-  if (target === 'esnext') return ts.ScriptTarget.ESNext as number;
   for (let index = TARGETS.indexOf(target); index > 0; index--) {
     const value = ts.ScriptTarget[TARGETS[index].toUpperCase()];
     if (typeof value === 'number') return value;

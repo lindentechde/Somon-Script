@@ -398,6 +398,16 @@ describe('lowerToTarget', () => {
       'true true true Х:бад true 2',
     ],
     ['line separators in strings', `const с = "а${LINE_SEPARATOR}б"; console.log(с.length);`, '3'],
+    [
+      'for-in with object patterns and block bodies',
+      'for (const { length: д } in { абв: 1 }) { console.log(д); } let е; for ({ length: е } in { аб: 1 }) { console.log(е); } let ж; for (ж in { в: 1 }) { console.log(ж); }',
+      '3\n2\nв',
+    ],
+    [
+      'class expressions that extend Error and Array',
+      'const Х = class extends Error { constructor(п) { super(п); } }; const Р = class extends Array {}; const х = new Х("бад"); console.log(х instanceof Х, х.message, new Р() instanceof Р);',
+      'true бад true',
+    ],
   ];
 
   test.each(programs)('%s: same output on every target', (_name, code, expected) => {
@@ -558,6 +568,30 @@ describe('lowerToTarget', () => {
 });
 
 describe('composeSourceMaps', () => {
+  test('outer segments without a source position are left out', () => {
+    const inner = new SourceMapGenerator({ file: 'bundle.js' });
+    inner.addMapping({
+      generated: { line: 2, column: 0 },
+      original: { line: 5, column: 1 },
+      source: 'a.som',
+    });
+    // Line 1: a segment with a column only; line 2: column 0 of bundle.js line 2
+    const outer = {
+      version: 3,
+      file: 'out.js',
+      sources: ['bundle.js'],
+      names: [],
+      mappings: 'A;AACA',
+    };
+    const composed = composeSourceMaps(
+      outer as unknown as RawSourceMap,
+      inner.toJSON() as unknown as RawSourceMap
+    );
+    // Only line 2 is mapped (to a.som line 5): `;` then one segment
+    expect(composed.mappings).toBe(';AAIC');
+    expect(composed.sources).toEqual(['a.som']);
+  });
+
   test('maps through both maps, keeping every source and name', async () => {
     // inner: generated lines 1 and 2 come from two sources
     const inner = new SourceMapGenerator({ file: 'bundle.js' });

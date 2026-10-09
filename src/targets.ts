@@ -459,8 +459,8 @@ class SyntaxScanner {
   }
 
   private checkDeclarationList(node: ts.VariableDeclarationList): void {
-    const using = (ts.NodeFlags as unknown as Record<string, number | undefined>).Using ?? 0;
-    if (using !== 0 && (node.flags & using) !== 0) {
+    // `using` and `await using` (TypeScript 5.2; tsc-checker.ts already needs 5.4)
+    if ((node.flags & ts.NodeFlags.Using) !== 0) {
       this.needLowering();
     } else if ((node.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) !== 0) {
       this.need('es2015');

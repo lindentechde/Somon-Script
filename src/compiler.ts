@@ -218,9 +218,10 @@ function runTypeCheckStage(
   typeScriptErrors: TypeCheckError[] | undefined
 ): boolean {
   if (options.typeCheck === false) return false;
+  // With `checker: 'typescript'` and type checking on, the TypeScript stage has run
   const result =
     options.checker === 'typescript'
-      ? { errors: (typeScriptErrors ?? []).map(formatTypeError), warnings: [] }
+      ? { errors: typeScriptErrors!.map(formatTypeError), warnings: [] }
       : runTypeCheck(source, ast, Boolean(options.strict));
   errors.push(...result.errors);
   warnings.push(...result.warnings);
@@ -317,9 +318,7 @@ function parseSource(source: string) {
   const tokens = lexer.tokenize();
   const parser = new Parser(tokens);
   const ast = parser.parse();
-  const parserErrors = parser
-    .getErrors()
-    .map(err => (err.startsWith('Parse error') ? err : `Parse error: ${err}`));
+  const parserErrors = parser.getErrors().map(err => `Parse error: ${err}`);
   return { ast, parserErrors };
 }
 
@@ -352,7 +351,8 @@ function targetErrors(
       if (line > diagnostic.line || (line === diagnostic.line && column > diagnostic.column)) break;
       original = mapping.original;
     }
-    const snippet = (sourceLines[original.line - 1] ?? '').trim();
+    // Every target error is inside a statement, which has a mapping
+    const snippet = sourceLines[original.line - 1].trim();
     return `Target error at line ${original.line}, column ${original.column + 1}: ${diagnostic.message}\n> ${snippet}`;
   });
   // Two literals in one statement end up at the same position
@@ -387,9 +387,9 @@ function loadMinifyPreset(): PluginItem {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       minifyPreset = require('babel-preset-minify') as PluginItem;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      // `require` fails with an Error
       throw new Error(
-        `Minification failed: the 'babel-preset-minify' dependency could not be loaded (${reason}). Reinstall the package dependencies.`
+        `Minification failed: the 'babel-preset-minify' dependency could not be loaded (${(error as Error).message}). Reinstall the package dependencies.`
       );
     }
   }
@@ -404,7 +404,7 @@ function minifyCode(
   const babel = transformSync(code, {
     sourceMaps: sourceMap,
     // Babel composes its own map with this one, so the result maps to the .som input
-    inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
+    inputSourceMap: map,
     presets: [loadMinifyPreset()],
     comments: false,
     compact: true,

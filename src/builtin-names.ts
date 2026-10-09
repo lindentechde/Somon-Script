@@ -394,5 +394,6 @@ export const BUILTIN_MAPPINGS: ReadonlyMap<string, string> = new Map([
 
 /** JavaScript name of a member name: `дарозӣ` → `length`, other names unchanged. */
 export function translateMemberName(name: string): string {
-  return MEMBER_ALIASES.has(name) ? (BUILTIN_MAPPINGS.get(name) ?? name) : name;
+  // Every member alias has a mapping (tests/builtin-names.test.ts)
+  return MEMBER_ALIASES.has(name) ? BUILTIN_MAPPINGS.get(name)! : name;
 }
