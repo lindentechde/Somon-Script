@@ -23,8 +23,9 @@ describe('CLI Integration - Real Coverage', () => {
     // `fs.rmSync`s `dist/`. Under `--coverage` (slower workers), one worker
     // would delete `dist/` while another's `execSync(node dist/cli.js ...)` was
     // starting — producing ENOENT flakes in ~20 tests. The suite now assumes
-    // `dist/` is already built by the caller (`npm test` runs `npm run build`
-    // before this file via the test:ci / default jest config).
+    // `dist/` is already built by the caller (`npm test` and
+    // `npm run test:coverage` build via their `pre*` scripts, `test:ci` builds
+    // explicitly; running jest directly requires a manual `npm run build`).
     if (!fs.existsSync(cliPath)) {
       throw new Error(
         `cli-integration-real: dist/cli.js is missing. Run 'npm run build' before 'npm test'.`
