@@ -158,4 +158,19 @@ describe('TypeScript checker: messages', () => {
     );
     expect(translateMessage('Тип «number» и «string»', 'ru', '', 1)).toBe('Тип «рақам» и «сатр»');
   });
+
+  test('a .som module is named as the program imports it, not as its checked file', () => {
+    for (const name of ['./math.som.js', './math.som.ts', './math.som']) {
+      expect(
+        translateMessage(`Module '"${name}"' has no exported member 'ҷамъ'.`, 'en', '', 1, 2305)
+      ).toBe(`Module '"./math"' has no exported member 'ҷамъ'.`);
+    }
+    expect(translateMessage(`File '/x/a.som.ts' is not a module.`, 'en', '', 1)).toBe(
+      `File '/x/a' is not a module.`
+    );
+    // Other names keep their extensions
+    expect(translateMessage(`Cannot find module './a.json'.`, 'en', '', 1)).toBe(
+      `Cannot find module './a.json'.`
+    );
+  });
 });

@@ -566,6 +566,15 @@ const TAJIK_MEMBER_NAMES: ReadonlyMap<string, string[]> = (() => {
 })();
 
 /**
+ * A `.som` module is checked as the file `м.som.ts`. Where TypeScript names a module by
+ * a specifier it computes instead of the one the import wrote (on macOS it gave
+ * `"./м.som.js"` for `аз "./м"`), the name is written as the program writes it.
+ */
+function withSourceModuleNames(message: string): string {
+  return message.replace(/(["'])([^"'\n]*?)\.som(?:\.[jt]s)?\1/g, '$1$2$1');
+}
+
+/**
  * Tajik type names inside the quoted parts of a message (`'number'` →
  * `'рақам'`), and, for a member name that the source spells with its Tajik
  * alias, both spellings (`'дорад' (includes)`).
@@ -583,8 +592,9 @@ export function translateMessage(
     : new Set(word ? [word] : []);
   let aliasNamed: string | undefined;
   // TypeScript escapes non-ASCII characters of string literal types (`"м"`)
-  const readable = message.replace(/\\u([0-9A-Fa-f]{4})/g, (_escape, hex: string) =>
-    String.fromCodePoint(Number.parseInt(hex, 16))
+  const readable = withSourceModuleNames(message).replace(
+    /\\u([0-9A-Fa-f]{4})/g,
+    (_escape, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16))
   );
   const translated = readable.replace(
     /(['"«])([^'"«»\n]*)(['"»])/g,

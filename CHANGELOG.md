@@ -138,6 +138,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * The type checker did not count an exported import alias (`номфазо Н { содир ворид х = А.б; }`) among the members of a namespace: `Н.х` had no type and another block of the namespace could not use `х`. In a declared module an alias is exported only when marked `содир`, as in TypeScript.
 * `танҳохонӣ` before a type other than an array or tuple type (`тағ х: танҳохонӣ сатр`, `танҳохонӣ Array<сатр>`) was accepted and ignored; it is the parse error TypeScript reports (TS1354), "'танҳохонӣ' type modifier is only permitted on array and tuple types".
 * The type checker accepted an array where a tuple is expected (`тағ т: [рақам] = рӯйхат;` with `рӯйхат: рақам[]`, also `ҳар[]` and the empty tuple `[]`) when the element type fitted every position; TypeScript rejects it (TS2322), as an array may have any length, and so does the checker. Array literals, returns, arguments and `чун` still give tuples where one is expected.
+* The TypeScript checker named an imported `.som` module by the file it checks: on macOS `аз "./math"` gave `Module '"./math.som.js"' has no exported member …`; messages name the module as the program imports it (`"./math"`).
 
 ## 0.4.0 (2026-10-09)
 
