@@ -187,7 +187,7 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 корбар["вазифа"] = "барномасоз";
 
 // Delete properties
-ҳазф корбар.вазифа;
+delete корбар.вазифа;
 
 // Object methods
 Object.keys(корбар);           // Get keys

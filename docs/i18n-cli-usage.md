@@ -9,7 +9,8 @@ There are several ways to set the CLI language:
 
 ### 1. Command-line Flag
 
-Use the `--lang` flag with any command:
+Use the `--lang` flag (`--lang tj` or `--lang=tj`) with any command. An
+unsupported value is an error.
 
 ```bash
 # Use Tajik interface
@@ -24,50 +25,37 @@ somon --lang en compile app.som
 
 ### 2. Environment Variables
 
-Set the language via environment variables (in order of precedence):
+Without `--lang`, the language comes from the first of these variables that is
+set, in this order:
 
 ```bash
 # SomonScript-specific variable (highest priority)
 export SOMON_LANG=tj
 
-# Standard locale variables
-export LANG=ru_RU.UTF-8
+# Standard locale variables, in POSIX precedence order
 export LC_ALL=tj_TJ.UTF-8
 export LC_MESSAGES=ru_RU.UTF-8
+export LANG=ru_RU.UTF-8
 ```
 
-### 3. Localization Modes
+Locale values match on their language part (`ru`, `tg`/`tj`); anything else
+falls back to English.
 
-The CLI supports two localization modes:
+### 3. Command Names
 
-#### Mixed Mode (Default)
-
-Shows both English and localized commands:
+The English command names always work, whatever the language. When the interface
+language is Tajik or Russian, each command also accepts its localized name and
+short alias, and `--help` lists both names:
 
 ```bash
-export SOMON_LOCALIZATION_MODE=mixed
-somon --help
+somon --lang tj --help
 
-# Shows:
 # Commands:
-#   compile|компайл|к    Compile SomonScript files...
-#   run|иҷро|и           Compile and run...
+#   compile|компайл [options] <input>   Файлҳои СомонСкриптро ба JavaScript компайл кардан
+#   run|иҷро [options] <input> [args...] Файли СомонСкриптро компайл ва иҷро кардан
 ```
 
-#### Pure Mode
-
-Shows only localized commands:
-
-```bash
-export SOMON_LOCALIZATION_MODE=pure
-export SOMON_LANG=tj
-somon --help
-
-# Shows only Tajik commands:
-# Фармонҳо:
-#   компайл|к    Файлҳои СомонСкриптро ба JavaScript компайл кардан
-#   иҷро|и       Файли СомонСкриптро компайл ва иҷро кардан
-```
+Commander's own labels (`Usage:`, `Options:`, `Commands:`) stay in English.
 
 ## Command Examples
 
@@ -186,25 +174,23 @@ To make a language preference persistent, add it to your shell profile:
 ```bash
 # ~/.bashrc or ~/.zshrc
 export SOMON_LANG=tj
-export SOMON_LOCALIZATION_MODE=mixed
 ```
 
 ## Compatibility
 
-- The English commands always work regardless of language setting in mixed mode
-- In pure mode, only the selected language commands are available
-- All existing scripts using English commands remain compatible in mixed mode
-- The `--lang` flag can be used anywhere in the command line
+- English command names work under every language setting, so existing scripts
+  keep working.
+- Localized names and aliases are available only while their language is active.
+- The `--lang` flag can be used anywhere before a `--` separator.
 
 ## Implementation Details
 
 The internationalization system:
 
-- Auto-detects system locale from environment variables
-- Supports command-line override via `--lang` flag
-- Provides complete translations for all commands, options, and messages
-- Maintains backward compatibility with existing scripts
-- Supports both mixed (multilingual) and pure (single language) modes
+- Detects the language once from `--lang` and the environment variables above
+- Translates command descriptions, option help and CLI messages; the English,
+  Tajik and Russian translation files are checked by a test to define the same
+  keys
 
 ## Adding New Languages
 

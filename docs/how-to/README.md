@@ -214,14 +214,10 @@ const user = {
 функсия коркард(маълумот: сатр | рақам): сатр {
     бозгашт String(маълумот).toUpperCase();
 }
-
-// Solution 3: Function overloading
-функсия коркард(маълумот: сатр): сатр;
-функсия коркард(маълумот: рақам): сатр;
-функсия коркард(маълумот: сатр | рақам): сатр {
-    бозгашт String(маълумот).toUpperCase();
-}
 ```
+
+SomonScript has no function overload signatures; use a union type (solution 2)
+instead.
 
 #### Performance Issues
 
