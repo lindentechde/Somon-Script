@@ -2456,6 +2456,9 @@ export class TypeChecker {
       case 'OptionalType':
       case 'RestType':
         return this.resolveTypeNode((typeNode as OptionalType | RestType).typeAnnotation);
+      case 'TemplateLiteralType':
+        // `пеш_${К}` is approximated as a string
+        return STRING_TYPE;
       default:
         return UNKNOWN;
     }

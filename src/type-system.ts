@@ -1,4 +1,4 @@
-import { ASTNode, Identifier, Parameter, Statement } from './ast';
+import { ASTNode, Expression, Identifier, Parameter, Statement } from './ast';
 
 // Type system AST nodes
 export interface TypeAnnotation extends ASTNode {
@@ -12,7 +12,7 @@ export interface TypeNode extends ASTNode {
 
 export interface PrimitiveType extends TypeNode {
   type: 'PrimitiveType';
-  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат' | 'рамз';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат' | 'рамз' | 'калонрақам';
 }
 
 export interface ArrayType extends TypeNode {
@@ -73,8 +73,18 @@ export interface PropertySignature extends ASTNode {
    * holds the property's type.
    */
   kind?: 'get' | 'set';
-  /** A computed name, `[калид]: Т;`, known only at run time (`key` is a placeholder). */
+  /**
+   * A computed name, `[калид]: Т;`, known only at run time: `key` is a
+   * placeholder and `computedKey` the expression.
+   */
   computed?: boolean;
+  computedKey?: Expression;
+  /**
+   * An index signature `[калид: сатр]: Т`: its key parameter (with the key
+   * type as its annotation), as in a class's `PropertyDefinition`. `key` is
+   * then the placeholder `__computed__`.
+   */
+  indexSignature?: Parameter;
 }
 
 export interface TypeParameter extends ASTNode {
@@ -126,6 +136,30 @@ export interface MappedType extends TypeNode {
   readonly?: boolean;
   /** Key remapping clause (TypeScript `as`): the `Н` of `[К дар калидҳои Т чун Н]`. */
   nameType?: TypeNode;
+  /** `+танҳохонӣ` / `-танҳохонӣ`: adds or removes `readonly` (`readonly` is set for '+' only). */
+  readonlyModifier?: '+' | '-';
+  /** `+?` / `-?`: adds or removes optionality (`optional` is set for '+' only). */
+  optionalModifier?: '+' | '-';
+}
+
+/** `инфер У` (`infer U`): a type variable inferred in the `мерос` clause of a conditional type. */
+export interface InferType extends TypeNode {
+  type: 'InferType';
+  typeParameter: TypeParameter;
+}
+
+/** `навъи х`, `навъи о.а` (`typeof x` in a type): the type of a value. */
+export interface TypeQuery extends TypeNode {
+  type: 'TypeQuery';
+  /** The value, a dotted name such as `о.а` kept in one identifier. */
+  exprName: Identifier;
+}
+
+/** `` `пеш_${К}` `` in a type: `quasis` (raw text) has one element more than `types`. */
+export interface TemplateLiteralType extends TypeNode {
+  type: 'TemplateLiteralType';
+  quasis: string[];
+  types: TypeNode[];
 }
 
 export interface IndexedAccessType extends TypeNode {

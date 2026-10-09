@@ -9,6 +9,13 @@ export class ImportHandler {
   }
 
   parseStatement(): Statement | null {
+    // `ворид(…)` (dynamic import) and `ворид.meta` start expression statements
+    if (
+      this.parser.checkSequence(TokenType.ВОРИД, TokenType.LEFT_PAREN) ||
+      this.parser.checkSequence(TokenType.ВОРИД, TokenType.DOT)
+    ) {
+      return null;
+    }
     if (this.parser.match(TokenType.ВОРИД)) {
       return this.parser.importDeclaration();
     }

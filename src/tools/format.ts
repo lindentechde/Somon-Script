@@ -354,6 +354,9 @@ const TYPE_NODES = [
   'ObjectType',
   'TypeParameter',
   'TypeAnnotation',
+  'InferType',
+  'TypeQuery',
+  'TemplateLiteralType',
 ];
 
 const EXPRESSION_BRACE_NODES = ['ObjectExpression', 'ObjectType', 'ObjectPattern', 'MappedType'];

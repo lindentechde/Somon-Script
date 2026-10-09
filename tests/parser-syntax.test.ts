@@ -398,7 +398,11 @@ describe('Parser: TypeScript assertions', () => {
     expect(alias.typeAnnotation.typeAnnotation).toMatchObject({
       type: 'MappedType',
       typeParameter: { name: { name: 'К' } },
-      nameType: { type: 'PrimitiveType', name: 'сатр' },
+      nameType: {
+        type: 'TemplateLiteralType',
+        quasis: ['гир_', ''],
+        types: [{ type: 'IntersectionType' }],
+      },
     });
     const english = parseOk('навъ Г<Т> = { [К дар калидҳои Т as К]: Т[К] };')[0] as TypeAlias;
     expect(english.typeAnnotation.typeAnnotation).toMatchObject({

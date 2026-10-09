@@ -271,6 +271,8 @@ export interface CallExpression extends Expression {
   arguments: Expression[];
   /** Optional call: `ф?.()`. */
   optional?: boolean;
+  /** Explicit type arguments: `ф<рақам>(1)` (erased in JavaScript). */
+  typeArguments?: TypeNode[];
 }
 
 /** `test ? consequent : alternate` */
@@ -386,6 +388,7 @@ export interface NonNullExpression extends Expression {
 
 export interface ImportDeclaration extends Statement {
   type: 'ImportDeclaration';
+  /** Empty for a side-effect import: `ворид "./м";`. */
   specifiers: (ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier)[];
   source: Literal;
   /** `ворид навъ { Т } аз "./м";`: imports types only, erased in the output. */
@@ -418,6 +421,8 @@ export interface ExportDeclaration extends Statement {
   default?: boolean;
   /** `содир навъ { Т };`, `содир навъ * аз "./м";`: types only, erased in the output. */
   exportKind?: 'type';
+  /** `содир * чун Н аз "./м";`: the module's namespace exported as `Н`. */
+  namespaceExport?: Identifier;
 }
 
 export interface ExportSpecifier extends ASTNode {
@@ -507,7 +512,11 @@ export interface ClassDeclaration extends Statement {
   /** `синф Қуттӣ<Т мерос { а: рақам }>` */
   typeParameters?: TypeParameter[];
   superClass?: Identifier;
+  /** Type arguments of the superclass: `мерос Асос<рақам>`. */
+  superTypeArguments?: TypeNode[];
   implements?: Identifier[];
+  /** Type arguments of each `implements` entry, by index: `татбиқ И<сатр>`. */
+  implementsTypeArguments?: (TypeNode[] | undefined)[];
   body: ClassBody;
   /** `@ном синф …` */
   decorators?: Decorator[];
@@ -522,7 +531,9 @@ export interface ClassExpression extends Expression {
   /** `синф<Т> { … }` */
   typeParameters?: TypeParameter[];
   superClass?: Identifier;
+  superTypeArguments?: TypeNode[];
   implements?: Identifier[];
+  implementsTypeArguments?: (TypeNode[] | undefined)[];
   body: ClassBody;
   decorators?: Decorator[];
 }
@@ -685,7 +696,10 @@ export interface ImportExpression extends Expression {
   source: Expression;
 }
 
-/** Meta property: `нав.target` (`new.target`, `meta.name` is 'new'). */
+/**
+ * Meta property: `нав.target` (`new.target`, `meta.name` is 'new') or
+ * `ворид.meta` (`import.meta`, `meta.name` is 'import').
+ */
 export interface MetaProperty extends Expression {
   type: 'MetaProperty';
   meta: Identifier;

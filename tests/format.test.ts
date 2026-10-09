@@ -94,6 +94,11 @@ describe('format: spacing', () => {
       'собит а = [1] чун собит; собит б = {} бармесоё И;\n',
     ],
     [
+      'type arguments that start with инфер, навъи or a template type, and of method calls',
+      'навъ Т<У> =У мерос Array<инфер В>?В:абадан;навъ Қ=Map<навъи а,`к_${сатр}`>;тағ р=[1].map<рақам>(х=>х);',
+      'навъ Т<У> = У мерос Array<инфер В> ? В : абадан; навъ Қ = Map<навъи а, `к_${сатр}`>; тағ р = [1].map<рақам>(х => х);\n',
+    ],
+    [
       'keeps tokens apart',
       'а - -б; а + +б; а / /б/.source.length;',
       'а - -б; а + +б; а / /б/.source.length;\n',
