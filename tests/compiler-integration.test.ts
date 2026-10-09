@@ -144,7 +144,7 @@ describe('Compiler - Integration Tests', () => {
 
     test('should handle parser errors gracefully', () => {
       // Test with incomplete syntax
-      const source = 'ТАҒЙИРЁБАНДА х =';
+      const source = 'тағйирёбанда х =';
       const result = compile(source);
 
       expect(result).toHaveProperty('errors');
@@ -165,7 +165,7 @@ describe('Compiler - Integration Tests', () => {
     });
 
     test('should handle very long source code', () => {
-      const longSource = 'ТАҒЙИРЁБАНДА х = 1;\n'.repeat(1000);
+      const longSource = 'тағйирёбанда х = 1;\n'.repeat(1000);
       const result = compile(longSource);
 
       expect(result).toHaveProperty('code');
@@ -179,7 +179,7 @@ describe('Compiler - Integration Tests', () => {
         '/* тест */ 42;', // Cyrillic comment
         '"🚀🎉🔥";', // Emoji
         '"\\u0041\\u0042";', // Unicode escapes
-        'ТАҒЙИРЁБАНДА тест = "тест";', // Full Cyrillic
+        'тағйирёбанда тест = "тест";', // Full Cyrillic
       ];
 
       unicodeSources.forEach(source => {
@@ -193,15 +193,15 @@ describe('Compiler - Integration Tests', () => {
 
   describe('Integration Between Components', () => {
     test('should integrate lexer, parser, and codegen', () => {
-      const source = 'ТАҒЙИРЁБАНДА салом = "Салом, ҷаҳон!";';
+      const source = 'тағйирёбанда салом = "Салом, ҷаҳон!";';
       const result = compile(source);
 
-      expect(result.code).toBeTruthy();
-      expect(typeof result.code).toBe('string');
+      expect(result.errors).toEqual([]);
+      expect(result.code).toContain('let салом = "Салом, ҷаҳон!";');
     });
 
     test('should integrate type checker when enabled', () => {
-      const source = 'ТАҒЙИРЁБАНДА х: РАҚАМ = 42;';
+      const source = 'тағйирёбанда х: рақам = 42;';
       const result = compile(source, { typeCheck: true });
 
       expect(result).toHaveProperty('code');
@@ -211,7 +211,7 @@ describe('Compiler - Integration Tests', () => {
 
     test('should handle type checker errors', () => {
       // This may or may not generate type errors depending on implementation
-      const source = 'ТАҒЙИРЁБАНДА х: РАҚАМ = "матн";'; // Type mismatch
+      const source = 'тағйирёбанда х: рақам = "матн";'; // Type mismatch
       const result = compile(source, { typeCheck: true });
 
       expect(result).toHaveProperty('code');
@@ -307,7 +307,7 @@ describe('Compiler - Integration Tests', () => {
 
   describe('Performance and Scalability', () => {
     test('should handle reasonable compilation times', () => {
-      const source = 'ТАҒЙИРЁБАНДА х = 42;\nТАҒЙИРЁБАНДА у = "тест";';
+      const source = 'тағйирёбанда х = 42;\nтағйирёбанда у = "тест";';
       const startTime = Date.now();
 
       const result = compile(source);
@@ -320,7 +320,7 @@ describe('Compiler - Integration Tests', () => {
     });
 
     test('should handle multiple compilations efficiently', () => {
-      const source = 'ТАҒЙИРЁБАНДА х = 42;';
+      const source = 'тағйирёбанда х = 42;';
       const times: number[] = [];
 
       for (let i = 0; i < 10; i++) {
@@ -359,43 +359,46 @@ describe('Compiler - Integration Tests', () => {
   describe('Real-world Code Scenarios', () => {
     test('should compile function declarations', () => {
       const source = `
-        ФУНКСИЯ салом(): VOID {
-          ЧОП.САБТ("Салом, ҷаҳон!");
+        функсия салом(): беджавоб {
+          чоп.сабт("Салом, ҷаҳон!");
         }
       `;
 
       const result = compile(source);
-      expect(result.code).toBeTruthy();
+      expect(result.errors).toEqual([]);
+      expect(result.code).toContain('function салом()');
     });
 
     test('should compile conditional statements', () => {
       const source = `
-        ТАҒЙИРЁБАНДА х = 5;
-        АГАР (х > 3) {
-          ЧОП.САБТ("Калон");
+        тағйирёбанда х = 5;
+        агар (х > 3) {
+          чоп.сабт("Калон");
         }
       `;
 
       const result = compile(source);
-      expect(result.code).toBeTruthy();
+      expect(result.errors).toEqual([]);
+      expect(result.code).toContain('if (х > 3)');
     });
 
     test('should compile loop statements', () => {
       const source = `
-        БАРОИ (ТАҒЙИРЁБАНДА и = 0; и < 5; и++) {
-          ЧОП.САБТ(и);
+        барои (тағйирёбанда и = 0; и < 5; и++) {
+          чоп.сабт(и);
         }
       `;
 
       const result = compile(source);
-      expect(result.code).toBeTruthy();
+      expect(result.errors).toEqual([]);
+      expect(result.code).toContain('for (let и = 0; и < 5; и++)');
     });
 
     test('should compile simple expressions', () => {
       const expressions = [
         '1 + 2',
         '"салом" + " " + "ҷаҳон"',
-        'ФУНКСИЯ() { БАРГАРДОНДАН 42; }',
+        'функсия() { БАРГАРДОНДАН 42; }',
         '[1, 2, 3]',
         '{ калид: "арзиш" }',
       ];

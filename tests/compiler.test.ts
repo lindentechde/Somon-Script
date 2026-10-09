@@ -26,28 +26,30 @@ describe('Compiler', () => {
   });
 
   test('should compile if statement', () => {
-    const source = 'агар (х > 5) { чоп.сабт("калон"); }';
+    const source = 'тағйирёбанда х = 10; агар (х > 5) { чоп.сабт("калон"); }';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.code.trim()).toBe('if (х > 5) {\n  console.log("калон");\n}');
+    expect(result.code.trim()).toBe('let х = 10;\nif (х > 5) {\n  console.log("калон");\n}');
   });
 
   test('should compile if-else statement', () => {
-    const source = 'агар (х > 5) { чоп.сабт("калон"); } вагарна { чоп.сабт("хурд"); }';
+    const source =
+      'тағйирёбанда х = 1; агар (х > 5) { чоп.сабт("калон"); } вагарна { чоп.сабт("хурд"); }';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
-    const expected = 'if (х > 5) {\n  console.log("калон");\n} else {\n  console.log("хурд");\n}';
+    const expected =
+      'let х = 1;\nif (х > 5) {\n  console.log("калон");\n} else {\n  console.log("хурд");\n}';
     expect(result.code.trim()).toBe(expected);
   });
 
   test('should compile while loop', () => {
-    const source = 'то (и < 10) { и = и + 1; }';
+    const source = 'тағйирёбанда и = 0; то (и < 10) { и = и + 1; }';
     const result = compile(source);
 
     expect(result.errors).toHaveLength(0);
-    expect(result.code.trim()).toBe('while (и < 10) {\n  и = и + 1;\n}');
+    expect(result.code.trim()).toBe('let и = 0;\nwhile (и < 10) {\n  и = и + 1;\n}');
   });
 
   test('should compile boolean literals', () => {
