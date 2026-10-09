@@ -2,13 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import ts from 'typescript';
 import { compile } from '../src/compiler';
+import { Lexer } from '../src/lexer';
+import { Parser } from '../src/parser';
 import { format } from '../src/tools/format';
 
 /**
  * The formatter on every SomonScript program in the repository: the .som
  * files (examples/, examples/leetcode/, …), the ```som blocks of the
- * documentation and the programs of tests/operators.test.ts. Formatting must
- * succeed, be idempotent and compile to the same JavaScript.
+ * documentation, the programs of tests/operators.test.ts and the valid
+ * programs of tests/ts-syntax-*.test.ts. Formatting must succeed, be
+ * idempotent and compile to the same JavaScript.
  */
 const ROOT = path.join(__dirname, '..');
 const SKIPPED = new Set(['node_modules', 'dist', 'coverage', '.git']);
@@ -70,7 +73,77 @@ function operatorPrograms(): Array<readonly [string, string]> {
   return programs;
 }
 
-const programs = [...somFiles, ...snippets, ...operatorPrograms()];
+/** Helpers of tests/ts-syntax-*.test.ts whose first argument is a SomonScript program. */
+const PROGRAM_HELPERS = new Set([
+  'run',
+  'check',
+  'expectClean',
+  'generator',
+  'generate',
+  'compiled',
+  'compile',
+  'parse',
+  'parseOk',
+  'errorsOf',
+  'classOf',
+]);
+
+/** A string literal, or `['…', '…'].join('\n')`. */
+function programText(node: ts.Expression | undefined): string | undefined {
+  if (!node) return undefined;
+  if (ts.isStringLiteralLike(node)) return node.text;
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
+    return undefined;
+  }
+  const lines = node.expression.expression;
+  const separator = node.arguments[0];
+  if (node.expression.name.text !== 'join' || !ts.isArrayLiteralExpression(lines)) return undefined;
+  if (!separator || !ts.isStringLiteralLike(separator)) return undefined;
+  if (!lines.elements.every(ts.isStringLiteralLike)) return undefined;
+  return lines.elements.map(line => (line as ts.StringLiteralLike).text).join(separator.text);
+}
+
+function parses(source: string): boolean {
+  try {
+    const parser = new Parser(new Lexer(source).tokenize());
+    parser.parse();
+    return parser.getErrors().length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/** The valid programs of the TypeScript 5 syntax tests (decorators, эълон, истифода, …). */
+function syntaxTestPrograms(): Array<readonly [string, string]> {
+  const programs: Array<readonly [string, string]> = [];
+  for (const name of fs
+    .readdirSync(__dirname)
+    .filter(file => /^ts-syntax-.*\.test\.ts$/.test(file))) {
+    const file = path.join(__dirname, name);
+    const source = ts.createSourceFile(
+      file,
+      fs.readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        PROGRAM_HELPERS.has(node.expression.text)
+      ) {
+        const program = programText(node.arguments[0]);
+        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+        if (program !== undefined && parses(program)) programs.push([`${name}:${line}`, program]);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return programs;
+}
+
+const programs = [...somFiles, ...snippets, ...operatorPrograms(), ...syntaxTestPrograms()];
 
 describe('formatter on every SomonScript program in the repository', () => {
   test('finds the programs', () => {
@@ -80,6 +153,8 @@ describe('formatter on every SomonScript program in the repository', () => {
     );
     expect(snippets.length).toBeGreaterThan(100);
     expect(operatorPrograms().length).toBeGreaterThan(80);
+    expect(syntaxTestPrograms().length).toBeGreaterThan(100);
+    expect(snippets.filter(([name]) => name.includes('16-targets')).length).toBeGreaterThan(0);
   });
 
   test.each(programs)('%s', (_name, source) => {
