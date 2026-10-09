@@ -129,6 +129,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * A default import named like a built-in or one of its members (`ворид маълумот аз "./д.json"`, `рӯйхат`, `навъ`) was a parse error; it binds any name a variable may have.
 * An exported destructuring declaration in a namespace (`номфазо Н { содир собит { а } = о; }`) compiled to nothing: the declaration was left out and `Н.а` was `undefined`. Each name the pattern binds is a member of the namespace.
 * An optional chain after the constructor of `нав` (`нав о?.К()`, `нав К?.()`), a SyntaxError in JavaScript and TypeScript, compiled to `new о()?.К()`, which constructs `о` and fails at run time; it is the parse error "Invalid optional chain from new expression". `нав К()?.а` and `нав (о?.К)()` are unchanged.
+* Inside a namespace, an exported nested namespace (`номфазо Н { содир номфазо Д { … } функсия ф() { бозгашт Д.а; } }`) was only the property `Н.Д`, so a use of `Д` by its name failed with "Д is not defined"; it is also a local name, as other exported members are.
 
 ## 0.4.0 (2026-10-09)
 

@@ -95,4 +95,24 @@ describe('codegen: exported namespace members', () => {
     // TypeScript agrees
     expect(compile(source, { checker: 'typescript', strict: true }).errors).toEqual([]);
   });
+
+  test('an exported nested namespace is also a local name of its namespace', () => {
+    const source = [
+      'номфазо Н {',
+      '  содир номфазо Д { содир собит а = 1; }',
+      '  содир номфазо М { содир собит б = 2; }',
+      '  содир номфазо М { содир собит в = б + 1; }',
+      '  содир функсия ф(): рақам { бозгашт Д.а + М.в; }',
+      '}',
+      'номфазо А.Б.В { содир собит г = 4; }',
+      'чоп.сабт(Н.ф(), Н.Д.а, Н.М.б, А.Б.В.г);',
+    ].join('\n');
+    // `Д` was only `Н.Д`: "Д is not defined"
+    expect(run(source)).toEqual(['4 1 2 4']);
+    expect(compile(source, { checker: 'typescript', strict: true }).errors).toEqual([]);
+    // Ambient members exist elsewhere: no code, nothing assigned
+    expect(
+      run('номфазо Н { содир эълон собит х: рақам; содир собит у = 1; }\nчоп.сабт(Object.keys(Н));')
+    ).toEqual(['у']);
+  });
 });

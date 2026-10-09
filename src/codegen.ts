@@ -2844,9 +2844,6 @@ export class CodeGenerator {
     result += this.indent(`return ${name};\n`);
     this.indentLevel--;
     result += this.indent('})();\n');
-    if (node.exported) {
-      result += this.indent(`module.exports.${translateMemberName(name)} = ${name};\n`);
-    }
 
     return result;
   }
@@ -2937,35 +2934,19 @@ export class CodeGenerator {
     return `${members.namespace}.${translateMemberName(name)}`;
   }
 
+  /**
+   * An exported member of a namespace: its declaration, a local binding the
+   * namespace's other members use (a nested namespace too), then
+   * `Н.ном = ном;` for each name it binds.
+   */
   private generateExportedNamespaceMember(stmt: Statement, namespaceName: string): string {
-    const memberNames = this.getMemberNames(stmt);
-    if (memberNames.length === 0) {
-      return '';
-    }
-
-    if (stmt.type === 'NamespaceDeclaration' && !this.mergeGroups.has(stmt)) {
-      return this.generateNestedNamespaceExport(
-        stmt as NamespaceDeclaration,
-        namespaceName,
-        memberNames[0]
-      );
-    }
-
-    // For functions, variables, classes
-    const stmtCode = this.generateStatement(stmt);
-    let result = stmtCode;
-    if (stmtCode.trim() && stmt.type !== 'ExpressionStatement') {
-      // Ensure there's a newline before the assignment if stmtCode doesn't end with one
-      if (!stmtCode.endsWith('\n')) {
-        result += '\n';
-      }
-      for (const memberName of memberNames) {
-        result += this.indent(
-          `${namespaceName}.${translateMemberName(memberName)} = ${memberName};\n`
-        );
-      }
-    }
-    return result;
+    const code = this.generateStatement(stmt);
+    // An ambient member (`содир эълон собит х: рақам;`) exists elsewhere
+    if (!code.trim()) return code;
+    const assignments = this.getMemberNames(stmt).map(name =>
+      this.indent(`${namespaceName}.${translateMemberName(name)} = ${name};\n`)
+    );
+    return `${withoutTrailingNewlines(code)}\n${assignments.join('')}`;
   }
 
   /**
@@ -2976,28 +2957,6 @@ export class CodeGenerator {
     const names: string[] = [];
     this.collectDeclaredNames(stmt, names);
     return names;
-  }
-
-  private generateNestedNamespaceExport(
-    nestedNs: NamespaceDeclaration,
-    parentName: string,
-    memberName: string
-  ): string {
-    // Remove the exported flag for nested generation
-    const originalExported = nestedNs.exported;
-    nestedNs.exported = false;
-    const nestedCode = this.generateStatement(nestedNs).trim();
-    nestedNs.exported = originalExported;
-
-    // Generate as a property of parent namespace
-    // Remove the initial assignment part from the nested code (e.g., "Дарунӣ = ")
-    const assignmentStart = nestedCode.indexOf('= (function()');
-    const nestedIIFE =
-      assignmentStart !== -1
-        ? nestedCode.substring(assignmentStart + 2) // Skip "= "
-        : nestedCode;
-
-    return this.indent(`${parentName}.${translateMemberName(memberName)} = ${nestedIIFE}`);
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {
