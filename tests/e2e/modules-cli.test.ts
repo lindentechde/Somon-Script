@@ -121,10 +121,10 @@ describe.each(['en', 'ru', 'tj'] as const)('bundle errors in %s', lang => {
   });
 });
 
-describe('reported: outside the module system', () => {
-  // src/cli/program.ts prints getStatistics().totalModules, which counts the
-  // Node.js modules and packages the bundle leaves to the run time (here 7).
-  test.failing('bundle counts the modules in the bundle', async () => {
+describe('the CLI around the module system', () => {
+  // getStatistics().totalModules also counts the Node.js modules and packages the
+  // bundle leaves to the run time (7 here); the CLI reports the bundle's own count.
+  test('bundle counts the modules in the bundle', async () => {
     const result = await somon(['bundle', 'src/main.som', '-o', 'dist/count.js'], {
       cwd: project.root,
     });
@@ -132,9 +132,9 @@ describe('reported: outside the module system', () => {
     expect(result.stdout).toContain('📊 Bundled 4 modules');
   });
 
-  // src/cli/program.ts writeEsmModules() names the output of an entry `x.som` → `x.js`,
-  // but keeps any other name, so Node refuses to run `prog.txt` as an ES module.
-  test.failing('run --module esm of an entry not named .som', async () => {
+  // writeEsmModules() writes an entry `prog.txt` as `prog.txt.js`, which Node.js runs
+  // as an ES module.
+  test('run --module esm of an entry not named .som', async () => {
     project.write({ 'prog.txt': 'чоп.сабт("txt");\n' });
     const result = await somon(['run', 'prog.txt', '--module', 'esm'], { cwd: project.root });
     expect(result).toMatchObject({ status: 0, stdout: 'txt\n' });

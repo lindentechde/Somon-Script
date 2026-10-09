@@ -120,6 +120,8 @@ export interface BundleOptions {
 export interface BundleOutput {
   code: string;
   map?: string;
+  /** How many modules the bundle holds (externals, packages and Node.js modules are not in it). */
+  moduleCount: number;
 }
 
 /**
@@ -1272,6 +1274,7 @@ export class ModuleSystem {
     return {
       code: bundleBuilder.code,
       map: rawMap && JSON.stringify(rawMap),
+      moduleCount: bundled.length,
     };
   }
 

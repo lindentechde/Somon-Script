@@ -313,8 +313,7 @@ async function performBundling(
 
   console.log(messages.bundleCreated(outputPath));
 
-  const stats = moduleSystem.getStatistics();
-  console.log(messages.bundledModules(stats.totalModules));
+  console.log(messages.bundledModules(bundle.moduleCount));
 }
 
 export interface CompileOptions extends CompilerOptions {
@@ -631,8 +630,14 @@ async function writeEsmModules(
     path.dirname(entry),
     files.map(file => path.dirname(file))
   );
-  const outputPath = (file: string): string =>
+  const modulePath = (file: string): string =>
     path.join(dir, path.relative(root, file).replace(/\.som$/i, '.js'));
+  // The entry is compiled as SomonScript whatever its name; Node.js runs an ES module
+  // only from a .js or .mjs file, so `prog.txt` is written as `prog.txt.js`
+  const outputPath = (file: string): string => {
+    const target = modulePath(file);
+    return file === result.entryPoint && !/\.m?js$/i.test(target) ? `${target}.js` : target;
+  };
 
   // The program the user runs, written into its temporary directory (S8707)
   fs.writeFileSync(path.join(dir, 'package.json'), '{ "type": "module" }\n');
@@ -651,7 +656,7 @@ async function writeEsmModules(
     }
     fs.writeFileSync(target, code); // NOSONAR
   }
-  return outputPath(entry);
+  return outputPath(result.entryPoint);
 }
 
 /** The deepest directory containing `first` and every one of `others`. */
