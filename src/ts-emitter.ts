@@ -1,7 +1,9 @@
 /**
  * TypeScript emitter: prints a SomonScript AST as TypeScript source that keeps
  * every type (annotations, generics, interfaces, type aliases, enums,
- * modifiers, assertions, …), with ES module imports and exports.
+ * modifiers, assertions, …) and every declaration that exists only for the
+ * type checker (`эълон …`, overload signatures, abstract and index members,
+ * `эълон модул`), with ES module imports and exports.
  *
  * It is the JavaScript code generator with its type hooks filled in, so values
  * and member names come out exactly as in the JavaScript output (built-in
@@ -14,6 +16,7 @@
 import { translateMemberName } from './builtin-names';
 import { CodeGenerator, PREC, type CodeMapping } from './codegen';
 import type {
+  AmbientModuleDeclaration,
   ArrayType,
   AsExpression,
   ASTNode,
@@ -22,11 +25,14 @@ import type {
   ConditionalType,
   ConstructorType,
   EnumDeclaration,
+  ExportAssignment,
   Expression,
   FunctionExpression,
+  FunctionSignature,
   FunctionType,
   GenericType,
   Identifier,
+  ImportEqualsDeclaration,
   IndexedAccessType,
   InferType,
   InterfaceDeclaration,
@@ -132,25 +138,61 @@ export interface TsEmitResult {
   code: string;
   /** Generated → original positions: lines 1-based, columns 0-based, in output order. */
   mappings: CodeMapping[];
+  /**
+   * The program's ambient modules (`эълон модул "м" { … }`), apart: a module
+   * file can only augment an existing module, so they go in a declaration
+   * file of their own (see `emit`).
+   */
+  ambient?: { code: string; mappings: CodeMapping[] };
 }
+
+type Declarable = Statement & { declare?: boolean; exported?: boolean };
 
 export class TsEmitter extends CodeGenerator {
   /** Type names the program declares, which shadow the built-in Tajik names. */
   private declaredTypeNames: ReadonlySet<string> = new Set();
+  /** Ambient contexts (`declare …`) around the current node; `declare` goes on the outermost. */
+  private ambientDepth = 0;
+  /** Names already exported under their JavaScript name (`export { илова as push }`). */
+  private exportedAliases = new Set<string>();
 
-  constructor() {
-    super({ module: 'esm' });
+  constructor(options: { experimentalDecorators?: boolean } = {}) {
+    super({ module: 'esm', experimentalDecorators: options.experimentalDecorators });
   }
 
-  /** TypeScript source of `ast`, with its position mappings. */
+  /**
+   * TypeScript source of `ast`, with its position mappings. Top-level ambient
+   * modules (`эълон модул "м"`) are returned apart, in `ambient`: in the
+   * module file they would augment `м` instead of declaring it.
+   */
   emit(ast: Program): TsEmitResult {
-    this.declaredTypeNames = TsEmitter.collectTypeNames(ast);
-    return this.generateWithMappings(ast);
+    const isAmbientModule = (stmt: Statement): boolean =>
+      stmt.type === 'AmbientModuleDeclaration' && !(stmt as AmbientModuleDeclaration).global;
+    const modules = ast.body.filter(isAmbientModule);
+    const result: TsEmitResult = this.emitProgram({
+      ...ast,
+      body: ast.body.filter(stmt => !isAmbientModule(stmt)),
+    });
+    if (modules.length > 0) {
+      result.ambient = this.emitProgram({ ...ast, body: modules, shebang: undefined });
+    }
+    return result;
   }
 
   generate(ast: Program): string {
-    this.declaredTypeNames = TsEmitter.collectTypeNames(ast);
+    this.reset(ast);
     return super.generate(ast);
+  }
+
+  private emitProgram(ast: Program): TsEmitResult {
+    this.reset(ast);
+    return this.generateWithMappings(ast);
+  }
+
+  private reset(ast: Program): void {
+    this.declaredTypeNames = TsEmitter.collectTypeNames(ast);
+    this.ambientDepth = 0;
+    this.exportedAliases = new Set();
   }
 
   /** Every name declared as a type or type parameter anywhere in the program. */
@@ -185,7 +227,7 @@ export class TsEmitter extends CodeGenerator {
   // Hooks of the JavaScript generator
   // ---------------------------------------------------------------------------
 
-  protected elidesTypeOnlyImports(): boolean {
+  protected elidesTypes(): boolean {
     return false;
   }
 
@@ -223,6 +265,10 @@ export class TsEmitter extends CodeGenerator {
     return optional ? '?' : '';
   }
 
+  protected thisParameterText(thisType: TypeAnnotation | undefined): string {
+    return thisType ? `this${this.typeAnnotationText(thisType)}` : '';
+  }
+
   /**
    * A parameter property without a type stays a TypeScript parameter
    * property, which infers its type. One with a type is declared as a field
@@ -232,16 +278,23 @@ export class TsEmitter extends CodeGenerator {
   protected parameterModifiers(param: Parameter): string {
     if (param.typeAnnotation) return '';
     const accessibility = param.accessibility ? `${param.accessibility} ` : '';
-    return `${accessibility}${param.readonly ? 'readonly ' : ''}`;
+    const override = param.override ? 'override ' : '';
+    return `${accessibility}${override}${param.readonly ? 'readonly ' : ''}`;
   }
 
-  /** `private declare readonly х: рақам;` for each typed parameter property. */
+  /**
+   * `private declare readonly х: рақам;` for each typed parameter property
+   * (without `override`, which TypeScript does not allow on a `declare` field).
+   */
   protected extraClassMembers(node: ClassDeclaration | ClassExpression): string[] {
     const constructor = node.body.body.find(
-      member => member.type === 'MethodDefinition' && member.kind === 'constructor'
+      member =>
+        member.type === 'MethodDefinition' && member.kind === 'constructor' && !member.signature
     ) as MethodDefinition | undefined;
     return (constructor?.value.params ?? [])
-      .filter(param => (param.accessibility || param.readonly) && param.typeAnnotation)
+      .filter(
+        param => (param.accessibility || param.readonly || param.override) && param.typeAnnotation
+      )
       .map(param => {
         const accessibility = param.accessibility ? `${param.accessibility} ` : '';
         const readonly = param.readonly ? 'readonly ' : '';
@@ -266,30 +319,63 @@ export class TsEmitter extends CodeGenerator {
     return ` implements ${types.join(', ')}`;
   }
 
+  /** `public static override readonly `: TypeScript's order of modifiers. */
   protected memberModifiers(member: MethodDefinition | PropertyDefinition): string {
     const accessibility = member.accessibility ? `${member.accessibility} ` : '';
     const isStatic = member.static ? 'static ' : '';
+    const abstract = member.abstract ? 'abstract ' : '';
+    const override = member.override ? 'override ' : '';
     const readonly =
       member.type === 'PropertyDefinition' && (member as PropertyDefinition).readonly
         ? 'readonly '
         : '';
-    return `${accessibility}${isStatic}${readonly}`;
+    return `${accessibility}${isStatic}${abstract}${override}${readonly}`;
   }
 
-  /** `abstract м(х: рақам): сатр;` */
-  protected generateAbstractMethod(node: MethodDefinition): string {
+  /**
+   * `abstract м(х: рақам): сатр;`, an overload signature `м(х: рақам): сатр;`
+   * or a member of an `эълон синф`. Signatures are neither `async` nor
+   * generators in TypeScript.
+   */
+  protected generateMethodSignature(node: MethodDefinition): string {
     const fn = node.value as FunctionExpression | undefined;
     const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
-    const accessibility = node.accessibility ? `${node.accessibility} ` : '';
-    const isAsync = fn?.async ? 'async ' : '';
-    const name = this.generateMemberKey(node.key);
+    const name =
+      node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key, node.computed);
     const typeParameters = this.typeParametersText(fn?.typeParameters);
     const params = this.withScope(this.paramNames(fn?.params), () =>
-      this.generateParams(fn?.params)
+      this.withThisParameter(fn?.thisType, this.generateParams(fn?.params))
     );
     const returnType = this.returnTypeText(fn?.returnType);
     return this.indent(
-      `${accessibility}abstract ${isAsync}${accessor}${name}${typeParameters}(${params})${returnType};`
+      `${this.memberModifiers(node)}${accessor}${name}${this.optionalMark(node.optional)}${typeParameters}(${params})${returnType};`
+    );
+  }
+
+  /** `[калид: сатр]: рақам;`, `declare х: рақам;`, `abstract х: рақам;` */
+  protected generateFieldSignature(node: PropertyDefinition): string {
+    const type = this.typeAnnotationText(node.typeAnnotation);
+    if (node.indexSignature) {
+      const param = node.indexSignature;
+      const key = this.markPosition(param.name, param.name.name);
+      const keyType = this.typeAnnotationText(param.typeAnnotation);
+      const isStatic = node.static ? 'static ' : '';
+      const readonly = node.readonly ? 'readonly ' : '';
+      return this.indent(`${isStatic}${readonly}[${key}${keyType}]${type};`);
+    }
+    const name = this.generateMemberKey(node.key, node.computed);
+    const optional = this.optionalMark(node.optional);
+    if (node.abstract) {
+      const accessor = node.accessor ? 'accessor ' : '';
+      return this.indent(`${this.memberModifiers(node)}${accessor}${name}${optional}${type};`);
+    }
+    // `declare` is implied (and not allowed) in an `эълон синф`
+    const declare = this.ambientDepth === 0 ? 'declare ' : '';
+    const accessibility = node.accessibility ? `${node.accessibility} ` : '';
+    const isStatic = node.static ? 'static ' : '';
+    const readonly = node.readonly ? 'readonly ' : '';
+    return this.indent(
+      `${accessibility}${isStatic}${declare}${readonly}${name}${optional}${type};`
     );
   }
 
@@ -327,23 +413,131 @@ export class TsEmitter extends CodeGenerator {
     return this.markPosition(node, `(${code})`);
   }
 
-  /** `export interface …`; a name that is a built-in member name is exported as its JavaScript name. */
+  /**
+   * `export interface …`, `export declare …`, an exported overload signature.
+   * A name that is a built-in member name is exported as its JavaScript name;
+   * an overload signature then stays unexported, like its implementation.
+   */
   protected exportTypeDeclaration(
     code: string,
     declaration: Statement,
     isDefault: boolean
   ): string {
     if (isDefault) return CodeGenerator.prefixDeclaration(code, 'export default ');
-    const name = (declaration as InterfaceDeclaration | TypeAlias).name?.name;
-    if (!name || translateMemberName(name) === name) {
+    const names = this.declaredNamesOf(declaration);
+    if (names.every(name => translateMemberName(name) === name)) {
       return CodeGenerator.prefixDeclaration(code, 'export ');
     }
-    return `${code}\n${this.indent(`export { ${name} as ${translateMemberName(name)} };`)}`;
+    const signature = declaration as Declarable;
+    if (signature.type === 'FunctionSignature' && !signature.declare) return code;
+    const aliases = names
+      .filter(name => !this.exportedAliases.has(name))
+      .map(name => {
+        this.exportedAliases.add(name);
+        const exported = translateMemberName(name);
+        return exported === name ? name : `${name} as ${exported}`;
+      });
+    if (aliases.length === 0) return code;
+    return `${code}\n${this.indent(`export { ${aliases.join(', ')} };`)}`;
+  }
+
+  /** The names a declaration binds, also when it is a type or `эълон …`. */
+  private declaredNamesOf(declaration: Statement): string[] {
+    switch (declaration.type) {
+      case 'InterfaceDeclaration':
+      case 'TypeAlias':
+      case 'FunctionSignature':
+        return [(declaration as InterfaceDeclaration | TypeAlias | FunctionSignature).name.name];
+      default: {
+        const names: string[] = [];
+        this.collectDeclaredNames(declaration, names);
+        return names;
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Declarations that exist only in TypeScript (or that TypeScript emits itself)
   // ---------------------------------------------------------------------------
+
+  protected generateStatementNode(node: Statement): string {
+    switch (node.type) {
+      case 'FunctionSignature':
+        return this.inAmbientContext(node, () =>
+          this.generateFunctionSignature(node as FunctionSignature)
+        );
+      case 'AmbientModuleDeclaration':
+        return this.generateAmbientModule(node as AmbientModuleDeclaration);
+      default:
+        if (!(node as Declarable).declare) return super.generateStatementNode(node);
+        // The JavaScript generator skips `эълон …`: generate the declaration itself
+        return this.inAmbientContext(node, () =>
+          super.generateStatementNode({ ...node, declare: false } as Statement)
+        );
+    }
+  }
+
+  /**
+   * Runs `generate` for `node`, inside an ambient context when it is
+   * `эълон …`: `declare` then goes before the outermost declaration only
+   * (after its `export`), as TypeScript allows.
+   */
+  private inAmbientContext(node: Statement, generate: () => string): string {
+    if (!(node as Declarable).declare) return generate();
+    const outermost = this.ambientDepth === 0;
+    this.ambientDepth++;
+    try {
+      const code = generate();
+      return outermost ? code.replace(/^( *(?:\0[^\0]*\0)?(?:export )?)/, '$1declare ') : code;
+    } finally {
+      this.ambientDepth--;
+    }
+  }
+
+  /** `function ф<Т>(this: Т, х: number): number;`: an overload signature or `эълон функсия`. */
+  private generateFunctionSignature(node: FunctionSignature): string {
+    const name = this.generateIdentifier(node.name, true);
+    const typeParameters = this.typeParametersText(node.typeParameters);
+    const params = this.withScope(this.paramNames(node.params), () =>
+      this.withThisParameter(node.thisType, this.generateParams(node.params))
+    );
+    const returnType = this.returnTypeText(node.returnType);
+    return this.indent(`function ${name}${typeParameters}(${params})${returnType};`);
+  }
+
+  /** `declare module "м" { … }`, `declare global { … }` */
+  private generateAmbientModule(node: AmbientModuleDeclaration): string {
+    const head = node.global ? 'global' : `module ${this.generateLiteral(node.name!)}`;
+    const declare = this.ambientDepth === 0 ? 'declare ' : '';
+    this.ambientDepth++;
+    this.indentLevel++;
+    let members: string[];
+    try {
+      members = this.withScope(this.declaredNames(node.body), () =>
+        node.body.map(stmt => this.generateStatement(stmt)).filter(code => code.length > 0)
+      );
+    } finally {
+      this.indentLevel--;
+      this.ambientDepth--;
+    }
+    const body = members.length > 0 ? `{\n${members.join('\n')}\n${this.getIndent()}}` : '{}';
+    return this.indent(`${declare}${head} ${body}`);
+  }
+
+  /** `import х = require("./м.js");`, `import type х = …`, `import х = Н.а;` */
+  protected generateImportEquals(node: ImportEqualsDeclaration): string {
+    const typeOnly = node.importKind === 'type' ? 'type ' : '';
+    const name = this.generateIdentifier(node.id, true);
+    const value = node.source
+      ? `require(${this.markPosition(node.source, this.convertSourcePath(this.generateLiteral(node.source)))})`
+      : this.generateExpression(node.reference!, PREC.ASSIGNMENT);
+    return this.indent(`import ${typeOnly}${name} = ${value};`);
+  }
+
+  /** `export = х;` */
+  protected generateExportAssignment(node: ExportAssignment): string {
+    return this.indent(`export = ${this.generateExpression(node.expression, PREC.ASSIGNMENT)};`);
+  }
 
   /** `interface И<Т> extends А, Б<В> { … }` */
   protected generateInterfaceDeclaration(node: InterfaceDeclaration): string {
@@ -385,15 +579,18 @@ export class TsEmitter extends CodeGenerator {
     return this.indent(`${node.const ? 'const ' : ''}enum ${name} ${body}`);
   }
 
-  /** `namespace Н { export … }` */
+  /** `namespace Н { export … }`; TypeScript merges namespaces itself. */
   protected generateNamespaceDeclaration(node: NamespaceDeclaration): string {
     const name = this.generateIdentifier(node.name, true);
     const statements = node.body?.statements ?? [];
     this.checkRedeclarations(statements);
     this.indentLevel++;
+    const aliased = new Set<string>();
     const members = this.withScope(this.declaredNames(statements), () =>
       this.withFunctionBoundary(() =>
-        statements.map(stmt => this.generateNamespaceMember(stmt)).filter(code => code.length > 0)
+        statements
+          .map(stmt => this.generateNamespaceMember(stmt, aliased))
+          .filter(code => code.length > 0)
       )
     );
     this.indentLevel--;
@@ -402,23 +599,27 @@ export class TsEmitter extends CodeGenerator {
     return this.indent(`${exported}namespace ${name} ${body}`);
   }
 
-  private generateNamespaceMember(stmt: Statement): string {
-    const flagged = stmt as Statement & { exported?: boolean };
+  /** A namespace member; `aliased`: names already exported as their JavaScript name. */
+  private generateNamespaceMember(stmt: Statement, aliased: Set<string>): string {
+    const flagged = stmt as Declarable;
     if (!flagged.exported || stmt.type === 'NamespaceDeclaration') {
       return this.generateStatement(stmt);
     }
     const code = this.generateStatement(stmt);
-    const names =
-      stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias'
-        ? [(stmt as InterfaceDeclaration | TypeAlias).name.name]
-        : this.extractExportNames(stmt);
+    const names = this.declaredNamesOf(stmt);
     if (names.every(name => translateMemberName(name) === name)) {
       return CodeGenerator.prefixDeclaration(code, 'export ');
     }
+    // An overload signature is exported, if at all, with its implementation
+    if (stmt.type === 'FunctionSignature' && !flagged.declare) return code;
     // A member named like a built-in member is read as its JavaScript name: `Н.push`
-    const aliases = names.flatMap(name =>
-      this.namespaceAliases(stmt, name, translateMemberName(name)).map(line => this.indent(line))
-    );
+    const aliases = names
+      .filter(name => !aliased.has(name))
+      .flatMap(name => {
+        aliased.add(name);
+        return this.namespaceAliases(stmt, name, translateMemberName(name));
+      })
+      .map(line => this.indent(line));
     return [code, ...aliases].join('\n');
   }
 
@@ -431,6 +632,11 @@ export class TsEmitter extends CodeGenerator {
     const typeArguments =
       params.length > 0 ? `<${params.map(param => param.name.name).join(', ')}>` : '';
     const typeAlias = `export type ${alias}${typeParameters} = ${name}${typeArguments};`;
+    // An ambient value has no initializer: its alias only has its type
+    const ambient = this.ambientDepth > 0 || Boolean((stmt as Declarable).declare);
+    const value = ambient
+      ? `export const ${alias}: typeof ${name};`
+      : `export const ${alias} = ${name};`;
     switch (stmt.type) {
       case 'EnumDeclaration':
       case 'NamespaceDeclaration':
@@ -439,9 +645,9 @@ export class TsEmitter extends CodeGenerator {
       case 'TypeAlias':
         return [typeAlias];
       case 'ClassDeclaration':
-        return [`export const ${alias} = ${name};`, typeAlias];
+        return [value, typeAlias];
       default:
-        return [`export const ${alias} = ${name};`];
+        return [value];
     }
   }
 
@@ -449,11 +655,12 @@ export class TsEmitter extends CodeGenerator {
   // Types
   // ---------------------------------------------------------------------------
 
-  /** `Т мерос У = В` → `Т extends U = V` */
+  /** `собит дар берун Т мерос У = В` → `const in out Т extends U = V` */
   private typeParameterText(param: TypeParameter): string {
+    const modifiers = `${param.const ? 'const ' : ''}${param.in ? 'in ' : ''}${param.out ? 'out ' : ''}`;
     const constraint = param.constraint ? ` extends ${this.typeText(param.constraint)}` : '';
     const fallback = param.default ? ` = ${this.typeText(param.default)}` : '';
-    return `${this.markPosition(param.name, param.name.name)}${constraint}${fallback}`;
+    return `${modifiers}${this.markPosition(param.name, param.name.name)}${constraint}${fallback}`;
   }
 
   /** A type reference name: a built-in Tajik name in TypeScript, `Н.Т` qualified. */
@@ -518,7 +725,7 @@ export class TsEmitter extends CodeGenerator {
     switch (node.type) {
       case 'FunctionType': {
         const fn = node as FunctionType;
-        return `(${this.signatureParams(fn.parameters)}) => ${this.typeText(fn.returnType)}`;
+        return `(${this.signatureParams(fn.parameters, fn.thisType)}) => ${this.typeText(fn.returnType)}`;
       }
       case 'ConstructorType': {
         const ctor = node as ConstructorType;
@@ -564,9 +771,15 @@ export class TsEmitter extends CodeGenerator {
     return String(value);
   }
 
-  /** Parameters of a function or constructor type; their names are in scope only there. */
-  private signatureParams(params: Parameter[]): string {
-    return this.withScope(this.paramNames(params), () => this.generateParams(params));
+  /**
+   * Parameters of a function or constructor type, after its `this` parameter
+   * if any; their names are in scope only there.
+   */
+  private signatureParams(params: Parameter[], thisType?: TypeNode): string {
+    const list = this.withScope(this.paramNames(params), () => this.generateParams(params));
+    if (!thisType) return list;
+    const thisParameter = `this: ${this.typeText(thisType)}`;
+    return list ? `${thisParameter}, ${list}` : thisParameter;
   }
 
   /** `х аст Т`, `ин аст Т`, `тасдиқ х`, `тасдиқ х аст Т` */
@@ -649,10 +862,13 @@ export class TsEmitter extends CodeGenerator {
     const key = property.computedKey
       ? `[${this.generateExpression(property.computedKey, PREC.ASSIGNMENT)}]`
       : this.markPosition(property.key, translateMemberName(property.key.name));
+    // `get ном(): Т;`, `set ном(қимат: Т);` (the parameter's name is not kept)
+    if (property.kind === 'get') return `get ${key}(): ${this.typeText(valueType)}`;
+    if (property.kind === 'set') return `set ${key}(value: ${this.typeText(valueType)})`;
     if (property.method && valueType.type === 'FunctionType') {
       const fn = valueType as FunctionType;
       const typeParameters = this.typeParametersText(property.typeParameters);
-      return `${readonly}${key}${optional}${typeParameters}(${this.signatureParams(fn.parameters)}): ${this.typeText(fn.returnType)}`;
+      return `${readonly}${key}${optional}${typeParameters}(${this.signatureParams(fn.parameters, fn.thisType)}): ${this.typeText(fn.returnType)}`;
     }
     return `${readonly}${key}${optional}: ${this.typeText(valueType)}`;
   }

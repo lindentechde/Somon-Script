@@ -15,13 +15,17 @@ function parse(source: string) {
 }
 
 /** Emitted TypeScript; it must have no syntax errors. */
-function emit(source: string): string {
-  const emitter = new TsEmitter();
+function emit(source: string, experimentalDecorators = false): string {
+  const emitter = new TsEmitter({ experimentalDecorators });
   const code = emitter.generate(parse(source));
   expect(emitter.getErrors()).toEqual([]);
   const { diagnostics } = ts.transpileModule(code, {
     reportDiagnostics: true,
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.Preserve,
+      experimentalDecorators,
+    },
   });
   expect((diagnostics ?? []).map(d => ts.flattenDiagnosticMessageText(d.messageText, ' '))).toEqual(
     []
@@ -409,6 +413,322 @@ describe('TypeScript emitter: modules', () => {
   test('top-level await is allowed', () => {
     expect(emit('интизор ф();\nбарои интизор (собит х аз у) {}')).toBe(
       'await ф();\nfor await (const х of у) {}'
+    );
+  });
+});
+
+describe('TypeScript emitter: the TypeScript 5 declaration syntax', () => {
+  test('ambient declarations: `declare` on the outermost one only', () => {
+    expect(
+      emit(
+        [
+          'эълон собит ВЕРСИЯ: сатр;',
+          'эълон тағ а: рақам, б: сатр;',
+          'эълон функсия логи(паём: сатр): беджавоб;',
+          'эълон синф Пайваст {',
+          '    конструктор(url: сатр);',
+          '    фиристодан(маълумот: сатр): Ваъда<беджавоб>;',
+          '    get ҳолат(): рақам;',
+          '    х: рақам;',
+          '}',
+          'эълон собит шумориш Ранг { Сурх, Сабз }',
+          'эълон номфазо Танзимот {',
+          '    функсия гирифтан(калид: сатр): сатр;',
+          '    содир собит ном: сатр;',
+          '}',
+          'содир эълон функсия ҳисоб(): рақам;',
+        ].join('\n')
+      )
+    ).toBe(
+      [
+        'declare const ВЕРСИЯ: string;',
+        'declare let а: number, б: string;',
+        'declare function логи(паём: string): void;',
+        'declare class Пайваст {',
+        '  constructor(url: string);',
+        '  фиристодан(маълумот: string): Promise<void>;',
+        '  get ҳолат(): number;',
+        '  х: number;',
+        '}',
+        'declare const enum Ранг {',
+        '  Сурх,',
+        '  Сабз,',
+        '}',
+        'declare namespace Танзимот {',
+        '  function гирифтан(калид: string): string;',
+        '  export const ном: string;',
+        '}',
+        'export declare function ҳисоб(): number;',
+      ].join('\n')
+    );
+  });
+
+  test('a declared member named like a built-in member is exported as its JavaScript name', () => {
+    expect(emit('эълон номфазо Н { содир функсия илова(): беджавоб; }')).toBe(
+      'declare namespace Н {\n  function илова(): void;\n  export const push: typeof илова;\n}'
+    );
+    expect(emit('содир эълон функсия илова(): беджавоб;')).toBe(
+      'declare function илова(): void;\nexport { илова as push };'
+    );
+  });
+
+  test('ambient modules and global declarations', () => {
+    const source =
+      'эълон модул "китобхона" {\n    содир функсия ҳисоб(а: рақам): рақам;\n    содир = ҳисоб;\n}\n' +
+      'эълон глобалӣ {\n    интерфейс Window { барнома?: сатр; }\n}';
+    expect(emit(source)).toBe(
+      [
+        'declare module "китобхона" {',
+        '  export function ҳисоб(а: number): number;',
+        '  export = ҳисоб;',
+        '}',
+        'declare global {',
+        '  interface Window {',
+        '    барнома?: string;',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+    // `emit` keeps ambient modules apart: in a module file they would augment
+    const result = new TsEmitter().emit(parse(source));
+    expect(result.code).toBe(
+      'declare global {\n  interface Window {\n    барнома?: string;\n  }\n}'
+    );
+    expect(result.ambient?.code).toBe(
+      'declare module "китобхона" {\n  export function ҳисоб(а: number): number;\n  export = ҳисоб;\n}'
+    );
+    expect(new TsEmitter().emit(parse('тағ а = 1;')).ambient).toBeUndefined();
+  });
+
+  test('overload signatures of functions, methods and constructors', () => {
+    expect(
+      emit(
+        [
+          'функсия ф(х: рақам): рақам;',
+          'функсия ф(х: сатр): сатр;',
+          'функсия ф(х: ҳар): ҳар { бозгашт х; }',
+          'синф К {',
+          '    конструктор(х: рақам);',
+          '    конструктор(х?: рақам) {}',
+          '    статикӣ м(х: рақам): рақам;',
+          '    статикӣ м(х: ҳар): ҳар { бозгашт х; }',
+          '}',
+          'содир функсия г(х: рақам): рақам;',
+          'содир функсия г(х: ҳар) { бозгашт х; }',
+          'содир функсия илова(х: рақам): рақам;',
+          'содир функсия илова(х: ҳар) { бозгашт х; }',
+        ].join('\n')
+      )
+    ).toBe(
+      [
+        'function ф(х: number): number;',
+        'function ф(х: string): string;',
+        'function ф(х: any): any {',
+        '  return х;',
+        '}',
+        'class К {',
+        '  constructor(х: number);',
+        '  constructor(х?: number) {}',
+        '  static м(х: number): number;',
+        '  static м(х: any): any {',
+        '    return х;',
+        '  }',
+        '}',
+        'export function г(х: number): number;',
+        'export function г(х: any) {',
+        '  return х;',
+        '}',
+        'function илова(х: number): number;',
+        'function илова(х: any) {',
+        '  return х;',
+        '}',
+        'export { илова as push };',
+      ].join('\n')
+    );
+  });
+
+  test('class members: override, abstract and declared fields, index signatures, accessor', () => {
+    expect(
+      emit(
+        [
+          'мавҳум синф Шакл {',
+          '    мавҳум масоҳат(): рақам;',
+          '    муҳофизатшуда мавҳум танҳохонӣ ном: сатр;',
+          '    мавҳум дастрасӣ андоза: рақам;',
+          '    ҷамъиятӣ мавҳум get тараф(): рақам;',
+          '    [калид: сатр]: ҳар;',
+          '    статикӣ танҳохонӣ [н: рақам]: сатр;',
+          '    эълон ранг: сатр;',
+          '    м?(): беджавоб;',
+          '    ["ҳисоб"](): рақам { бозгашт 1; }',
+          '    дастрасӣ шумора = 0;',
+          '    статикӣ дастрасӣ умумӣ = 1;',
+          '}',
+          'синф Доира мерос Шакл {',
+          '    ҷамъиятӣ статикӣ бознавис танҳохонӣ н = 2;',
+          '    ном = "доира";',
+          '    андоза = 1;',
+          '    конструктор(хосусӣ бознавис радиус: рақам, бознавис танҳохонӣ а = 1) { супер(); }',
+          '    бознавис масоҳат(): рақам { бозгашт ин.радиус; }',
+          '    get тараф(): рақам { бозгашт 0; }',
+          '}',
+        ].join('\n')
+      )
+    ).toBe(
+      [
+        'abstract class Шакл {',
+        '  abstract масоҳат(): number;',
+        '  protected abstract readonly ном: string;',
+        '  abstract accessor андоза: number;',
+        '  public abstract get тараф(): number;',
+        '  [калид: string]: any;',
+        '  static readonly [н: number]: string;',
+        '  declare ранг: string;',
+        '  м?(): void;',
+        '  ["ҳисоб"](): number {',
+        '    return 1;',
+        '  }',
+        '  accessor шумора = 0;',
+        '  static accessor умумӣ = 1;',
+        '}',
+        'class Доира extends Шакл {',
+        '  private declare радиус: number;',
+        '  public static override readonly н = 2;',
+        '  ном = "доира";',
+        '  андоза = 1;',
+        '  constructor(радиус: number, override readonly а = 1) {',
+        '    super();',
+        '    this.радиус = радиус;',
+        '  }',
+        '  override масоҳат(): number {',
+        '    return this.радиус;',
+        '  }',
+        '  get тараф(): number {',
+        '    return 0;',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('decorators, also on parameters with experimentalDecorators', () => {
+    expect(emit('@д синф К { @м(1) х = 1; @(а[0]) статикӣ ф() {} }\nсодир @д синф Л {}')).toBe(
+      '@д class К {\n  @м(1) х = 1;\n  @(а[0]) static ф() {}\n}\nexport @д class Л {}'
+    );
+    expect(emit('синф К { конструктор(@тазриқ("а") х: рақам) {} }', true)).toBe(
+      'class К {\n  constructor(@тазриқ("а") х: number) {}\n}'
+    );
+  });
+
+  test('`this` parameters, const and variance modifiers of type parameters', () => {
+    expect(
+      emit(
+        [
+          'функсия ф(ин: Window, к: рақам): рақам { бозгашт к; }',
+          'функсия г(ин: Window) {}',
+          'эълон функсия д(ин: Window): беджавоб;',
+          'тағ е = функсия (ин: ҳар) {};',
+          'синф К { м(ин: К, х: рақам) {} }',
+          'навъ Ф = (ин: Window, х: рақам) => беджавоб;',
+          'интерфейс Қуттӣ<дар берун Т> { м(ин: Қуттӣ<Т>): беджавоб; get қимат(): Т; set қимат(қ: Т); }',
+          'функсия аввал<собит Т мерос сатр[]>(р: Т): Т[0] { бозгашт р[0]; }',
+        ].join('\n')
+      )
+    ).toBe(
+      [
+        'function ф(this: Window, к: number): number {',
+        '  return к;',
+        '}',
+        'function г(this: Window) {}',
+        'declare function д(this: Window): void;',
+        'let е = function(this: any) {};',
+        'class К {',
+        '  м(this: К, х: number) {}',
+        '}',
+        'type Ф = (this: Window, х: number) => void;',
+        'interface Қуттӣ<in out Т> {',
+        '  м(this: Қуттӣ<Т>): void;',
+        '  get қимат(): Т;',
+        '  set қимат(value: Т);',
+        '}',
+        'function аввал<const Т extends string[]>(р: Т): Т[0] {',
+        '  return р[0];',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('`истифода` and `интизор истифода`, also at the top level', () => {
+    expect(
+      emit(
+        'истифода а: Disposable = ф();\nинтизор истифода б = г();\nҳамзамон функсия м() { барои (интизор истифода в аз д) {} }'
+      )
+    ).toBe(
+      'using а: Disposable = ф();\nawait using б = г();\nasync function м() {\n  for (await using в of д) {}\n}'
+    );
+  });
+
+  test('type-only imports and exports, import = require and export =', () => {
+    expect(
+      emit(
+        [
+          'ворид навъ { Т } аз "./т";',
+          'ворид навъ Д аз "./д";',
+          'ворид { навъ У, у } аз "./у";',
+          'ворид навъ * чун Н аз "./н";',
+          'ворид fs = require("fs");',
+          'ворид навъ роҳ = require("path");',
+          'ворид Ҷ = Н.Ҷ;',
+          'содир навъ { Т };',
+          'содир { навъ У, у };',
+          'содир навъ { Д } аз "./д";',
+          'содир навъ * аз "./у";',
+          'содир навъ * чун Х аз "./х";',
+        ].join('\n')
+      )
+    ).toBe(
+      [
+        'import type { Т } from "./т.js";',
+        'import type Д from "./д.js";',
+        'import { type У, у } from "./у.js";',
+        'import type * as Н from "./н.js";',
+        'import fs = require("fs");',
+        'import type роҳ = require("path");',
+        'import Ҷ = Н.Ҷ;',
+        'export type { Т };',
+        'export { type У, у };',
+        'export type { Д } from "./д.js";',
+        'export type * from "./у.js";',
+        'export type * as Х from "./х.js";',
+      ].join('\n')
+    );
+    expect(emit('синф К {}\nсодир = К;')).toBe('class К {}\nexport = К;');
+  });
+
+  test('a shebang stays the first line', () => {
+    expect(emit('#!/usr/bin/env node\nчоп.сабт(1);')).toBe('#!/usr/bin/env node\nconsole.log(1);');
+  });
+
+  test('merged namespaces and enums stay apart: TypeScript merges them', () => {
+    expect(
+      emit(
+        'номфазо Н { содир собит а = 1; }\nномфазо Н { содир собит б = а + 1; }\nшумориш Э { А }\nшумориш Э { Б = 2 }'
+      )
+    ).toBe(
+      [
+        'namespace Н {',
+        '  export const а = 1;',
+        '}',
+        'namespace Н {',
+        '  export const б = а + 1;',
+        '}',
+        'enum Э {',
+        '  А,',
+        '}',
+        'enum Э {',
+        '  Б = 2,',
+        '}',
+      ].join('\n')
     );
   });
 });

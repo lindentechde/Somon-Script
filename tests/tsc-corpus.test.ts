@@ -1,10 +1,18 @@
 /**
  * The TypeScript checker on the repository's programs: every LeetCode
- * solution and every example type-checks cleanly in strict mode, and wrong
- * programs get TypeScript's errors at the right `.som` positions.
+ * solution and every example type-checks cleanly in strict mode, so do the
+ * programs of tests/operators.test.ts and the correct TypeScript 5 syntax
+ * programs of tests/ts-syntax-*.test.ts (where TypeScript's rules are not
+ * stricter), programs the SomonScript checker rejects are rejected too, and
+ * wrong programs get TypeScript's errors at the right `.som` positions.
  */
-import { compile } from '../src/compiler';
-import { examplePrograms } from './helpers/corpus';
+import { compile, type CompileOptions } from '../src/compiler';
+import {
+  type CorpusProgram,
+  examplePrograms,
+  operatorPrograms,
+  tsSyntaxPrograms,
+} from './helpers/corpus';
 
 jest.setTimeout(120000);
 
@@ -38,6 +46,84 @@ describe('strict TypeScript checking of the repository', () => {
       expect(result.code).not.toBe('');
     }
   );
+});
+
+/** TypeScript error codes of a program, in strict mode unless `strict` is false. */
+function codesOf(program: CorpusProgram, options: CompileOptions = {}): string[] {
+  const result = compile(program.source, {
+    checker: 'typescript',
+    strict: true,
+    experimentalDecorators: program.experimentalDecorators,
+    ...options,
+  });
+  return result.errors.map(error => /^Type error \[(TS\d+)\]/.exec(error)?.[1] ?? error);
+}
+
+/**
+ * Correct programs that TypeScript rejects by design, found by a word of
+ * their source, with the errors it reports.
+ */
+const STRICTER_IN_TYPESCRIPT: ReadonlyArray<[string, string[], string]> = [
+  ['1 == "1"', ['TS2367', 'TS2367', 'TS2367'], 'comparisons of types without overlap'],
+  ['(1, 2, 3)', ['TS2695'], 'the left side of a comma operator has no effect'],
+  ['тасдиқиПур', ['TS2775'], 'an assertion call needs an explicitly typed target'],
+  ['бознавис ҳарчӣ', ['TS4113'], "'override' of a member Error does not have"],
+];
+
+/** Programs that import modules of their own, which exist only in their tests. */
+const importsOwnModules = (program: CorpusProgram): boolean =>
+  /аз "\.\.?\/|require\("\.\.?\//.test(program.source);
+
+/** The TypeScript 5 syntax programs the compiler accepts (some tests expect errors). */
+const tsSyntax = tsSyntaxPrograms().filter(
+  program =>
+    !importsOwnModules(program) &&
+    compile(program.source, {
+      typeCheck: false,
+      experimentalDecorators: program.experimentalDecorators,
+    }).errors.length === 0
+);
+
+describe('the operator and TypeScript 5 syntax programs', () => {
+  const correct = [
+    ...operatorPrograms().filter(program => !importsOwnModules(program)),
+    ...tsSyntax.filter(program => program.helper === 'run' || program.helper === 'expectClean'),
+  ];
+
+  test('there are enough of them', () => {
+    expect(correct.length).toBeGreaterThan(130);
+    expect(tsSyntax.filter(program => program.helper === 'check').length).toBeGreaterThan(15);
+  });
+
+  test.each(correct.map(program => [program.name, program] as const))(
+    '%s type-checks',
+    (_name, program) => {
+      const stricter = STRICTER_IN_TYPESCRIPT.find(([word]) => program.source.includes(word));
+      expect(codesOf(program)).toEqual(stricter?.[1] ?? []);
+      expect(codesOf(program, { strict: false })).toEqual(stricter?.[1] ?? []);
+    }
+  );
+
+  test('every exception is used', () => {
+    for (const [word] of STRICTER_IN_TYPESCRIPT) {
+      expect(correct.some(program => program.source.includes(word))).toBe(true);
+    }
+  });
+
+  // `check` programs of tests/ts-syntax-checker.test.ts have type errors
+  test.each(
+    tsSyntax
+      .filter(
+        program =>
+          program.helper === 'check' &&
+          compile(program.source, { strict: true }).errors.some(error =>
+            error.startsWith('Type error')
+          )
+      )
+      .map(program => [program.name, program] as const)
+  )('%s is rejected by TypeScript too', (_name, program) => {
+    expect(codesOf(program).length).toBeGreaterThan(0);
+  });
 });
 
 describe('wrong programs get the expected errors', () => {

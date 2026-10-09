@@ -15,7 +15,11 @@ export interface CorpusProgram {
   source: string;
   /** Absolute path for programs that are files. */
   file?: string;
-  kind: 'example' | 'leetcode' | 'module' | 'operator' | 'doc';
+  kind: 'example' | 'leetcode' | 'module' | 'operator' | 'doc' | 'ts-syntax';
+  /** ts-syntax: the helper the test passes the program to (`run`, `check`, `expectClean`, …). */
+  helper?: string;
+  /** ts-syntax: the program needs TypeScript's legacy decorators. */
+  experimentalDecorators?: boolean;
 }
 
 function somFiles(dir: string): string[] {
@@ -70,6 +74,101 @@ export function operatorPrograms(): CorpusProgram[] {
   };
   visit(sourceFile);
   return programs;
+}
+
+/** Helpers of tests/ts-syntax-*.test.ts whose first argument is a program. */
+const TS_SYNTAX_HELPERS = new Set([
+  'run',
+  'compiled',
+  'generate',
+  'generator',
+  'check',
+  'expectClean',
+  'parse',
+  'parseOk',
+  'errorsOf',
+  'classOf',
+]);
+
+/** A string literal, or string literals `[…].join('\n')`: the program text. */
+function programText(node: ts.Expression): string | undefined {
+  if (ts.isStringLiteralLike(node)) return node.text;
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'join' &&
+    ts.isArrayLiteralExpression(node.expression.expression) &&
+    node.expression.expression.elements.every(ts.isStringLiteralLike) &&
+    node.arguments.length === 1 &&
+    ts.isStringLiteralLike(node.arguments[0])
+  ) {
+    const lines = node.expression.expression.elements as unknown as ts.StringLiteralLike[];
+    return lines.map(line => line.text).join(node.arguments[0].text);
+  }
+  return undefined;
+}
+
+/** `{ experimentalDecorators: true }` or `generator(…, true)`. */
+function usesLegacyDecorators(call: ts.CallExpression): boolean {
+  const options = call.arguments[1];
+  if (!options) return false;
+  if (options.kind === ts.SyntaxKind.TrueKeyword) return true;
+  return (
+    ts.isObjectLiteralExpression(options) &&
+    options.properties.some(
+      property =>
+        ts.isPropertyAssignment(property) &&
+        property.name.getText() === 'experimentalDecorators' &&
+        property.initializer.kind === ts.SyntaxKind.TrueKeyword
+    )
+  );
+}
+
+/**
+ * The programs of tests/ts-syntax-*.test.ts (the TypeScript 5 declaration
+ * syntax): the first argument of the tests' helpers, once each. `helper`
+ * says what the test expects of it: `run` and `expectClean` programs are
+ * correct, `check` ones may have type errors, `parse`/`errorsOf` ones may
+ * not even parse.
+ */
+export function tsSyntaxPrograms(): CorpusProgram[] {
+  const files = fs
+    .readdirSync(path.join(ROOT, 'tests'))
+    .filter(name => /^ts-syntax-.*\.test\.ts$/.test(name))
+    .sort();
+  const programs = new Map<string, CorpusProgram>();
+  for (const name of files) {
+    const file = path.join(ROOT, 'tests', name);
+    const sourceFile = ts.createSourceFile(
+      file,
+      fs.readFileSync(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        TS_SYNTAX_HELPERS.has(node.expression.text) &&
+        node.arguments.length > 0
+      ) {
+        const source = programText(node.arguments[0]);
+        if (source !== undefined && !programs.has(source)) {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+          programs.set(source, {
+            name: `${name}:${line + 1}`,
+            source,
+            kind: 'ts-syntax',
+            helper: node.expression.text,
+            experimentalDecorators: usesLegacyDecorators(node),
+          });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+  return [...programs.values()];
 }
 
 function markdownFiles(dir: string): string[] {

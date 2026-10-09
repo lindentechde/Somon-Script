@@ -1,7 +1,9 @@
 /**
- * The TypeScript emitter over every program of the repository: the emitted
- * TypeScript has no syntax errors, and, transpiled by TypeScript, it runs
- * exactly like the JavaScript the compiler emits.
+ * The TypeScript emitter over every program of the repository (examples,
+ * LeetCode solutions, operators, documentation snippets and the TypeScript 5
+ * syntax programs of tests/ts-syntax-*.test.ts): the emitted TypeScript has
+ * no syntax errors, and, transpiled by TypeScript, it runs exactly like the
+ * JavaScript the compiler emits.
  */
 import { spawn } from 'child_process';
 import * as fs from 'fs';
@@ -19,24 +21,29 @@ import {
   docPrograms,
   examplePrograms,
   operatorPrograms,
+  tsSyntaxPrograms,
 } from './helpers/corpus';
 
 jest.setTimeout(300000);
 
-function emitTypeScript(source: string): string | undefined {
+function emitTypeScript(source: string, experimentalDecorators = false): string | undefined {
   const parser = new Parser(new Lexer(source).tokenize());
   const ast = parser.parse();
   if (parser.getErrors().length > 0) return undefined;
-  const emitter = new TsEmitter();
+  const emitter = new TsEmitter({ experimentalDecorators });
   const code = emitter.generate(ast);
   expect(emitter.getErrors()).toEqual([]);
   return code;
 }
 
-function syntaxErrors(code: string): string[] {
+function syntaxErrors(code: string, experimentalDecorators = false): string[] {
   const { diagnostics } = ts.transpileModule(code, {
     reportDiagnostics: true,
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.Preserve,
+      experimentalDecorators,
+    },
   });
   return (diagnostics ?? []).map(diagnostic => {
     const { line, character } = diagnostic.file!.getLineAndCharacterOfPosition(diagnostic.start!);
@@ -45,7 +52,7 @@ function syntaxErrors(code: string): string[] {
 }
 
 /** TypeScript → CommonJS JavaScript, with class fields as the compiler emits them. */
-function transpile(code: string): string {
+function transpile(code: string, experimentalDecorators = false): string {
   return ts
     .transpileModule(code, {
       compilerOptions: {
@@ -53,30 +60,45 @@ function transpile(code: string): string {
         module: ts.ModuleKind.CommonJS,
         useDefineForClassFields: true,
         esModuleInterop: true,
+        experimentalDecorators,
       },
     })
     .outputText.replace(/^"use strict";\n/, '');
 }
 
 const examples = examplePrograms();
-const allPrograms: CorpusProgram[] = [...examples, ...operatorPrograms(), ...docPrograms()];
+/** The TypeScript 5 syntax programs the compiler accepts (some tests expect errors). */
+const tsSyntax = tsSyntaxPrograms().filter(
+  program =>
+    compile(program.source, {
+      typeCheck: false,
+      experimentalDecorators: program.experimentalDecorators,
+    }).errors.length === 0
+);
+const allPrograms: CorpusProgram[] = [
+  ...examples,
+  ...operatorPrograms(),
+  ...docPrograms(),
+  ...tsSyntax,
+];
 
 describe('emitted TypeScript has no syntax errors', () => {
   test('the corpus is complete', () => {
     expect(examples.filter(program => program.kind === 'leetcode')).toHaveLength(100);
-    expect(allPrograms.length).toBeGreaterThan(500);
+    expect(tsSyntax.length).toBeGreaterThan(100);
+    expect(allPrograms.length).toBeGreaterThan(600);
   });
 
   test.each(allPrograms.map(program => [program.name, program] as const))(
     '%s',
     (_name, program) => {
-      const code = emitTypeScript(program.source);
+      const code = emitTypeScript(program.source, program.experimentalDecorators);
       // Documentation snippets may be fragments that do not parse on their own
       if (code === undefined) {
         expect(program.kind).toBe('doc');
         return;
       }
-      expect(syntaxErrors(code)).toEqual([]);
+      expect(syntaxErrors(code, program.experimentalDecorators)).toEqual([]);
     }
   );
 });
@@ -142,10 +164,12 @@ function writeBoth(programs: CorpusProgram[], dir: string): void {
   fs.mkdirSync(path.join(dir, 'ts'), { recursive: true });
   for (const program of programs) {
     const name = `${path.basename(program.file ?? program.name, '.som')}.js`;
-    const javascript = compile(program.source, { typeCheck: false });
+    const { experimentalDecorators } = program;
+    const javascript = compile(program.source, { typeCheck: false, experimentalDecorators });
     expect(javascript.errors).toEqual([]);
     fs.writeFileSync(path.join(dir, 'js', name), javascript.code);
-    fs.writeFileSync(path.join(dir, 'ts', name), transpile(emitTypeScript(program.source)!));
+    const typescript = emitTypeScript(program.source, experimentalDecorators)!;
+    fs.writeFileSync(path.join(dir, 'ts', name), transpile(typescript, experimentalDecorators));
   }
 }
 
@@ -182,7 +206,11 @@ describe('transpiled TypeScript runs like the JavaScript output', () => {
         });
       }
     });
-    operatorPrograms().forEach((program, index) => {
+    // Programs that print, without modules of their own to import
+    const printing = tsSyntax.filter(
+      program => program.helper === 'run' && !/аз "\.\.?\//.test(program.source)
+    );
+    [...operatorPrograms(), ...printing].forEach((program, index) => {
       const dir = path.join(workspace, `operator-${index}`);
       writeBoth([{ ...program, name: 'main' }], dir);
       runs.push({

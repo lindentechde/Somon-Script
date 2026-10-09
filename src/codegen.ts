@@ -482,7 +482,7 @@ export class CodeGenerator {
 
   private generateProgram(node: Program): string {
     this.lowering = CodeGenerator.noLowering();
-    if (this.module === 'esm' && this.elidesTypeOnlyImports()) {
+    if (this.module === 'esm' && this.elidesTypes()) {
       this.valueNames = CodeGenerator.collectValueNames(node);
       this.typeOnlyNames = this.collectTypeOnlyNames(node.body ?? []);
     }
@@ -497,11 +497,12 @@ export class CodeGenerator {
   }
 
   /**
-   * Whether ES module output drops imports that are used only as types. True
-   * for JavaScript, where such an import would name an export that does not
-   * exist at run time; TypeScript output keeps every import.
+   * Whether ES module output drops what exists only as types: type-only
+   * imports and exports (`ворид навъ`, `содир навъ`) and imports used only as
+   * types. True for JavaScript, where they would name exports that do not
+   * exist at run time; TypeScript output keeps them all.
    */
-  protected elidesTypeOnlyImports(): boolean {
+  protected elidesTypes(): boolean {
     return true;
   }
 
@@ -520,13 +521,7 @@ export class CodeGenerator {
       }
       if (!value || typeof value !== 'object') return;
       const node = value as ASTNode & Record<string, unknown>;
-      if (
-        node.type === 'InterfaceDeclaration' ||
-        node.type === 'TypeAlias' ||
-        node.type === 'ImportDeclaration'
-      ) {
-        return;
-      }
+      if (CodeGenerator.isTypeOnlyNode(node)) return;
       if (node.type === 'Identifier' && key !== 'skip') names.add(String(node.name));
       for (const [childKey, child] of Object.entries(node)) {
         if (TYPE_KEYS.has(childKey) || childKey === 'exported') continue;
@@ -540,7 +535,33 @@ export class CodeGenerator {
     return names;
   }
 
-  /** Top-level names declared only as types: `интерфейс И`, `навъ Т` without a value `И`/`Т`. */
+  /**
+   * Nodes without runtime code, whose names are no value references:
+   * interfaces, type aliases, imports, `эълон …` declarations, overload
+   * signatures, `эълон модул` and type-only exports (`содир навъ`).
+   */
+  private static isTypeOnlyNode(node: ASTNode & Record<string, unknown>): boolean {
+    switch (node.type) {
+      case 'InterfaceDeclaration':
+      case 'TypeAlias':
+      case 'ImportDeclaration':
+      case 'FunctionSignature':
+      case 'AmbientModuleDeclaration':
+        return true;
+      case 'ImportEqualsDeclaration':
+        return node.importKind === 'type';
+      case 'ExportDeclaration':
+      case 'ExportSpecifier':
+        return node.exportKind === 'type';
+      default:
+        return node.declare === true;
+    }
+  }
+
+  /**
+   * Top-level names that are only types: `интерфейс И`, `навъ Т` without a
+   * value `И`/`Т`, and type-only imports (`ворид навъ { Т }`, `{ навъ Т }`).
+   */
   private collectTypeOnlyNames(statements: Statement[]): Set<string> {
     const types = new Set<string>();
     const values: string[] = [];
@@ -549,6 +570,19 @@ export class CodeGenerator {
         stmt.type === 'ExportDeclaration' ? (stmt as ExportDeclaration).declaration : stmt;
       if (declaration?.type === 'InterfaceDeclaration' || declaration?.type === 'TypeAlias') {
         types.add((declaration as InterfaceDeclaration | TypeAlias).name.name);
+      } else if (declaration?.type === 'ImportDeclaration') {
+        const imports = declaration as ImportDeclaration;
+        for (const spec of imports.specifiers) {
+          const typeOnly =
+            imports.importKind === 'type' || (spec as ImportSpecifier).importKind === 'type';
+          if (typeOnly) types.add(spec.local.name);
+          else values.push(spec.local.name);
+        }
+      } else if (
+        declaration?.type === 'ImportEqualsDeclaration' &&
+        (declaration as ImportEqualsDeclaration).importKind === 'type'
+      ) {
+        types.add((declaration as ImportEqualsDeclaration).id.name);
       } else {
         this.collectDeclaredNames(declaration, values);
       }
@@ -569,7 +603,7 @@ export class CodeGenerator {
   }
 
   // eslint-disable-next-line complexity
-  private generateStatementNode(node: Statement): string {
+  protected generateStatementNode(node: Statement): string {
     // `эълон …` declares what exists elsewhere: nothing to emit
     if ((node as { declare?: boolean }).declare) return '';
     switch (node.type) {
@@ -580,9 +614,7 @@ export class CodeGenerator {
       case 'ImportEqualsDeclaration':
         return this.generateImportEquals(node as ImportEqualsDeclaration);
       case 'ExportAssignment':
-        return this.indent(
-          `module.exports = ${this.generateExpression((node as ExportAssignment).expression, PREC.ASSIGNMENT)};`
-        );
+        return this.generateExportAssignment(node as ExportAssignment);
       case 'ImportDeclaration':
         return this.generateImportDeclaration(node as ImportDeclaration);
       case 'ExportDeclaration':
@@ -723,7 +755,8 @@ export class CodeGenerator {
   private declarationKeyword(node: VariableDeclaration | VariableDeclarationList): string {
     if (node.using) {
       this.lowering.usingDeclarations = true;
-      if (node.using === 'async' && !this.inAsyncFunction) {
+      // Allowed in a `ҳамзамон` function and at the top level of an ES module
+      if (node.using === 'async' && !this.inAsyncFunction && !this.allowsTopLevelAwait()) {
         this.errors.push(
           `'интизор истифода' is only allowed inside a 'ҳамзамон' function at line ${node.line}, column ${node.column}`
         );
@@ -801,8 +834,21 @@ export class CodeGenerator {
     return [];
   }
 
-  /** An abstract method, which has no body: nothing in JavaScript. */
-  protected generateAbstractMethod(_node: MethodDefinition): string {
+  /**
+   * A method without a body: abstract, an overload signature or a member of
+   * an `эълон синф`. Nothing in JavaScript.
+   */
+  protected generateMethodSignature(_node: MethodDefinition): string {
+    return '';
+  }
+
+  /** A field that only declares a type: an index signature, `эълон` or `мавҳум`. */
+  protected generateFieldSignature(_node: PropertyDefinition): string {
+    return '';
+  }
+
+  /** The `this` parameter of a function, `this: Т` (`ин: Т`); '' in JavaScript. */
+  protected thisParameterText(_thisType: TypeAnnotation | undefined): string {
     return '';
   }
 
@@ -833,7 +879,7 @@ export class CodeGenerator {
     const name = this.generateIdentifier(node.name, true);
     const typeParameters = this.typeParametersText(node.typeParameters);
     const { params, body } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.params, node.body, node.async)
+      this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
     );
     const returnType = this.returnTypeText(node.returnType);
 
@@ -868,20 +914,31 @@ export class CodeGenerator {
       .join(', ');
   }
 
-  /** Parameter list and body of a function, with the parameters in scope. */
+  /**
+   * Parameter list and body of a function, with the parameters in scope; a
+   * `this` parameter (`thisType`) comes first.
+   */
   private generateFunctionParts(
     params: Parameter[] | undefined,
     body: BlockStatement,
-    isAsync = false
+    isAsync = false,
+    thisType?: TypeAnnotation
   ): { params: string; body: string } {
     const paramNames = this.paramNames(params);
     return this.withScope(paramNames, () => ({
-      params: this.generateParams(params),
+      params: this.withThisParameter(thisType, this.generateParams(params)),
       body: this.withFunctionBoundary(
         () => this.generateBlockStatement(body, [], paramNames),
         Boolean(isAsync)
       ),
     }));
+  }
+
+  /** `this: Т, а, б`: the parameters after the `this` parameter, if any. */
+  protected withThisParameter(thisType: TypeAnnotation | undefined, params: string): string {
+    const thisParameter = this.thisParameterText(thisType);
+    if (!thisParameter) return params;
+    return params ? `${thisParameter}, ${params}` : thisParameter;
   }
 
   /**
@@ -1287,7 +1344,7 @@ export class CodeGenerator {
     const head = node.generator ? `function*${name || ' '}` : `function${name}`;
     const typeParameters = this.typeParametersText(node.typeParameters);
     const { params, body } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.params, node.body, node.async)
+      this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
     );
     const returnType = this.returnTypeText(node.returnType);
     return `${async}${head}${typeParameters}(${params})${returnType} ${body}`;
@@ -1346,20 +1403,17 @@ export class CodeGenerator {
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
+    // Module resolution: convert .som extensions to .js
+    const source = this.convertSourcePath(this.generateLiteral(node.source));
+    if (this.module === 'esm') {
+      return this.generateEsmImport(node, this.markPosition(node.source, source));
+    }
     // `ворид навъ { … }` and `{ навъ Т }` import types only: no `require` for them
     if (node.importKind === 'type') return '';
     const specifiers = node.specifiers.filter(
       spec => (spec as ImportSpecifier).importKind !== 'type'
     );
     if (specifiers.length === 0 && node.specifiers.length > 0) return '';
-    // Module resolution: convert .som extensions to .js
-    const source = this.convertSourcePath(this.generateLiteral(node.source));
-    if (this.module === 'esm') {
-      return this.generateEsmImport(
-        { ...node, specifiers },
-        this.markPosition(node.source, source)
-      );
-    }
     // `ворид "./м";` only runs the module
     if (specifiers.length === 0) {
       return this.indent(`require(${source});`);
@@ -1402,25 +1456,48 @@ export class CodeGenerator {
     return results.join('\n');
   }
 
-  /** `ворид х = require("./м");` → `const х = require("./м.js");`; `ворид х = Н.а;` → `const х = Н.а;`. */
-  private generateImportEquals(node: ImportEqualsDeclaration): string {
+  /**
+   * `ворид х = require("./м");` → `const х = require("./м.js");`, in an ES
+   * module `import х from "./м.js";` (a CommonJS module's `module.exports` is
+   * its default export); `ворид х = Н.а;` → `const х = Н.а;`.
+   */
+  protected generateImportEquals(node: ImportEqualsDeclaration): string {
     if (node.importKind === 'type') return '';
     const name = this.generateIdentifier(node.id, true);
-    const value = node.source
-      ? `require(${this.convertSourcePath(this.generateLiteral(node.source))})`
-      : this.generateExpression(node.reference!, PREC.ASSIGNMENT);
-    return this.indent(`const ${name} = ${value};`);
+    if (!node.source) {
+      return this.indent(
+        `const ${name} = ${this.generateExpression(node.reference!, PREC.ASSIGNMENT)};`
+      );
+    }
+    const source = this.convertSourcePath(this.generateLiteral(node.source));
+    if (this.module === 'esm') {
+      return this.indent(`import ${name} from ${this.markPosition(node.source, source)};`);
+    }
+    return this.indent(`const ${name} = require(${source});`);
+  }
+
+  /** `содир = х;` → `module.exports = х;`, in an ES module `export default х;`. */
+  protected generateExportAssignment(node: ExportAssignment): string {
+    const value = this.generateExpression(node.expression, PREC.ASSIGNMENT);
+    return this.indent(
+      this.module === 'esm' ? `export default ${value};` : `module.exports = ${value};`
+    );
   }
 
   /**
-   * `import а, { б as в } from "./м.js";`, `import * as Н from …`. Bindings
-   * used only as types are dropped from JavaScript (see `valueNames`); the
-   * module still runs, as an `import "./м.js";`.
+   * `import а, { б as в } from "./м.js";`, `import * as Н from …`. JavaScript
+   * leaves out type-only imports (`ворид навъ`, `{ навъ Т }`) and bindings used
+   * only as types (see `valueNames`); the module of the latter still runs, as
+   * an `import "./м.js";`. TypeScript keeps them, as `import type`.
    */
   private generateEsmImport(node: ImportDeclaration, source: string): string {
-    const specifiers = node.specifiers.filter(
-      spec => !this.valueNames || this.valueNames.has(spec.local.name)
-    );
+    const keepsTypes = !this.elidesTypes();
+    if (node.importKind === 'type' && !keepsTypes) return '';
+    const values = node.specifiers.filter(spec => (spec as ImportSpecifier).importKind !== 'type');
+    if (!keepsTypes && values.length === 0 && node.specifiers.length > 0) return '';
+    const specifiers = keepsTypes
+      ? node.specifiers
+      : values.filter(spec => !this.valueNames || this.valueNames.has(spec.local.name));
     const clauses: string[] = [];
     const named: string[] = [];
     for (const spec of specifiers) {
@@ -1432,12 +1509,16 @@ export class CodeGenerator {
       } else {
         // Exported names are member names: `содир функсия илова` exports `push`
         const imported = translateMemberName((spec as ImportSpecifier).imported.name);
-        named.push(imported === stripPositionMarkers(local) ? local : `${imported} as ${local}`);
+        const typeOnly = (spec as ImportSpecifier).importKind === 'type' ? 'type ' : '';
+        named.push(
+          `${typeOnly}${imported === stripPositionMarkers(local) ? local : `${imported} as ${local}`}`
+        );
       }
     }
     if (named.length > 0) clauses.push(`{ ${named.join(', ')} }`);
     if (clauses.length === 0) return this.indent(`import ${source};`);
-    return this.indent(`import ${clauses.join(', ')} from ${source};`);
+    const typeOnly = node.importKind === 'type' ? 'type ' : '';
+    return this.indent(`import ${typeOnly}${clauses.join(', ')} from ${source};`);
   }
 
   private generateExportDeclaration(node: ExportDeclaration): string {
@@ -1564,8 +1645,10 @@ export class CodeGenerator {
    * Export names go through the member-name mapping, as in CommonJS output.
    */
   private generateEsmExport(node: ExportDeclaration): string {
-    // `содир навъ { Т };`, `содир навъ * аз …`: types only
-    if (node.exportKind === 'type') return '';
+    const keepsTypes = !this.elidesTypes();
+    // `содир навъ { Т };`, `содир навъ * аз …`: types only, `export type` in TypeScript
+    if (node.exportKind === 'type' && !keepsTypes) return '';
+    const typeOnly = node.exportKind === 'type' ? 'type ' : '';
     if (node.declaration) {
       return this.generateEsmExportDeclaration(node);
     }
@@ -1575,31 +1658,34 @@ export class CodeGenerator {
         this.convertSourcePath(this.generateLiteral(node.source))
       );
       if (node.specifiers && node.specifiers.length > 0) {
-        const values = node.specifiers.filter(spec => spec.exportKind !== 'type');
+        const values = node.specifiers.filter(spec => keepsTypes || spec.exportKind !== 'type');
         if (values.length === 0) return '';
         const names = values.map(spec => {
           const local = translateMemberName(spec.local.name);
           const exported = translateMemberName(spec.exported.name);
-          return local === exported ? local : `${local} as ${exported}`;
+          const typeName = spec.exportKind === 'type' ? 'type ' : '';
+          return `${typeName}${local === exported ? local : `${local} as ${exported}`}`;
         });
-        return this.indent(`export { ${names.join(', ')} } from ${source};`);
+        return this.indent(`export ${typeOnly}{ ${names.join(', ')} } from ${source};`);
       }
       const namespace = node.namespaceExport
         ? ` as ${translateMemberName(node.namespaceExport.name)}`
         : '';
-      return this.indent(`export *${namespace} from ${source};`);
+      return this.indent(`export ${typeOnly}*${namespace} from ${source};`);
     }
-    // Interfaces and type aliases have no runtime binding to export
+    // Interfaces, type aliases and type-only imports have no runtime binding to export
     const specifiers = (node.specifiers ?? []).filter(
-      spec => spec.exportKind !== 'type' && !this.typeOnlyNames?.has(spec.local.name)
+      spec =>
+        keepsTypes || (spec.exportKind !== 'type' && !this.typeOnlyNames?.has(spec.local.name))
     );
     if (specifiers.length === 0) return '';
     const names = specifiers.map(spec => {
       const local = this.generateIdentifier(spec.local);
       const exported = translateMemberName(spec.exported.name);
-      return exported === stripPositionMarkers(local) ? local : `${local} as ${exported}`;
+      const typeName = spec.exportKind === 'type' ? 'type ' : '';
+      return `${typeName}${exported === stripPositionMarkers(local) ? local : `${local} as ${exported}`}`;
     });
-    return this.indent(`export { ${names.join(', ')} };`);
+    return this.indent(`export ${typeOnly}{ ${names.join(', ')} };`);
   }
 
   private generateEsmExportDeclaration(node: ExportDeclaration): string {
@@ -1658,7 +1744,7 @@ export class CodeGenerator {
    * `.som` becomes `.js`, and a relative specifier without a JavaScript/JSON
    * extension gets `.js` appended. Anything else is returned unchanged.
    */
-  private convertSourcePath(source: string): string {
+  protected convertSourcePath(source: string): string {
     const match = /^(["'])(.*)\1$/s.exec(source);
     if (!match) {
       return source;
@@ -2227,7 +2313,7 @@ export class CodeGenerator {
       const star = fn.generator ? '*' : '';
       const typeParameters = this.typeParametersText(fn.typeParameters);
       const { params, body } = this.withNewTarget(() =>
-        this.generateFunctionParts(fn.params, fn.body, fn.async)
+        this.generateFunctionParts(fn.params, fn.body, fn.async, fn.thisType)
       );
       const returnType = this.returnTypeText(fn.returnType);
       return `${asyncPrefix}${star}${key}${typeParameters}(${params})${returnType} ${body}`;
@@ -2915,18 +3001,16 @@ export class CodeGenerator {
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
-    // Signatures without a body (overloads, members of an `эълон синф`) don't
-    // exist in JavaScript
-    if (node.signature) return '';
-    // Nor do abstract methods
-    if (node.abstract) return this.generateAbstractMethod(node);
+    // Abstract methods and signatures without a body (overloads, members of
+    // an `эълон синф`) don't exist in JavaScript
+    if (node.abstract || node.signature) return this.generateMethodSignature(node);
 
     // Method names follow the same member-name mapping as `obj.маълумот()`
     // call sites (`translateMemberName`), so declaration and use agree.
     const name =
       node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key, node.computed);
     const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
-    const methodName = `${accessor}${name}`;
+    const methodName = `${accessor}${name}${this.optionalMark(node.optional)}`;
     // Decorators come before every modifier: `@д static м() {}`
     const modifiers = `${this.generateDecorators(node.decorators)}${this.memberModifiers(node)}`;
     const isAsync = node.value?.async ? 'async ' : '';
@@ -2945,7 +3029,7 @@ export class CodeGenerator {
     }
     const body = node.kind === 'constructor' ? this.constructorBody(node.value) : node.value.body;
     const { params, body: code } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.value.params, body, node.value.async)
+      this.generateFunctionParts(node.value.params, body, node.value.async, node.value.thisType)
     );
     return this.indent(
       `${modifiers}${isAsync}${star}${methodName}${typeParameters}(${params})${returnType} ${code}`
@@ -3014,7 +3098,9 @@ export class CodeGenerator {
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
     // Index signatures, `эълон` and `мавҳум` fields only declare types
-    if (node.indexSignature || node.declare || node.abstract) return '';
+    if (node.indexSignature || node.declare || node.abstract) {
+      return this.generateFieldSignature(node);
+    }
     const propertyName = this.generateMemberKey(node.key, node.computed);
     const modifiers = this.memberModifiers(node);
     // `дастрасӣ ном = 1;`: an auto-accessor, lowered by TypeScript

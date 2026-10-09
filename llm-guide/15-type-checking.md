@@ -40,6 +40,32 @@ Choose the checker:
 are resolved from it. The command line passes it for you. `run` and `bundle`
 check every module of the program.
 
+### What TypeScript sees
+
+Everything SomonScript writes reaches TypeScript as written, including the
+declarations that exist only for the checker:
+
+| SomonScript                                        | TypeScript                                         |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `эълон собит/функсия/синф/шумориш/номфазо …`       | `declare const/function/class/enum/namespace …`    |
+| `эълон модул "м" { … }`, `эълон глобалӣ { … }`     | `declare module "м" { … }`, `declare global { … }` |
+| overload signatures, `мавҳум` and `эълон` members  | the same signatures, `abstract`, `declare`         |
+| `[калид: сатр]: Т;` in a class, `м?()`, `бознавис` | index signatures, optional methods, `override`     |
+| `дастрасӣ`, `истифода`, `интизор истифода`         | `accessor`, `using`, `await using`                 |
+| decorators (`@д`), `ин` parameters                 | decorators, `this` parameters                      |
+| `<собит Т>`, `<дар берун Т>`                       | `<const T>`, `<in out T>`                          |
+| `ворид навъ`, `содир навъ`, `{ навъ Т }`           | `import type`, `export type`, `{ type T }`         |
+| `ворид х = require("./м");`, `содир = х;`          | `import х = require("./м.js");`, `export = х;`     |
+
+- The program is checked with TypeScript's `module: "preserve"`, which allows
+  `import … = require()` and `export =` next to ES module syntax.
+- `эълон модул "м"` declares the module `м`: the checker gives it a declaration
+  file of its own, since inside a module file it would only augment an existing
+  module.
+- Legacy decorators, which may also decorate parameters, need
+  `--experimental-decorators`; otherwise decorators are checked as standard
+  ones.
+
 ### Strict mode
 
 Without `--strict`, TypeScript's default (non-strict) options apply and type
@@ -204,6 +230,8 @@ instead of `require`/`module.exports`. The default is `commonjs`.
 | `содир * чун Н аз "./м";`     | `export * as Н from "./м.js";`     |
 | `ворид("./м")`                | `import("./м.js")`                 |
 | `ворид.meta.url`              | `import.meta.url`                  |
+| `ворид х = require("./м");`   | `import х from "./м.js";`          |
+| `содир = х;`                  | `export default х;`                |
 
 - Imports used only as types (`ворид { Корбар } аз "./м";` for an interface) are
   dropped; the module still runs (`import "./м.js";`). `ворид навъ` imports
@@ -215,8 +243,13 @@ instead of `require`/`module.exports`. The default is `commonjs`.
   JavaScript.
 - An export named like a built-in member is exported under its JavaScript name,
   as in CommonJS: `содир функсия илова() {}` → `export { илова as push };`.
-- ES modules allow `интизор` and `барои интизор` at the top level, and
-  `ворид.meta` (`import.meta`). With `--module commonjs` both are errors.
+- `ворид х = require("./м");` imports what a CommonJS module assigns to
+  `module.exports`, which ES modules see as its default export; `содир = х;`
+  makes `х` the default export.
+- ES modules allow `интизор`, `барои интизор` and `интизор истифода` at the top
+  level, and `ворид.meta` (`import.meta`). With `--module commonjs` both are
+  errors (the API's `topLevelAwait` option allows top-level `интизор` for hosts
+  that run the code in an async function, as the REPL does).
 - `somon run --module esm` runs the ES modules (with their `node_modules`).
 - `somon bundle` keeps CommonJS modules in the bundle's module table whatever
   `module` is; with `module: "esm"` the bundle itself is an ES module (the `esm`

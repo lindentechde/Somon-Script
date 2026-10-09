@@ -177,6 +177,53 @@ describe('compile options', () => {
   });
 });
 
+describe('TypeScript module forms in ES module output', () => {
+  test('type-only imports and exports are left out', () => {
+    expect(
+      esm(
+        [
+          'ворид навъ { Т } аз "./т";',
+          'ворид навъ Д аз "./д";',
+          'ворид { навъ У, у } аз "./у";',
+          'ворид { навъ В } аз "./в";',
+          'ворид навъ Ф = require("./ф");',
+          'содир навъ { Т };',
+          'содир { навъ У, у };',
+          'содир { Д };',
+          'содир навъ { Е } аз "./е";',
+          'содир { навъ Ж, ж } аз "./ж";',
+          'содир навъ * аз "./з";',
+          'у();',
+        ].join('\n')
+      )
+    ).toBe(
+      ['import { у } from "./у.js";', 'export { у };', 'export { ж } from "./ж.js";', 'у();'].join(
+        '\n'
+      )
+    );
+  });
+
+  test('`ворид х = require(…)` imports the default export, `содир =` exports it', () => {
+    expect(esm('ворид fs = require("fs");\nfs.readFileSync;')).toBe(
+      'import fs from "fs";\nfs.readFileSync;'
+    );
+    expect(esm('ворид * чун Н аз "./н";\nворид Ҷ = Н.Ҷ;')).toBe(
+      'import * as Н from "./н.js";\nconst Ҷ = Н.Ҷ;'
+    );
+    expect(esm('синф К {}\nсодир = К;')).toBe('class К {}\nexport default К;');
+    expect(commonjs('синф К {}\nсодир = К;')).toBe('class К {}\nmodule.exports = К;');
+  });
+
+  test('`интизор истифода` at the top level of an ES module', () => {
+    const result = compile('интизор истифода р = ф();', { module: 'esm', typeCheck: false });
+    expect(result.errors).toEqual([]);
+    expect(result.code).toContain('await result_1;');
+    expect(compile('интизор истифода р = ф();', { typeCheck: false }).errors.join('\n')).toMatch(
+      /'интизор истифода' is only allowed inside a 'ҳамзамон' function/
+    );
+  });
+});
+
 describe('ES module programs run in Node', () => {
   test('imports, exports, re-exports, dynamic import, top-level await and import.meta', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-esm-'));
@@ -188,17 +235,24 @@ describe('ES module programs run in Node', () => {
           'содир пешфарз синф Ҳисоб { қимат = 7; }\n' +
           'содир собит ПИ = 3;\n' +
           'содир интерфейс Нуқта { х: рақам; }\n',
-        'reexport.som': 'содир { ҷамъ чун сум, ПИ } аз "./math";\nсодир * чун Ҳама аз "./math";\n',
+        'reexport.som':
+          'содир { ҷамъ чун сум, ПИ } аз "./math";\nсодир * чун Ҳама аз "./math";\n' +
+          'содир навъ { Нуқта } аз "./math";\nсодир { навъ Нуқта чун Н2 } аз "./math";\n',
+        'value.som': 'синф Ҳисобгар { қимат = 42; }\nсодир = Ҳисобгар;\n',
         'side.som': 'чоп.сабт("таъсир");\n',
         'main.som':
           'ворид "./side";\n' +
           'ворид Ҳисоб, { ҷамъ, илова, Нуқта } аз "./math";\n' +
           'ворид * чун М аз "./math.som";\n' +
-          'ворид { сум, Ҳама } аз "./reexport";\n' +
+          'ворид { сум, Ҳама, навъ Н2 } аз "./reexport";\n' +
+          'ворид навъ { Нуқта чун Н3 } аз "./reexport";\n' +
+          'ворид Ҳисобгар = require("./value");\n' +
+          'собит н2: Н2 | Н3 = { х: 2 };\n' +
           'собит н: Нуқта = { х: 1 };\n' +
           'собит динамикӣ = интизор ворид("./math");\n' +
           'чоп.сабт(ҷамъ(1, 2), илова([1], 2), нав Ҳисоб().қимат, М.ПИ, сум(2, 3), Ҳама.ПИ, н.х);\n' +
-          'чоп.сабт(динамикӣ.ҷамъ(4, 5), ворид.meta.url.endsWith("main.mjs"));\n',
+          'чоп.сабт(динамикӣ.ҷамъ(4, 5), ворид.meta.url.endsWith("main.mjs"));\n' +
+          'чоп.сабт(нав Ҳисобгар().қимат, н2.х);\n',
       };
       for (const [name, source] of Object.entries(files)) {
         const result = compile(source, { module: 'esm', strict: true });
@@ -209,7 +263,7 @@ describe('ES module programs run in Node', () => {
       }
       const run = spawnSync(process.execPath, [path.join(dir, 'main.mjs')], { encoding: 'utf8' });
       expect(run.stderr).toBe('');
-      expect(run.stdout).toBe('таъсир\n3 2 7 3 5 3 1\n9 true\n');
+      expect(run.stdout).toBe('таъсир\n3 2 7 3 5 3 1\n9 true\n42 2\n');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

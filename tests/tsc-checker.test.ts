@@ -327,6 +327,110 @@ describe('TypeScript checker: modules and typings', () => {
   });
 });
 
+describe('TypeScript checker: the TypeScript 5 declaration syntax', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-tsc-ts5-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function write(name: string, text: string): string {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, text);
+    return file;
+  }
+
+  test('ambient modules declare the modules they name', () => {
+    const declared = 'эълон модул "китобхона" {\n    содир функсия ҳисоб(а: рақам): рақам;\n}\n';
+    expect(
+      positions(`${declared}ворид { ҳисоб } аз "китобхона";\nтағ х: сатр = ҳисоб(1);`)
+    ).toEqual([['TS2322', 5, 5]]);
+    // Errors in their bodies are reported at their place
+    expect(positions('эълон модул "м" {\n    содир функсия ф(а: Нест): рақам;\n}')).toEqual([
+      ['TS2304', 2, 24],
+    ]);
+    // Also those of a module the program imports
+    write('types.som', declared);
+    const main = 'ворид "./types";\nворид { ҳисоб } аз "китобхона";\nтағ х: сатр = ҳисоб(1);';
+    expect(
+      check(main, { filePath: write('main.som', main) }).errors.map(error => error.split('\n')[0])
+    ).toEqual([
+      "Type error [TS2322] at line 3, column 5: Type 'рақам' is not assignable to type 'сатр'.",
+    ]);
+  });
+
+  test('module names in messages are readable', () => {
+    const [error] = check(
+      'эълон модул "китоб" { содир собит а: рақам; }\nворид { б } аз "китоб";'
+    ).errors;
+    expect(error).toContain('"китоб"');
+    expect(error).not.toContain('\\u');
+  });
+
+  test('`ворид х = require(…)` and `содир = …`', () => {
+    write('value.som', 'синф Ҳисобгар { қимат = 42; }\nсодир = Ҳисобгар;\n');
+    const main = 'ворид Ҳ = require("./value");\nтағ х: сатр = нав Ҳ().қимат;';
+    expect(positions(main, { filePath: write('main.som', main), strict: true })).toEqual([
+      ['TS2322', 2, 5],
+    ]);
+    const node = 'ворид fs = require("fs");\nтағ х: рақам = fs.existsSync("а");';
+    // node_modules typings, from the current directory's packages
+    expect(positions(node)).toEqual([['TS2322', 2, 5]]);
+  });
+
+  test('overloads, override, abstract members, `ин` parameters and accessors', () => {
+    expect(
+      positions(
+        [
+          'функсия ф(х: рақам): рақам;',
+          'функсия ф(х: сатр): сатр;',
+          'функсия ф(х: ҳар): ҳар { бозгашт х; }',
+          'тағ а: сатр = ф(1);',
+          'синф А { м(): рақам { бозгашт 1; } }',
+          'синф Б мерос А { бознавис н(): рақам { бозгашт 2; } }',
+          'мавҳум синф Ш { мавҳум масоҳат(): рақам; }',
+          'синф Д мерос Ш {}',
+          'функсия г(ин: А, х: рақам): рақам { бозгашт ин.м() + х; }',
+          'г(1);',
+          'синф К { дастрасӣ қ = 1; }',
+          'тағ қ: сатр = нав К().қ;',
+        ].join('\n'),
+        { strict: true }
+      )
+    ).toEqual([
+      ['TS2322', 4, 5],
+      ['TS4113', 6, 27],
+      ['TS18052', 8, 6],
+      ['TS2684', 10, 1],
+      ['TS2322', 12, 5],
+    ]);
+  });
+
+  test('parameter decorators need experimentalDecorators, as in TypeScript', () => {
+    const source =
+      'функсия д(ҳадаф: объект, ном: сатр | беқимат, ҷой: рақам): беджавоб {}\n' +
+      'синф К { м(@д х: рақам): беджавоб {} }';
+    expect(check(source, { experimentalDecorators: true }).errors).toEqual([]);
+    const standard =
+      'функсия д(қимат: ҳар, контекст: ClassMethodDecoratorContext): беджавоб {}\n' +
+      'синф К { @д м(): беджавоб {} }';
+    expect(check(standard, { strict: true }).errors).toEqual([]);
+  });
+
+  test('`истифода` checks Symbol.dispose', () => {
+    expect(
+      positions(
+        'функсия ф(о: { а: рақам }) {\n    истифода р = { [Symbol.dispose]() {} };\n    истифода н = о;\n}',
+        { strict: true }
+      )
+    ).toEqual([['TS2850', 3, 18]]);
+  });
+});
+
 describe('TypeScript checker: libs and targets', () => {
   test('the default lib is the target’s, with esnext.disposable for `истифода`', () => {
     const dom = ['lib.dom.d.ts', 'lib.dom.iterable.d.ts', 'lib.dom.asynciterable.d.ts'];

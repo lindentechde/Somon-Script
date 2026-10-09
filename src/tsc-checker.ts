@@ -81,12 +81,26 @@ function virtualName(somFile: string): string {
   return `${toTsPath(somFile)}.ts`;
 }
 
+/**
+ * The declaration file of a `.som` file's ambient modules (`эълон модул "м"`):
+ * a script, where they declare modules (in a module they would augment them).
+ */
+const AMBIENT_SUFFIX = '.ambient.d.ts';
+
+function ambientName(somFile: string): string {
+  return `${toTsPath(somFile)}${AMBIENT_SUFFIX}`;
+}
+
+function isAmbient(fileName: string): boolean {
+  return fileName.endsWith(`.som${AMBIENT_SUFFIX}`);
+}
+
 function isVirtual(fileName: string): boolean {
-  return fileName.endsWith('.som.ts');
+  return fileName.endsWith('.som.ts') || isAmbient(fileName);
 }
 
 function somFileOf(fileName: string): string {
-  return fileName.slice(0, -'.ts'.length);
+  return fileName.slice(0, -(isAmbient(fileName) ? AMBIENT_SUFFIX : '.ts').length);
 }
 
 // ---------------------------------------------------------------------------
@@ -128,7 +142,9 @@ function compilerOptions(options: TsCheckOptions): ts.CompilerOptions {
   return {
     target: scriptTargetFor(target),
     lib: libFiles(target, options.lib),
-    module: ts.ModuleKind.ESNext,
+    // ES modules, and also `import х = require()` / `export =` (`ворид х = require`,
+    // `содир =`), as the output has them
+    module: ts.ModuleKind.Preserve,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     // Every `.som` file is a module, even without imports or exports
     moduleDetection: ts.ModuleDetectionKind.Force,
@@ -137,7 +153,9 @@ function compilerOptions(options: TsCheckOptions): ts.CompilerOptions {
     resolveJsonModule: true,
     allowJs: true,
     checkJs: false,
-    skipLibCheck: true,
+    // Libraries' typings are not checked; the ambient modules of `.som` files are
+    skipLibCheck: false,
+    skipDefaultLibCheck: true,
     useDefineForClassFields:
       options.useDefineForClassFields ?? defaultUseDefineForClassFields(target),
     experimentalDecorators: Boolean(options.experimentalDecorators),
@@ -193,9 +211,31 @@ function emitSom(fileName: string, source: string, ast?: Program): TsEmitResult 
       program = { type: 'Program', body: [], line: 1, column: 1 };
     }
   }
-  const result = new TsEmitter().emit(program);
+  const result = withAmbientReference(new TsEmitter().emit(program), fileName);
   emitCache.set(fileName, { source, result });
   return result;
+}
+
+/**
+ * A module with ambient modules references their declaration file, so they
+ * are declared whenever the module is part of the program. The directive
+ * goes first (after a shebang); the mappings move down a line.
+ */
+function withAmbientReference(result: TsEmitResult, somFile: string): TsEmitResult {
+  if (!result.ambient) return result;
+  const directive = `/// <reference path="./${path.basename(somFile)}${AMBIENT_SUFFIX}" />`;
+  const lines = result.code.split('\n');
+  const at = lines[0]?.startsWith('#!') ? 1 : 0;
+  lines.splice(at, 0, directive);
+  return {
+    ...result,
+    code: lines.join('\n'),
+    mappings: result.mappings.map(mapping =>
+      mapping.generated.line > at
+        ? { ...mapping, generated: { ...mapping.generated, line: mapping.generated.line + 1 } }
+        : mapping
+    ),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,18 +277,22 @@ function createHost(
     return file;
   };
 
+  /** TypeScript of a virtual file: a `.som` module or its ambient modules. */
+  const virtualCode = (fileName: string): string | undefined => {
+    if (!isAmbient(fileName)) return virtualFile(fileName)?.emitted.code;
+    return virtualFile(virtualName(somFileOf(fileName)))?.emitted.ambient?.code;
+  };
+
   const fileExists = (fileName: string): boolean =>
-    isVirtual(fileName)
-      ? virtualFiles.has(fileName) || ts.sys.fileExists(somFileOf(fileName))
-      : ts.sys.fileExists(fileName);
+    isVirtual(fileName) ? virtualCode(fileName) !== undefined : ts.sys.fileExists(fileName);
 
   const host: ts.CompilerHost = {
     getSourceFile(fileName, languageVersionOrOptions) {
       if (isVirtual(fileName)) {
-        const file = virtualFile(fileName);
-        return file
-          ? ts.createSourceFile(fileName, file.emitted.code, languageVersionOrOptions, true)
-          : undefined;
+        const code = virtualCode(fileName);
+        return code === undefined
+          ? undefined
+          : ts.createSourceFile(fileName, code, languageVersionOrOptions, true);
       }
       const version = fileVersion(fileName);
       if (version === undefined) return undefined;
@@ -273,8 +317,7 @@ function createHost(
     useCaseSensitiveFileNames: () => ts.sys.useCaseSensitiveFileNames,
     getNewLine: () => '\n',
     fileExists,
-    readFile: fileName =>
-      isVirtual(fileName) ? virtualFile(fileName)?.emitted.code : ts.sys.readFile(fileName),
+    readFile: fileName => (isVirtual(fileName) ? virtualCode(fileName) : ts.sys.readFile(fileName)),
     realpath: ts.sys.realpath,
     resolveModuleNameLiterals(moduleLiterals, containingFile, redirectedReference, compilerOpts) {
       return moduleLiterals.map(literal => {
@@ -360,6 +403,13 @@ export function checkWithTypeScript(
           ...program.getSyntacticDiagnostics(sourceFile),
           ...program.getSemanticDiagnostics(sourceFile)
         );
+        const ambient = program.getSourceFile(ambientName(somFileOf(root)));
+        if (ambient) {
+          diagnostics.push(
+            ...program.getSyntacticDiagnostics(ambient),
+            ...program.getSemanticDiagnostics(ambient)
+          );
+        }
       }
       let declaration: string | undefined;
       if (options.declaration) {
@@ -432,7 +482,10 @@ function toTypeCheckError(
   let column = 1;
   if (diagnostic.file && diagnostic.start !== undefined) {
     const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
-    const original = originalPosition(file.emitted.mappings, position.line + 1, position.character);
+    const mappings = isAmbient(diagnostic.file.fileName)
+      ? (file.emitted.ambient?.mappings ?? [])
+      : file.emitted.mappings;
+    const original = originalPosition(mappings, position.line + 1, position.character);
     if (original) {
       line = original.line;
       column = original.column + 1;
