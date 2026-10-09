@@ -122,6 +122,54 @@ export interface BundleOutput {
   map?: string;
 }
 
+/**
+ * Suggestions for the errors of a build, by what their (lower case) message says.
+ * The first that matches is used; the messages are those of the compiler
+ * ("Unexpected token end of input", "Identifier 'х' has already been declared",
+ * "Type 'сатр' is not assignable …") and of the loader.
+ */
+const ERROR_SUGGESTIONS: ReadonlyArray<{
+  matches: (_message: string) => boolean;
+  suggestion: string;
+}> = [
+  {
+    matches: message => message.includes('end of input'),
+    suggestion: 'You may have unclosed brackets, parentheses, or string literals',
+  },
+  {
+    matches: message => message.includes('unexpected token'),
+    suggestion: 'Check for missing or extra brackets, parentheses, or semicolons',
+  },
+  {
+    matches: message =>
+      message.includes('cannot find module') || message.includes('module not found'),
+    suggestion:
+      'Verify the module path is correct and the file exists. Check for typos in the import path',
+  },
+  {
+    matches: message => message.includes('circular dependenc'),
+    suggestion: 'Refactor your code to remove circular dependencies between modules',
+  },
+  {
+    matches: message =>
+      message.includes('is not assignable') ||
+      (message.includes('type') && message.includes('mismatch')),
+    suggestion: 'Check that the types of your variables and function parameters are compatible',
+  },
+  {
+    matches: message =>
+      message.includes('already been declared') ||
+      message.includes('already declared') ||
+      message.includes('redeclared'),
+    suggestion:
+      'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration',
+  },
+  {
+    matches: message => message.includes('is not defined') || message.includes('undefined'),
+    suggestion: 'Make sure the variable is declared before use. Check for typos in variable names',
+  },
+];
+
 /** A module of a bundle, its requires pointed at bundle keys. */
 interface BundleModule {
   id: string;
@@ -169,39 +217,7 @@ export class ModuleSystem {
    */
   private getSuggestionForError(errorMessage: string): string | undefined {
     const lowerMessage = errorMessage.toLowerCase();
-
-    // Common syntax errors
-    if (lowerMessage.includes('unexpected token')) {
-      return 'Check for missing or extra brackets, parentheses, or semicolons';
-    }
-    if (lowerMessage.includes('unexpected end of input')) {
-      return 'You may have unclosed brackets, parentheses, or string literals';
-    }
-
-    // Import/module errors
-    if (lowerMessage.includes('cannot find module') || lowerMessage.includes('module not found')) {
-      return 'Verify the module path is correct and the file exists. Check for typos in the import path';
-    }
-    if (lowerMessage.includes('circular dependency')) {
-      return 'Refactor your code to remove circular dependencies between modules';
-    }
-
-    // Type errors
-    if (lowerMessage.includes('type') && lowerMessage.includes('mismatch')) {
-      return 'Check that the types of your variables and function parameters are compatible';
-    }
-
-    // Variable errors
-    if (lowerMessage.includes('is not defined') || lowerMessage.includes('undefined')) {
-      return 'Make sure the variable is declared before use. Check for typos in variable names';
-    }
-
-    // Scope errors
-    if (lowerMessage.includes('already declared') || lowerMessage.includes('redeclared')) {
-      return 'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration';
-    }
-
-    return undefined;
+    return ERROR_SUGGESTIONS.find(({ matches }) => matches(lowerMessage))?.suggestion;
   }
 
   /**

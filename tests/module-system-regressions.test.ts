@@ -401,6 +401,26 @@ describe('module system regressions', () => {
       );
     });
 
+    test('suggestions match the messages of the compiler', async () => {
+      write({
+        'unclosed.som': 'функсия ф() {\n',
+        'twice.som': 'тағ х = 1;\nтағ х = 2;\n',
+        'types.som': 'тағ х: рақам = "сатр";\n',
+      });
+      const ms = createSystem({ compilation: { strict: true } });
+      const suggestion = async (file: string) =>
+        (await ms.compile(path.join(root, file))).errors.map(error => error.suggestion);
+      expect(await suggestion('unclosed.som')).toEqual([
+        'You may have unclosed brackets, parentheses, or string literals',
+      ]);
+      expect(await suggestion('twice.som')).toEqual([
+        'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration',
+      ]);
+      expect(await suggestion('types.som')).toEqual([
+        'Check that the types of your variables and function parameters are compatible',
+      ]);
+    });
+
     test('bundle() throws one message naming the failing file', async () => {
       write({ 'bad.som': 'функсия (\n', 'main.som': 'ворид { а } аз "./bad";\n' });
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

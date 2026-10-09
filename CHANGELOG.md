@@ -111,6 +111,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * The `dependents` of a module's metadata (`ModuleSystem.getModule()`, `getAllModules()`, `ModuleRegistry.get()`) were always empty; they list the modules that import it.
 * The `loading.externals` of a `ModuleSystem` were cleared by every `compile()`/`bundle()` that named no externals of its own, so they never applied.
 * A `ModuleSystem` that built a bundle with `externals` and then one without them (or the other way round) reused the modules of the first build, leaving a module out of the second bundle or bundling one that was external; modules whose imports became or stopped being externals are loaded again.
+* The suggestions of module system errors (`💡 Suggestion:` of `somon bundle`) missed the compiler's wording: a name declared twice, a type that is not assignable and an unclosed block ("Unexpected token end of input") got no suggestion or the one for stray brackets.
 
 ## 0.4.0 (2026-10-09)
 
