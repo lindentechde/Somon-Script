@@ -286,7 +286,9 @@ export class TsEmitter extends CodeGenerator {
 
   /**
    * `private declare readonly х: рақам;` for each typed parameter property
-   * (without `override`, which TypeScript does not allow on a `declare` field).
+   * (without `override`, which TypeScript does not allow on a `declare` field);
+   * an optional parameter (`х?: рақам`) declares an optional field, whose
+   * type includes `undefined` as the parameter property's does.
    */
   protected extraClassMembers(node: ClassDeclaration | ClassExpression): string[] {
     const constructor = node.body.body.find(
@@ -301,8 +303,9 @@ export class TsEmitter extends CodeGenerator {
         const accessibility = param.accessibility ? `${param.accessibility} ` : '';
         const readonly = param.readonly ? 'readonly ' : '';
         const name = this.markPosition(param.name, translateMemberName(param.name.name));
+        const optional = param.optional ? '?' : '';
         const type = this.typeAnnotationText(param.typeAnnotation);
-        return this.indent(`${accessibility}declare ${readonly}${name}${type};`);
+        return this.indent(`${accessibility}declare ${readonly}${name}${optional}${type};`);
       });
   }
 

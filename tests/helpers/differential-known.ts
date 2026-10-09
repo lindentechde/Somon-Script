@@ -240,10 +240,6 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
     reason:
       'BUG: members of a merged enum are unknown in the initializers of its other declarations',
   },
-  'migrate/24-parameter-properties.ts': {
-    strict: 'typescript-only',
-    reason: 'BUG: the TypeScript emitter declares an optional parameter property as required',
-  },
   'migrate/61-getters-setters.ts': {
     strict: 'somon-only',
     reason: "BUG: the SomonScript checker does not know a class's `prototype`",

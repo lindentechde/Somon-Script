@@ -135,6 +135,18 @@ describe('TypeScript checker: diagnostics', () => {
     expect(check(source, { strict: true }).errors).toEqual([]);
   });
 
+  test('optional parameter properties may be left out', () => {
+    // Found by tests/differential.test.ts (migrate/24-parameter-properties.ts)
+    const source = [
+      'синф Корбар {',
+      '    конструктор(хосусӣ рамз?: сатр, ҷамъиятӣ ном: сатр = "") {}',
+      '    рамзДорад(): мантиқӣ { бозгашт ин.рамз !== беқимат; }',
+      '}',
+      'чоп.сабт(нав Корбар().рамзДорад());',
+    ].join('\n');
+    expect(check(source, { strict: true }).errors).toEqual([]);
+  });
+
   test('instantiating an abstract class is an error', () => {
     expect(positions('мавҳум синф Ш {}\nнав Ш();')).toEqual([['TS2511', 2, 1]]);
   });

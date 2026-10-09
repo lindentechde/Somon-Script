@@ -334,6 +334,18 @@ describe('TypeScript emitter: classes', () => {
     );
   });
 
+  test('an optional typed parameter property declares an optional field', () => {
+    // Found by tests/differential.test.ts: `secret: string` rejected `this.secret = secret`
+    expect(emit('синф А { конструктор(хосусӣ х?: сатр) {} }')).toBe(
+      'class А {\n' +
+        '  private declare х?: string;\n' +
+        '  constructor(х?: string) {\n' +
+        '    this.х = х;\n' +
+        '  }\n' +
+        '}'
+    );
+  });
+
   test('class expressions and exported abstract classes', () => {
     expect(emit('тағ К = синф<Т> мерос Б<Т> { х?: Т; };')).toBe(
       'let К = class<Т> extends Б<Т> {\n  х?: Т;\n};'
