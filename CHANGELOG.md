@@ -79,6 +79,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * The TypeScript emitter declares an optional parameter property (`конструктор(хосусӣ х?: сатр)`) as optional; the TypeScript checker rejected the assignment of `х` in strict mode.
 * The SomonScript checker knows a class's `prototype`, lets a later declaration of a merged `шумориш` name the members of earlier ones, and checks the computed names of class members (`[калид] = 1`).
 * ES module output exports a later block of a merged `номфазо`/`шумориш` by name; it was `export (function (Н) { … })(…)`, a syntax error.
+* Two default exports in one module (`содир пешфарз …` twice, or with `содир { х чун пешфарз }`) are a compile error, as in TypeScript (TS2528); ES module output failed to load and CommonJS output kept the last one.
 * `навъи {}`, `навъи --х`, `void ++х`, `void -1` and `typeof +х` parse as the operators they are; a stray run of tokens in an `интихоб` body is one error, and switch and class body errors give their column.
 * `somon migrate` keeps `typeof` before a sign (`typeof -x`), which `навъи -x` would read as a subtraction.
 * Lowering for a target no longer fails when TypeScript 5.4's checker crashes on valid JavaScript (an `интихоб` over a variable that holds `[]`): the code is then lowered as TypeScript.
