@@ -85,6 +85,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Lowering for a target no longer fails when TypeScript 5.4's checker crashes on valid JavaScript (an `интихоб` over a variable that holds `[]`): the code is then lowered as TypeScript.
 * The TypeScript emitter keeps the parentheses of `(а < б) > (в)` and `ф((а < б), в > (г))`, which TypeScript would otherwise read as calls with type arguments.
 * `кӯшиш { … }` without `гирифтан` or `ниҳоят` is a parse error, as in JavaScript; it compiled to a `try` that no JavaScript engine loads.
+* When TypeScript 5.4 crashes while it lowers valid code for a target (its checker overflows the stack on a few programs), the compile error says so and names the TypeScript version, instead of passing on the raw `Maximum call stack size exceeded`. TypeScript 5.6 and later no longer type-check the code they lower.
 
 ## 0.4.0 (2026-10-09)
 

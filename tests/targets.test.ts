@@ -516,7 +516,17 @@ describe('lowerToTarget', () => {
         lowerToTarget(`${evolvingArraySwitch}console.log(х ?? (а < б > (в)));`, {
           target: 'es2017',
         })
-      ).toThrow(/Debug Failure/);
+      ).toThrow(/^TypeScript \S+ crashed while lowering the code \(Debug Failure/);
+      // Found by tests/fuzz.test.ts: TypeScript 5.4's checker overflows its stack on this
+      const result = compile('тағ х = {} !== 1;\nагар ([х = холӣ], х) {}', {
+        target: 'es5',
+        typeCheck: false,
+      });
+      expect(result.errors).toEqual([
+        expect.stringMatching(
+          /^TypeScript \S+ crashed while lowering the code \(Maximum call stack size exceeded\); TypeScript 5\.6 and later/
+        ),
+      ]);
     }
   );
 

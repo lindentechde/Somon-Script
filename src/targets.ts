@@ -843,21 +843,36 @@ export function loweringCompilerOptions(
  * JavaScript ("Debug Failure. Unhandled object type EvolvingArray" for an
  * `интихоб` over a variable that holds `[]`). The code is then transpiled as
  * TypeScript, which has no such arrays, when TypeScript reads it as the same
- * program.
+ * program. When that fails too (the checker of TypeScript 5.4 also overflows
+ * its stack on `агар ([х = холӣ], х)` after `тағ х = {} !== 1`), the error
+ * says that TypeScript crashed.
  */
 function transpileJavaScript(code: string, options: ts.TranspileOptions): ts.TranspileOutput {
   try {
     return ts.transpileModule(code, { ...options, fileName: 'module.js' });
   } catch (error) {
-    const crashed = error instanceof Error && error.message.startsWith('Debug Failure');
-    if (!crashed || !readsAlikeAsTypeScript(code)) throw error;
-    return ts.transpileModule(code, {
-      ...options,
-      fileName: 'module.ts',
-      // Keep every import, as for JavaScript
-      compilerOptions: { ...options.compilerOptions, verbatimModuleSyntax: true },
-    });
+    if (!readsAlikeAsTypeScript(code)) throw typeScriptCrash(error);
+    try {
+      return ts.transpileModule(code, {
+        ...options,
+        fileName: 'module.ts',
+        // Keep every import, as for JavaScript
+        compilerOptions: { ...options.compilerOptions, verbatimModuleSyntax: true },
+      });
+    } catch {
+      throw typeScriptCrash(error);
+    }
   }
+}
+
+/** Prefix of the error when TypeScript crashes while it lowers the code. */
+export const TYPESCRIPT_CRASH = `TypeScript ${ts.version} crashed while lowering the code`;
+
+function typeScriptCrash(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `${TYPESCRIPT_CRASH} (${message}); TypeScript 5.6 and later no longer type-check the code they lower`
+  );
 }
 
 /** Whether TypeScript parses `code` as TypeScript to the same syntax tree as JavaScript. */
