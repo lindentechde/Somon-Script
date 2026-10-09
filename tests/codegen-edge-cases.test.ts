@@ -4,22 +4,38 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import * as ts from 'typescript';
 
 import { compile, type CompileOptions } from '../src/compiler';
+import { Lexer } from '../src/lexer';
+import { Parser } from '../src/parser';
+import { TsEmitter } from '../src/ts-emitter';
 import { canonicalTmpDir } from './helpers/paths';
 
-/** Compiles and runs a program; returns what it logged. */
-function run(source: string, options: CompileOptions = {}): string[] {
-  const result = compile(source, { typeCheck: false, ...options });
-  expect(result.errors).toEqual([]);
+/** Runs JavaScript; returns what it logged. */
+function runCode(code: string): string[] {
   const lines: string[] = [];
-  new Function('console', 'require', 'module', 'exports', result.code)(
+  new Function('console', 'require', 'module', 'exports', code)(
     { log: (...args: unknown[]) => lines.push(args.map(String).join(' ')) },
     require,
     { exports: {} },
     {}
   );
   return lines;
+}
+
+/** Compiles and runs a program; returns what it logged. */
+function run(source: string, options: CompileOptions = {}): string[] {
+  const result = compile(source, { typeCheck: false, ...options });
+  expect(result.errors).toEqual([]);
+  return runCode(result.code);
+}
+
+/** What a program logs compiled by TypeScript: the TypeScript emitter's output, transpiled. */
+function runWithTypeScript(source: string): string[] {
+  const typescript = new TsEmitter().emit(new Parser(new Lexer(source).tokenize()).parse()).code;
+  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS };
+  return runCode(ts.transpileModule(typescript, { compilerOptions: options }).outputText);
 }
 
 const errorsOf = (source: string, options: CompileOptions = {}) =>
@@ -114,5 +130,33 @@ describe('codegen: exported namespace members', () => {
     expect(
       run('номфазо Н { содир эълон собит х: рақам; содир собит у = 1; }\nчоп.сабт(Object.keys(Н));')
     ).toEqual(['у']);
+  });
+});
+
+describe('codegen: enum members', () => {
+  test('constant initializers are folded as TypeScript folds them, others run', () => {
+    const source = [
+      'собит Б = { А: 3 };',
+      'шумориш Р {',
+      // Arithmetic and bitwise operators, `+ - ~`, earlier members by name
+      '  А = 10 - 3, В = 9 / 2, Г = 9 % 4, Д = 2 ** 3, Ё = 1 << 3, Ж = -16 >> 2,',
+      '  З = -1 >>> 28, И = 6 & 3, Й = 6 | 3, К = 6 ^ 3, Л = +А, М = ~А, Я = -0,',
+      // Strings, and earlier members as `Р.А`, `Р["А"]`, `Р[`А`]`
+      '  Н = `матн`, О = Р.А + 1, П = Р["А"] * 2, С = Р[`А`] * 3, Ф = `${Н}-${А}-${Р.В}`,',
+      '  Қ = Р[`Ф`] + "!",',
+      // Not constant: computed when the enum is created
+      '  Т = !А ? 1 : 2, У = "а" - 1, Х = Б.А, Ч = Р[100], Ш = -Н, Щ = !А, Ы = 1 && 2,',
+      '  Ю = дуруст, Ә = 10n, Ғ = `${Б.А}`, Ҳ = Р[`${Н}`]',
+      '}',
+      'чоп.сабт(JSON.stringify(Р, (к, қ) => (навъи қ === "bigint" ? `${қ}n` : қ)));',
+    ].join('\n');
+    const output = run(source);
+    expect(output).toEqual(runWithTypeScript(source));
+    const enumObject = JSON.parse(output[0]);
+    expect(enumObject).toMatchObject({ А: 7, '7': 'Л', Я: 0, С: 21, Ф: 'матн-7-4.5', Т: 2 });
+    // A string member has no reverse mapping, also when a template with
+    // constant substitutions makes it (`Ф`), or a member read as `Р[`Ф`]`
+    expect(enumObject['матн-7-4.5']).toBeUndefined();
+    expect(enumObject['матн-7-4.5!']).toBeUndefined();
   });
 });

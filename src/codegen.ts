@@ -2719,12 +2719,18 @@ export class CodeGenerator {
       case 'Literal': {
         const { value, raw } = expr as Literal;
         if (typeof value === 'string') return value;
-        return typeof value === 'number' && !/n$/.test(raw ?? '') ? value : undefined;
+        return typeof value === 'number' && !/n$/.test(raw) ? value : undefined;
       }
       case 'TemplateLiteral': {
+        // `матн ${А}`: a string when every substitution is a constant
         const template = expr as TemplateLiteral;
-        if (template.expressions.length > 0) return undefined;
-        return template.quasis.map(quasi => quasi.value.cooked ?? quasi.value.raw).join('');
+        let text = template.quasis[0].value.cooked!;
+        for (const [index, substitution] of template.expressions.entries()) {
+          const value = operand(substitution);
+          if (value === undefined) return undefined;
+          text += `${value}${template.quasis[index + 1].value.cooked!}`;
+        }
+        return text;
       }
       case 'Identifier':
         return values.get(translateMemberName((expr as Identifier).name));
@@ -2747,7 +2753,7 @@ export class CodeGenerator {
     }
   }
 
-  /** `Ранг.А` / `Ранг["А"]` naming an earlier member of the enum `enumName`. */
+  /** `Ранг.А` / `Ранг["А"]` / `Ранг[\`А\`]` naming an earlier member of the enum `enumName`. */
   private static enumMemberConstant(
     member: MemberExpression,
     enumName: string,
@@ -2756,13 +2762,22 @@ export class CodeGenerator {
     if (member.object.type !== 'Identifier' || (member.object as Identifier).name !== enumName) {
       return undefined;
     }
-    const property = member.property as Identifier | Literal;
-    if (!member.computed && property.type === 'Identifier') {
-      return values.get(translateMemberName((property as Identifier).name));
+    if (!member.computed) {
+      return values.get(translateMemberName((member.property as Identifier).name));
     }
-    const literal = property as Literal;
-    return property.type === 'Literal' && typeof literal.value === 'string'
-      ? values.get(literal.value)
+    const key = CodeGenerator.stringKey(member.property);
+    return key === undefined ? undefined : values.get(key);
+  }
+
+  /** The text of a string literal or a template without substitutions, as TypeScript reads keys. */
+  private static stringKey(expr: Expression): string | undefined {
+    if (expr.type === 'Literal') {
+      const { value } = expr as Literal;
+      return typeof value === 'string' ? value : undefined;
+    }
+    const template = expr as TemplateLiteral;
+    return expr.type === 'TemplateLiteral' && template.expressions.length === 0
+      ? template.quasis[0].value.cooked!
       : undefined;
   }
 
