@@ -138,7 +138,13 @@ function emitCode(
   errors: string[],
   warnings: string[]
 ): CompileResult {
-  let code = new CodeGenerator().generate(ast);
+  const generator = new CodeGenerator();
+  let code = generator.generate(ast);
+  const codegenErrors = generator.getErrors();
+  if (codegenErrors.length > 0) {
+    errors.push(...codegenErrors.map(err => `Code generation error: ${err}`));
+    return { code: '', errors, warnings };
+  }
   const transpileResult = transpile(code, options);
   code = transpileResult.code;
   let map = transpileResult.map;
