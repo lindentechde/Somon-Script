@@ -343,10 +343,9 @@ describe('CLI Run Command - Module Imports', () => {
 чоп.сабт(функсияА());`
       );
 
-      // Should detect and report circular dependency
-      expect(() => {
-        runCli(['run', mainFile], { cwd: tempDir, stdio: 'pipe' });
-      }).toThrow();
+      // The default 'warn' strategy reports the cycle but still runs the program
+      const output = runCli(['run', mainFile], { cwd: tempDir, stdio: 'pipe' });
+      expect(output).toContain('A calls B');
     });
   });
 
