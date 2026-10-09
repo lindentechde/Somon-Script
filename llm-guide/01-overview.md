@@ -85,19 +85,19 @@ Every Tajik keyword has exactly one JavaScript equivalent:
 - `собит` → `const` (always)
 - `функсия` → `function` (always)
 
-### 2. **Context-Aware Translation**
+### 2. **Built-in Method Name Translation**
 
-Built-in method names only translate when used with built-in objects:
+Built-in method/property names translate to their JavaScript equivalents on
+built-in objects:
 
 ```som
-// Translation occurs - built-in object
-тағ рӯйхат = [1, 2, 3];
-тағ дарозӣ = рӯйхат.дарозӣ;     // array.length
-
-// No translation - user object
-тағ корбар = { дарозӣ: 180 };
-чоп.сабт(корбар.дарозӣ);        // user.дарозӣ (preserved)
+тағ рақамҳо = [1, 2, 3];
+тағ дарозӣ = рақамҳо.дарозӣ;    // рақамҳо.length
 ```
+
+Don't use built-in method names (`дарозӣ`, `сабт`, `илова`, ...) as names of
+your own properties or methods: the compiler cannot always tell a user object
+from a built-in one, so such names may be translated on user objects too.
 
 ### 3. **Type System Integration**
 
@@ -116,7 +116,7 @@ ES6+ imports with automatic file extension handling:
 
 ```som
 ворид { ҷамъ } аз "./math";           // import { sum } from "./math.js";
-содир функсия тафриқ(а, б) { ... }   // export function subtract(a, b) { ... }
+содир функсия тафриқ(а, б) { }      // export function subtract(a, b) { }
 ```
 
 ### 5. **Preserve Semantics**
@@ -229,9 +229,9 @@ Generated JavaScript must be functionally equivalent to the SomonScript source.
 ### Array Operations
 
 ```som
-тағ рӯйхат = [1, 2, 3];
-тағ филтр = рӯйхат.филтр(х => х > 1); // let filtered = list.filter(x => x > 1);
-тағ ҷамъ = рӯйхат.ҷамъбаст((а, б) => а + б, 0);
+тағ рақамҳо = [1, 2, 3];
+тағ филтр = рақамҳо.филтр(х => х > 1); // let filtered = list.filter(x => x > 1);
+тағ ҷамъ = рақамҳо.ҷамъбаст((а, б) => а + б, 0);
 // let sum = list.reduce((a, b) => a + b, 0);
 ```
 
@@ -278,20 +278,19 @@ somon module-info src/main.som --graph --stats
 
 2. **Translate keywords consistently**
 
-   ```som
+   ```text
    тағ → let (always)
    собит → const (always)
    ```
 
-3. **Apply context-sensitive method translation**
+3. **Translate built-in method names on built-in objects**
 
-   ```som
-   рӯйхат.дарозӣ → array.length (built-in)
-   объект.дарозӣ → object.дарозӣ (user property)
+   ```text
+   рақамҳо.дарозӣ → рақамҳо.length (built-in name)
    ```
 
 4. **Use correct boolean literals**
-   ```som
+   ```text
    дуруст → true
    нодуруст → false
    ```
@@ -312,15 +311,12 @@ somon module-info src/main.som --graph --stats
    // RIGHT: дуруст → true
    ```
 
-3. **Don't translate method names outside built-in objects**
+3. **Don't name user methods after built-in methods**
 
    ```som
-   // WRONG: корбар.сабт() → user.log()
-   // RIGHT: корбар.сабт() → user.сабт() (preserved!)
+   // Built-in names may be translated on user objects too, so give user
+   // methods non-built-in names, e.g. корбар.нигоҳДоштан()
    ```
-
-4. **Don't assume variable context without checking** Always verify if an
-   identifier is a built-in object before translating methods.
 
 ---
 
