@@ -268,10 +268,7 @@ function pathA(
 }
 
 /** TypeScript's options for B and C: the cell's target and module format. */
-export function transpileOptions(
-  cell: Cell,
-  experimentalDecorators: boolean | undefined
-): ts.CompilerOptions {
+export function transpileOptions(cell: Cell, experimentalDecorators?: boolean): ts.CompilerOptions {
   return {
     target: scriptTargetFor(cell.target),
     module: cell.format === 'esm' ? ts.ModuleKind.ESNext : ts.ModuleKind.CommonJS,
