@@ -394,6 +394,21 @@ describe('module system regressions', () => {
       expect(() => resolve('pkgx/lib/sub.js')).toThrow(/not exported/);
     });
 
+    test('packageName is the name of the package, also for subpaths', () => {
+      write({
+        'node_modules/@scope/kit/package.json': '{ "name": "@scope/kit" }',
+        'node_modules/@scope/kit/tools/x.js': '',
+        'node_modules/plain/package.json': '{ "name": "plain" }',
+        'node_modules/plain/lib/y.js': '',
+      });
+      const resolver = new ModuleResolver({ baseUrl: root });
+      const from = path.join(root, 'main.som');
+      expect(resolver.resolve('pkgx/feature/f', from).packageName).toBe('pkgx');
+      expect(resolver.resolve('pkgx', from).packageName).toBe('pkgx');
+      expect(resolver.resolve('@scope/kit/tools/x', from).packageName).toBe('@scope/kit');
+      expect(resolver.resolve('plain/lib/y', from).packageName).toBe('plain');
+    });
+
     test('a relative fromFile still searches node_modules', () => {
       const resolver = new ModuleResolver({ baseUrl: root });
       const relativeFrom = path.relative(process.cwd(), path.join(root, 'main.som'));

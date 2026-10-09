@@ -163,11 +163,11 @@ export class ModuleResolver {
     for (;;) {
       for (const moduleDir of this.options.moduleDirectories) {
         const packageDir = path.join(currentDir, moduleDir, packageName);
-        const fromExports = this.tryPackageExports(packageDir, subpath, specifier);
+        const fromExports = this.tryPackageExports(packageDir, packageName, subpath, specifier);
         if (fromExports) return fromExports;
 
         try {
-          return this.resolveFile(path.join(currentDir, moduleDir, specifier), true, specifier);
+          return this.resolveFile(path.join(currentDir, moduleDir, specifier), true, packageName);
         } catch {
           // Continue searching
         }
@@ -188,6 +188,7 @@ export class ModuleResolver {
    */
   private tryPackageExports(
     packageDir: string,
+    packageName: string,
     subpath: string,
     specifier: string
   ): ResolvedModule | null {
@@ -224,7 +225,7 @@ export class ModuleResolver {
     if (!this.isInsideDir(targetPath, packageDir)) {
       throw new Error(`package.json 'exports' target escapes package directory: ${target}`);
     }
-    const resolved = this.tryExactPath(targetPath, true, specifier);
+    const resolved = this.tryExactPath(targetPath, true, packageName);
     if (!resolved) {
       throw new Error(`Cannot resolve module: ${targetPath} (exported by ${packageJsonPath})`);
     }
