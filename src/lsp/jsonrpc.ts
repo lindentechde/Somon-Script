@@ -97,8 +97,8 @@ export class MessageReader {
     try {
       message = JSON.parse(body);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.onError(new FramingError(`Invalid JSON body: ${reason}`));
+      // JSON.parse throws a SyntaxError
+      this.onError(new FramingError(`Invalid JSON body: ${(error as Error).message}`));
       return;
     }
     if (typeof message !== 'object' || message === null || Array.isArray(message)) {

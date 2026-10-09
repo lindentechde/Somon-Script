@@ -37,11 +37,8 @@ export function tokenizeDocument(document: TextDocument): TokenizeResult {
   try {
     raw = new Lexer(document.text).tokenize();
   } catch (error) {
-    return {
-      tokens: [],
-      raw: [],
-      error: error instanceof Error ? error : new Error(String(error)),
-    };
+    // The lexer reports every problem with an Error
+    return { tokens: [], raw: [], error: error as Error };
   }
   const tokens: LocatedToken[] = [];
   for (const token of raw) {
@@ -62,13 +59,13 @@ export function tokenizeDocument(document: TextDocument): TokenizeResult {
 function tokenEnd(text: string, token: Token, start: number): number {
   if (token.type === TokenType.STRING) return quotedEnd(text, start);
   if (token.type === TokenType.TEMPLATE_LITERAL) return start + token.value.length + 2;
-  if (text.startsWith(token.value, start)) return start + token.value.length;
-  if (token.type === TokenType.NUMBER) {
-    // Numeric separators are dropped from the value: `1_000`
-    const match = /^[\w.]+/u.exec(text.slice(start));
-    return start + (match ? match[0].length : token.value.length);
+  // Other tokens hold their source text, except numbers, whose separators are dropped (`1_000`)
+  if (token.type !== TokenType.NUMBER || text.startsWith(token.value, start)) {
+    return start + token.value.length;
   }
-  return start + token.value.length;
+  let end = start;
+  while (end < text.length && /[\w.]/.test(text[end])) end++;
+  return end;
 }
 
 /** End of the quoted string starting at `start` (escapes skipped). */

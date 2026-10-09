@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { ConfigError, loadConfigWithPath, type SomonConfig } from '../config';
+import { loadConfigWithPath, type ConfigError, type SomonConfig } from '../config';
 import { DEFAULT_INDENT } from '../tools/format';
 import {
   analyzeDocument,
@@ -74,7 +74,7 @@ const defaultReadFile = (file: string): string | undefined => {
 };
 
 export class SomonLanguageServer {
-  private readonly documents = new Map<string, TextDocument>();
+  /** The open documents, analysed, by URI (`analysis.document` is the document). */
   private readonly analyses = new Map<string, Analysis>();
   private locale: Locale;
   private messages: LspMessages;
@@ -246,26 +246,24 @@ export class SomonLanguageServer {
     if (changes.length === 0) return;
     // Full sync: the last change holds the whole text
     const text = changes[changes.length - 1].text;
-    const previous = this.documents.get(uri);
-    this.update(new TextDocument(uri, text, version, previous?.languageId));
+    const languageId = this.analyses.get(uri)?.document.languageId;
+    this.update(new TextDocument(uri, text, version, languageId));
   }
 
   private close(params: TextDocumentParams): void {
     const { uri } = params.textDocument;
-    this.documents.delete(uri);
     this.analyses.delete(uri);
     this.publish(uri, []);
   }
 
   private update(document: TextDocument): void {
-    this.documents.set(document.uri, document);
     const analysis = this.analyze(document);
     this.analyses.set(document.uri, analysis);
     this.publish(document.uri, analysis.diagnostics, document.version);
   }
 
   private refreshAll(): void {
-    for (const document of this.documents.values()) this.update(document);
+    for (const { document } of [...this.analyses.values()]) this.update(document);
   }
 
   private publish(uri: string, diagnostics: unknown[], version?: number): void {
@@ -296,7 +294,8 @@ export class SomonLanguageServer {
     try {
       return { config: loadConfigWithPath(path.dirname(fileName)).config };
     } catch (error) {
-      return { error: describeConfigError(error) };
+      // loadConfigWithPath reports every problem as a ConfigError
+      return { error: describeConfigError(error as ConfigError) };
     }
   }
 
@@ -313,7 +312,7 @@ export class SomonLanguageServer {
 
   /** `somon fmt` with the project's `fmt.indent`, else the editor's tab size. */
   private format(params: TextDocumentParams): unknown {
-    const document = this.documents.get(params.textDocument?.uri);
+    const document = this.analyses.get(params.textDocument?.uri)?.document;
     if (!document) return null;
     const fileName = uriToPath(document.uri);
     const indent = this.configFor(fileName).config?.fmt?.indent;
@@ -345,10 +344,9 @@ export class SomonLanguageServer {
     const fromFile = uriToPath(fromUri);
     if (!fromFile || !specifier.startsWith('.')) return undefined;
     for (const candidate of moduleCandidates(path.resolve(path.dirname(fromFile), specifier))) {
+      const open = this.openAnalysis(candidate);
+      if (open) return { uri: open.document.uri, analysis: open };
       const uri = pathToFileURL(candidate).href;
-      const open = this.openDocument(candidate);
-      if (open)
-        return { uri: open.uri, analysis: this.analyses.get(open.uri) ?? this.analyze(open) };
       const text = (this.options.readFile ?? defaultReadFile)(candidate);
       if (text !== undefined) return { uri, analysis: this.analyze(new TextDocument(uri, text)) };
     }
@@ -356,11 +354,11 @@ export class SomonLanguageServer {
   }
 
   /** The open document of a file, compared by path (URIs differ in escaping and case). */
-  private openDocument(file: string): TextDocument | undefined {
+  private openAnalysis(file: string): Analysis | undefined {
     const wanted = normalizePath(file);
-    for (const document of this.documents.values()) {
-      const documentPath = uriToPath(document.uri);
-      if (documentPath && normalizePath(documentPath) === wanted) return document;
+    for (const analysis of this.analyses.values()) {
+      const documentPath = uriToPath(analysis.document.uri);
+      if (documentPath && normalizePath(documentPath) === wanted) return analysis;
     }
     return undefined;
   }
@@ -392,14 +390,10 @@ function normalizePath(file: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-function describeConfigError(error: unknown): string {
-  if (error instanceof ConfigError) {
-    return [
-      error.message,
-      ...error.details.map(detail => `${detail.path}: ${detail.message}`),
-    ].join('; ');
-  }
-  return error instanceof Error ? error.message : String(error);
+function describeConfigError(error: ConfigError): string {
+  return [error.message, ...error.details.map(detail => `${detail.path}: ${detail.message}`)].join(
+    '; '
+  );
 }
 
 function toResponseError(error: unknown, messages: LspMessages): ResponseError {

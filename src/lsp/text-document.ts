@@ -63,7 +63,8 @@ export class TextDocument {
     const text = this.lineText(zeroLine);
     let character = zeroLine === 0 ? this.bomLength : 0;
     for (let remaining = Math.max(0, column - 1); remaining > 0 && character < text.length; ) {
-      const code = text.codePointAt(character) ?? 0;
+      // `character < text.length`: there is a code point
+      const code = text.codePointAt(character)!;
       character += code > 0xffff ? 2 : 1;
       remaining--;
     }

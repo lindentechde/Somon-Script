@@ -112,12 +112,12 @@ class SymbolCollector {
     const start = this.offsetOf(node);
     const index = tokenIndexAt(this.tokens, start);
     if (index !== -1) return [start, this.tokens[index].end];
-    const name = String((node as AnyNode).name ?? '');
-    return [start, start + name.length];
+    // No token starts here: a name inside a template literal's `${…}`
+    return [start, start + String((node as AnyNode).name).length];
   }
 
   /** End of a declaration: its `{ … }` body when it has one, else its statement. */
-  private declarationEnd(node: ASTNode, from = node): number {
+  private declarationEnd(node: ASTNode, from: ASTNode): number {
     const index = this.tokenIndexFrom(this.offsetOf(from));
     if (index === -1) return this.offsetOf(node);
     return braceGroupEnd(this.tokens, index) ?? extentEnd(this.tokens, index);
@@ -139,7 +139,6 @@ class SymbolCollector {
 
   /** End of a statement or expression starting at the node. */
   private nodeEnd(node: ASTNode): number {
-    if (node.type === 'BlockStatement') return this.blockEnd(node);
     const index = this.tokenIndexFrom(this.offsetOf(node));
     return index === -1 ? this.offsetOf(node) : extentEnd(this.tokens, index);
   }
@@ -337,7 +336,7 @@ class SymbolCollector {
     this.withScope(this.offsetOf(node), end, () =>
       this.nested(() => {
         this.declareTypeParameters(node);
-        for (const param of (node.params as AnyNode[]) ?? []) {
+        for (const param of node.params as AnyNode[]) {
           const extent: [number, number] = [this.offsetOf(param), this.offsetOf(param)];
           if (isNode(param.pattern)) this.bindPattern(param.pattern, 'parameter', extent);
           else if (isNode(param.name)) this.declare(param.name, 'parameter', extent);
@@ -366,7 +365,7 @@ class SymbolCollector {
     this.withScope(this.offsetOf(node), end, () =>
       this.withContainer(declaration, () => {
         this.declareTypeParameters(node);
-        for (const member of ((node.body as AnyNode).body as AnyNode[]) ?? []) {
+        for (const member of (node.body as AnyNode).body as AnyNode[]) {
           this.visitClassMember(member);
         }
       })
@@ -377,10 +376,11 @@ class SymbolCollector {
     const extent: [number, number] = [this.offsetOf(member), this.nodeEnd(member)];
     if (member.type === 'MethodDefinition') {
       const value = member.value as AnyNode;
-      extent[1] = isNode(value.body) ? this.blockEnd(value.body) : extent[1];
+      // Signatures without a body have an empty block at their `;`
+      extent[1] = this.blockEnd(value.body as AnyNode);
       this.member(member.key as AnyNode, 'method', extent, Boolean(member.static));
       // Parameter properties: `конструктор(хосусӣ х: рақам)`
-      for (const param of (value.params as AnyNode[]) ?? []) {
+      for (const param of value.params as AnyNode[]) {
         if (param.accessibility || param.readonly) {
           this.member(param.name as AnyNode, 'property', [
             this.offsetOf(param),
@@ -403,7 +403,7 @@ class SymbolCollector {
     const end = this.declarationEnd(node, node.name as AnyNode);
     const declaration = this.declare(node.name as AnyNode, 'interface', [this.offsetOf(node), end]);
     this.withContainer(declaration, () => {
-      for (const property of ((node.body as AnyNode).properties as AnyNode[]) ?? []) {
+      for (const property of (node.body as AnyNode).properties as AnyNode[]) {
         // Call and construct signatures, index signatures and computed names (`[Symbol.iterator]`)
         // have no name
         if (property.signature || property.indexSignature || property.computed) continue;
@@ -420,7 +420,7 @@ class SymbolCollector {
     const end = this.declarationEnd(node, node.name as AnyNode);
     const declaration = this.declare(node.name as AnyNode, 'enum', [this.offsetOf(node), end]);
     this.withContainer(declaration, () => {
-      for (const member of (node.members as AnyNode[]) ?? []) {
+      for (const member of node.members as AnyNode[]) {
         const id = member.id as AnyNode;
         this.member(id, 'enumMember', [this.offsetOf(member), this.nameRange(id)[1]]);
       }
@@ -432,7 +432,7 @@ class SymbolCollector {
     const declaration = this.declare(node.name as AnyNode, 'namespace', [this.offsetOf(node), end]);
     this.withScope(this.offsetOf(node), end, () =>
       this.withContainer(declaration, () => {
-        for (const statement of ((node.body as AnyNode).statements as AnyNode[]) ?? []) {
+        for (const statement of (node.body as AnyNode).statements as AnyNode[]) {
           // `содир` inside a namespace marks the member itself
           if (statement.exported === true) this.exported(false, () => this.visit(statement));
           else this.visit(statement);
@@ -444,7 +444,7 @@ class SymbolCollector {
   private visitImport(node: AnyNode): void {
     const from = String((node.source as AnyNode).value);
     const extent: [number, number] = [this.offsetOf(node), this.nodeEnd(node)];
-    for (const specifier of (node.specifiers as AnyNode[]) ?? []) {
+    for (const specifier of node.specifiers as AnyNode[]) {
       let importedName = '*';
       if (specifier.type === 'ImportSpecifier')
         importedName = String((specifier.imported as AnyNode).name);
