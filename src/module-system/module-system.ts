@@ -585,17 +585,6 @@ export class ModuleSystem {
     );
   }
 
-  private async cleanupOnCompilationFailure(): Promise<void> {
-    if (this.activeWatchers.size > 0) {
-      if (this.logger) {
-        this.logger.warn('Compilation failed, cleaning up active watchers', {
-          watcherCount: this.activeWatchers.size,
-        });
-      }
-      await this.stopWatching();
-    }
-  }
-
   /**
    * Compile a module and all its dependencies
    */
@@ -643,8 +632,8 @@ export class ModuleSystem {
         warnings,
       };
     } catch (error) {
+      // Watchers stay: a watch loop recompiles once the file is fixed
       this.handleEntryPointLoadError(error, entryPoint, errors);
-      await this.cleanupOnCompilationFailure();
 
       return {
         modules,

@@ -710,6 +710,29 @@ describe('Module System', () => {
       const result = await moduleSystem.compile(mainFile);
       expect(result.modules.get(path.resolve(depFile))?.code).toContain('= 2');
     });
+
+    test('a compile that fails keeps watching, so the fixed file compiles', async () => {
+      watchMock.mockClear();
+      const mainFile = path.join(tempDir, 'watch-broken.som');
+      fs.writeFileSync(mainFile, 'чоп.сабт(1);\n');
+      const onChange = jest.fn();
+      moduleSystem.watch(mainFile, { onChange });
+      const watcherInstance = watchMock.mock.results[0].value;
+      const close = watcherInstance.close;
+
+      fs.writeFileSync(mainFile, 'ворид { Нест } аз "./нест";\n');
+      watcherInstance.emit('change', mainFile);
+      expect((await moduleSystem.compile(mainFile)).errors).toHaveLength(1);
+      expect(close).not.toHaveBeenCalled();
+
+      fs.writeFileSync(mainFile, 'чоп.сабт(2);\n');
+      watcherInstance.emit('change', mainFile);
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect((await moduleSystem.compile(mainFile)).errors).toEqual([]);
+
+      await moduleSystem.shutdown();
+      expect(close).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('Error Handling', () => {

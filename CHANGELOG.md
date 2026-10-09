@@ -104,6 +104,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * A bundle (also `somon run`) that imported a directory (`ворид … аз "./lib"` for `lib/index.som`) or a file found by another extension (`"./data"` for `data.json`) failed at run time with "Cannot find module './lib.js'"; such modules are bundled.
 * With `moduleSystem.loading.cache: false` the module system compiled nothing: `compile()` returned no modules and no errors and `somon bundle`/`somon run` failed with "Entry module … missing from bundle results". Without a cache every build reads its files again.
 * The errors of `ModuleSystem.compile()` for a module that does not compile had no `column` (and bundle errors named `file:line`), because the compiler's "at line 3, column 16" was read with a pattern for "line 3:16"; they have both.
+* `ModuleSystem.compile()`/`bundle()` closed every watcher of `watch()` when the entry point could not be loaded, so a watch-and-rebuild loop stopped at the first broken edit; watchers stay until `shutdown()`.
 
 ## 0.4.0 (2026-10-09)
 
