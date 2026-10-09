@@ -1,6 +1,10 @@
 /**
- * Timeout protection for async operations
- * Prevents operations from hanging indefinitely
+ * Timeout protection for async operations.
+ *
+ * These helpers stop *waiting* for a promise after a deadline; they cannot cancel the
+ * underlying work. A timed-out operation keeps running in the background, and a
+ * synchronous (blocking) operation cannot be interrupted at all, because the timer
+ * only fires once the event loop is free again.
  */
 
 export interface TimeoutOptions {
@@ -73,7 +77,11 @@ export function createTimeoutWrapper(defaultTimeout: number) {
 }
 
 /**
- * Wrap multiple promises with individual timeouts
+ * Wrap multiple promises with individual timeouts.
+ *
+ * Without `failFast`, all promises are awaited; if some fail, the error is an
+ * AggregateTimeoutError when every failure was a TimeoutError, and otherwise a
+ * standard AggregateError ("N of M operations failed") holding the original errors.
  */
 export async function allWithTimeout<T>(
   promises: Array<{ promise: Promise<T>; options: TimeoutOptions }>,
@@ -92,7 +100,15 @@ export async function allWithTimeout<T>(
 
     if (failures.length > 0) {
       const errors = failures.map(f => (f as PromiseRejectedResult).reason);
-      throw new AggregateTimeoutError(errors);
+      const timeouts = errors.filter(error => error instanceof TimeoutError).length;
+      if (timeouts === errors.length) {
+        throw new AggregateTimeoutError(errors);
+      }
+      const timeoutInfo = timeouts > 0 ? ` (${timeouts} timed out)` : '';
+      throw new AggregateError(
+        errors,
+        `${errors.length} of ${promises.length} operations failed${timeoutInfo}`
+      );
     }
 
     return results.map(r => (r as PromiseFulfilledResult<T>).value);
@@ -100,7 +116,7 @@ export async function allWithTimeout<T>(
 }
 
 /**
- * Aggregate error for multiple timeout failures
+ * Aggregate error for allWithTimeout() when every failure was a timeout
  */
 export class AggregateTimeoutError extends Error {
   constructor(public readonly errors: Error[]) {

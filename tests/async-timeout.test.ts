@@ -256,6 +256,36 @@ describe('async-timeout', () => {
     });
   });
 
+  describe('allWithTimeout failure labelling', () => {
+    test('rejections that are not timeouts are not reported as timeouts', async () => {
+      const failure = new Error('boom');
+      const error = await allWithTimeout([
+        { promise: Promise.resolve(1), options: { timeout: 1000 } },
+        { promise: Promise.reject(failure), options: { timeout: 1000, operation: 'op2' } },
+      ]).catch(e => e);
+
+      expect(error).toBeInstanceOf(AggregateError);
+      expect(error).not.toBeInstanceOf(AggregateTimeoutError);
+      expect(error.errors).toEqual([failure]);
+      expect(error.message).toBe('1 of 2 operations failed');
+    });
+
+    test('a mix of timeouts and other failures is not labelled as a timeout', async () => {
+      jest.useFakeTimers();
+      const allPromise = allWithTimeout([
+        { promise: new Promise(() => {}), options: { timeout: 1000, operation: 'slow' } },
+        { promise: Promise.reject(new Error('boom')), options: { timeout: 1000 } },
+      ]);
+      jest.advanceTimersByTime(1100);
+
+      const error = await allPromise.catch(e => e);
+      expect(error).not.toBeInstanceOf(AggregateTimeoutError);
+      expect(error.message).toBe('2 of 2 operations failed (1 timed out)');
+      expect(error.errors[0]).toBeInstanceOf(TimeoutError);
+      jest.useRealTimers();
+    });
+  });
+
   describe('AggregateTimeoutError', () => {
     test('should aggregate multiple errors', () => {
       const errors = [
