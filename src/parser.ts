@@ -2983,7 +2983,8 @@ export class Parser {
     if (token.type === TokenType.DIVIDE || token.type === TokenType.DIVIDE_ASSIGN) {
       return new Error(`Unterminated regular expression ${at}`);
     }
-    return new Error(`Unexpected token '${token.value}' ${at}`);
+    const shown = token.type === TokenType.EOF ? 'end of input' : `'${token.value}'`;
+    return new Error(`Unexpected token ${shown} ${at}`);
   }
 
   /** `нав.target` (`new.target`); the only meta property of `нав`. */

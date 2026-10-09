@@ -123,6 +123,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * A type parameter list that does not parse (`функсия ф<1>()`, the empty `функсия ф<>()`, also on methods and classes) was silently left out, and so were heritage type arguments that do not parse; they are parse errors, as in TypeScript.
 * Overload signatures of a private method (`#м(х: рақам): сатр; #м(х: ҳар) { … }`), which TypeScript accepts, were the code generation error "Identifier '#м' has already been declared"; a signature declares nothing.
 * Overload signatures of a class method with a computed name (`[к](): беджавоб; [к]() { … }`), which TypeScript accepts, were the parse error "Function implementation is missing"; a computed name matches the same expression.
+* A missing operand at the end of the input (`тағ х =`, `@д`, a template interpolation cut short) was reported as "Unexpected token ''"; it is "Unexpected token end of input", as elsewhere.
 
 ## 0.4.0 (2026-10-09)
 

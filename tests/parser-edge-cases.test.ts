@@ -49,6 +49,16 @@ describe('parser: type parameter lists', () => {
   });
 });
 
+describe('parser: the end of the input where an operand belongs', () => {
+  test('is named as such, not as an empty token', () => {
+    expect(errorsOf('тағ х =')).toEqual(['Unexpected token end of input at line 1, column 8']);
+    // Also at the end of a template interpolation, on its own line
+    expect(errorsOf('тағ с = `а${\n  1 +\n}`;')).toEqual([
+      'Unexpected token end of input at line 3, column 1',
+    ]);
+  });
+});
+
 describe('parser: overloads of class methods', () => {
   test('computed, string, number and private names match their implementation', () => {
     expect(
