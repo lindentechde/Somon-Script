@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       force_release:
-        description: 'Force release even if version unchanged'
+        description: 'Run the release steps even if this version is already on npm (finishes a partial release)'
         required: false
         default: false
         type: boolean
@@ -44,6 +44,8 @@ jobs:
 
       - name: Check if version should be released
         id: check
+        env:
+          FORCE_RELEASE: ${{ inputs.force_release }}
         run: |
           # Get current version from package.json
           CURRENT_VERSION=$(jq -r '.version' package.json)
@@ -57,9 +59,17 @@ jobs:
 
           # Check if version is already published on NPM
           if npm view "@lindentech/somon-script@$CURRENT_VERSION" version 2>/dev/null >/dev/null; then
-            echo "::warning::Version $CURRENT_VERSION already published on NPM"
             echo "version_changed=false" >> "$GITHUB_OUTPUT"
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            if [ "$FORCE_RELEASE" = "true" ]; then
+              # Every publish, tag and release step skips work already done,
+              # so this only finishes what a failed run left out.
+              echo "::notice::Version $CURRENT_VERSION is on NPM; forcing the remaining release steps"
+              echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+              echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning::Version $CURRENT_VERSION already published on NPM"
+              echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "Version $CURRENT_VERSION is new and ready to publish"
             echo "version_changed=true" >> "$GITHUB_OUTPUT"
@@ -163,10 +173,10 @@ jobs:
           PACKAGE_NAME="@lindentech/somon-script"
 
           # Configuration for retry mechanism
-          MAX_ATTEMPTS=12              # Maximum number of verification attempts
+          MAX_ATTEMPTS=30              # Maximum number of verification attempts
           INITIAL_WAIT=5               # Initial wait time in seconds
           MAX_WAIT=30                  # Maximum wait time between attempts in seconds
-          TIMEOUT=180                  # Total timeout in seconds (3 minutes)
+          TIMEOUT=600                  # Total timeout in seconds (10 minutes; the registry can serve a stale packument for several minutes)
 
           echo "🔍 Verifying NPM package publication: ${PACKAGE_NAME}@${VERSION}"
           echo "⏱️  Will retry for up to ${TIMEOUT} seconds with exponential backoff"
@@ -197,7 +207,7 @@ jobs:
             echo "📦 Attempt $attempt/$MAX_ATTEMPTS: Checking NPM registry..."
 
             # Attempt to fetch package version from NPM
-            if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            if npm view "${PACKAGE_NAME}@${VERSION}" version --prefer-online >/dev/null 2>&1; then
               ELAPSED=$(($(date +%s) - START_TIME))
               echo ""
               echo "✅ Success! Package found on NPM registry"
@@ -244,7 +254,9 @@ jobs:
           if curl -fsS "https://jsr.io/@lindentechde/somon-script/meta.json" | jq -e --arg v "$VERSION" '.versions[$v]' >/dev/null 2>&1; then
             echo "@lindentechde/somon-script@${VERSION} is already on JSR, skipping publish"
           else
-            npx jsr publish
+            # Build and coverage steps leave untracked files (e.g. the Codecov
+            # uploader binary); jsr.json "publish.include" decides what ships.
+            npx jsr publish --allow-dirty
           fi
 
       - name: Create Git Tag
