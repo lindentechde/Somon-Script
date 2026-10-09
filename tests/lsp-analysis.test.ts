@@ -1,3 +1,7 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { pathToFileURL } from 'url';
+
 import { analyzeDocument, messageDiagnostic, nameType, rangeAt } from '../src/lsp/analysis';
 import { DiagnosticSeverity } from '../src/lsp/protocol';
 import { exportedDeclaration, resolveName, scopeAt, visibleDeclarations } from '../src/lsp/symbols';
@@ -9,6 +13,7 @@ import {
   tokenizeDocument,
   wordTokenAt,
 } from '../src/lsp/tokens';
+import { canonicalTmpDir } from './helpers/paths';
 
 const analyze = (text: string, options = {}) =>
   analyzeDocument(new TextDocument('file:///санҷиш.som', text, 1), options);
@@ -152,6 +157,30 @@ describe('LSP analysis: diagnostics', () => {
     expect(analysis.diagnostics.length).toBeGreaterThan(0);
     expect(analysis.diagnostics[0].severity).toBe(DiagnosticSeverity.Error);
     expect(analysis.diagnostics[0].range.start.line).toBe(0);
+  });
+
+  test('the TypeScript checker resolves imports from the file of the document', () => {
+    const dir = canonicalTmpDir('somon-lsp-imports-');
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'math.som'),
+        'содир функсия ҷамъ(а: рақам, б: рақам): рақам { бозгашт а + б; }\n'
+      );
+      const fileName = path.join(dir, 'main.som');
+      const text = 'ворид { ҷамъ } аз "./math";\nчоп.сабт(ҷамъ(1, "2"));\n';
+      const analysis = analyzeDocument(new TextDocument(pathToFileURL(fileName).href, text, 1), {
+        compilerOptions: { checker: 'typescript' },
+        fileName,
+      });
+      // Not "Cannot find module './math.js'" (TS2307): the call is checked against math.som
+      expect(analysis.diagnostics).toHaveLength(1);
+      expect(analysis.diagnostics[0].message).toMatch(
+        /^Type error \[TS2345\]: Argument of type 'сатр' is not assignable to parameter of type 'рақам'\./
+      );
+      expect(covered(text, analysis.diagnostics[0].range)).toBe('"2"');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('messages are placed by any position format they carry', () => {

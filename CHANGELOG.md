@@ -115,6 +115,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon bundle` reported "Bundled N modules" with N counting the Node.js modules and packages the bundle leaves to the run time; it reports the modules in the bundle (`BundleOutput.moduleCount`).
 * `somon run --module esm prog.txt` wrote the entry as `prog.txt`, which Node.js does not run as an ES module; an entry not named `.som`, `.js` or `.mjs` is written as `prog.txt.js`.
 * The package exports the module system (`ModuleSystem`, `ModuleResolver`, `ModuleLoader`, `ModuleRegistry`, the timeout helpers and their types), as `docs/module-system.md` shows; `import { ModuleSystem } from '@lindentech/somon-script'` was `undefined`.
+* `somon lsp` with `compilerOptions.checker: 'typescript'` reported every relative import as "Cannot find module './м.js'" (TS2307): the document's path did not reach the TypeScript checker, so imports were resolved from the working directory. Imported modules are now found and checked.
 
 ## 0.4.0 (2026-10-09)
 

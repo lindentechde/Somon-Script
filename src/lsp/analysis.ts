@@ -61,13 +61,14 @@ const POSITION_PATTERNS: readonly RegExp[] = [
 ];
 
 export function analyzeDocument(document: TextDocument, options: AnalysisOptions = {}): Analysis {
+  const compilerOptions = options.compilerOptions ?? {};
   const diagnostics: Diagnostic[] = [];
   if (options.configError) {
     diagnostics.push(diagnostic(lineRange(document, 0), options.configError));
   }
   const types = new Map<number, Type>();
   const checker = new TypeChecker(document.text, {
-    strict: Boolean(options.compilerOptions?.strict),
+    strict: Boolean(compilerOptions.strict),
     onIdentifierType: (identifier, type) =>
       types.set(document.offsetFromCompiler(identifier.line, identifier.column), type),
   });
@@ -99,17 +100,19 @@ export function analyzeDocument(document: TextDocument, options: AnalysisOptions
   const checked = safely(() => checker.check(program));
   if (parseErrors.length > 0) return analysis;
 
-  if (options.compilerOptions?.noTypeCheck !== true) {
-    const checkerName = options.compilerOptions?.checker;
+  if (compilerOptions.noTypeCheck !== true) {
+    const checkerName = compilerOptions.checker;
     if (typeof checkerName === 'string' && checkerName !== 'somon') {
-      diagnostics.push(...externalTypeDiagnostics(document, tokens, checkerName, options));
+      diagnostics.push(
+        ...externalTypeDiagnostics(document, tokens, checkerName, compilerOptions, options)
+      );
       return analysis;
     }
     for (const problem of [...(checked?.errors ?? []), ...(checked?.warnings ?? [])]) {
       diagnostics.push(typeDiagnostic(document, tokens, problem));
     }
   }
-  diagnostics.push(...codegenDiagnostics(document, tokens, program, options));
+  diagnostics.push(...codegenDiagnostics(document, tokens, program, compilerOptions));
   return analysis;
 }
 
@@ -126,10 +129,10 @@ function codegenDiagnostics(
   document: TextDocument,
   tokens: LocatedToken[],
   program: Program,
-  options: AnalysisOptions
+  compilerOptions: DocumentCompilerOptions
 ): Diagnostic[] {
   const generator = new CodeGenerator({
-    experimentalDecorators: Boolean(options.compilerOptions?.experimentalDecorators),
+    experimentalDecorators: Boolean(compilerOptions.experimentalDecorators),
   });
   safely(() => generator.generate(program));
   return generator.getErrors().map(message => messageDiagnostic(document, tokens, message));
@@ -140,6 +143,7 @@ function externalTypeDiagnostics(
   document: TextDocument,
   tokens: LocatedToken[],
   checkerName: string,
+  compilerOptions: DocumentCompilerOptions,
   options: AnalysisOptions
 ): Diagnostic[] {
   const checker = resolveChecker(checkerName, options.hooks);
@@ -148,7 +152,7 @@ function externalTypeDiagnostics(
       safely(() =>
         checker(document.text, {
           fileName: options.fileName,
-          compilerOptions: options.compilerOptions ?? {},
+          compilerOptions,
           locale: options.locale ?? 'en',
         })
       ) ?? [];
@@ -158,10 +162,11 @@ function externalTypeDiagnostics(
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { compile } = require('../compiler') as typeof import('../compiler');
   const compiled = compile(document.text, {
-    ...options.compilerOptions,
+    ...compilerOptions,
     typeCheck: true,
     locale: options.locale,
-    sourceFileName: options.fileName,
+    // Imports resolve from the file's directory
+    filePath: options.fileName,
   } as Parameters<typeof compile>[1]);
   return [
     ...compiled.errors.map(message => messageDiagnostic(document, tokens, message)),
