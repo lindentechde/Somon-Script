@@ -42,9 +42,9 @@ import {
   PropertyDefinition,
   SwitchStatement,
   SpreadElement,
-  Property,
   SwitchCase,
   ArrayPattern,
+  AssignmentPattern,
   ObjectPattern,
   PropertyPattern,
   TemplateLiteral,
@@ -1286,7 +1286,10 @@ export class CodeGenerator {
 
   private generateObjectExpression(node: ObjectExpression): string {
     const properties = node.properties
-      .map((prop: Property) => {
+      .map(prop => {
+        if (prop.type === 'SpreadElement') {
+          return this.generateSpreadElement(prop);
+        }
         const key = prop.computed
           ? `[${this.generateExpression(prop.key)}]`
           : this.generateExpression(prop.key);
@@ -1579,10 +1582,14 @@ export class CodeGenerator {
   }
 
   // Pattern generation methods
-  private generatePattern(node: Identifier | ArrayPattern | ObjectPattern): string {
+  private generatePattern(
+    node: Identifier | ArrayPattern | ObjectPattern | AssignmentPattern
+  ): string {
     switch (node.type) {
       case 'Identifier':
         return this.generateIdentifier(node);
+      case 'AssignmentPattern':
+        return `${this.generatePattern(node.left)} = ${this.generateExpression(node.right)}`;
       case 'ArrayPattern':
         return this.generateArrayPattern(node);
       case 'ObjectPattern':

@@ -904,6 +904,7 @@ export class TypeChecker {
 
     if (objExpr.properties) {
       for (const prop of objExpr.properties) {
+        if (prop.type === 'SpreadElement') continue;
         if (prop.key && prop.value) {
           const keyName =
             prop.key.type === 'Identifier'
