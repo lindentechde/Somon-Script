@@ -294,6 +294,10 @@ types it needs.
 | `import x = require("m");`       | `ворид х = require("м");`           | CommonJS interop                          |
 | `import x = N.a;`                | `ворид х = Н.а;`                    | alias                                     |
 | `export = x;`                    | `содир = х;`                        | the only export of the module             |
+| `export { x as default }`        | `содир { х чун пешфарз };`          | also `содир { пешфарз } аз "м";`          |
+| `import { default as x }`        | `ворид { пешфарз чун х } аз "м";`   | any keyword with `чун`                    |
+| `export default function () {}`  | `содир пешфарз функсия () {}`       | also `синф {}`, `ҳамзамон функсия* () {}` |
+| `namespace A.B { }`              | `номфазо А.Б { }`                   | `номфазо А { содир номфазо Б { } }`       |
 | `#!/usr/bin/env node`            | same, on the first line             | kept as the output's first line           |
 | `function f(x: number): number;` | `функсия ф(х: рақам): рақам;`       | overload signature                        |
 | `function f(this: T, x: U)`      | `функсия ф(ин: Т, х: У)`            | `this` parameter, erased                  |
@@ -474,6 +478,9 @@ namespace keeps its usual output.
 - `import.meta` (`ворид.meta`) outside ES module output: see
   [Type Checking and Module Output](15-type-checking.md).
 - `export as namespace N;`: it only appears in declaration (`.d.ts`) files.
+- Import attributes (`import data from "./d.json" with { type: "json" }`) and
+  module export names written as strings (`import { "a-b" as x }`): SomonScript
+  has no form for them yet.
 - `emitDecoratorMetadata`, and decorators on overload signatures or in `эълон`
   declarations (TypeScript rejects those too).
 

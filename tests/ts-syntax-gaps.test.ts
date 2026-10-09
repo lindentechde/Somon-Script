@@ -836,6 +836,54 @@ describe('the rest of the TypeScript 5.4 type syntax', () => {
   });
 });
 
+describe('modules and namespaces', () => {
+  test('`пешфарз` and keywords as export names', () => {
+    const source = [
+      'ворид { пешфарз чун ҳисоб, агар чун шарт } аз "./м";',
+      'содир { пешфарз } аз "./н";',
+      'содир { пешфарз чун дигар, а чун пешфарз } аз "./о";',
+      'собит у = ҳисоб(шарт);',
+      'содир { у чун пешфарз, у чун return };',
+    ].join('\n');
+    expect(compile(source, { module: 'esm', typeCheck: false }).code).toBe(
+      [
+        'import { default as ҳисоб, агар as шарт } from "./м.js";',
+        'export { default } from "./н.js";',
+        'export { default as дигар, а as default } from "./о.js";',
+        'const у = ҳисоб(шарт);',
+        'export { у as default, у as return };',
+      ].join('\n')
+    );
+    expect(compile(source, { typeCheck: false }).code).toContain(
+      'const { default: ҳисоб, агар: шарт } = __somon_import_0;'
+    );
+    expect(errorsOf('ворид { агар } аз "./м";\nсодир { бозгашт };')).toEqual([
+      "'агар' is a keyword and cannot be a local name; write 'агар чун ном' at line 1, column 9",
+      "'бозгашт' is a keyword and cannot be a local name; write 'бозгашт чун ном' at line 2, column 9",
+    ]);
+  });
+
+  test('dotted namespaces and more namespace members', async () => {
+    expect(
+      await run(
+        [
+          'номфазо Асбоб.Матн { содир собит ном = "матн"; }',
+          'номфазо Асбоб.Рақам { содир функсия дубора(х: рақам): рақам { бозгашт х * 2; } }',
+          'номфазо Асл { содир собит қимат = 3; }',
+          'номфазо Н {',
+          '    содир ҳамзамон функсия дер(): Ваъда<рақам> { бозгашт 1; }',
+          '    содир мавҳум синф Шакл { мавҳум масоҳат(): рақам; }',
+          '    содир ворид қимат = Асл.қимат;',
+          '}',
+          'синф Доира мерос Н.Шакл { масоҳат(): рақам { бозгашт 3; } }',
+          'чоп.сабт(Асбоб.Матн.ном, Асбоб.Рақам.дубора(2), Н.қимат, нав Доира().масоҳат());',
+          'Н.дер().then(х => чоп.сабт(х));',
+        ].join('\n')
+      )
+    ).toEqual(['матн 4 3 3', '1']);
+  });
+});
+
 describe('classes, loops and patterns', () => {
   test('any expression as a base class', async () => {
     expect(

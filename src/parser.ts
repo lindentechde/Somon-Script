@@ -3452,8 +3452,9 @@ export class Parser {
     return declaration;
   }
 
-  public importDeclaration(): ImportDeclaration | ImportEqualsDeclaration {
-    const importToken = this.previous();
+  public importDeclaration(
+    importToken: Token = this.previous()
+  ): ImportDeclaration | ImportEqualsDeclaration {
     const specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier> =
       [];
     // `ворид навъ { Т } аз "./м";`: types only
@@ -3595,6 +3596,27 @@ export class Parser {
     throw new Error(`${errorMessage} at line ${this.peek().line}, column ${this.peek().column}`);
   }
 
+  /**
+   * The name a module exports, in `ворид { ном чун х }` and
+   * `содир { х чун ном }`: any word, as in JavaScript; `пешфарз` is `default`.
+   */
+  private parseModuleExportName(errorMessage: string): Token {
+    const token = this.peek();
+    if (!this.isIdentifierNameToken(token)) {
+      throw new Error(`${errorMessage} at line ${token.line}, column ${token.column}`);
+    }
+    this.advance();
+    return token.type === TokenType.ПЕШФАРЗ ? { ...token, value: 'default' } : token;
+  }
+
+  /** A keyword imported or exported by name needs `чун`: `{ пешфарз чун х }`. */
+  private checkBindingName(name: Token): void {
+    if (this.isPlainIdentifierToken(name)) return;
+    this.errors.push(
+      `'${name.value}' is a keyword and cannot be a local name; write '${name.value} чун ном' at line ${name.line}, column ${name.column}`
+    );
+  }
+
   private createImportSpecifier(imported: Token, local: Token): ImportSpecifier {
     return {
       type: 'ImportSpecifier',
@@ -3626,11 +3648,14 @@ export class Parser {
       // A trailing comma is allowed: `{ а, б, }`
       if (specifiers.length > 0 && this.check(TokenType.RIGHT_BRACE)) break;
       const typeOnly = this.matchSpecifierTypeModifier();
-      const imported = this.parseImportOrExportName('Expected import name');
+      // `{ пешфарз чун х }`: any exported name, but the local one must be a name
+      const imported = this.parseModuleExportName('Expected import name');
       let local = imported;
 
       if (this.match(TokenType.ЧУН)) {
         local = this.parseImportOrExportName("Expected local name after 'чун'");
+      } else {
+        this.checkBindingName(imported);
       }
 
       const specifier = this.createImportSpecifier(imported, local);
@@ -3666,40 +3691,7 @@ export class Parser {
     if (this.match(TokenType.ПЕШФАРЗ)) return this.defaultExport(exportToken);
 
     // Handle: содир { name1, name2 }
-    if (this.match(TokenType.LEFT_BRACE)) {
-      const specifiers = this.parseExportSpecifiers();
-      this.consume(TokenType.RIGHT_BRACE, "Expected '}' after export specifiers");
-
-      // Handle: содир { name1, name2 } аз "module"
-      let source: Literal | undefined;
-      if (this.match(TokenType.АЗ)) {
-        const sourceToken = this.consume(TokenType.STRING, 'Expected module path after аз');
-        source = {
-          type: 'Literal',
-          value: sourceToken.value,
-          raw: `"${sourceToken.value}"`,
-          line: sourceToken.line,
-          column: sourceToken.column,
-        };
-      }
-
-      this.consumeSemicolon("Expected ';' after export statement");
-      if (typeOnly && specifiers.some(specifier => specifier.exportKind)) {
-        this.errors.push(
-          `The 'навъ' modifier cannot be used on a named export when 'содир навъ' is used on its export statement at line ${exportToken.line}, column ${exportToken.column}`
-        );
-      }
-
-      return {
-        type: 'ExportDeclaration',
-        specifiers,
-        source,
-        default: false,
-        ...kind,
-        line: exportToken.line,
-        column: exportToken.column,
-      };
-    }
+    if (this.match(TokenType.LEFT_BRACE)) return this.namedExports(exportToken, typeOnly);
 
     // Handle: содир * аз "module", содир * чун Н аз "module"
     if (this.match(TokenType.MULTIPLY)) {
@@ -3857,7 +3849,50 @@ export class Parser {
     };
   }
 
-  private parseExportSpecifiers(): ExportSpecifier[] {
+  /** `содир { а, б чун в };` and `содир { а } аз "./м";`, after the `{`. */
+  private namedExports(exportToken: Token, typeOnly: boolean): ExportDeclaration {
+    const localTokens: Token[] = [];
+    const specifiers = this.parseExportSpecifiers(localTokens);
+    this.consume(TokenType.RIGHT_BRACE, "Expected '}' after export specifiers");
+
+    // Handle: содир { name1, name2 } аз "module"
+    let source: Literal | undefined;
+    if (this.match(TokenType.АЗ)) {
+      const sourceToken = this.consume(TokenType.STRING, 'Expected module path after аз');
+      source = {
+        type: 'Literal',
+        value: sourceToken.value,
+        raw: `"${sourceToken.value}"`,
+        line: sourceToken.line,
+        column: sourceToken.column,
+      };
+    }
+
+    this.consumeSemicolon("Expected ';' after export statement");
+    // Without `аз`, the specifiers export names of this module
+    if (!source) localTokens.forEach(token => this.checkBindingName(token));
+    if (typeOnly && specifiers.some(specifier => specifier.exportKind)) {
+      this.errors.push(
+        `The 'навъ' modifier cannot be used on a named export when 'содир навъ' is used on its export statement at line ${exportToken.line}, column ${exportToken.column}`
+      );
+    }
+
+    return {
+      type: 'ExportDeclaration',
+      specifiers,
+      source,
+      default: false,
+      ...(typeOnly && { exportKind: 'type' as const }),
+      line: exportToken.line,
+      column: exportToken.column,
+    };
+  }
+
+  /**
+   * The specifiers of `содир { … }`; `localTokens` receives the token of each
+   * local name, which must be a name unless `аз "./м"` follows.
+   */
+  private parseExportSpecifiers(localTokens: Token[]): ExportSpecifier[] {
     const specifiers: ExportSpecifier[] = [];
 
     if (this.check(TokenType.RIGHT_BRACE)) {
@@ -3868,11 +3903,13 @@ export class Parser {
       // A trailing comma is allowed: `{ а, б, }`
       if (specifiers.length > 0 && this.check(TokenType.RIGHT_BRACE)) break;
       const typeOnly = this.matchSpecifierTypeModifier();
-      const local = this.parseImportOrExportName('Expected export name');
+      // `{ х чун пешфарз }`, `{ пешфарз } аз "./м"`: export names may be any word
+      const local = this.parseModuleExportName('Expected export name');
+      localTokens.push(local);
       let exported = local;
 
       if (this.match(TokenType.ЧУН)) {
-        exported = this.parseImportOrExportName("Expected export alias after 'чун'");
+        exported = this.parseModuleExportName("Expected export alias after 'чун'");
       }
 
       const specifier = this.createExportSpecifier(local, exported);
@@ -6700,6 +6737,24 @@ export class Parser {
   public namespaceDeclaration(): NamespaceDeclaration {
     const namespaceToken = this.previous();
     const name = this.consume(TokenType.IDENTIFIER, 'Expected namespace name');
+    // `номфазо А.Б { … }` is `номфазо А { содир номфазо Б { … } }`
+    if (this.match(TokenType.DOT)) {
+      const inner = this.namespaceDeclaration();
+      inner.exported = true;
+      return {
+        type: 'NamespaceDeclaration',
+        name: this.createIdentifier(name),
+        body: {
+          type: 'NamespaceBody',
+          statements: [inner],
+          line: namespaceToken.line,
+          column: namespaceToken.column,
+        },
+        ...(this.ambient && { declare: true }),
+        line: namespaceToken.line,
+        column: namespaceToken.column,
+      };
+    }
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after namespace name");
 
     const statements: Statement[] = [];
@@ -6756,6 +6811,8 @@ export class Parser {
       if (isExported) (enumDecl as Statement & { exported?: boolean }).exported = true;
       return enumDecl;
     }
+    const declaration = this.namespaceModifiedDeclaration();
+    if (declaration) return this.markExported(declaration, isExported);
 
     const declarationParsers: [TokenType | TokenType[], () => Statement | null][] = [
       [TokenType.ИНТЕРФЕЙС, () => this.interfaceDeclaration()],
@@ -6783,6 +6840,33 @@ export class Parser {
     }
     // Any other statement runs inside the namespace's function body
     return this.statement();
+  }
+
+  /**
+   * Namespace members that start with a modifier or `ворид`: `ҳамзамон функсия`,
+   * `мавҳум синф` and the alias `ворид х = Н.а;` (also exported:
+   * `содир ворид х = Н.а;`).
+   */
+  private namespaceModifiedDeclaration(): Statement | null {
+    if (this.isAsyncFunctionStart()) {
+      this.advance(); // 'ҳамзамон' / 'async'
+      this.advance(); // 'функсия'
+      const func = this.functionDeclaration();
+      func.async = true;
+      return func;
+    }
+    if (this.checkSequence(TokenType.МАВҲУМ, TokenType.СИНФ)) {
+      this.advance();
+      this.advance();
+      const classDecl = this.classDeclaration() as ClassDeclaration & { abstract?: boolean };
+      classDecl.abstract = true;
+      return classDecl;
+    }
+    const next = this.peekNext();
+    if (this.check(TokenType.ВОРИД) && next && this.isPlainIdentifierToken(next)) {
+      return this.importDeclaration(this.advance());
+    }
+    return null;
   }
 
   private markExported(statement: Statement | null, isExported: boolean): Statement | null {

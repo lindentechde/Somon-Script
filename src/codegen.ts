@@ -2858,6 +2858,8 @@ export class CodeGenerator {
         return (stmt as NamespaceDeclaration).name.name;
       case 'EnumDeclaration':
         return (stmt as EnumDeclaration).name.name;
+      case 'ImportEqualsDeclaration':
+        return (stmt as ImportEqualsDeclaration).id.name;
     }
     return null;
   }
