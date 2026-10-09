@@ -54,6 +54,12 @@ import {
   Property,
   RestElement,
   NonNullExpression,
+  DoWhileStatement,
+  LabeledStatement,
+  BreakStatement,
+  ContinueStatement,
+  EnumDeclaration,
+  YieldExpression,
 } from './types';
 import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
 
@@ -171,7 +177,17 @@ const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   MemberExpression: PREC.CALL,
   NewExpression: PREC.CALL,
   ImportExpression: PREC.CALL,
+  YieldExpression: PREC.ASSIGNMENT,
 };
+
+/** Statements `давом` may continue: the loops. */
+const LOOP_TYPES: ReadonlySet<string> = new Set([
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+]);
 
 export class CodeGenerator {
   private indentLevel: number = 0;
@@ -184,6 +200,12 @@ export class CodeGenerator {
   private jumpTargets = { loops: 0, switches: 0 };
   /** Whether statements are prefixed with position markers (`generateWithMappings`). */
   private trackPositions = false;
+  /** Labels around the current statement in the current function, innermost last. */
+  private labels: Array<{ name: string; isLoop: boolean }> = [];
+  /** Whether the current function is `ҳамзамон` (allows `барои интизор`). */
+  private inAsyncFunction = false;
+  /** While generating an enum member initializer: how to read each earlier member. */
+  private enumMembers?: ReadonlyMap<string, string>;
 
   /**
    * Return diagnostics collected during generation. Codegen follows the same
@@ -367,6 +389,19 @@ export class CodeGenerator {
         return this.withJumpTarget('loops', () =>
           this.generateWhileStatement(node as WhileStatement)
         );
+      case 'DoWhileStatement':
+        return this.withJumpTarget('loops', () =>
+          this.generateDoWhileStatement(node as DoWhileStatement)
+        );
+      case 'LabeledStatement':
+        return this.generateLabeledStatement(node as LabeledStatement);
+      case 'EmptyStatement':
+        // Nothing to run; a body that is only `;` becomes `{}`
+        return '';
+      case 'DebuggerStatement':
+        return this.indent('debugger;');
+      case 'EnumDeclaration':
+        return this.generateEnumDeclaration(node as EnumDeclaration);
       // A loop head binding one name twice (`барои (собит [а, а] аз …)`) is an early error
       case 'ForStatement':
         if ((node as ForStatement).init) {
@@ -381,6 +416,11 @@ export class CodeGenerator {
           this.withJumpTarget('loops', () => this.generateForInStatement(node as ForInStatement))
         );
       case 'ForOfStatement':
+        if ((node as ForOfStatement).await && !this.inAsyncFunction) {
+          this.errors.push(
+            `Illegal for await statement at line ${node.line}, column ${node.column}: 'барои интизор' must be inside a 'ҳамзамон' function`
+          );
+        }
         this.checkRedeclarations([(node as ForOfStatement).left]);
         return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
           this.withJumpTarget('loops', () => this.generateForOfStatement(node as ForOfStatement))
@@ -410,6 +450,9 @@ export class CodeGenerator {
         );
       }
       case 'BreakStatement':
+        if ((node as BreakStatement).label) {
+          return this.generateLabeledJump(node as BreakStatement, 'break');
+        }
         if (this.jumpTargets.loops + this.jumpTargets.switches === 0) {
           this.errors.push(
             `Illegal break statement at line ${node.line}, column ${node.column}: 'шикастан' must be inside a loop or 'интихоб'`
@@ -417,6 +460,9 @@ export class CodeGenerator {
         }
         return this.indent('break;');
       case 'ContinueStatement':
+        if ((node as ContinueStatement).label) {
+          return this.generateLabeledJump(node as ContinueStatement, 'continue');
+        }
         if (this.jumpTargets.loops === 0) {
           this.errors.push(
             `Illegal continue statement at line ${node.line}, column ${node.column}: 'давом' must be inside a loop`
@@ -441,10 +487,11 @@ export class CodeGenerator {
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
     const async = node.async ? 'async ' : '';
+    const star = node.generator ? '*' : '';
     const name = this.generateIdentifier(node.name, true);
-    const { params, body } = this.generateFunctionParts(node.params, node.body);
+    const { params, body } = this.generateFunctionParts(node.params, node.body, node.async);
 
-    return this.indent(`${async}function ${name}(${params}) ${body}`);
+    return this.indent(`${async}function${star} ${name}(${params}) ${body}`);
   }
 
   /**
@@ -471,12 +518,16 @@ export class CodeGenerator {
   /** Parameter list and body of a function, with the parameters in scope. */
   private generateFunctionParts(
     params: Parameter[] | undefined,
-    body: BlockStatement
+    body: BlockStatement,
+    isAsync = false
   ): { params: string; body: string } {
     const paramNames = this.paramNames(params);
     return this.withScope(paramNames, () => ({
       params: this.generateParams(params),
-      body: this.withFunctionBoundary(() => this.generateBlockStatement(body, [], paramNames)),
+      body: this.withFunctionBoundary(
+        () => this.generateBlockStatement(body, [], paramNames),
+        Boolean(isAsync)
+      ),
     }));
   }
 
@@ -509,6 +560,8 @@ export class CodeGenerator {
     );
     this.indentLevel--;
 
+    // A block of empty statements (`{ ; }`) is empty
+    if (statements.length === 0) return '{}';
     return `{\n${statements.join('\n')}\n${this.getIndent()}}`;
   }
 
@@ -554,6 +607,58 @@ export class CodeGenerator {
     return this.indent(`while (${test}) `) + this.generateBody(node.body);
   }
 
+  private generateDoWhileStatement(node: DoWhileStatement): string {
+    const body = this.generateBody(node.body);
+    const test = this.generateExpression(node.test);
+    return this.indent('do ') + `${body} while (${test});`;
+  }
+
+  /**
+   * `берун: барои (…) { … }`. As in JavaScript, a label may not repeat one
+   * that encloses it, and only labels of loops can be continued.
+   */
+  private generateLabeledStatement(node: LabeledStatement): string {
+    const name = node.label.name;
+    if (this.labels.some(label => label.name === name)) {
+      this.errors.push(
+        `Label '${name}' has already been declared at line ${node.line}, column ${node.column}`
+      );
+    }
+    if (JS_RESERVED_WORDS.has(name)) {
+      this.errors.push(
+        `'${name}' is a reserved word in JavaScript and cannot be used as a label at line ${node.line}, column ${node.column}`
+      );
+    }
+    let target = node.body;
+    while (target?.type === 'LabeledStatement') target = (target as LabeledStatement).body;
+    this.labels.push({ name, isLoop: LOOP_TYPES.has(target?.type) });
+    try {
+      // The body continues the label's line: drop its indentation (but keep
+      // its position marker, which follows the indentation)
+      const body = this.generateStatement(node.body).slice(this.getIndent().length);
+      return this.indent(`${name}: ${body || ';'}`);
+    } finally {
+      this.labels.pop();
+    }
+  }
+
+  /** `шикастан берун;` / `давом берун;` */
+  private generateLabeledJump(
+    node: BreakStatement | ContinueStatement,
+    keyword: 'break' | 'continue'
+  ): string {
+    const name = node.label!.name;
+    const label = this.labels.find(candidate => candidate.name === name);
+    if (!label) {
+      this.errors.push(`Undefined label '${name}' at line ${node.line}, column ${node.column}`);
+    } else if (keyword === 'continue' && !label.isLoop) {
+      this.errors.push(
+        `Illegal continue statement at line ${node.line}, column ${node.column}: '${name}' does not label a loop`
+      );
+    }
+    return this.indent(`${keyword} ${name};`);
+  }
+
   private generateForStatement(node: ForStatement): string {
     const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
     const test = node.test ? this.generateExpression(node.test) : '';
@@ -570,7 +675,8 @@ export class CodeGenerator {
   private generateForOfStatement(node: ForOfStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
     const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
-    return this.indent(`for (${left} of ${right}) `) + this.generateBody(node.body);
+    const head = node.await ? 'for await' : 'for';
+    return this.indent(`${head} (${left} of ${right}) `) + this.generateBody(node.body);
   }
 
   private generateExpressionStatement(node: ExpressionStatement): string {
@@ -665,6 +771,7 @@ export class CodeGenerator {
       'ImportExpression',
       'ArrowFunctionExpression',
       'FunctionExpression',
+      'YieldExpression',
     ];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
@@ -750,6 +857,8 @@ export class CodeGenerator {
         return this.generateArrowFunctionExpression(node as ArrowFunctionExpression);
       case 'FunctionExpression':
         return this.generateFunctionExpression(node as FunctionExpression);
+      case 'YieldExpression':
+        return this.generateYieldExpression(node as YieldExpression);
       default:
         return this.handleUnknownExpression(node);
     }
@@ -758,8 +867,16 @@ export class CodeGenerator {
   private generateFunctionExpression(node: FunctionExpression): string {
     const async = node.async ? 'async ' : '';
     const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
-    const { params, body } = this.generateFunctionParts(node.params, node.body);
-    return `${async}function${name}(${params}) ${body}`;
+    // `function* (…)`, `function* ном(…)`
+    const head = node.generator ? `function*${name || ' '}` : `function${name}`;
+    const { params, body } = this.generateFunctionParts(node.params, node.body, node.async);
+    return `${async}${head}(${params}) ${body}`;
+  }
+
+  private generateYieldExpression(node: YieldExpression): string {
+    const keyword = node.delegate ? 'yield*' : 'yield';
+    if (!node.argument) return keyword;
+    return `${keyword} ${this.generateExpression(node.argument, PREC.ASSIGNMENT)}`;
   }
 
   private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
@@ -767,7 +884,11 @@ export class CodeGenerator {
 
     if (node.body.type === 'BlockStatement') {
       // Block body
-      const { params, body } = this.generateFunctionParts(node.params, node.body as BlockStatement);
+      const { params, body } = this.generateFunctionParts(
+        node.params,
+        node.body as BlockStatement,
+        node.isAsync
+      );
       return `${async}(${params}) => ${body}`;
     }
 
@@ -962,6 +1083,12 @@ export class CodeGenerator {
 
   /** `binding`: the identifier declares a name rather than referencing one. */
   private generateIdentifier(node: Identifier, binding: boolean = false): string {
+    // In an enum member initializer, earlier members are read by name: `Б = А + ф()`
+    const enumMember = binding ? undefined : this.enumMembers?.get(translateMemberName(node.name));
+    if (enumMember) {
+      return enumMember;
+    }
+
     // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
     // when the program does not declare a binding of that name in scope;
     // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
@@ -1028,14 +1155,23 @@ export class CodeGenerator {
     }
   }
 
-  /** Run `generate` for a function body: loops around the function are not jump targets. */
-  private withFunctionBoundary<T>(generate: () => T): T {
+  /**
+   * Run `generate` for a function body: loops and labels around the function
+   * are not jump targets. `isAsync`: the function is `ҳамзамон`.
+   */
+  private withFunctionBoundary<T>(generate: () => T, isAsync = false): T {
     const outer = this.jumpTargets;
+    const outerLabels = this.labels;
+    const outerAsync = this.inAsyncFunction;
     this.jumpTargets = { loops: 0, switches: 0 };
+    this.labels = [];
+    this.inAsyncFunction = isAsync;
     try {
       return generate();
     } finally {
       this.jumpTargets = outer;
+      this.labels = outerLabels;
+      this.inAsyncFunction = outerAsync;
     }
   }
 
@@ -1088,8 +1224,10 @@ export class CodeGenerator {
       case 'FunctionDeclaration':
       case 'ClassDeclaration':
       case 'NamespaceDeclaration':
+      case 'EnumDeclaration':
         names.push(
-          (stmt as FunctionDeclaration | ClassDeclaration | NamespaceDeclaration).name.name
+          (stmt as FunctionDeclaration | ClassDeclaration | NamespaceDeclaration | EnumDeclaration)
+            .name.name
         );
         break;
       case 'ImportDeclaration':
@@ -1386,8 +1524,9 @@ export class CodeGenerator {
     if (prop.method && prop.value.type === 'FunctionExpression') {
       const fn = prop.value as FunctionExpression;
       const asyncPrefix = fn.async ? 'async ' : '';
-      const { params, body } = this.generateFunctionParts(fn.params, fn.body);
-      return `${asyncPrefix}${key}(${params}) ${body}`;
+      const star = fn.generator ? '*' : '';
+      const { params, body } = this.generateFunctionParts(fn.params, fn.body, fn.async);
+      return `${asyncPrefix}${star}${key}(${params}) ${body}`;
     }
     const value = this.generateExpression(prop.value, PREC.ASSIGNMENT);
     return `${key}: ${value}`;
@@ -1470,6 +1609,210 @@ export class CodeGenerator {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
     const name = node.name.name;
     return this.indent(`// Type alias: ${name}\n`);
+  }
+
+  /**
+   * `шумориш Ранг { Сурх, Сабз = 5, Ном = "н" }` (also `собит шумориш`) as
+   * TypeScript emits an enum:
+   *
+   *   var Ранг;
+   *   (function (Ранг) {
+   *     Ранг[Ранг["Сурх"] = 0] = "Сурх";
+   *     Ранг[Ранг["Сабз"] = 5] = "Сабз";
+   *     Ранг["Ном"] = "н";
+   *   })(Ранг || (Ранг = {}));
+   *
+   * Constant initializers (literals, arithmetic, earlier members) are folded,
+   * string members get no reverse mapping, and a member without initializer
+   * is the previous numeric member plus one. Member names go through the
+   * member-name mapping, like `Ранг.дарозӣ` (→ `Ранг.length`) does.
+   */
+  private generateEnumDeclaration(node: EnumDeclaration): string {
+    const name = this.generateIdentifier(node.name, true);
+    // At the top level a `var`, as TypeScript emits it; in a block a `let`,
+    // which stays in the block like every SomonScript declaration
+    const keyword = this.scopes.length <= 1 ? 'var' : 'let';
+    const values = new Map<string, number | string>();
+    const earlier = new Map<string, string>();
+    let previous: number | string | undefined = -1;
+
+    this.indentLevel++;
+    const lines = node.members.map(member => {
+      const key =
+        member.id.type === 'Identifier'
+          ? translateMemberName((member.id as Identifier).name)
+          : String((member.id as Literal).value);
+      const keyText = this.enumValueText(key);
+      let value: number | string | undefined;
+      let code: string;
+      if (member.initializer) {
+        value = this.enumConstant(member.initializer, node.name.name, values);
+        code =
+          value === undefined
+            ? this.withEnumMembers(earlier, () =>
+                this.generateExpression(member.initializer!, PREC.ASSIGNMENT)
+              )
+            : this.enumValueText(value);
+      } else if (typeof previous === 'number') {
+        value = previous + 1;
+        code = this.enumValueText(value);
+      } else {
+        this.errors.push(
+          `Enum member '${key}' must have an initializer at line ${member.line}, column ${member.column}`
+        );
+        code = 'undefined';
+      }
+      if (value !== undefined) values.set(key, value);
+      earlier.set(
+        key,
+        /^[\p{L}_$][\p{L}\p{N}\p{M}_$]*$/u.test(key) ? `${name}.${key}` : `${name}[${keyText}]`
+      );
+      previous = value;
+      return typeof value === 'string'
+        ? this.indent(`${name}[${keyText}] = ${code};`)
+        : this.indent(`${name}[${name}[${keyText}] = ${code}] = ${keyText};`);
+    });
+    this.indentLevel--;
+
+    const body = lines.length > 0 ? `{\n${lines.join('\n')}\n${this.getIndent()}}` : '{}';
+    return [
+      this.indent(`${keyword} ${name};`),
+      this.indent(`(function (${name}) ${body})(${name} || (${name} = {}));`),
+    ].join('\n');
+  }
+
+  /** Runs `generate` with earlier enum members readable by name (`Б = А + ф()`). */
+  private withEnumMembers<T>(members: Map<string, string>, generate: () => T): T {
+    const outer = this.enumMembers;
+    this.enumMembers = new Map(members);
+    try {
+      return generate();
+    } finally {
+      this.enumMembers = outer;
+    }
+  }
+
+  private enumValueText(value: number | string): string {
+    if (typeof value === 'string') {
+      return this.generateLiteral({ type: 'Literal', value, raw: '', line: 0, column: 0 });
+    }
+    return Object.is(value, -0) ? '-0' : String(value);
+  }
+
+  /**
+   * Value of a constant enum initializer: number and string literals, `+ - ~`,
+   * arithmetic, bitwise and `+` concatenation, and earlier members (`А`,
+   * `Ранг.А`). Undefined when the value is only known at run time.
+   */
+  private enumConstant(
+    expr: Expression,
+    enumName: string,
+    values: Map<string, number | string>
+  ): number | string | undefined {
+    const operand = (e: Expression) => this.enumConstant(e, enumName, values);
+    switch (expr.type) {
+      case 'Literal': {
+        const { value, raw } = expr as Literal;
+        if (typeof value === 'string') return value;
+        return typeof value === 'number' && !/n$/.test(raw ?? '') ? value : undefined;
+      }
+      case 'TemplateLiteral': {
+        const template = expr as TemplateLiteral;
+        if (template.expressions.length > 0) return undefined;
+        return template.quasis.map(quasi => quasi.value.cooked ?? quasi.value.raw).join('');
+      }
+      case 'Identifier':
+        return values.get(translateMemberName((expr as Identifier).name));
+      case 'MemberExpression':
+        return CodeGenerator.enumMemberConstant(expr as MemberExpression, enumName, values);
+      case 'UnaryExpression': {
+        const unary = expr as UnaryExpression;
+        return CodeGenerator.foldUnary(unary.operator, operand(unary.argument));
+      }
+      case 'BinaryExpression': {
+        const binary = expr as BinaryExpression;
+        return CodeGenerator.foldBinary(
+          binary.operator,
+          operand(binary.left),
+          operand(binary.right)
+        );
+      }
+      default:
+        return undefined;
+    }
+  }
+
+  /** `Ранг.А` / `Ранг["А"]` naming an earlier member of the enum `enumName`. */
+  private static enumMemberConstant(
+    member: MemberExpression,
+    enumName: string,
+    values: Map<string, number | string>
+  ): number | string | undefined {
+    if (member.object.type !== 'Identifier' || (member.object as Identifier).name !== enumName) {
+      return undefined;
+    }
+    const property = member.property as Identifier | Literal;
+    if (!member.computed && property.type === 'Identifier') {
+      return values.get(translateMemberName((property as Identifier).name));
+    }
+    const literal = property as Literal;
+    return property.type === 'Literal' && typeof literal.value === 'string'
+      ? values.get(literal.value)
+      : undefined;
+  }
+
+  private static foldUnary(
+    operator: string,
+    argument: number | string | undefined
+  ): number | undefined {
+    if (typeof argument !== 'number') return undefined;
+    if (operator === '+') return argument;
+    if (operator === '-') return -argument;
+    return operator === '~' ? ~argument : undefined;
+  }
+
+  private static foldBinary(
+    operator: string,
+    left: number | string | undefined,
+    right: number | string | undefined
+  ): number | string | undefined {
+    if (left === undefined || right === undefined) return undefined;
+    if (operator === '+') {
+      return typeof left === 'number' && typeof right === 'number'
+        ? left + right
+        : `${left}${right}`;
+    }
+    if (typeof left !== 'number' || typeof right !== 'number') return undefined;
+    return CodeGenerator.foldNumeric(operator, left, right);
+  }
+
+  private static foldNumeric(operator: string, left: number, right: number): number | undefined {
+    switch (operator) {
+      case '-':
+        return left - right;
+      case '*':
+        return left * right;
+      case '/':
+        return left / right;
+      case '%':
+        return left % right;
+      case '**':
+        return left ** right;
+      case '<<':
+        return left << right;
+      case '>>':
+        return left >> right;
+      case '>>>':
+        return left >>> right;
+      case '&':
+        return left & right;
+      case '|':
+        return left | right;
+      case '^':
+        return left ^ right;
+      default:
+        return undefined;
+    }
   }
 
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
@@ -1581,6 +1924,8 @@ export class CodeGenerator {
         return (stmt as ClassDeclaration).name.name;
       case 'NamespaceDeclaration':
         return (stmt as NamespaceDeclaration).name.name;
+      case 'EnumDeclaration':
+        return (stmt as EnumDeclaration).name.name;
     }
     return null;
   }
@@ -1626,6 +1971,7 @@ export class CodeGenerator {
       node.kind === 'constructor' ? 'constructor' : translateMemberName(node.key.name);
     const isStatic = node.static ? 'static ' : '';
     const isAsync = node.value?.async ? 'async ' : '';
+    const star = node.value?.generator ? '*' : '';
 
     // Skip abstract methods - they don't exist in JavaScript
     if (node.abstract) {
@@ -1637,10 +1983,14 @@ export class CodeGenerator {
       const params = this.withScope(this.paramNames(node.value?.params), () =>
         this.generateParams(node.value?.params)
       );
-      return this.indent(`${isStatic}${isAsync}${methodName}(${params}) {}`);
+      return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) {}`);
     }
-    const { params, body } = this.generateFunctionParts(node.value.params, node.value.body);
-    return this.indent(`${isStatic}${isAsync}${methodName}(${params}) ${body}`);
+    const { params, body } = this.generateFunctionParts(
+      node.value.params,
+      node.value.body,
+      node.value.async
+    );
+    return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) ${body}`);
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {

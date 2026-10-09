@@ -559,3 +559,194 @@ describe('CodeGenerator - Core Coverage Tests', () => {
     });
   });
 });
+
+describe('CodeGenerator - statements and generators', () => {
+  test('do-while, labels, debugger and empty statements', () => {
+    const code = emitted([
+      'тағ х = 0;;',
+      'кун {',
+      '    х++;',
+      '} то (х < 3);',
+      'берун: барои (тағ и = 0; и < 3; и++) {',
+      '    дарун: кун {',
+      '        агар (и === 1) давом берун;',
+      '        шикастан дарун;',
+      '    } то (дуруст)',
+      '}',
+      'блок: {',
+      '    шикастан блок;',
+      '}',
+      'холӣ_: ;',
+      'агар (х);',
+      'то (нодуруст);',
+      'debugger;',
+    ]);
+    expect(code).toBe(
+      [
+        'let х = 0;',
+        'do {',
+        '  х++;',
+        '} while (х < 3);',
+        'берун: for (let и = 0; и < 3; и++) {',
+        '  дарун: do {',
+        '    if (и === 1) {',
+        '      continue берун;',
+        '    }',
+        '    break дарун;',
+        '  } while (true);',
+        '}',
+        'блок: {',
+        '  break блок;',
+        '}',
+        'холӣ_: ;',
+        'if (х) {}',
+        'while (false) {}',
+        'debugger;',
+      ].join('\n')
+    );
+  });
+
+  test('for await inside async functions', () => {
+    expect(
+      emitted([
+        'ҳамзамон функсия ф(р: ҳар) {',
+        '    барои интизор (собит х аз р) { чоп.сабт(х); }',
+        '}',
+      ])
+    ).toBe(
+      [
+        'async function ф(р) {',
+        '  for await (const х of р) {',
+        '    console.log(х);',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('enums are emitted as TypeScript emits them', () => {
+    const code = emitted([
+      'шумориш Ранг { Сурх, Сабз = 5, Кабуд }',
+      'собит шумориш Ҳаҷм { Хурд = 1, Калон = Хурд * 10, Манфӣ = -Хурд }',
+      'шумориш Самт { Боло = "боло", Ҳарду = Боло + "-поён" }',
+      'собит асос = 1;',
+      'содир шумориш Ҳисоб { А = асос + 1, Б = А * 2, дарозӣ = 7, "номи дароз" }',
+      'функсия ф() { шумориш Д {} }',
+    ]);
+    expect(code).toBe(
+      [
+        'var Ранг;',
+        '(function (Ранг) {',
+        '  Ранг[Ранг["Сурх"] = 0] = "Сурх";',
+        '  Ранг[Ранг["Сабз"] = 5] = "Сабз";',
+        '  Ранг[Ранг["Кабуд"] = 6] = "Кабуд";',
+        '})(Ранг || (Ранг = {}));',
+        'var Ҳаҷм;',
+        '(function (Ҳаҷм) {',
+        '  Ҳаҷм[Ҳаҷм["Хурд"] = 1] = "Хурд";',
+        '  Ҳаҷм[Ҳаҷм["Калон"] = 10] = "Калон";',
+        '  Ҳаҷм[Ҳаҷм["Манфӣ"] = -1] = "Манфӣ";',
+        '})(Ҳаҷм || (Ҳаҷм = {}));',
+        'var Самт;',
+        '(function (Самт) {',
+        '  Самт["Боло"] = "боло";',
+        '  Самт["Ҳарду"] = "боло-поён";',
+        '})(Самт || (Самт = {}));',
+        'const асос = 1;',
+        'var Ҳисоб;',
+        '(function (Ҳисоб) {',
+        '  Ҳисоб[Ҳисоб["А"] = асос + 1] = "А";',
+        '  Ҳисоб[Ҳисоб["Б"] = Ҳисоб.А * 2] = "Б";',
+        '  Ҳисоб[Ҳисоб["length"] = 7] = "length";',
+        '  Ҳисоб[Ҳисоб["номи дароз"] = 8] = "номи дароз";',
+        '})(Ҳисоб || (Ҳисоб = {}));',
+        'module.exports.Ҳисоб = Ҳисоб;',
+        'function ф() {',
+        '  let Д;',
+        '  (function (Д) {})(Д || (Д = {}));',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('generators, generator methods and yield precedence', () => {
+    const code = emitted([
+      'функсия* г(): Generator<рақам> {',
+      '    тағ а = ҳосил;',
+      '    ҳосил а + 1;',
+      '    тағ б = (ҳосил а) * 2;',
+      '    ф(ҳосил, ҳосил б);',
+      '    ҳосил* [1, 2];',
+      '}',
+      'собит е = функсия* () { ҳосил 1; };',
+      'ҳамзамон функсия* ах() { ҳосил интизор х; }',
+      'синф К { *а() { ҳосил 1; } статикӣ ҳамзамон *б() {} }',
+      'собит о = { *в() { ҳосил 2; } };',
+    ]);
+    expect(code).toBe(
+      [
+        'function* г() {',
+        '  let а = yield;',
+        '  yield а + 1;',
+        '  let б = (yield а) * 2;',
+        '  ф(yield, yield б);',
+        '  yield* [1, 2];',
+        '}',
+        'const е = function* () {',
+        '  yield 1;',
+        '};',
+        'async function* ах() {',
+        '  yield await х;',
+        '}',
+        'class К {',
+        '  *а() {',
+        '    yield 1;',
+        '  }',
+        '  static async *б() {}',
+        '}',
+        'const о = {*в() {',
+        '  yield 2;',
+        '}};',
+      ].join('\n')
+    );
+  });
+
+  test.each([
+    ['an undefined label', 'шикастан нест;', /Undefined label 'нест' at line 1, column 1/],
+    [
+      'continue to a label that is not a loop',
+      'то (дуруст) { л: { давом л; } }',
+      /Illegal continue statement at line 1, column 20: 'л' does not label a loop/,
+    ],
+    [
+      'a label repeated inside itself',
+      'л: { л: то (дуруст) {} }',
+      /Label 'л' has already been declared at line 1, column 6/,
+    ],
+    [
+      'a label of an enclosing function',
+      'л: то (дуруст) { функсия ф() { шикастан л; } }',
+      /Undefined label 'л'/,
+    ],
+    [
+      'for await outside async functions',
+      'функсия ф(р: ҳар) { барои интизор (собит х аз р) {} }',
+      /Illegal for await statement at line 1, column 21: 'барои интизор' must be inside a 'ҳамзамон' function/,
+    ],
+    [
+      'for await in a plain arrow inside an async function',
+      'ҳамзамон функсия ф(р: ҳар) { собит г = () => { барои интизор (собит х аз р) {} }; }',
+      /Illegal for await statement/,
+    ],
+    [
+      'an enum member after a string member',
+      'шумориш Р { А = "а", Б }',
+      /Enum member 'Б' must have an initializer at line 1, column 22/,
+    ],
+    ['a reserved word as a label', 'for: то (дуруст) {}', /'for' is a reserved word/],
+  ])('%s is a code generation error', (_name, source, message) => {
+    const result = compile(source, { typeCheck: false });
+    expect(result.errors).toEqual([expect.stringMatching(message)]);
+    expect(result.code).toBe('');
+  });
+});

@@ -84,6 +84,35 @@ describe('source maps', () => {
     expect(await originalOf(result.code, map, 'console.log(ф(х), а);')).toMatchObject({ line: 5 });
   });
 
+  test('labels, do-while, enums and generators map to their lines', async () => {
+    const statements = [
+      'шумориш Ранг { Сурх }',
+      'берун: барои (тағ и = 0; и < 1; и++) {',
+      '  кун {',
+      '    шикастан берун;',
+      '  } то (дуруст);',
+      '}',
+      'функсия* г() {',
+      '  ҳосил 1;',
+      '}',
+    ].join('\n');
+    const result = compile(statements, { sourceMap: true, typeCheck: false });
+    expect(result.errors).toEqual([]);
+    const map = JSON.parse(result.sourceMap!) as RawSourceMap;
+    const lines: Array<[string, number]> = [
+      ['var Ранг', 1],
+      ['берун:', 2],
+      ['for (', 2],
+      ['do {', 3],
+      ['break берун', 4],
+      ['function*', 7],
+      ['yield 1', 8],
+    ];
+    for (const [needle, line] of lines) {
+      expect(await originalOf(result.code, map, needle)).toMatchObject({ line });
+    }
+  });
+
   test('no source map unless requested', () => {
     expect(compile(source, { typeCheck: false }).sourceMap).toBeUndefined();
   });

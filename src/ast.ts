@@ -32,6 +32,8 @@ export interface FunctionDeclaration extends Statement {
   returnType?: TypeAnnotation;
   body: BlockStatement;
   async?: boolean;
+  /** Generator function: `функсия* ном() { … }`. */
+  generator?: boolean;
 }
 
 export interface Parameter extends ASTNode {
@@ -73,6 +75,45 @@ export interface WhileStatement extends Statement {
   body: Statement;
 }
 
+/** `кун { … } то (шарт);` — the body runs before the test. */
+export interface DoWhileStatement extends Statement {
+  type: 'DoWhileStatement';
+  body: Statement;
+  test: Expression;
+}
+
+/** `берун: барои (…) { … }` — a target for `шикастан берун;` / `давом берун;`. */
+export interface LabeledStatement extends Statement {
+  type: 'LabeledStatement';
+  label: Identifier;
+  body: Statement;
+}
+
+/** A lone `;`. */
+export interface EmptyStatement extends Statement {
+  type: 'EmptyStatement';
+}
+
+/** `debugger;` */
+export interface DebuggerStatement extends Statement {
+  type: 'DebuggerStatement';
+}
+
+/** `шумориш Ранг { Сурх, Сабз = 5 }`; `собит шумориш …` is a const enum. */
+export interface EnumDeclaration extends Statement {
+  type: 'EnumDeclaration';
+  name: Identifier;
+  members: EnumMember[];
+  const?: boolean;
+}
+
+export interface EnumMember extends ASTNode {
+  type: 'EnumMember';
+  /** `Сурх` or `"номи дароз"` */
+  id: Identifier | Literal;
+  initializer?: Expression;
+}
+
 export interface ForStatement extends Statement {
   type: 'ForStatement';
   init: VariableDeclaration | ExpressionStatement | null;
@@ -93,6 +134,8 @@ export interface ForOfStatement extends Statement {
   left: VariableDeclaration | Expression;
   right: Expression;
   body: Statement;
+  /** `барои интизор (собит х аз …)`: for await. */
+  await?: boolean;
 }
 
 export interface ExpressionStatement extends Statement {
@@ -331,6 +374,13 @@ export interface AwaitExpression extends Expression {
   argument: Expression;
 }
 
+/** `ҳосил х` / `ҳосил* итерабел` inside a generator; the argument is optional. */
+export interface YieldExpression extends Expression {
+  type: 'YieldExpression';
+  argument?: Expression;
+  delegate: boolean;
+}
+
 export interface NewExpression extends Expression {
   type: 'NewExpression';
   callee: Expression;
@@ -381,6 +431,8 @@ export interface FunctionExpression extends Expression {
   params: Parameter[];
   body: BlockStatement;
   async?: boolean;
+  /** Generator: `функсия* () { … }`, methods `*ном() { … }`. */
+  generator?: boolean;
   returnType?: TypeAnnotation;
 }
 

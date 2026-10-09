@@ -335,3 +335,146 @@ describe('members that do not exist', () => {
     expect(result.warnings).toEqual([expect.stringMatching(/PROPERTY_NOT_FOUND/)]);
   });
 });
+
+describe('do-while and labeled statements', () => {
+  test.each([
+    [
+      'a value the body set to холӣ on an earlier iteration',
+      'функсия ф(г0: Г) { тағ г: Г | холӣ = г0; тағ и = 0; кун { чоп.сабт(г.қ); г = холӣ; и++; } то (и < 3); }',
+    ],
+    [
+      'a value the body reassigns without a check',
+      'функсия ф(сар: Г) { тағ ҷ: Г | холӣ = сар; кун { чоп.сабт(ҷ.қ); ҷ = ҷ.навбатӣ; } то (дуруст); }',
+    ],
+    [
+      'a шикастан before the assignment',
+      'функсия ф(ш: мантиқӣ) { тағ г: Г | холӣ = холӣ; кун { агар (ш) шикастан; г = нав Г(1); } то (нодуруст); чоп.сабт(г.қ); }',
+    ],
+    [
+      'a давом before the assignment, at the test',
+      'функсия ф(ш: мантиқӣ) { тағ г: Г | холӣ = холӣ; кун { агар (ш) давом; г = нав Г(1); } то (г.қ > 0); }',
+    ],
+    [
+      'after a labeled block left early',
+      'функсия ф(г: Г | холӣ) { л: { агар (г === холӣ) шикастан л; чоп.сабт(г.қ); } чоп.сабт(г.қ); }',
+    ],
+  ])('%s', (_name, source) => {
+    expectError(source, /POSSIBLY_NULL/);
+  });
+
+  test.each([
+    [
+      'a list walked by a do-while',
+      'функсия ф(сар: Г): рақам { тағ ҷ: Г | холӣ = сар; тағ ҷамъ = 0; кун { ҷамъ += ҷ.қ; ҷ = ҷ.навбатӣ; } то (ҷ !== холӣ); бозгашт ҷамъ; }',
+    ],
+    [
+      'an assignment in the body',
+      'тағ г: Г | холӣ = холӣ; кун { г = нав Г(1); } то (нодуруст); чоп.сабт(г.қ);',
+    ],
+    [
+      'the test after the loop',
+      'функсия ф(п: () => Г | холӣ) { тағ г: Г | холӣ = холӣ; кун { г = п(); } то (г === холӣ); чоп.сабт(г.қ); }',
+    ],
+    [
+      'a check before the loop',
+      'функсия ф(г: Г | холӣ) { агар (г === холӣ) бозгашт; тағ и = 0; кун { и++; чоп.сабт(г.қ); } то (и < 3); чоп.сабт(г.қ); }',
+    ],
+    [
+      'давом of a nested loop',
+      'функсия ф(ш: мантиқӣ) { тағ г: Г | холӣ = холӣ; кун { барои (собит х аз [1]) { агар (ш) давом; } г = нав Г(1); } то (г.қ > 0); }',
+    ],
+    [
+      'inside a labeled block',
+      'функсия ф(г: Г | холӣ) { л: { агар (г === холӣ) шикастан л; чоп.сабт(г.қ); } }',
+    ],
+    [
+      'a labeled block that always returns',
+      'функсия ф(г: Г | холӣ): рақам { агар (г === холӣ) л: { бозгашт 0; } бозгашт г.қ; }',
+    ],
+    [
+      'давом to a labeled loop',
+      'функсия ф(р: (Г | холӣ)[]) { берун: барои (собит г аз р) { агар (г === холӣ) давом берун; чоп.сабт(г.қ); } }',
+    ],
+  ])('%s', (_name, source) => {
+    expectClean(source);
+  });
+});
+
+describe('enums', () => {
+  test.each([
+    [
+      'members as values and the enum as a type',
+      'шумориш Р { А, Б = 5 } тағ р: Р = Р.А; р = Р.Б; собит н: рақам = Р.Б; функсия ф(х: Р): рақам { бозгашт х + 1; } ф(Р.А);',
+    ],
+    [
+      'a widened member kept in a variable',
+      'шумориш Р { А } тағ р = Р.А; тағ р2: Р = р; шумориш С { А = "а" } тағ с = С.А; тағ с2: С = с; собит з: сатр = С.А;',
+    ],
+    ['initializers naming earlier members', 'шумориш Р { А = 1, Б = А * 2, В = Р.Б + 1 }'],
+    [
+      'the enum type used before the enum',
+      'интерфейс И { р: Р; } функсия ф(р: Р) {} шумориш Р { А }',
+    ],
+    ['a const enum in a function', 'функсия ф(): рақам { собит шумориш Д { А = 2 } бозгашт Д.А; }'],
+    ['reverse mapping', 'шумориш Р { А } собит н = Р[0];'],
+  ])('%s', (_name, source) => {
+    expectClean(source);
+  });
+
+  test.each([
+    ['an unknown member', 'шумориш Р { А } чоп.сабт(Р.Б);', /'Б' does not exist on type 'навъи Р'/],
+    ['a number member as a сатр', 'шумориш Р { А } тағ с: сатр = Р.А;', /TYPE_NOT_ASSIGNABLE/],
+    [
+      'a string member as a рақам',
+      'шумориш С { А = "а" } тағ н: рақам = С.А;',
+      /TYPE_NOT_ASSIGNABLE/,
+    ],
+    ['an undefined name in an initializer', 'шумориш Р { А = нест }', /'нест' is not defined/],
+  ])('%s', (_name, source, message) => {
+    expectError(source, message);
+  });
+
+  test('an unknown member is a warning without --strict', () => {
+    const result = compile('шумориш Р { А } чоп.сабт(Р.Б);');
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([expect.stringMatching(/PROPERTY_NOT_FOUND/)]);
+  });
+});
+
+describe('generators and for await', () => {
+  test.each([
+    [
+      'Generator<рақам> with a yield and a бозгашт',
+      'функсия* ф(сар: Г | холӣ): Generator<рақам> { тағ ҷ = сар; то (ҷ !== холӣ) { ҳосил ҷ.қ; ҷ = ҷ.навбатӣ; } бозгашт "охир"; }',
+    ],
+    [
+      'Iterable<рақам> iterated by for-of',
+      'функсия* ф(): Iterable<рақам> { ҳосил 1; бозгашт; } барои (собит х аз ф()) { чоп.сабт(х); }',
+    ],
+    [
+      'the value of a yield',
+      'функсия* ф() { собит а: рақам = ҳосил 1; чоп.сабт(а + 1, ҳосил, ҳосил* [2]); }',
+    ],
+    [
+      'generator methods',
+      'синф К { *а(): Generator<сатр> { ҳосил "х"; бозгашт 1; } } собит о = { *б(): Iterable<рақам> { ҳосил 1; } };',
+    ],
+    [
+      'an async generator',
+      'ҳамзамон функсия* ф(): AsyncGenerator<рақам> { ҳосил интизор Ваъда.resolve(1); }',
+    ],
+    [
+      'for await elements are awaited',
+      'ҳамзамон функсия ф(р: Ваъда<рақам>[]) { барои интизор (собит х аз р) { собит у: рақам = х; } }',
+    ],
+  ])('%s', (_name, source) => {
+    expectClean(source);
+  });
+
+  test('for await elements have the awaited type', () => {
+    expectError(
+      'ҳамзамон функсия ф(р: Ваъда<рақам>[]) { барои интизор (собит х аз р) { собит у: сатр = х; } }',
+      /Type 'рақам' is not assignable to type 'сатр'/
+    );
+  });
+});

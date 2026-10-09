@@ -433,6 +433,19 @@ describe('JavaScript early errors are compile errors', () => {
     ['an asserted binary expression as target', 'тағ а = 1;\n(а + 1)! = 2;', /left-hand side/],
     ['a postfix update of an asserted call', 'функсия ф() {}\nф()!++;', /operand/],
     ['a type assertion before **', 'тағ а = 1;\n<рақам>а ** 2;', /must be parenthesized/],
+    ['break to an undefined label', 'то (дуруст) { шикастан берун; }', /Undefined label 'берун'/],
+    [
+      'continue to a label that is not a loop',
+      'то (дуруст) { блок: { давом блок; } }',
+      /'блок' does not label a loop/,
+    ],
+    [
+      'a label nested in a label of the same name',
+      'л: барои (тағ и = 0; и < 1; и++) { л: то (дуруст) {} }',
+      /Label 'л' has already been declared/,
+    ],
+    ['a labeled declaration', 'л: тағ х = 1;', /declaration cannot be labeled/],
+    ['for await outside a ҳамзамон function', 'барои интизор (собит х аз []) {}', /for await/],
   ])('%s', (_name, source, message) => {
     for (const typeCheck of [true, false]) {
       const result = compile(source, { typeCheck });
@@ -464,4 +477,107 @@ describe('JavaScript early errors are compile errors', () => {
 test('a value that does not match a function type is a type error', () => {
   const result = compile('тағйирёбанда ф: (а: рақам) => рақам = 5;');
   expect(result.errors).toEqual([expect.stringContaining('TYPE_NOT_ASSIGNABLE')]);
+});
+
+/**
+ * do-while, labels, for await, debugger, empty statements, enums and
+ * generators: each program runs the same with the default options, in strict
+ * mode and without type checking.
+ */
+describe('statements and generators', () => {
+  const programs: Array<[string, string, string[]]> = [
+    [
+      'do-while runs the body before the test',
+      'тағ и = 10;\nкун { и++; } то (и < 3);\nчоп.сабт(и);\n' +
+        'тағ ҷ = 0;\nкун { ҷ++; агар (ҷ === 2) давом; агар (ҷ === 4) шикастан; } то (ҷ < 10)\nчоп.сабт(ҷ);',
+      ['11', '4'],
+    ],
+    [
+      'labelled break and continue',
+      'берун: барои (тағ и = 0; и < 3; и++) {\n' +
+        '  барои (тағ ҷ = 0; ҷ < 3; ҷ++) {\n' +
+        '    агар (ҷ === 1) давом берун;\n' +
+        '    агар (и === 2) шикастан берун;\n' +
+        '    чоп.сабт(и, ҷ);\n' +
+        '  }\n' +
+        '}\n' +
+        'блок: { чоп.сабт("пеш"); агар (дуруст) шикастан блок; чоп.сабт("ҳеҷ"); }\n' +
+        'тағ н = 0;\nҳалқа: кун { н++; агар (н < 3) давом ҳалқа; } то (нодуруст);\nчоп.сабт(н);',
+      ['0 0', '1 0', 'пеш', '1'],
+    ],
+    [
+      'debugger and empty statements',
+      ';; тағ х = 0; агар (х); барои (тағ и = 0; и < 3; и++); debugger; { ; }\nчоп.сабт("ok");',
+      ['ok'],
+    ],
+    [
+      'numeric, string and computed enum members',
+      'шумориш Ранг { Сурх, Сабз = 5, Кабуд }\n' +
+        'собит шумориш Ҳаҷм { Хурд = 2, Калон = Хурд * 10, Б = Ҳаҷм.Калон + 1 }\n' +
+        'шумориш Самт { Боло = "боло", Поён = "поён" }\n' +
+        'собит асос = 40;\nшумориш Ҳисоб { А = асос + 2, Б = А + 1 }\n' +
+        'тағ р: Ранг = Ранг.Сурх;\nр = Ранг.Кабуд;\nсобит н: рақам = Ранг.Сабз;\n' +
+        'чоп.сабт(Ранг.Сурх, Ранг.Сабз, р, н, Ранг[5]);\n' +
+        'чоп.сабт(Ҳаҷм.Калон, Ҳаҷм.Б, Самт.Поён, Самт["боло"], Ҳисоб.А);',
+      ['0 5 6 5 Сабз', '20 21 поён undefined 42'],
+    ],
+    [
+      'enum members named like built-in members',
+      'шумориш Номҳо { дарозӣ, илова }\nчоп.сабт(Номҳо.дарозӣ, Номҳо.илова, Номҳо[1]);',
+      ['0 1 push'],
+    ],
+    [
+      'generators, yield precedence and delegation',
+      'функсия* шумор(то_: рақам): Generator<рақам> {\n' +
+        '  барои (тағ и = 0; и < то_; и++) { ҳосил и * 2; }\n' +
+        '  ҳосил* [10, 11];\n' +
+        '}\n' +
+        'функсия* ҷамъ() { тағ а = ҳосил; тағ б = ҳосил а + 1; бозгашт а + б; }\n' +
+        'собит г = ҷамъ(); г.next(); чоп.сабт(г.next(5).value, г.next(7).value);\n' +
+        'чоп.сабт([...шумор(3)].join(","));',
+      ['6 12', '0,2,4,10,11'],
+    ],
+    [
+      'generator methods and function expressions',
+      'синф Рӯйхат { *қиматҳо() { ҳосил 1; ҳосил 2; } статикӣ *як() { ҳосил "я"; } }\n' +
+        'собит о = { *ҳарф() { ҳосил "а"; ҳосил "б"; } };\n' +
+        'собит е = функсия* () { ҳосил дуруст; };\n' +
+        'чоп.сабт([...нав Рӯйхат().қиматҳо()].join(""), [...Рӯйхат.як()][0], [...о.ҳарф()].join(""), [...е()][0]);',
+      ['12 я аб true'],
+    ],
+    [
+      'кун and шумориш are ordinary names outside their statements',
+      'тағ кун = 1;\nкун = кун + 1;\nфунксия шумориш(р: рақам[]): рақам { бозгашт р.length; }\n' +
+        'собит о = { кун: 3, шумориш: 4 };\nчоп.сабт(кун, шумориш([1, 2, 3]), о.кун + о.шумориш);',
+      ['2 3 7'],
+    ],
+    [
+      'ҳосил is an ordinary variable outside generators',
+      'тағ ҳосил = 4;\nҳосил += 1;\nсобит ф = (ҳосил: рақам) => ҳосил * 2;\nчоп.сабт(ҳосил, ф(ҳосил));',
+      ['5 10'],
+    ],
+  ];
+
+  test.each(programs)('%s', (_name, source, expected) => {
+    expect(run(source)).toEqual(expected);
+    expect(run(source, { strict: true })).toEqual(expected);
+    expect(run(source, { typeCheck: false })).toEqual(expected);
+  });
+
+  test('for await over an async generator', async () => {
+    const source =
+      'ҳамзамон функсия* ададҳо() { ҳосил 1; ҳосил интизор Ваъда.resolve(2); }\n' +
+      'собит манбаъ = { ҳамзамон *[Symbol.asyncIterator]() { ҳосил "x"; } };\n' +
+      'ҳамзамон функсия асосӣ() {\n' +
+      '  барои интизор (собит х аз ададҳо()) { чоп.сабт(х); }\n' +
+      '  барои интизор (собит х аз [Ваъда.resolve(3), 4]) { чоп.сабт(х); }\n' +
+      '  барои интизор (собит х аз манбаъ) { чоп.сабт(х); }\n' +
+      '}\n' +
+      'асосӣ();';
+    for (const options of [{}, { strict: true }, { typeCheck: false }]) {
+      const lines = run(source, options);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(lines).toEqual(['1', '2', '3', '4', 'x']);
+    }
+  });
 });

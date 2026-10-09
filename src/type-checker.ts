@@ -65,6 +65,11 @@ import {
   UnaryExpression,
   UpdateExpression,
   WhileStatement,
+  DoWhileStatement,
+  LabeledStatement,
+  EnumDeclaration,
+  EnumMember,
+  YieldExpression,
 } from './ast';
 import { translateMemberName } from './builtin-names';
 
@@ -142,6 +147,7 @@ export interface Type {
   staticMembers?: Set<string>; // Static member names of a class
   implicitMembers?: Set<string>; // Undeclared class members assigned through `ин.ном = …`
   constant?: boolean; // Type of a `чун собит` expression: never widened
+  enumType?: Type; // For an enum object: the type its name stands for in annotations
 }
 
 /**
@@ -167,6 +173,7 @@ type FunctionLike = {
   returnType?: TypeAnnotation;
   async?: boolean;
   isAsync?: boolean;
+  generator?: boolean;
 };
 
 const UNKNOWN: Type = { kind: 'unknown' };
@@ -370,7 +377,9 @@ export class TypeChecker {
     BlockStatement: s => this.withScope(() => this.checkStatements((s as BlockStatement).body)),
     IfStatement: s => this.checkIfStatement(s as IfStatement),
     WhileStatement: s => this.checkWhileStatement(s as WhileStatement),
-    DoWhileStatement: s => this.checkWhileStatement(s as WhileStatement),
+    DoWhileStatement: s => this.checkDoWhileStatement(s as DoWhileStatement),
+    LabeledStatement: s => this.checkLabeledStatement(s as LabeledStatement),
+    EnumDeclaration: s => this.checkEnumDeclaration(s as EnumDeclaration),
     ForStatement: s => this.checkForStatement(s as ForStatement),
     ForInStatement: s => this.checkForInOfStatement(s as ForInStatement, true),
     ForOfStatement: s => this.checkForInOfStatement(s as ForOfStatement, false),
@@ -414,6 +423,12 @@ export class TypeChecker {
     },
     AwaitExpression: e =>
       this.unwrapPromise(this.inferExpressionType((e as AwaitExpression).argument)),
+    // The value of `ҳосил х` is whatever the caller passes to `next()`
+    YieldExpression: e => {
+      const argument = (e as YieldExpression).argument;
+      if (argument) this.inferExpressionType(argument);
+      return UNKNOWN;
+    },
     ArrowFunctionExpression: e =>
       this.inferFunctionExpressionType(e as unknown as FunctionLike, true),
     FunctionExpression: e => this.inferFunctionExpressionType(e as unknown as FunctionLike, false),
@@ -534,6 +549,8 @@ export class TypeChecker {
    */
   private collectTypeDefinitions(statements: Statement[]): void {
     const declarations = statements.map(s => this.unwrapExport(s));
+    // Enum names are types too: `интерфейс И { р: Ранг; }`
+    this.declareEnums(declarations);
     const interfaces = declarations.filter(
       (s): s is InterfaceDeclaration => s.type === 'InterfaceDeclaration'
     );
@@ -564,6 +581,7 @@ export class TypeChecker {
    */
   private hoistDeclarations(statements: Statement[]): void {
     const declarations = statements.map(s => this.unwrapExport(s));
+    this.declareEnums(declarations);
     const classes = declarations.filter(
       (s): s is ClassDeclaration =>
         s.type === 'ClassDeclaration' && !this.isDeclaredHere(s as ClassDeclaration)
@@ -801,6 +819,101 @@ export class TypeChecker {
     }
   }
 
+  /** Declares each enum of a statement list (once per scope) as a value and a type. */
+  private declareEnums(declarations: Statement[]): void {
+    for (const statement of declarations) {
+      if (statement.type !== 'EnumDeclaration') continue;
+      const enumDecl = statement as EnumDeclaration;
+      const existing = this.scopes[this.scopes.length - 1].get(enumDecl.name.name);
+      if (!existing?.enumType) this.declare(enumDecl.name.name, this.buildEnumType(enumDecl));
+    }
+  }
+
+  /**
+   * The enum object: its members are `рақам` (or `сатр` for string members),
+   * and an unknown member is reported like one of any other object. As a
+   * type, the enum's name stands for the union of its members' types.
+   */
+  private buildEnumType(enumDecl: EnumDeclaration): Type {
+    const properties = new Map<string, PropertyType>();
+    for (const member of enumDecl.members) {
+      const isString = this.isStringEnumInitializer(member.initializer, enumDecl, properties);
+      properties.set(this.enumMemberName(member), {
+        type: isString ? STRING_TYPE : NUMBER_TYPE,
+        optional: false,
+      });
+    }
+    const memberTypes = [...properties.values()].map(prop => prop.type);
+    const hasString = memberTypes.includes(STRING_TYPE);
+    const hasNumber = memberTypes.includes(NUMBER_TYPE) || memberTypes.length === 0;
+    const enumType =
+      hasString && hasNumber
+        ? { kind: 'union', types: [NUMBER_TYPE, STRING_TYPE] }
+        : hasString
+          ? STRING_TYPE
+          : NUMBER_TYPE;
+    return { kind: 'object', name: enumDecl.name.name, properties, enumType };
+  }
+
+  private enumMemberName(member: EnumMember): string {
+    return member.id.type === 'Identifier'
+      ? (member.id as Identifier).name
+      : String((member.id as Literal).value);
+  }
+
+  /** `"х"`, `` `х` ``, a string member or a concatenation with one; other members are numbers. */
+  private isStringEnumInitializer(
+    initializer: Expression | undefined,
+    enumDecl: EnumDeclaration,
+    earlier: Map<string, PropertyType>
+  ): boolean {
+    if (!initializer) return false;
+    const isStringMember = (name: string): boolean =>
+      this.findProperty(earlier, name, translateMemberName(name))?.type === STRING_TYPE;
+    switch (initializer.type) {
+      case 'Literal':
+        return typeof (initializer as Literal).value === 'string';
+      case 'TemplateLiteral':
+        return true;
+      case 'Identifier':
+        return isStringMember((initializer as Identifier).name);
+      case 'MemberExpression': {
+        const member = initializer as MemberExpression;
+        return (
+          member.object.type === 'Identifier' &&
+          (member.object as Identifier).name === enumDecl.name.name &&
+          member.property.type === 'Identifier' &&
+          !member.computed &&
+          isStringMember((member.property as Identifier).name)
+        );
+      }
+      case 'BinaryExpression': {
+        const binary = initializer as BinaryExpression;
+        return (
+          binary.operator === '+' &&
+          (this.isStringEnumInitializer(binary.left, enumDecl, earlier) ||
+            this.isStringEnumInitializer(binary.right, enumDecl, earlier))
+        );
+      }
+      default:
+        return false;
+    }
+  }
+
+  /** Checks member initializers; earlier members are in scope by name (`Б = А * 2`). */
+  private checkEnumDeclaration(enumDecl: EnumDeclaration): void {
+    const enumType = this.lookup(enumDecl.name.name);
+    this.withScope(() => {
+      for (const member of enumDecl.members) {
+        if (member.initializer) this.inferExpressionType(member.initializer);
+        const name = this.enumMemberName(member);
+        if (member.id.type === 'Identifier') {
+          this.declare(name, enumType?.properties?.get(name)?.type ?? NUMBER_TYPE);
+        }
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Statements
   // ---------------------------------------------------------------------------
@@ -867,6 +980,60 @@ export class TypeChecker {
     }
   }
 
+  /**
+   * `кун { … } то (шарт);`: the body runs before the test. It starts with
+   * what holds before the loop or after a true test (found by a quiet first
+   * pass); what the body assigns is only known again once it is reassigned or
+   * checked.
+   */
+  private checkDoWhileStatement(statement: DoWhileStatement): void {
+    const before = this.narrowed;
+    this.narrowed = new Map(before);
+    this.invalidateAssignedIn(statement.body, statement.test);
+    // Holds anywhere in the loop: nothing the loop assigns
+    const loopEntry = this.narrowed;
+
+    this.silent++;
+    try {
+      this.checkDoWhileIteration(statement, loopEntry, loopEntry);
+      this.applyFacts(this.narrowingsFor(statement.test, true));
+    } finally {
+      this.silent--;
+    }
+    const bodyEntry = this.joinFacts(before, this.narrowed);
+
+    this.checkDoWhileIteration(statement, bodyEntry, loopEntry);
+    if (this.containsLoopExit(statement.body)) {
+      // `шикастан` leaves without evaluating the test
+      this.narrowed = this.joinFacts(loopEntry, this.narrowed);
+    } else {
+      this.applyFacts(this.narrowingsFor(statement.test, false));
+    }
+  }
+
+  /** Checks the body and then the test of a do-while loop, starting from `entry`. */
+  private checkDoWhileIteration(statement: DoWhileStatement, entry: Facts, loopEntry: Facts): void {
+    this.narrowed = new Map(entry);
+    this.checkBody(statement.body);
+    // `давом` jumps to the test from anywhere in the body
+    if (this.containsLoopContinue(statement.body)) {
+      this.narrowed = this.joinFacts(loopEntry, this.narrowed);
+    }
+    this.inferExpressionType(statement.test);
+  }
+
+  /** `берун: …`; `шикастан берун;` may leave the body from anywhere in it. */
+  private checkLabeledStatement(statement: LabeledStatement): void {
+    const entry = new Map(this.narrowed);
+    this.checkStatement(statement.body);
+    if (this.breaksTo(statement.label.name, statement.body)) {
+      const after = this.narrowed;
+      this.narrowed = entry;
+      this.invalidateAssignedIn(statement.body);
+      this.narrowed = this.joinFacts(this.narrowed, after);
+    }
+  }
+
   private checkForStatement(statement: ForStatement): void {
     this.withScope(() => {
       const init = statement.init as Statement | Expression | null;
@@ -903,9 +1070,15 @@ export class TypeChecker {
       const left = statement.left;
       if (left.type === 'VariableDeclaration') {
         const varDecl = left as VariableDeclaration;
-        const elementType: Type = isForIn
+        let elementType: Type = isForIn
           ? { kind: 'primitive', name: 'string' }
           : this.iterationElementType(iterated);
+        // `барои интизор` awaits each element
+        if ((statement as ForOfStatement).await) {
+          elementType = this.unionOf(
+            this.unionMembers(elementType).map(type => this.unwrapPromise(type))
+          );
+        }
         const bound = varDecl.typeAnnotation
           ? this.resolveTypeNode(varDecl.typeAnnotation.typeAnnotation)
           : this.widenType(elementType);
@@ -1123,7 +1296,11 @@ export class TypeChecker {
   ): void {
     const isAsync = Boolean(fn.async ?? fn.isAsync);
     this.functionStack.push({
-      returnType: this.expectedReturnType(functionType.returnType, isAsync),
+      // A generator's declared type (`Generator<рақам>`, `Iterable<рақам>`) describes
+      // what it yields, not what `бозгашт` returns
+      returnType: fn.generator
+        ? undefined
+        : this.expectedReturnType(functionType.returnType, isAsync),
       thisType,
     });
     // The body may run at any later time: a closure only keeps what is known
@@ -1447,6 +1624,10 @@ export class TypeChecker {
     const classType = this.lookup(typeName);
     if (classType && classType.kind === 'class') {
       return classType;
+    }
+    // An enum's name is also the type of its members: `тағ р: Ранг = Ранг.Сурх;`
+    if (classType?.enumType) {
+      return classType.enumType;
     }
 
     // Unknown type
@@ -2747,6 +2928,32 @@ export class TypeChecker {
     return visit(body, false);
   }
 
+  /** Whether `body` has a `давом` that may continue the loop owning `body`. */
+  private containsLoopContinue(body: Statement): boolean {
+    const visit = (node: unknown, nested: boolean): boolean => {
+      if (!node || typeof node !== 'object') return false;
+      if (Array.isArray(node)) return node.some(child => visit(child, nested));
+      const record = node as Record<string, unknown>;
+      const type = String(record.type ?? '');
+      // An unlabelled `давом` in a nested loop continues that one
+      if (type === 'ContinueStatement') return !nested || Boolean(record.label);
+      if (/Function|ClassDeclaration/.test(type)) return false;
+      const nestsLoop = nested || (JUMP_TARGETS.has(type) && type !== 'SwitchStatement');
+      return Object.values(record).some(value => visit(value, nestsLoop));
+    };
+    return visit(body, false);
+  }
+
+  /** Whether `body` has a `шикастан label;`. */
+  private breaksTo(label: string, body: Statement): boolean {
+    let found = false;
+    this.forEachNode(body, node => {
+      const jump = node as { type: string; label?: Identifier };
+      if (jump.type === 'BreakStatement' && jump.label?.name === label) found = true;
+    });
+    return found;
+  }
+
   /** Whether control never continues after `statement` (it returns, throws, breaks or continues). */
   private alwaysExits(statement: Statement | undefined): boolean {
     if (!statement) return false;
@@ -2758,6 +2965,8 @@ export class TypeChecker {
         return true;
       case 'BlockStatement':
         return (statement as BlockStatement).body.some(s => this.alwaysExits(s));
+      case 'LabeledStatement':
+        return this.labeledAlwaysExits(statement as LabeledStatement);
       case 'IfStatement': {
         const ifStatement = statement as IfStatement;
         return this.alwaysExits(ifStatement.consequent) && this.alwaysExits(ifStatement.alternate);
@@ -2773,6 +2982,11 @@ export class TypeChecker {
       default:
         return false;
     }
+  }
+
+  /** `л: { … }` exits when its body does, unless a `шикастан л;` continues after it. */
+  private labeledAlwaysExits(statement: LabeledStatement): boolean {
+    return this.alwaysExits(statement.body) && !this.breaksTo(statement.label.name, statement.body);
   }
 
   // ---------------------------------------------------------------------------
@@ -3245,6 +3459,8 @@ export class TypeChecker {
   }
 
   private objectTypeToString(type: Type): string {
+    // The enum object itself, as TypeScript prints it (`typeof Ранг`)
+    if (type.enumType) return `навъи ${type.name}`;
     const members = [...(type.properties ?? [])].map(
       ([key, prop]) => `${key}${prop.optional ? '?' : ''}: ${this.typeToString(prop.type)}`
     );
