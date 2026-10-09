@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## Unreleased
+
+### ⚠ Breaking Changes
+
+* Parse errors are always fatal: `compile()` returns no code and the CLI exits non-zero. Previously they were warnings and statements were silently dropped from the output.
+* Keywords are matched with their exact spelling; `Агар`, `ТАҒЙИРЁБАНДА`, … are ordinary identifiers.
+* JavaScript reserved words (`class`, `new`, …) cannot be used as names.
+* Built-in member aliases are translated consistently: an object key such as `дарозӣ` is emitted as `length`, matching `о.дарозӣ`.
+* The localized CLI has a single command tree: English command names always work, Tajik/Russian names are aliases. `SOMON_LOCALIZATION_MODE` is gone, an invalid `--lang` is an error, and `LC_ALL` overrides `LANG`.
+* Config paths (`outDir`, `output`, `bundle.output`, `resolution.baseUrl`) resolve against the config file's directory.
+* `--production` is deprecated and has no effect; `start-server.sh`, `src/core` and `src/error-aggregator.ts` were removed; the npm package only ships `dist` and the docs.
+
+### ✨ Features
+
+* Operators `?:`, `??`, `**`, `?.`, `??=`/`||=`/`&&=`/`**=`, `typeof`/`навъи`, `void`, `delete`, `in`, `instanceof` and the comma operator.
+* Spread in arrays, objects and calls; parameter defaults, rest and destructuring; shorthand and method properties; destructuring defaults.
+* Async class methods, function type annotations, named tuple members, interface inheritance (`мерос А, Б`), `Ваъда<Т>`.
+* Numeric literals in hex/binary/octal/exponent/BigInt form with `_` separators; full string escapes.
+* Real source maps built from AST positions (`CompileOptions.sourceFileName`), also for `run --source-map`.
+* Bundles include local `.js`/`.json` dependencies and honour `circularDependencyStrategy`; `package.json` `exports` are resolved.
+
+### 🐛 Bug Fixes
+
+* Code generation keeps grouping parentheses, no longer drops call statements, escapes template literals correctly and parenthesises arrow bodies that are object literals.
+* Bundle module keys are escaped (a crafted file name could inject code); imports with three or more `../` work.
+* The type checker accepts subclasses and implementing classes, checks every statement body, return types and object literals, and is linear instead of quadratic in the number of functions.
+* `--no-type-check` and the `run`/`bundle` compiler flags work; `compile` never overwrites its input; `run` forwards only the program's own arguments, writes its temp file outside the source tree and forwards signals.
+* Release workflows no longer interpolate inputs into shell scripts, publish in a re-runnable order and generate non-empty release notes.
+
 ## 0.3.16 (2025-09-18)
 
 ### ✨ Features
