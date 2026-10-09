@@ -29,6 +29,9 @@ const translations: Translations = {
         experimentalDecorators:
           'Декораторҳои кӯҳна (озмоишӣ)-ро истифода бурдан, ки параметрҳоро низ оро медиҳанд',
         watch: 'Дар тағйирёбии файл аз нав компайл кардан',
+        module: "Формати модулҳои баромад: 'commonjs' (пешфарз) ё 'esm'",
+        checker: "Тафтиши навъҳо: 'somon' (пешфарз) ё 'typescript' (компайлери TypeScript)",
+        declaration: 'Инчунин файли эълонҳои TypeScript (.d.ts)-ро навиштан',
       },
       messages: {
         fileNotFound: (file: string) => `Хато: Файли '${file}' ёфт нашуд`,
@@ -36,6 +39,7 @@ const translations: Translations = {
         warnings: 'Огоҳиҳо:',
         compiled: (input: string, output: string) => `'${input}' ба '${output}' компайл шуд`,
         sourceMapGenerated: (file: string) => `Харитаи манбаъ эҷод шуд: '${file}'`,
+        declarationGenerated: (file: string) => `Эълонҳо эҷод шуданд: '${file}'`,
         watching: (file: string) => `'${file}'-ро барои тағйирот назорат мекунем...`,
         recompiling: (file: string) => `'${file}'-ро аз нав компайл мекунем...`,
         configChanged: (file: string) =>
@@ -86,7 +90,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Роҳи файли баромад',
-        format: 'Формати баста: commonjs, esm ё iife',
+        format:
+          'Формати баста: commonjs, esm ё iife (пешфарз: esm, агар модулҳо ба ES-модулҳо тартиб дода шаванд, вагарна commonjs)',
         globalName: 'Тағйирёбандаи глобалӣ, ки содироти бастаи iife-ро мегирад',
         inlineSources: 'Манбаъҳои аслиро дар харитаи манбаъҳо ҷойгир кардан',
         externals: 'Модулҳои берунӣ (бо вергул ҷудошуда)',
@@ -124,6 +129,20 @@ const translations: Translations = {
         noCircularDeps: '✅ Вобастагиҳои даврӣ ёфт нашуданд',
         issuesFound: '❌ Мушкилот ёфт шуданд:',
         analysisError: 'Хатои таҳлил:',
+      },
+    },
+    check: {
+      name: 'санҷиш',
+      description: 'Навъҳои файлҳои СомонСкриптро бе компайл санҷидан',
+      usage: '<файлҳо...> [интихобҳо]',
+      args: {
+        files: 'Файлҳои вурудии .som',
+      },
+      messages: {
+        noErrors: (files: number) => `✅ Дар ${files} файл хатои навъ нест`,
+        errorsFound: (errors: number, files: number) =>
+          `❌ Дар ${files} файл ${errors} хатои навъ ёфт шуд`,
+        fileErrors: (file: string) => `${file}:`,
       },
     },
     resolve: {

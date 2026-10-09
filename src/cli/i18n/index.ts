@@ -35,6 +35,9 @@ export interface Translations {
         strict: string;
         experimentalDecorators: string;
         watch: string;
+        module: string;
+        checker: string;
+        declaration: string;
       };
       messages: {
         fileNotFound: (_file: string) => string;
@@ -42,6 +45,7 @@ export interface Translations {
         warnings: string;
         compiled: (_input: string, _output: string) => string;
         sourceMapGenerated: (_file: string) => string;
+        declarationGenerated: (_file: string) => string;
         watching: (_file: string) => string;
         recompiling: (_file: string) => string;
         configChanged: (_file: string) => string;
@@ -127,6 +131,19 @@ export interface Translations {
         noCircularDeps: string;
         issuesFound: string;
         analysisError: string;
+      };
+    };
+    check: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        files: string;
+      };
+      messages: {
+        noErrors: (_files: number) => string;
+        errorsFound: (_errors: number, _files: number) => string;
+        fileErrors: (_file: string) => string;
       };
     };
     resolve: {

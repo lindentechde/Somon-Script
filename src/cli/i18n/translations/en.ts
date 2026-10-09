@@ -29,6 +29,9 @@ const translations: Translations = {
         experimentalDecorators:
           'Use legacy (experimental) decorators, which may decorate parameters',
         watch: 'Recompile on file changes',
+        module: "Module format of the output: 'commonjs' (default) or 'esm'",
+        checker: "Type checker: 'somon' (default) or 'typescript' (the TypeScript compiler)",
+        declaration: 'Also write a TypeScript declaration file (.d.ts)',
       },
       messages: {
         fileNotFound: (file: string) => `Error: File '${file}' not found`,
@@ -36,6 +39,7 @@ const translations: Translations = {
         warnings: 'Warnings:',
         compiled: (input: string, output: string) => `Compiled '${input}' to '${output}'`,
         sourceMapGenerated: (file: string) => `Generated source map: '${file}'`,
+        declarationGenerated: (file: string) => `Generated declarations: '${file}'`,
         watching: (file: string) => `Watching '${file}' for changes...`,
         recompiling: (file: string) => `Recompiling '${file}'...`,
         configChanged: (file: string) =>
@@ -86,7 +90,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Output file path',
-        format: 'Bundle format: commonjs, esm or iife',
+        format:
+          'Bundle format: commonjs, esm or iife (default: esm when modules compile to ES modules, else commonjs)',
         globalName: 'Global that receives the exports of an iife bundle',
         inlineSources: 'Inline original sources into emitted source maps',
         externals: 'External modules (comma-separated)',
@@ -124,6 +129,20 @@ const translations: Translations = {
         noCircularDeps: '✅ No circular dependencies found',
         issuesFound: '❌ Issues found:',
         analysisError: 'Analysis error:',
+      },
+    },
+    check: {
+      name: 'check',
+      description: 'Type-check SomonScript files without compiling them',
+      usage: '<files...> [options]',
+      args: {
+        files: 'Input .som files',
+      },
+      messages: {
+        noErrors: (files: number) => `✅ No type errors in ${files} file(s)`,
+        errorsFound: (errors: number, files: number) =>
+          `❌ Found ${errors} type error(s) in ${files} file(s)`,
+        fileErrors: (file: string) => `${file}:`,
       },
     },
     resolve: {

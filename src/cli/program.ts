@@ -13,7 +13,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { compile, type CompileResult } from '../compiler';
+import { compile, formatTypeError, type CompileResult } from '../compiler';
 import {
   ConfigError,
   loadConfigWithPath,
@@ -30,7 +30,11 @@ import {
   validateGlobalName,
   validateLib,
 } from '../targets';
-import { LANGUAGES, t, type Translations } from './i18n';
+import type { CompilationResult } from '../module-system/module-system';
+import { Lexer } from '../lexer';
+import { Parser } from '../parser';
+import { checkWithTypeScript, type TsCheckInput } from '../tsc-checker';
+import { i18n, LANGUAGES, t, type Translations } from './i18n';
 import { registerToolCommands } from './tool-commands';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -65,6 +69,9 @@ function parseGlobalName(value: string): string {
   if (problem) throw new InvalidArgumentError(problem);
   return value;
 }
+
+const MODULE_FORMATS = ['commonjs', 'esm'] as const;
+const CHECKERS = ['somon', 'typescript'] as const;
 
 function logConfigError(error: ConfigError): void {
   console.error(t().common.configError);
@@ -113,6 +120,8 @@ interface CliCompilerFlags {
   strict?: boolean;
   production?: boolean;
   experimentalDecorators?: boolean;
+  module?: CompilerOptions['module'];
+  checker?: CompilerOptions['checker'];
 }
 
 interface BundleOptions extends CliCompilerFlags {
@@ -140,7 +149,14 @@ function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
   if (flags.experimentalDecorators !== undefined) {
     overrides.experimentalDecorators = flags.experimentalDecorators;
   }
+  if (flags.module !== undefined) overrides.module = flags.module;
+  if (flags.checker !== undefined) overrides.checker = flags.checker;
   return overrides;
+}
+
+/** Diagnostics language: the config's `locale`, otherwise the CLI's own language (`--lang`). */
+function diagnosticLocale(config?: CompilerOptions): NonNullable<CompilerOptions['locale']> {
+  return config?.locale ?? i18n.getLanguage();
 }
 
 /**
@@ -151,7 +167,7 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
   // Output paths and watch settings in compilerOptions only apply to `compile`.
   const { target, sourceMap, minify, noTypeCheck, strict, experimentalDecorators } =
     config.compilerOptions ?? {};
-  const { lib, useDefineForClassFields } = config.compilerOptions ?? {};
+  const { lib, useDefineForClassFields, module, checker } = config.compilerOptions ?? {};
   const fromConfig = Object.fromEntries(
     Object.entries({
       target,
@@ -162,9 +178,12 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
       noTypeCheck,
       strict,
       experimentalDecorators,
+      module,
+      checker,
     }).filter(([, value]) => value !== undefined)
   ) as CompilerOptions;
   return {
+    locale: diagnosticLocale(config.compilerOptions),
     ...fromConfig,
     ...config.moduleSystem?.compilation,
     ...cliCompilerOverrides(flags),
@@ -253,8 +272,10 @@ function createBundleOptions(
   return {
     entryPoint: path.resolve(input),
     outputPath,
-    // --format is checked by commander, bundle.format by the configuration
-    format: options.format ?? config.bundle?.format ?? 'commonjs',
+    // --format is checked by commander, bundle.format by the configuration.
+    // Without either the module system chooses: esm when modules compile to
+    // ES modules, commonjs otherwise.
+    format: options.format ?? config.bundle?.format,
     globalName: options.globalName ?? config.bundle?.globalName,
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
@@ -367,6 +388,11 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
       typeCheck: options.typeCheck !== false && !options.noTypeCheck,
       strict: options.strict,
       experimentalDecorators: options.experimentalDecorators,
+      module: options.module,
+      checker: options.checker,
+      locale: diagnosticLocale(options),
+      declaration: options.declaration,
+      filePath: path.resolve(input),
     });
 
     if (result.errors.length > 0) {
@@ -457,7 +483,7 @@ export const cliRuntime = {
  * Create a private temporary directory for `run`, removed when `cleanup` is
  * called or, as a fallback, when the CLI process exits.
  */
-function createRunWorkspace(input: string): { file: string; cleanup: () => void } {
+function createRunWorkspace(input: string): { dir: string; file: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-run-'));
   const baseName = path.basename(input).replace(/\.[^.]+$/, '') || 'somon-script';
   const file = path.join(dir, `${baseName}.js`);
@@ -475,7 +501,7 @@ function createRunWorkspace(input: string): { file: string; cleanup: () => void 
   };
   process.once('exit', cleanup);
 
-  return { file, cleanup };
+  return { dir, file, cleanup };
 }
 
 /**
@@ -506,13 +532,25 @@ async function executeRunCommand(
     const config = loaded.config;
 
     // Create module system and bundle the file with all dependencies
-    const moduleSystem = await createModuleSystem(
-      input,
-      loaded,
-      moduleCompilationOptions(config, options)
-    );
+    const compilation = moduleCompilationOptions(config, options);
+    const moduleSystem = await createModuleSystem(input, loaded, compilation);
 
     const sourceMaps = options.sourceMap ?? config.bundle?.sourceMaps ?? false;
+    if (compilation.module === 'esm') {
+      const workspace = createRunWorkspace(input);
+      cleanup = workspace.cleanup;
+      const entryFile = await writeEsmModules(moduleSystem, input, workspace.dir, {
+        sourceMaps,
+        externals: config.bundle?.externals,
+      });
+      reportChildResult(
+        await cliRuntime.executeCompiledFile(entryFile, scriptArgs, {
+          cwd: baseDir,
+          enableSourceMaps: sourceMaps,
+        })
+      );
+      return;
+    }
     const bundle = await moduleSystem.bundle({
       entryPoint: path.resolve(input),
       format: 'commonjs',
@@ -540,21 +578,198 @@ async function executeRunCommand(
       cwd: baseDir,
       enableSourceMaps: sourceMaps && !!bundle.map,
     });
-
-    const messages = t().commands.run.messages;
-    if (child.error) {
-      console.error(messages.failedToExecute, child.error.message ?? child.error);
-      process.exitCode = 1;
-    } else if (typeof child.status === 'number') {
-      process.exitCode = child.status;
-    } else if (typeof child.signal === 'string') {
-      console.error(messages.terminatedWithSignal(child.signal));
-      process.exitCode = 1;
-    }
+    reportChildResult(child);
   } catch (error) {
     handleCliFailure(error, t().common.error);
   } finally {
     cleanup?.();
+  }
+}
+
+/** Sets the CLI's exit code from the program it ran. */
+function reportChildResult(child: ExecutionResult): void {
+  const messages = t().commands.run.messages;
+  if (child.error) {
+    console.error(messages.failedToExecute, child.error.message ?? child.error);
+    process.exitCode = 1;
+  } else if (typeof child.status === 'number') {
+    process.exitCode = child.status;
+  } else if (typeof child.signal === 'string') {
+    console.error(messages.terminatedWithSignal(child.signal));
+    process.exitCode = 1;
+  }
+}
+
+/** The errors of a module system compilation, one per paragraph, with their files. */
+function formatCompilationErrors(result: CompilationResult): string {
+  const details = result.errors.map((error, index) => {
+    const position =
+      error.line === undefined
+        ? ''
+        : `:${error.line}${error.column === undefined ? '' : `:${error.column}`}`;
+    return `  ${index + 1}. ${error.filePath}${position}\n     ${error.message}`;
+  });
+  return `Compilation failed with ${result.errors.length} error(s):\n\n${details.join('\n\n')}`;
+}
+
+/**
+ * ES module output for `run --module esm`: every module of the program is
+ * compiled as an ES module and written to `dir` with its place relative to
+ * the others (`м.som` → `м.js`), next to a package.json with "type": "module"
+ * and a link to the program's node_modules. Returns the entry file to run.
+ */
+async function writeEsmModules(
+  moduleSystem: ModuleSystem,
+  input: string,
+  dir: string,
+  options: { sourceMaps: boolean; externals?: string[] }
+): Promise<string> {
+  const entry = path.resolve(input);
+  const result = await moduleSystem.compile(entry, options.externals, {
+    module: 'esm',
+    minify: false,
+    sourceMap: options.sourceMaps,
+  });
+  if (result.errors.length > 0) {
+    throw new Error(formatCompilationErrors(result));
+  }
+  const files = [...result.modules.keys()].filter(id => path.isAbsolute(id));
+  const root = commonDirectory([path.dirname(entry), ...files.map(file => path.dirname(file))]);
+  const outputPath = (file: string): string =>
+    path.join(dir, path.relative(root, file).replace(/\.som$/i, '.js'));
+
+  // The program the user runs, written into its temporary directory (S8707)
+  fs.writeFileSync(path.join(dir, 'package.json'), '{ "type": "module" }\n');
+  const nodeModules = findNodeModules(path.dirname(entry));
+  if (nodeModules) {
+    fs.symlinkSync(nodeModules, path.join(dir, 'node_modules'), 'junction'); // NOSONAR
+  }
+  for (const id of files) {
+    const compiled = result.modules.get(id)!;
+    const target = outputPath(id);
+    fs.mkdirSync(path.dirname(target), { recursive: true }); // NOSONAR
+    let code = compiled.code;
+    if (options.sourceMaps && compiled.map) {
+      fs.writeFileSync(`${target}.map`, JSON.stringify(compiled.map)); // NOSONAR
+      code = `${code}\n//# sourceMappingURL=${path.basename(target)}.map`;
+    }
+    fs.writeFileSync(target, code); // NOSONAR
+  }
+  return outputPath(entry);
+}
+
+/** The deepest directory containing every one of `directories`. */
+function commonDirectory(directories: string[]): string {
+  return directories.reduce((common, directory) => {
+    let candidate = common;
+    while (path.relative(candidate, directory).startsWith('..')) {
+      candidate = path.dirname(candidate);
+    }
+    return candidate;
+  });
+}
+
+/** The nearest node_modules directory at or above `start`. */
+function findNodeModules(start: string): string | undefined {
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, 'node_modules');
+    // Above the program the user runs (S8707)
+    if (fs.existsSync(candidate)) return candidate; // NOSONAR
+    if (path.dirname(dir) === dir) return undefined;
+  }
+}
+
+interface CheckOptions {
+  checker?: CompilerOptions['checker'];
+  strict?: boolean;
+  target?: CompilerOptions['target'];
+  lib?: string[];
+  experimentalDecorators?: boolean;
+}
+
+/** What `somon check` checks with: its flags over the configuration's compilerOptions. */
+type CheckSettings = Required<Pick<CheckOptions, 'checker'>> &
+  Omit<CheckOptions, 'checker'> &
+  Pick<CompilerOptions, 'useDefineForClassFields'>;
+
+/**
+ * `somon check <files…>`: type-check without writing output. Errors are
+ * printed per file; the exit code is 1 when there are any.
+ */
+function executeCheckCommand(files: string[], options: CheckOptions): void {
+  try {
+    const config =
+      loadConfigWithPath(path.dirname(path.resolve(files[0] ?? '.'))).config.compilerOptions ?? {};
+    const results = checkFiles(
+      files,
+      {
+        checker: options.checker ?? config.checker ?? 'typescript',
+        strict: options.strict ?? config.strict,
+        target: options.target ?? config.target,
+        lib: options.lib ?? config.lib,
+        useDefineForClassFields: config.useDefineForClassFields,
+        experimentalDecorators: options.experimentalDecorators ?? config.experimentalDecorators,
+      },
+      diagnosticLocale(config)
+    );
+    reportCheckResults(results, files.length);
+  } catch (error) {
+    handleCliFailure(error, t().common.error);
+  }
+}
+
+/** The errors of each file, formatted; TypeScript checks all files in one program. */
+function checkFiles(
+  files: string[],
+  options: CheckSettings,
+  locale: NonNullable<CompilerOptions['locale']>
+): Map<string, string[]> {
+  const { checker, ...settings } = options;
+  const results = new Map<string, string[]>();
+  const inputs: TsCheckInput[] = [];
+  for (const file of files) {
+    // Checking the files the user names is the command's purpose (S8707)
+    if (!fs.existsSync(file)) {
+      results.set(file, [t().commands.compile.messages.fileNotFound(file)]);
+      continue;
+    }
+    const source = fs.readFileSync(file, 'utf-8'); // NOSONAR
+    if (checker === 'somon') {
+      results.set(file, compile(source, { ...settings, filePath: path.resolve(file) }).errors);
+      continue;
+    }
+    const parser = new Parser(new Lexer(source).tokenize());
+    const ast = parser.parse();
+    results.set(file, parser.getErrors());
+    if (parser.getErrors().length === 0) inputs.push({ fileName: file, source, ast });
+  }
+  if (inputs.length > 0) {
+    checkWithTypeScript(inputs, { ...settings, locale }).forEach((result, index) => {
+      results.set(inputs[index].fileName, result.errors.map(formatTypeError));
+    });
+  }
+  return results;
+}
+
+/** Prints the errors per file and a summary; the exit code is 1 when there are errors. */
+function reportCheckResults(results: Map<string, string[]>, fileCount: number): void {
+  const messages = t().commands.check.messages;
+  let errorCount = 0;
+  let filesWithErrors = 0;
+  for (const [file, errors] of results) {
+    if (errors.length === 0) continue;
+    errorCount += errors.length;
+    filesWithErrors++;
+    console.error(messages.fileErrors(file));
+    for (const error of errors) {
+      console.error(`  ${error.replace(/\n/g, '\n  ')}`);
+    }
+  }
+  if (errorCount > 0) {
+    console.error(messages.errorsFound(errorCount, filesWithErrors));
+    process.exitCode = 1;
+  } else {
+    console.log(messages.noErrors(fileCount));
   }
 }
 
@@ -628,10 +843,17 @@ function defineCommand(
   return command;
 }
 
-/** Options shared by every command that compiles SomonScript (compile, run, bundle). */
-function addCompilerOptions(command: Command): Command {
+/**
+ * Options shared by every command that compiles SomonScript (compile, run,
+ * bundle); `--module` only where the output is not a bundle.
+ */
+function addCompilerOptions(command: Command, withModule = true): Command {
   const options = t().commands.compile.options;
+  if (withModule) {
+    command.addOption(new Option('--module <format>', options.module).choices(MODULE_FORMATS));
+  }
   return command
+    .addOption(new Option('--checker <checker>', options.checker).choices(CHECKERS))
     .addOption(new Option('--target <target>', options.target).choices(TARGETS))
     .addOption(new Option('--lib <libs>', options.lib).argParser(parseLibList))
     .option('--use-define-for-class-fields', options.useDefineForClassFields)
@@ -670,6 +892,7 @@ export function createProgram(): Command {
     .option('-o, --output <file>', tr.commands.compile.options.output)
     .option('--out-dir <dir>', tr.commands.compile.options.outDir);
   addCompilerOptions(compileCommand)
+    .option('--declaration', tr.commands.compile.options.declaration)
     .option('-w, --watch', tr.commands.compile.options.watch)
     .action((input: string, options: CompileOptions): void => {
       try {
@@ -715,6 +938,12 @@ export function createProgram(): Command {
           console.log(t().commands.compile.messages.compiled(input, outputFile));
           if (sourceMapFile) {
             console.log(t().commands.compile.messages.sourceMapGenerated(sourceMapFile));
+          }
+          if (merged.options.declaration && result.declaration !== undefined) {
+            const declarationFile = outputFile.replace(/(?:\.[cm]?js)?$/i, '.d.ts');
+            // Next to the output the user names (S8707)
+            fs.writeFileSync(declarationFile, result.declaration); // NOSONAR
+            console.log(t().commands.compile.messages.declarationGenerated(declarationFile));
           }
 
           // A successful recompile clears the failure of an earlier one.
@@ -844,9 +1073,23 @@ export function createProgram(): Command {
     )
     .option('--inline-sources', tr.commands.bundle.options.inlineSources)
     .option('--externals <modules>', tr.commands.bundle.options.externals);
-  addCompilerOptions(bundleCommand).action(async (input: string, options: BundleOptions) => {
+  addCompilerOptions(bundleCommand, false).action(async (input: string, options: BundleOptions) => {
     await executeBundleCommand(input, options);
   });
+
+  defineCommand(program, 'check', 'check')
+    .usage(tr.commands.check.usage)
+    .argument('<files...>', tr.commands.check.args.files)
+    .addOption(
+      new Option('--checker <checker>', tr.commands.compile.options.checker).choices(CHECKERS)
+    )
+    .addOption(new Option('--target <target>', tr.commands.compile.options.target).choices(TARGETS))
+    .addOption(new Option('--lib <libs>', tr.commands.compile.options.lib).argParser(parseLibList))
+    .option('--strict', tr.commands.compile.options.strict)
+    .option('--experimental-decorators', tr.commands.compile.options.experimentalDecorators)
+    .action((files: string[], options: CheckOptions): void => {
+      executeCheckCommand(files, options);
+    });
 
   // Module info command
   defineCommand(program, 'module-info', 'moduleInfo', 'info')

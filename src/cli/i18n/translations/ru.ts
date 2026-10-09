@@ -30,6 +30,9 @@ const translations: Translations = {
         experimentalDecorators:
           'Использовать устаревшие (экспериментальные) декораторы, в том числе для параметров',
         watch: 'Перекомпилировать при изменении файлов',
+        module: "Формат модулей вывода: 'commonjs' (по умолчанию) или 'esm'",
+        checker: "Проверка типов: 'somon' (по умолчанию) или 'typescript' (компилятор TypeScript)",
+        declaration: 'Также записать файл объявлений TypeScript (.d.ts)',
       },
       messages: {
         fileNotFound: (file: string) => `Ошибка: Файл '${file}' не найден`,
@@ -37,6 +40,7 @@ const translations: Translations = {
         warnings: 'Предупреждения:',
         compiled: (input: string, output: string) => `Скомпилировано '${input}' в '${output}'`,
         sourceMapGenerated: (file: string) => `Сгенерирована карта источников: '${file}'`,
+        declarationGenerated: (file: string) => `Сгенерированы объявления: '${file}'`,
         watching: (file: string) => `Отслеживаем '${file}' на изменения...`,
         recompiling: (file: string) => `Перекомпилируем '${file}'...`,
         configChanged: (file: string) =>
@@ -86,7 +90,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Путь к выходному файлу',
-        format: 'Формат пакета: commonjs, esm или iife',
+        format:
+          'Формат пакета: commonjs, esm или iife (по умолчанию esm, если модули компилируются в ES-модули, иначе commonjs)',
         globalName: 'Глобальная переменная, получающая экспорты пакета iife',
         inlineSources: 'Встроить оригинальные источники в карты источников',
         externals: 'Внешние модули (через запятую)',
@@ -124,6 +129,20 @@ const translations: Translations = {
         noCircularDeps: '✅ Циклические зависимости не найдены',
         issuesFound: '❌ Обнаружены проблемы:',
         analysisError: 'Ошибка анализа:',
+      },
+    },
+    check: {
+      name: 'проверить',
+      description: 'Проверить типы в файлах СомонСкрипт без компиляции',
+      usage: '<файлы...> [опции]',
+      args: {
+        files: 'Входные файлы .som',
+      },
+      messages: {
+        noErrors: (files: number) => `✅ Ошибок типов нет (файлов: ${files})`,
+        errorsFound: (errors: number, files: number) =>
+          `❌ Найдено ошибок типов: ${errors} (файлов: ${files})`,
+        fileErrors: (file: string) => `${file}:`,
       },
     },
     resolve: {
