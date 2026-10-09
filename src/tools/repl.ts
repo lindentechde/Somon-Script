@@ -354,7 +354,7 @@ export class Repl {
           } catch (error) {
             this.write(`${this.messages.error} ${errorText(error)}\n`);
           }
-          if (!this.exiting && (!closed || queue.length > 0)) this.prompt();
+          if (!this.exiting && (!closed || queue.length > 0)) this.prompt(closed);
         }
         busy = false;
         if (closed || this.exiting) {
@@ -374,13 +374,22 @@ export class Repl {
     });
   }
 
-  private prompt(): void {
-    const rl = this.rl as readline.Interface;
-    rl.setPrompt(
+  /**
+   * Shows the prompt for the next line. Once the input has ended, readline is closed
+   * (Node.js 24 throws on its use) while queued lines are still run, so their prompts
+   * are written directly.
+   */
+  private prompt(inputClosed = false): void {
+    const text =
       this.buffer.length > 0
         ? (this.options.continuationPrompt ?? '... ')
-        : (this.options.prompt ?? 'сомон> ')
-    );
+        : (this.options.prompt ?? 'сомон> ');
+    if (inputClosed) {
+      this.write(text);
+      return;
+    }
+    const rl = this.rl as readline.Interface;
+    rl.setPrompt(text);
     rl.prompt();
   }
 

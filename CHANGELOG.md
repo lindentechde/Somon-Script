@@ -90,6 +90,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon compile --declaration -o x.mjs` wrote `x.d.ts`, which TypeScript does not read for `x.mjs`; it writes `x.d.mts`, and `x.d.cts` for `x.cjs`.
 * `somon.config.json` accepted an array where an object belongs (`"compilerOptions": []`, also for the file itself, `moduleSystem` and its sections, `paths`, `bundle` and `fmt`) and ignored it; it is a configuration error (`compilerOptions: must be an object`).
 * A `somon.config.json` saved as UTF-8 with a byte order mark (as Notepad and other Windows editors do) was "not valid JSON"; the mark is ignored.
+* `somon repl` with piped input no longer fails on Node.js 24: when the input ended while an input was still running, the next prompt went to the closed readline interface, which Node.js 24 rejects (`readline was closed`).
 
 ## 0.4.0 (2026-10-09)
 
