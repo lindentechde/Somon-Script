@@ -347,15 +347,15 @@ export class TsEmitter extends CodeGenerator {
    * generators in TypeScript.
    */
   protected generateMethodSignature(node: MethodDefinition): string {
-    const fn = node.value as FunctionExpression | undefined;
+    const fn = node.value;
     const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
     const name =
       node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key, node.computed);
-    const typeParameters = this.typeParametersText(fn?.typeParameters);
-    const params = this.withScope(this.paramNames(fn?.params), () =>
-      this.withThisParameter(fn?.thisType, this.generateParams(fn?.params))
+    const typeParameters = this.typeParametersText(fn.typeParameters);
+    const params = this.withScope(this.paramNames(fn.params), () =>
+      this.withThisParameter(fn.thisType, this.generateParams(fn.params))
     );
-    const returnType = this.returnTypeText(fn?.returnType);
+    const returnType = this.returnTypeText(fn.returnType);
     return this.indent(
       `${this.memberModifiers(node)}${accessor}${name}${this.optionalMark(node.optional)}${typeParameters}(${params})${returnType};`
     );

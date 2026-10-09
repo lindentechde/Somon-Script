@@ -90,7 +90,7 @@ describe('CodeGenerator - Core Coverage Tests', () => {
 
       expect(() => {
         generator.generate(invalidProgram);
-      }).toThrow('Cannot read properties of null');
+      }).toThrow(TypeError);
     });
 
     test('should handle empty statements array', () => {

@@ -6,6 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
 
+import type { Program } from '../src/ast';
+import { CodeGenerator } from '../src/codegen';
 import { compile, type CompileOptions } from '../src/compiler';
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
@@ -158,5 +160,93 @@ describe('codegen: enum members', () => {
     // constant substitutions makes it (`Ф`), or a member read as `Р[`Ф`]`
     expect(enumObject['матн-7-4.5']).toBeUndefined();
     expect(enumObject['матн-7-4.5!']).toBeUndefined();
+  });
+});
+
+describe('codegen: rarer statements and expressions', () => {
+  test('a label on a label, and a for loop without its init or update', () => {
+    // `давом берун` continues the loop that both labels name
+    expect(
+      run('берун: дарун: барои (тағ и = 0; и < 3; и++) { агар (и == 1) давом берун; чоп.сабт(и); }')
+    ).toEqual(['0', '2']);
+    const loop = compile('тағ и = 0;\nбарои (; и < 2;) { чоп.сабт(и); и++; }', {
+      typeCheck: false,
+    });
+    expect(loop.code).toContain('for (; и < 2; ) {');
+    expect(runCode(loop.code)).toEqual(['0', '1']);
+  });
+
+  test('`чоп.хато` is `console.error`, also spelt like the Error constructor', () => {
+    expect(compile('чоп.хато("х");', { typeCheck: false }).code).toBe('console.error("х");');
+    // `Хато` alone is `Error`
+    expect(compile('чоп.Хато("х");', { strict: true }).code).toBe('console.error("х");');
+  });
+
+  test('a private setter and then its getter are one accessor pair', () => {
+    expect(
+      run(
+        'синф К {\n  #қ = 0;\n  set #х(в: рақам) { ин.#қ = в; }\n  get #х(): рақам { бозгашт ин.#қ; }\n  гир() { ин.#х = 3; бозгашт ин.#х; }\n}\nчоп.сабт(нав К().гир());'
+      )
+    ).toEqual(['3']);
+  });
+});
+
+describe('codegen: merged declarations', () => {
+  test('an enum merges into an earlier namespace of its name', () => {
+    const source =
+      'номфазо Р { содир собит Б = 1; }\nшумориш Р { А = 2 }\nчоп.сабт(Р.А, Р.Б, Р[2]);';
+    expect(run(source)).toEqual(['2 1 А']);
+    expect(compile(source, { checker: 'typescript', strict: true }).errors).toEqual([]);
+  });
+
+  test('an ES module exports a merged binding named like a built-in member by its mapped name', () => {
+    const { code } = compile('шумориш илова { А }\nсодир шумориш илова { Б = 2 }', {
+      typeCheck: false,
+      module: 'esm',
+    });
+    expect(code.split('\n').filter(line => line.startsWith('export'))).toEqual([
+      'export { илова as push };',
+    ]);
+  });
+
+  test('a block reads the members of an ambient block as `Н.ном`, unless a local name hides them', () => {
+    const ambient = compile(
+      'эълон номфазо Н { функсия ф(): рақам; собит а: рақам; синф К { б: рақам; } }\nномфазо Н { содир функсия г() { бозгашт а + ф() + нав К().б; } }',
+      { strict: true }
+    );
+    expect(ambient.errors).toEqual([]);
+    expect(ambient.code).toContain('return Н.а + Н.ф() + new Н.К().б;');
+    // A parameter `а` hides the member `а` of the other block
+    expect(
+      run(
+        'номфазо Н { содир собит а = 1; }\nномфазо Н {\n  содир функсия ф(а: рақам) { бозгашт а; }\n  содир функсия г() { бозгашт а; }\n}\nчоп.сабт(Н.ф(5), Н.г());'
+      )
+    ).toEqual(['5 1']);
+  });
+});
+
+describe('codegen: syntax trees the parser does not make', () => {
+  test('an unknown expression or pattern is an error, not code', () => {
+    const at = { line: 1, column: 1 };
+    const program = {
+      type: 'Program',
+      ...at,
+      body: [
+        { type: 'ExpressionStatement', ...at, expression: { type: 'JSXElement', ...at } },
+        {
+          type: 'FunctionDeclaration',
+          ...at,
+          name: { type: 'Identifier', name: 'ф', ...at },
+          params: [{ type: 'Parameter', ...at, pattern: { type: 'TupleBinding', ...at } }],
+          body: { type: 'BlockStatement', body: [], ...at },
+        },
+      ],
+    } as unknown as Program;
+    const generator = new CodeGenerator();
+    generator.generate(program);
+    expect(generator.getErrors()).toEqual([
+      'Unknown expression type: JSXElement',
+      'Unknown pattern type: TupleBinding',
+    ]);
   });
 });
