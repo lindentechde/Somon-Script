@@ -135,17 +135,19 @@ describe('Lexer Extended Coverage Tests', () => {
       const source = '.123';
       const tokens = tokenize(source);
 
-      // Should tokenize as . followed by 123 or as a single number
-      expect(tokens[0].type).toBe(TokenType.DOT);
-      expect(tokens[1].type).toBe(TokenType.NUMBER);
-      expect(tokens[1].value).toBe('123');
+      expect(tokens[0].type).toBe(TokenType.NUMBER);
+      expect(tokens[0].value).toBe('.123');
     });
 
     test('should handle multiple decimal points as separate tokens', () => {
-      // Test case should expect an error for invalid syntax
-      const source = '1.2.3';
+      // As in JavaScript, '1.2.3' is the number 1.2 followed by the number .3;
+      // the parser rejects the sequence
+      const tokens = tokenize('1.2.3');
 
-      expect(() => tokenize(source)).toThrow('multiple decimal points');
+      expect(tokens.slice(0, 2).map(t => [t.type, t.value])).toEqual([
+        [TokenType.NUMBER, '1.2'],
+        [TokenType.NUMBER, '.3'],
+      ]);
     });
   });
 

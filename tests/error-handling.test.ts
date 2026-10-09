@@ -24,7 +24,7 @@ describe('Error Handling Tests', () => {
     });
 
     test('should handle invalid numbers', () => {
-      const invalidNumber = 'тағйирёбанда рақам = 123.456.789;';
+      const invalidNumber = 'тағйирёбанда рақам = 123_.456;';
       const lexer = new Lexer(invalidNumber);
 
       expect(() => {
