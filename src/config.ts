@@ -550,7 +550,8 @@ function loadConfigFromFile(configPath: string): SomonConfig {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fileContents);
+    // Editors on Windows may save UTF-8 with a byte order mark, which JSON rejects
+    parsed = JSON.parse(fileContents.replace(/^\uFEFF/, ''));
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new ConfigError(`Failed to parse config file ${configPath}: ${reason}`);

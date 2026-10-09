@@ -89,6 +89,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * A `/` after an object literal or a block comment in a template interpolation (`` `${{} / 2}` ``, `` `${а / /* … */ б}` ``) is a division; it was read as the start of a regular expression, a parse error.
 * `somon compile --declaration -o x.mjs` wrote `x.d.ts`, which TypeScript does not read for `x.mjs`; it writes `x.d.mts`, and `x.d.cts` for `x.cjs`.
 * `somon.config.json` accepted an array where an object belongs (`"compilerOptions": []`, also for the file itself, `moduleSystem` and its sections, `paths`, `bundle` and `fmt`) and ignored it; it is a configuration error (`compilerOptions: must be an object`).
+* A `somon.config.json` saved as UTF-8 with a byte order mark (as Notepad and other Windows editors do) was "not valid JSON"; the mark is ignored.
 
 ## 0.4.0 (2026-10-09)
 

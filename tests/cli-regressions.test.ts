@@ -105,3 +105,23 @@ describe('somon.config.json rejects arrays where an object belongs', () => {
     expect(fs.existsSync(path.join(dir, 'a.js'))).toBe(false);
   });
 });
+
+describe('somon.config.json saved with a byte order mark', () => {
+  // Notepad and other Windows editors write UTF-8 with a BOM; the file was
+  // reported as "not valid JSON".
+  test('is read like the same file without it', async () => {
+    writeFiles(dir, {
+      'a.som': 'тағ ф = () => 1;\nчоп.сабт(ф());\n',
+      'somon.config.json': '\uFEFF{ "compilerOptions": { "target": "es5" } }\r\n',
+    });
+    expect(loadConfig(dir)).toEqual({ compilerOptions: { target: 'es5' } });
+    const result = await runInProcess(['compile', 'a.som'], { cwd: dir });
+    expect(result).toEqual({ stdout: "Compiled 'a.som' to 'a.js'", stderr: '', exitCode: 0 });
+    expect(fs.readFileSync(path.join(dir, 'a.js'), 'utf8')).not.toContain('=>');
+  });
+
+  test('a byte order mark anywhere else is still invalid JSON', () => {
+    writeFiles(dir, { 'somon.config.json': '{ "fmt": \uFEFF{} }' });
+    expect(() => loadConfig(dir)).toThrow(/^Failed to parse config file /);
+  });
+});
