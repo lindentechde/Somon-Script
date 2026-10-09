@@ -11,6 +11,8 @@ export interface CompilerOptions {
   outDir?: string;
   watch?: boolean;
   compileOnSave?: boolean;
+  /** TypeScript's legacy decorators, which may decorate parameters too. */
+  experimentalDecorators?: boolean;
 }
 
 export interface SomonConfig {
@@ -74,7 +76,15 @@ function validateCompilerOptions(
   }
 
   // Validate boolean options
-  const booleanOptions = ['sourceMap', 'minify', 'noTypeCheck', 'strict', 'watch', 'compileOnSave'];
+  const booleanOptions = [
+    'sourceMap',
+    'minify',
+    'noTypeCheck',
+    'strict',
+    'watch',
+    'compileOnSave',
+    'experimentalDecorators',
+  ];
   for (const option of booleanOptions) {
     if (options[option] !== undefined && typeof options[option] !== 'boolean') {
       errors.push({
@@ -106,6 +116,7 @@ function validateCompilerOptions(
     'outDir',
     'watch',
     'compileOnSave',
+    'experimentalDecorators',
   ];
   for (const key of Object.keys(options)) {
     if (!knownOptions.includes(key)) {

@@ -175,6 +175,11 @@ export class Lexer {
   tokenize(): Token[] {
     const tokens: Token[] = [];
 
+    // `#!/usr/bin/env node`: only on the very first line, as in JavaScript
+    if (this.input.startsWith('#!')) {
+      tokens.push(this.readShebang());
+    }
+
     while (!this.isAtEnd()) {
       const token = this.nextToken();
       if (token.type !== TokenType.WHITESPACE) {
@@ -615,6 +620,8 @@ export class Lexer {
         return this.handleDotOperator();
       case ':':
         return this.singleCharToken(TokenType.COLON);
+      case '@':
+        return this.singleCharToken(TokenType.AT);
       case '\n':
         this.advance();
         this.line++;
@@ -654,6 +661,16 @@ export class Lexer {
     }
 
     return this.readPrivateName(startLine, startColumn);
+  }
+
+  /** The shebang line up to (not including) its line break. */
+  private readShebang(): Token {
+    let value = '';
+    while (!this.isAtEnd() && !isLineTerminator(this.currentChar())) {
+      value += this.currentCodePoint();
+      this.advanceCodePoint();
+    }
+    return this.createToken(TokenType.SHEBANG, value, 1, 1);
   }
 
   private singleCharToken(type: TokenType): Token {

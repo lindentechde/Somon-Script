@@ -213,7 +213,7 @@ describe('Lexer: line breaks', () => {
   });
 
   test('errors after lone-CR line breaks report the right line', () => {
-    expect(() => tokenize('тағ а = 1;\rтағ б = 2;\r@')).toThrow(/line 3, column 1/);
+    expect(() => tokenize('тағ а = 1;\rтағ б = 2;\r§')).toThrow(/line 3, column 1/);
   });
 });
 

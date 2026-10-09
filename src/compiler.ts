@@ -2,7 +2,7 @@ import { transformSync, type PluginItem } from '@babel/core';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 import ts from 'typescript';
 
-import { CodeGenerator, type CodeMapping } from './codegen';
+import { CodeGenerator, type CodeMapping, type LoweringNeeds } from './codegen';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { TypeChecker } from './type-checker';
@@ -43,6 +43,12 @@ export interface CompileOptions {
    * interrupted. Enforce time limits around the call (e.g. in a worker).
    */
   timeout?: number;
+  /**
+   * TypeScript's legacy decorators (`experimentalDecorators`), which also
+   * decorate parameters. Without it decorators are the standard (TC39) ones.
+   * Either way TypeScript lowers them, since no JavaScript runtime runs them.
+   */
+  experimentalDecorators?: boolean;
 }
 
 /**
@@ -138,7 +144,7 @@ function emitCode(
   warnings: string[],
   source: string
 ): CompileResult {
-  const generator = new CodeGenerator();
+  const generator = new CodeGenerator({ experimentalDecorators: options.experimentalDecorators });
   const generated = generator.generateWithMappings(ast);
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
@@ -150,7 +156,7 @@ function emitCode(
   let map = options.sourceMap
     ? buildSourceMap(generated.mappings, sourceFileName, source)
     : undefined;
-  const transpileResult = transpile(generated.code, options);
+  const transpileResult = transpile(generated.code, options, generator.getLoweringNeeds());
   let code = transpileResult.code;
   if (map && transpileResult.map) {
     map = chainSourceMaps(transpileResult.map, map, source);
@@ -194,7 +200,21 @@ function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: 
   };
 }
 
-function transpile(code: string, options: CompileOptions) {
+/**
+ * Whether the generated code has syntax no JavaScript runtime runs yet:
+ * decorators, `accessor` fields, `using` declarations.
+ */
+function needsLowering(lowering: LoweringNeeds | undefined): boolean {
+  return Boolean(
+    lowering &&
+      (lowering.decorators ||
+        lowering.parameterDecorators ||
+        lowering.autoAccessors ||
+        lowering.usingDeclarations)
+  );
+}
+
+function transpile(code: string, options: CompileOptions, lowering?: LoweringNeeds) {
   const targetMap: Record<NonNullable<CompileOptions['target']>, ts.ScriptTarget> = {
     es5: ts.ScriptTarget.ES5,
     es2015: ts.ScriptTarget.ES2015,
@@ -202,14 +222,19 @@ function transpile(code: string, options: CompileOptions) {
     esnext: ts.ScriptTarget.ESNext,
   };
   const target = options.target ?? 'es2020';
-  if (target === 'es2020') {
+  const lower = needsLowering(lowering);
+  if (target === 'es2020' && !lower) {
     return { code };
   }
+  // The es2020 output is the generated code as is (ES2022 classes included);
+  // TypeScript lowers decorators, `accessor` and `using` only below ESNext
+  const scriptTarget = target === 'es2020' ? ts.ScriptTarget.ES2022 : targetMap[target];
   const transpile = ts.transpileModule(code, {
     compilerOptions: {
-      target: targetMap[target],
+      target: lower ? Math.min(scriptTarget, ts.ScriptTarget.ES2022) : scriptTarget,
       module: ts.ModuleKind.ESNext,
       sourceMap: options.sourceMap,
+      ...(options.experimentalDecorators && { experimentalDecorators: true }),
     },
   });
   const map =

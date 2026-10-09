@@ -67,6 +67,9 @@ import {
   MetaProperty,
   PrivateIdentifier,
   TaggedTemplateExpression,
+  Decorator,
+  ImportEqualsDeclaration,
+  ExportAssignment,
 } from './types';
 import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
 
@@ -85,6 +88,37 @@ const PREC = {
 export interface CodeMapping {
   generated: { line: number; column: number };
   original: { line: number; column: number };
+}
+
+/**
+ * TypeScript syntax the generated code keeps because no JavaScript runtime
+ * runs it yet: the compiler lowers it with `ts.transpileModule`.
+ */
+export interface LoweringNeeds {
+  /** Decorators on classes and class members (`@ном`). */
+  decorators: boolean;
+  /** Decorators on parameters; TypeScript lowers them only as `experimentalDecorators`. */
+  parameterDecorators: boolean;
+  /** `accessor` fields (`дастрасӣ`). */
+  autoAccessors: boolean;
+  /** `using` / `await using` declarations (`истифода`). */
+  usingDeclarations: boolean;
+}
+
+/**
+ * Declarations of one name in one scope that merge, as in TypeScript:
+ * namespaces with namespaces, a class, function or enum followed by
+ * namespaces, and enums with enums.
+ */
+interface MergeGroup {
+  name: string;
+  declarations: Statement[];
+  /** Constant values of the members of the group's enums, by member name. */
+  enumValues: Map<string, number | string>;
+  /** How enum initializers read earlier members of the group (`Ранг.Сурх`). */
+  enumMembers: Map<string, string>;
+  /** An enum of the group has a first member without an initializer. */
+  omittedFirstInitializer?: boolean;
 }
 
 const POSITION_MARKER = '\0';
@@ -220,6 +254,36 @@ export class CodeGenerator {
   private readonly privateNames: Set<string>[] = [];
   /** Inside a class `статикӣ { … }` block (and not in a function within it). */
   private inStaticBlock = false;
+  /** What `ts.transpileModule` must lower in the generated code (see `getLoweringNeeds`). */
+  private lowering: LoweringNeeds = CodeGenerator.noLowering();
+  /** Declarations that merge with others of their name (namespaces, enums). */
+  private readonly mergeGroups = new WeakMap<Statement, MergeGroup>();
+  /**
+   * In a block of a merged namespace: names the namespace's other blocks
+   * export, read as `Н.ном` (`depth`: the block's scope in `scopes`).
+   */
+  private namespaceMembers?: { namespace: string; names: Set<string>; depth: number };
+
+  /** Legacy decorators (TypeScript `experimentalDecorators`), which may decorate parameters. */
+  private readonly experimentalDecorators: boolean;
+
+  constructor(options: { experimentalDecorators?: boolean } = {}) {
+    this.experimentalDecorators = Boolean(options.experimentalDecorators);
+  }
+
+  private static noLowering(): LoweringNeeds {
+    return {
+      decorators: false,
+      parameterDecorators: false,
+      autoAccessors: false,
+      usingDeclarations: false,
+    };
+  }
+
+  /** TypeScript syntax in the code generated last, which the compiler lowers. */
+  getLoweringNeeds(): LoweringNeeds {
+    return { ...this.lowering };
+  }
 
   /**
    * Return diagnostics collected during generation. Codegen follows the same
@@ -361,10 +425,13 @@ export class CodeGenerator {
   }
 
   private generateProgram(node: Program): string {
+    this.lowering = CodeGenerator.noLowering();
     this.checkRedeclarations(node.body ?? []);
     const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
+    // `#!/usr/bin/env node` stays the first line
+    if (node.shebang !== undefined) statements.unshift(node.shebang);
 
     return statements.join('\n');
   }
@@ -383,7 +450,19 @@ export class CodeGenerator {
 
   // eslint-disable-next-line complexity
   private generateStatementNode(node: Statement): string {
+    // `эълон …` declares what exists elsewhere: nothing to emit
+    if ((node as { declare?: boolean }).declare) return '';
     switch (node.type) {
+      case 'FunctionSignature':
+      case 'AmbientModuleDeclaration':
+        // Overload signatures and `эълон модул` / `эълон глобалӣ` are types only
+        return '';
+      case 'ImportEqualsDeclaration':
+        return this.generateImportEquals(node as ImportEqualsDeclaration);
+      case 'ExportAssignment':
+        return this.indent(
+          `module.exports = ${this.generateExpression((node as ExportAssignment).expression, PREC.ASSIGNMENT)};`
+        );
       case 'ImportDeclaration':
         return this.generateImportDeclaration(node as ImportDeclaration);
       case 'ExportDeclaration':
@@ -494,15 +573,32 @@ export class CodeGenerator {
   }
 
   private generateVariableDeclaration(node: VariableDeclaration): string {
-    const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
+    const kind = this.declarationKeyword(node);
     return this.indent(`${kind} ${this.generateDeclarator(node)};`);
   }
 
   /** `тағ а = 1, б = 2;` → `let а = 1, б = 2;` */
   private generateVariableDeclarationList(node: VariableDeclarationList): string {
-    const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
+    const kind = this.declarationKeyword(node);
     const declarators = node.declarations.map(declaration => this.generateDeclarator(declaration));
     return this.indent(`${kind} ${declarators.join(', ')};`);
+  }
+
+  /**
+   * `let`, `const`, or `using` / `await using` for `истифода` / `интизор истифода`
+   * (lowered by TypeScript, since Node.js does not run them yet).
+   */
+  private declarationKeyword(node: VariableDeclaration | VariableDeclarationList): string {
+    if (node.using) {
+      this.lowering.usingDeclarations = true;
+      if (node.using === 'async' && !this.inAsyncFunction) {
+        this.errors.push(
+          `'интизор истифода' is only allowed inside a 'ҳамзамон' function at line ${node.line}, column ${node.column}`
+        );
+      }
+      return node.using === 'async' ? 'await using' : 'using';
+    }
+    return node.kind === 'СОБИТ' ? 'const' : 'let';
   }
 
   /** The binding and initializer of one declaration: `а = 1`, `[б, в] = р`. */
@@ -539,7 +635,10 @@ export class CodeGenerator {
         const defaultValue = param.defaultValue
           ? ` = ${this.generateExpression(param.defaultValue, PREC.ASSIGNMENT)}`
           : '';
-        return `${param.rest ? '...' : ''}${target}${defaultValue}`;
+        // `@ворид() х` (experimentalDecorators): lowered by TypeScript
+        if (param.decorators?.length) this.checkParameterDecorators(param);
+        const decorators = this.generateDecorators(param.decorators);
+        return `${decorators}${param.rest ? '...' : ''}${target}${defaultValue}`;
       })
       .join(', ');
   }
@@ -999,7 +1098,12 @@ export class CodeGenerator {
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
-    const specifiers = node.specifiers;
+    // `ворид навъ { … }` and `{ навъ Т }` import types only: no `require` for them
+    if (node.importKind === 'type') return '';
+    const specifiers = node.specifiers.filter(
+      spec => (spec as ImportSpecifier).importKind !== 'type'
+    );
+    if (specifiers.length === 0 && node.specifiers.length > 0) return '';
     // Module resolution: convert .som extensions to .js
     const source = this.convertSourcePath(this.generateLiteral(node.source));
 
@@ -1040,13 +1144,27 @@ export class CodeGenerator {
     return results.join('\n');
   }
 
+  /** `ворид х = require("./м");` → `const х = require("./м.js");`; `ворид х = Н.а;` → `const х = Н.а;`. */
+  private generateImportEquals(node: ImportEqualsDeclaration): string {
+    if (node.importKind === 'type') return '';
+    const name = this.generateIdentifier(node.id, true);
+    const value = node.source
+      ? `require(${this.convertSourcePath(this.generateLiteral(node.source))})`
+      : this.generateExpression(node.reference!, PREC.ASSIGNMENT);
+    return this.indent(`const ${name} = ${value};`);
+  }
+
   private generateExportDeclaration(node: ExportDeclaration): string {
+    // `содир навъ { Т };`, `содир навъ * аз …`: types only
+    if (node.exportKind === 'type') return '';
     if (node.declaration) {
       return this.generateExportWithDeclaration(node);
     }
 
+    const specifiers = node.specifiers?.filter(spec => spec.exportKind !== 'type');
     if (node.specifiers && node.specifiers.length > 0) {
-      return this.generateExportWithSpecifiers(node);
+      if (specifiers!.length === 0) return '';
+      return this.generateExportWithSpecifiers({ ...node, specifiers });
     }
 
     if (node.source) {
@@ -1084,8 +1202,12 @@ export class CodeGenerator {
   }
 
   private extractExportNames(declaration: Statement): string[] {
-    // Interfaces and TypeAlias don't generate runtime code
-    if (declaration.type === 'InterfaceDeclaration' || declaration.type === 'TypeAlias') {
+    // Interfaces, type aliases and `эълон …` declarations don't generate runtime code
+    if (
+      declaration.type === 'InterfaceDeclaration' ||
+      declaration.type === 'TypeAlias' ||
+      (declaration as { declare?: boolean }).declare
+    ) {
       return [];
     }
     const names: string[] = [];
@@ -1168,6 +1290,11 @@ export class CodeGenerator {
     const enumMember = binding ? undefined : this.enumMembers?.get(translateMemberName(node.name));
     if (enumMember) {
       return enumMember;
+    }
+    // In a merged namespace, what its other blocks export: `Н.ном`
+    const namespaceMember = binding ? undefined : this.namespaceMemberReference(node.name);
+    if (namespaceMember) {
+      return namespaceMember;
     }
 
     // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
@@ -1274,7 +1401,8 @@ export class CodeGenerator {
     bound: string[] = [],
     functionBody = false
   ): void {
-    const declared = new Set<string>();
+    const declared = new Map<string, Statement>();
+    const groups = new Map<string, MergeGroup>();
     for (const stmt of statements) {
       const names: string[] = [];
       this.collectDeclaredNames(stmt, names);
@@ -1282,14 +1410,60 @@ export class CodeGenerator {
         stmt.type === 'ExportDeclaration' ? (stmt as ExportDeclaration).declaration : stmt;
       const reusesParam = functionBody && declaration?.type === 'FunctionDeclaration';
       for (const name of names) {
-        if (declared.has(name) || (bound.includes(name) && !reusesParam)) {
+        const earlier = declared.get(name);
+        if (earlier && declaration && CodeGenerator.mergesWith(earlier, declaration)) {
+          this.addToMergeGroup(groups, name, earlier, declaration);
+          continue;
+        }
+        if (earlier || (bound.includes(name) && !reusesParam)) {
           this.errors.push(
             `Identifier '${name}' has already been declared at line ${stmt.line}, column ${stmt.column}`
           );
         }
-        declared.add(name);
+        declared.set(name, declaration ?? stmt);
       }
     }
+  }
+
+  /**
+   * TypeScript's declaration merging: a namespace merges with an earlier
+   * namespace, class, function or enum of its name, and an enum with an
+   * earlier enum or namespace.
+   */
+  private static mergesWith(earlier: Statement, later: Statement): boolean {
+    if (later.type === 'NamespaceDeclaration') {
+      return [
+        'NamespaceDeclaration',
+        'ClassDeclaration',
+        'FunctionDeclaration',
+        'EnumDeclaration',
+      ].includes(earlier.type);
+    }
+    return (
+      later.type === 'EnumDeclaration' &&
+      (earlier.type === 'EnumDeclaration' || earlier.type === 'NamespaceDeclaration')
+    );
+  }
+
+  private addToMergeGroup(
+    groups: Map<string, MergeGroup>,
+    name: string,
+    earlier: Statement,
+    later: Statement
+  ): void {
+    let group = groups.get(name);
+    if (!group) {
+      group = {
+        name,
+        declarations: [earlier],
+        enumValues: new Map(),
+        enumMembers: new Map(),
+      };
+      groups.set(name, group);
+      this.mergeGroups.set(earlier, group);
+    }
+    group.declarations.push(later);
+    this.mergeGroups.set(later, group);
   }
 
   /** Names bound by the statements of one block (lexical declarations are hoisted to it). */
@@ -1322,6 +1496,9 @@ export class CodeGenerator {
         break;
       case 'ImportDeclaration':
         names.push(...(stmt as ImportDeclaration).specifiers.map(spec => spec.local.name));
+        break;
+      case 'ImportEqualsDeclaration':
+        names.push((stmt as ImportEqualsDeclaration).id.name);
         break;
       case 'ExportDeclaration':
         this.collectDeclaredNames((stmt as ExportDeclaration).declaration, names);
@@ -1757,9 +1934,20 @@ export class CodeGenerator {
     // At the top level a `var`, as TypeScript emits it; in a block a `let`,
     // which stays in the block like every SomonScript declaration
     const keyword = this.scopes.length <= 1 ? 'var' : 'let';
-    const values = new Map<string, number | string>();
-    const earlier = new Map<string, string>();
+    // Merged enums (`шумориш Э { А } шумориш Э { Б = 1 }`) share their members
+    const group = this.mergeGroups.get(node);
+    const values = group?.enumValues ?? new Map<string, number | string>();
+    const earlier = group?.enumMembers ?? new Map<string, string>();
     let previous: number | string | undefined = -1;
+    const first = node.members[0];
+    if (group && first && !first.initializer) {
+      if (group.omittedFirstInitializer) {
+        this.errors.push(
+          `In an enum with multiple declarations, only one declaration can omit an initializer for its first enum element at line ${first.line}, column ${first.column}`
+        );
+      }
+      group.omittedFirstInitializer = true;
+    }
 
     this.indentLevel++;
     const lines = node.members.map(member => {
@@ -1800,10 +1988,17 @@ export class CodeGenerator {
     this.indentLevel--;
 
     const body = lines.length > 0 ? `{\n${lines.join('\n')}\n${this.getIndent()}}` : '{}';
-    return [
-      this.indent(`${keyword} ${name};`),
-      this.indent(`(function (${name}) ${body})(${name} || (${name} = {}));`),
-    ].join('\n');
+    const iife = this.indent(`(function (${name}) ${body})(${name} || (${name} = {}));`);
+    if (group && !this.declaresMergedBinding(node, group)) return iife;
+    return [this.indent(`${keyword} ${name};`), iife].join('\n');
+  }
+
+  /**
+   * Whether `node` declares the binding of its merge group: the group's first
+   * declaration that emits code (`эълон …` declarations emit none).
+   */
+  private declaresMergedBinding(node: Statement, group: MergeGroup): boolean {
+    return group.declarations.find(d => !(d as { declare?: boolean }).declare) === node;
   }
 
   /** Runs `generate` with earlier enum members readable by name (`Б = А + ф()`). */
@@ -1941,6 +2136,9 @@ export class CodeGenerator {
   }
 
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
+    const group = this.mergeGroups.get(node);
+    if (group) return this.generateMergedNamespace(node, group);
+
     // Generate namespace as an IIFE (Immediately Invoked Function Expression)
     const name = this.generateIdentifier(node.name, true);
 
@@ -1955,22 +2153,7 @@ export class CodeGenerator {
     // The body shares the IIFE's scope with the `const ${name} = {}` above
     this.checkRedeclarations(statements, [node.name.name]);
     this.scopes.push(new Set(this.declaredNames(statements)));
-    this.withFunctionBoundary(() => {
-      for (const stmt of statements) {
-        const isExported = (stmt as Statement & { exported?: boolean }).exported;
-
-        // Skip interface declarations and type aliases - they don't generate runtime code
-        if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
-          result += this.generateStatement(stmt);
-          continue;
-        }
-
-        const code = isExported
-          ? this.generateExportedNamespaceMember(stmt, name)
-          : this.generateStatement(stmt);
-        result += code && !code.endsWith('\n') ? `${code}\n` : code;
-      }
-    });
+    result += this.withFunctionBoundary(() => this.generateNamespaceBody(statements, name));
     this.scopes.pop();
 
     result += this.indent(`return ${name};\n`);
@@ -1983,13 +2166,99 @@ export class CodeGenerator {
     return result;
   }
 
+  /** The statements of a namespace block; exported members also become `Н.ном`. */
+  private generateNamespaceBody(statements: Statement[], name: string): string {
+    let result = '';
+    for (const stmt of statements) {
+      const isExported = (stmt as Statement & { exported?: boolean }).exported;
+
+      // Skip interface declarations and type aliases - they don't generate runtime code
+      if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
+        result += this.generateStatement(stmt);
+        continue;
+      }
+
+      const code = isExported
+        ? this.generateExportedNamespaceMember(stmt, name)
+        : this.generateStatement(stmt);
+      result += code && !code.endsWith('\n') ? `${code}\n` : code;
+    }
+    return result;
+  }
+
+  /**
+   * A namespace merged with other declarations of its name (another
+   * `номфазо`, a class, function or enum), as TypeScript emits it:
+   *
+   *   var Н;
+   *   (function (Н) {
+   *     const а = 1;
+   *     Н.а = а;
+   *   })(Н || (Н = {}));
+   *
+   * Members the group's other namespace blocks export are read as `Н.ном`.
+   */
+  private generateMergedNamespace(node: NamespaceDeclaration, group: MergeGroup): string {
+    const name = this.generateIdentifier(node.name, true);
+    const keyword = this.scopes.length <= 1 ? 'var' : 'let';
+    const statements = node.body?.statements ?? [];
+    const own = new Set(this.declaredNames(statements));
+    const shared = new Set<string>();
+    for (const other of group.declarations) {
+      if (other === node || other.type !== 'NamespaceDeclaration') continue;
+      for (const member of this.namespaceExports(other as NamespaceDeclaration)) {
+        if (!own.has(member)) shared.add(member);
+      }
+    }
+
+    let result = '';
+    if (this.declaresMergedBinding(node, group)) result += this.indent(`${keyword} ${name};\n`);
+    result += this.indent(`(function (${name}) {\n`);
+    this.indentLevel++;
+    this.checkRedeclarations(statements, [node.name.name]);
+    this.scopes.push(new Set([node.name.name, ...own]));
+    const outerMembers = this.namespaceMembers;
+    this.namespaceMembers = { namespace: name, names: shared, depth: this.scopes.length - 1 };
+    try {
+      result += this.withFunctionBoundary(() => this.generateNamespaceBody(statements, name));
+    } finally {
+      this.namespaceMembers = outerMembers;
+      this.scopes.pop();
+      this.indentLevel--;
+    }
+    return result + this.indent(`})(${name} || (${name} = {}));\n`);
+  }
+
+  /** Names a namespace block exports; in an `эълон номфазо` every declaration counts. */
+  private namespaceExports(node: NamespaceDeclaration): string[] {
+    const statements = node.body?.statements ?? [];
+    if (!node.declare) {
+      return statements
+        .filter(stmt => (stmt as Statement & { exported?: boolean }).exported)
+        .flatMap(stmt => this.getMemberNames(stmt));
+    }
+    return statements.flatMap(stmt =>
+      stmt.type === 'FunctionSignature'
+        ? [(stmt as FunctionDeclaration).name.name]
+        : this.getMemberNames(stmt)
+    );
+  }
+
+  /** `ном` in a block of a merged namespace that another block exports: `Н.ном`. */
+  private namespaceMemberReference(name: string): string | undefined {
+    const members = this.namespaceMembers;
+    if (!members?.names.has(name)) return undefined;
+    if (this.scopes.slice(members.depth).some(scope => scope.has(name))) return undefined;
+    return `${members.namespace}.${translateMemberName(name)}`;
+  }
+
   private generateExportedNamespaceMember(stmt: Statement, namespaceName: string): string {
     const memberNames = this.getMemberNames(stmt);
     if (memberNames.length === 0) {
       return '';
     }
 
-    if (stmt.type === 'NamespaceDeclaration') {
+    if (stmt.type === 'NamespaceDeclaration' && !this.mergeGroups.has(stmt)) {
       return this.generateNestedNamespaceExport(
         stmt as NamespaceDeclaration,
         namespaceName,
@@ -2077,8 +2346,59 @@ export class CodeGenerator {
     return this.withScope(node.name ? [node.name.name] : [], () => this.generateClass(node));
   }
 
+  /**
+   * Decorators as written, `@ном(1) `, before a class, member or parameter;
+   * TypeScript lowers them (see `LoweringNeeds`).
+   */
+  private generateDecorators(decorators: Decorator[] | undefined): string {
+    if (!decorators || decorators.length === 0) return '';
+    this.lowering.decorators = true;
+    return decorators
+      .map(decorator => {
+        const expression = this.generateExpression(decorator.expression);
+        // `@а.б(1)` as is; anything else (`@(а[0])`) in parentheses
+        return CodeGenerator.isDecoratorChain(decorator.expression, true)
+          ? `@${expression} `
+          : `@(${expression}) `;
+      })
+      .join('');
+  }
+
+  /** `ном`, `а.б`, `а.б(1)`: a decorator JavaScript accepts without parentheses. */
+  private static isDecoratorChain(expression: Expression, allowCall: boolean): boolean {
+    switch (expression.type) {
+      case 'Identifier':
+        return true;
+      case 'MemberExpression': {
+        const member = expression as MemberExpression;
+        return (
+          !member.computed &&
+          !member.optional &&
+          CodeGenerator.isDecoratorChain(member.object, false)
+        );
+      }
+      case 'CallExpression': {
+        const call = expression as CallExpression;
+        return allowCall && !call.optional && CodeGenerator.isDecoratorChain(call.callee, false);
+      }
+      default:
+        return false;
+    }
+  }
+
+  /** Standard decorators cannot decorate parameters; legacy ones (`experimentalDecorators`) can. */
+  private checkParameterDecorators(param: Parameter): void {
+    this.lowering.parameterDecorators = true;
+    if (this.experimentalDecorators) return;
+    const at = param.decorators![0];
+    this.errors.push(
+      `Decorators are not valid here at line ${at.line}, column ${at.column}: parameter decorators need the 'experimentalDecorators' option`
+    );
+  }
+
   /** `class Ном extends Асос { … }`, members one level deeper than the current indentation. */
   private generateClass(node: ClassDeclaration | ClassExpression): string {
+    const decorators = this.generateDecorators(node.decorators);
     const className = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
@@ -2113,7 +2433,7 @@ export class CodeGenerator {
       }
     }
 
-    return `class${className}${extendsClause} {${classBody}}`;
+    return `${decorators}class${className}${extendsClause} {${classBody}}`;
   }
 
   /**
@@ -2145,7 +2465,7 @@ export class CodeGenerator {
     const declared = new Map<string, string>();
     for (const member of node.body.body) {
       if (member.type === 'StaticBlock' || member.key?.type !== 'PrivateIdentifier') continue;
-      const name = member.key.name;
+      const name = (member.key as PrivateIdentifier).name;
       const kind = member.type === 'MethodDefinition' ? member.kind : 'field';
       const previous = declared.get(name);
       const accessorPair =
@@ -2160,27 +2480,39 @@ export class CodeGenerator {
     return new Set(declared.keys());
   }
 
-  /** A class member name: `#ном` as written, other names through the member-name mapping. */
-  private generateMemberKey(key: Identifier | PrivateIdentifier): string {
-    return key.type === 'PrivateIdentifier'
-      ? this.generatePrivateIdentifier(key as PrivateIdentifier)
-      : translateMemberName(key.name);
+  /**
+   * A class member name: `#ном` as written, `[ифода]` for a computed name, a
+   * string or number literal as is, other names through the member-name mapping.
+   */
+  private generateMemberKey(
+    key: Identifier | PrivateIdentifier | Expression,
+    computed: boolean = false
+  ): string {
+    if (computed) return `[${this.generateExpression(key, PREC.ASSIGNMENT)}]`;
+    if (key.type === 'PrivateIdentifier') {
+      return this.generatePrivateIdentifier(key as PrivateIdentifier);
+    }
+    if (key.type === 'Literal') return this.generateLiteral(key as Literal);
+    return translateMemberName((key as Identifier).name);
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
-    // Method names follow the same member-name mapping as `obj.маълумот()`
-    // call sites (`translateMemberName`), so declaration and use agree.
-    const name = node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key);
-    const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
-    const methodName = `${accessor}${name}`;
-    const isStatic = node.static ? 'static ' : '';
-    const isAsync = node.value?.async ? 'async ' : '';
-    const star = node.value?.generator ? '*' : '';
-
-    // Skip abstract methods - they don't exist in JavaScript
-    if (node.abstract) {
+    // Skip abstract methods and signatures without a body (overloads, members
+    // of an `эълон синф`) - they don't exist in JavaScript
+    if (node.abstract || node.signature) {
       return '';
     }
+
+    // Method names follow the same member-name mapping as `obj.маълумот()`
+    // call sites (`translateMemberName`), so declaration and use agree.
+    const name =
+      node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key, node.computed);
+    const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
+    const methodName = `${accessor}${name}`;
+    // Decorators come before every modifier: `@д static м() {}`
+    const isStatic = `${this.generateDecorators(node.decorators)}${node.static ? 'static ' : ''}`;
+    const isAsync = node.value?.async ? 'async ' : '';
+    const star = node.value?.generator ? '*' : '';
 
     // Handle cases where body might be null or undefined
     if (!node.value || !node.value.body) {
@@ -2204,7 +2536,7 @@ export class CodeGenerator {
    */
   private withParameterProperties(constructor: FunctionExpression): BlockStatement {
     const assignments = constructor.params
-      .filter(param => param.accessibility || param.readonly)
+      .filter(param => param.accessibility || param.readonly || param.override)
       .map(param => {
         const { line, column } = param;
         const target: MemberExpression = {
@@ -2247,15 +2579,21 @@ export class CodeGenerator {
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
-    const propertyName = this.generateMemberKey(node.key);
+    // Index signatures, `эълон` and `мавҳум` fields only declare types
+    if (node.indexSignature || node.declare || node.abstract) return '';
+    const propertyName = this.generateMemberKey(node.key, node.computed);
     const isStatic = node.static ? 'static ' : '';
+    // `дастрасӣ ном = 1;`: an auto-accessor, lowered by TypeScript
+    if (node.accessor) this.lowering.autoAccessors = true;
+    const accessor = node.accessor ? 'accessor ' : '';
     // A field initializer may use `нав.target` (it is `беқимат` there)
     const value = node.value;
     const initializer = value
       ? ` = ${this.withNewTarget(() => this.generateExpression(value, PREC.ASSIGNMENT))}`
       : '';
 
-    return this.indent(`${isStatic}${propertyName}${initializer};`);
+    const decorators = this.generateDecorators(node.decorators);
+    return this.indent(`${decorators}${isStatic}${accessor}${propertyName}${initializer};`);
   }
 
   private generateSwitchStatement(node: SwitchStatement): string {

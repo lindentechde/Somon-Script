@@ -1,5 +1,5 @@
 import type { Parser } from '../parser';
-import { TokenType, Statement, ClassDeclaration, FunctionDeclaration } from '../types';
+import { TokenType, Statement, ClassDeclaration } from '../types';
 
 export class DeclarationHandler {
   private readonly parser: Parser;
@@ -41,7 +41,7 @@ export class DeclarationHandler {
       this.parser.match(TokenType.ҲАМЗАМОН);
       this.parser.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
       const func = this.parser.functionDeclaration();
-      (func as FunctionDeclaration & { async?: boolean }).async = true;
+      func.async = true;
       return func;
     }
 

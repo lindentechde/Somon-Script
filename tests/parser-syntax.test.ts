@@ -757,7 +757,7 @@ describe('Parser: error reporting', () => {
   test('invalid class members are reported as errors, not printed', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
-      const { ast, errors } = parse('синф А {\n  1;\n  салом() { бозгашт 1; }\n}');
+      const { ast, errors } = parse('синф А {\n  +;\n  салом() { бозгашт 1; }\n}');
       expect(errors).toEqual([expect.stringMatching(/Expected class member at line 2, column 3/)]);
       const body = (ast.body[0] as ClassDeclaration).body.body;
       expect(body.map(member => member.key.name)).toEqual(['салом']);

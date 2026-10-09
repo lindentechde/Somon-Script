@@ -430,7 +430,7 @@ describe('Lexer Extended Coverage Tests', () => {
 
   describe('Invalid character handling', () => {
     test('should handle unexpected characters gracefully', () => {
-      const source = 'тағйирёбанда @ ном = #значение;';
+      const source = 'тағйирёбанда § ном = #значение;';
 
       expect(() => tokenize(source)).toThrow();
     });

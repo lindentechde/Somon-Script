@@ -205,6 +205,8 @@ export enum TokenType {
   NOT = '!',
   SPREAD = '...',
   OPTIONAL_CHAINING = '?.',
+  /** `@`, which starts a decorator: `@ном`, `@ном(…)`. */
+  AT = '@',
 
   // Punctuation
   SEMICOLON = ';',
@@ -222,6 +224,8 @@ export enum TokenType {
   RIGHT_BRACKET = ']',
 
   // Special
+  /** `#!/usr/bin/env node` on the first line; the value is the whole line. */
+  SHEBANG = 'SHEBANG',
   EOF = 'EOF',
   NEWLINE = 'NEWLINE',
   WHITESPACE = 'WHITESPACE',

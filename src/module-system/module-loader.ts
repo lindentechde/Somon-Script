@@ -4,7 +4,14 @@ import { parseSync } from '@babel/core';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
-import { Program, ImportDeclaration, ExportDeclaration } from '../types';
+import {
+  Program,
+  Statement,
+  ImportDeclaration,
+  ImportEqualsDeclaration,
+  ImportSpecifier,
+  ExportDeclaration,
+} from '../types';
 import { moduleLoaderLogger as logger } from './logger';
 
 type BufferEncoding =
@@ -441,11 +448,17 @@ export class ModuleLoader {
     }
 
     for (const statement of ast.body) {
-      if (statement?.type !== 'ImportDeclaration' && statement?.type !== 'ExportDeclaration') {
+      if (
+        statement?.type !== 'ImportDeclaration' &&
+        statement?.type !== 'ExportDeclaration' &&
+        statement?.type !== 'ImportEqualsDeclaration'
+      ) {
         continue;
       }
-      const source = (statement as ImportDeclaration | ExportDeclaration).source;
-      if (!source) {
+      const source = (statement as ImportDeclaration | ExportDeclaration | ImportEqualsDeclaration)
+        .source;
+      // `ворид навъ { Т } аз …` and `содир навъ { Т } аз …` load nothing at run time
+      if (!source || ModuleLoader.isTypeOnly(statement)) {
         continue;
       }
 
@@ -476,6 +489,15 @@ export class ModuleLoader {
     }
 
     return references;
+  }
+
+  /** An import or re-export of types only, which the compiled code does not `require`. */
+  private static isTypeOnly(statement: Statement): boolean {
+    const declaration = statement as { importKind?: 'type'; exportKind?: 'type' };
+    if (declaration.importKind === 'type' || declaration.exportKind === 'type') return true;
+    if (statement.type !== 'ImportDeclaration') return false;
+    const specifiers = (statement as ImportDeclaration).specifiers;
+    return specifiers.length > 0 && specifiers.every(spec => (spec as ImportSpecifier).importKind);
   }
 
   private canResolve(specifier: string, fromFile: string): boolean {

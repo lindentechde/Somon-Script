@@ -55,6 +55,7 @@ import {
   ForStatement,
   IfStatement,
   ImportDeclaration,
+  ImportSpecifier,
   MemberExpression,
   MethodDefinition,
   NonNullExpression,
@@ -81,6 +82,11 @@ import {
   EnumDeclaration,
   EnumMember,
   YieldExpression,
+  Decorator,
+  FunctionSignature,
+  ImportEqualsDeclaration,
+  ExportAssignment,
+  AmbientModuleDeclaration,
 } from './ast';
 import { translateMemberName } from './builtin-names';
 
@@ -111,6 +117,10 @@ export const TypeCheckErrorCode = {
   PossiblyNull: 'POSSIBLY_NULL',
   ReadonlyAssignment: 'READONLY_ASSIGNMENT',
   UsedBeforeInitialization: 'USED_BEFORE_INITIALIZATION',
+  NoMatchingOverload: 'NO_MATCHING_OVERLOAD',
+  InvalidOverride: 'INVALID_OVERRIDE',
+  TypeOnlyImportValue: 'TYPE_ONLY_IMPORT_VALUE',
+  AbstractInstantiation: 'ABSTRACT_INSTANTIATION',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -165,6 +175,9 @@ export interface Type {
   minLength?: number; // Tuples: elements before the first optional one (`[рақам, сатр?]` → 1)
   restType?: Type; // Tuples: element type of a trailing rest element (`[рақам, ...сатр[]]`)
   predicate?: PredicateInfo; // Functions returning `х аст Т` or asserting `тасдиқ х [аст Т]`
+  overloads?: Type[]; // Overload signatures (`функсия ф(х: рақам): рақам;`): what calls are checked against
+  typeOnly?: boolean; // A name imported with `ворид навъ`: not usable as a value
+  abstract?: boolean; // `мавҳум синф`: `нав` cannot create instances
 }
 
 /**
@@ -175,6 +188,14 @@ export interface PredicateInfo {
   parameter: number | 'this';
   type?: Type;
   asserts: boolean;
+}
+
+/** The exports of an `эълон модул "ном" { … }` declaration. */
+interface AmbientModuleExports {
+  /** Values by export name (`default` for `содир пешфарз`, `export=` for `содир = …`). */
+  values: Map<string, Type>;
+  /** Interfaces and type aliases the module exports. */
+  types: Set<string>;
 }
 
 /**
@@ -203,7 +224,26 @@ type FunctionLike = {
   async?: boolean;
   isAsync?: boolean;
   generator?: boolean;
+  /** `функсия ф(ин: Т)`: the type of `ин` in the body. */
+  thisType?: TypeAnnotation;
 };
+
+/**
+ * Interfaces that `эълон глобалӣ { интерфейс Array<Т> { … } }` may extend, by
+ * the built-in values they describe (see `augmentedMember`).
+ */
+const AUGMENTABLE_BUILTINS: ReadonlySet<string> = new Set([
+  'Array',
+  'ReadonlyArray',
+  'String',
+  'Number',
+  'Boolean',
+  'Object',
+  'Map',
+  'Set',
+  'Promise',
+  'RegExp',
+]);
 
 const UNKNOWN: Type = { kind: 'unknown' };
 const NULL_TYPE: Type = { kind: 'primitive', name: 'null' };
@@ -415,6 +455,8 @@ export class TypeChecker {
   private typeParameterScopes: Set<string>[] = [];
   /** Classes whose body is being checked, innermost last (the owners of `#ном` names). */
   private classStack: Type[] = [];
+  /** Enum declarations already declared (merged enums add to the first one's type). */
+  private declaredEnums: WeakSet<EnumDeclaration> = new WeakSet();
   /** Types `initializePrimitiveTypes` gives the names `сатр`, `рақам`, … as values. */
   private primitiveValues: Set<Type> = new Set();
   /** Callee type of each call when last inferred, for type predicates (`х аст Т`). */
@@ -426,6 +468,13 @@ export class TypeChecker {
   private classValueKeys: Set<string> = new Set();
   /** (source, target) pairs being compared, to stop recursion on recursive types. */
   private assignabilityStack: Array<[Type, Type]> = [];
+  /** `эълон модул "ном" { … }`: what each declared module exports, by name. */
+  private ambientModules: Map<string, AmbientModuleExports> = new Map();
+  /**
+   * Members `эълон глобалӣ { интерфейс Array<Т> { … } }` adds to built-in
+   * types, by interface name.
+   */
+  private builtinAugmentations: Map<string, Map<string, PropertyType>> = new Map();
 
   private sourceLines: string[] = [];
 
@@ -453,8 +502,9 @@ export class TypeChecker {
     TryStatement: s => this.checkTryStatement(s as TryStatement),
     ThrowStatement: s => this.inferExpressionType((s as ThrowStatement).argument),
     ReturnStatement: s => this.checkReturnStatement(s as ReturnStatement),
-    NamespaceDeclaration: s =>
-      this.withScope(() => this.checkStatements((s as NamespaceDeclaration).body.statements)),
+    NamespaceDeclaration: s => this.checkNamespace(s as NamespaceDeclaration),
+    ExportAssignment: s => this.inferExpressionType((s as ExportAssignment).expression),
+    ImportEqualsDeclaration: s => this.checkImportEquals(s as ImportEqualsDeclaration),
   };
 
   private readonly expressionHandlers: Record<
@@ -516,6 +566,12 @@ export class TypeChecker {
     },
   };
 
+  /** Declarations that only describe types: their names have no value to check. */
+  private static readonly TYPE_DECLARATIONS: ReadonlySet<string> = new Set([
+    'InterfaceDeclaration',
+    'TypeAlias',
+  ]);
+
   constructor(source?: string, options: TypeCheckOptions = {}) {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
     this.strict = Boolean(options.strict);
@@ -562,13 +618,20 @@ export class TypeChecker {
     this.classStack = [];
     this.calleeTypes = new WeakMap();
     this.classValueKeys = new Set();
+    this.ambientModules = new Map();
+    this.builtinAugmentations = new Map();
+    this.declaredEnums = new WeakSet();
     this.initializePrimitiveTypes();
 
+    // `эълон глобалӣ { … }` declares top-level names; `эълон модул "ном"` modules
+    const body = this.expandGlobalDeclarations(program.body);
+    this.collectAmbientModules(body);
+
     // First pass: collect type definitions and hoist top-level bindings
-    this.collectTypeDefinitions(program.body);
+    this.collectTypeDefinitions(body);
 
     // Second pass: type check statements
-    this.checkStatements(program.body);
+    this.checkStatements(body);
 
     return {
       errors: this.errors,
@@ -672,11 +735,20 @@ export class TypeChecker {
     classes.forEach(classDecl => this.declareClassShell(classDecl));
     classes.forEach(classDecl => this.collectClass(classDecl));
 
+    // Overload signatures (`функсия ф(х: рақам): рақам;`), by function name
+    const signatures = new Map<string, Type[]>();
     for (const statement of declarations) {
       switch (statement.type) {
         case 'FunctionDeclaration':
           this.hoistFunctionDeclaration(statement as FunctionDeclaration);
           break;
+        case 'FunctionSignature': {
+          const signature = statement as FunctionSignature;
+          const list = signatures.get(signature.name.name) ?? [];
+          list.push(this.buildFunctionType(signature.name.name, signature));
+          signatures.set(signature.name.name, list);
+          break;
+        }
         case 'VariableDeclaration':
           this.hoistVariableDeclaration(statement as VariableDeclaration);
           break;
@@ -686,13 +758,100 @@ export class TypeChecker {
           );
           break;
         case 'NamespaceDeclaration':
-          this.declare((statement as NamespaceDeclaration).name.name, UNKNOWN);
+          this.hoistNamespace(statement as NamespaceDeclaration);
           break;
         case 'ImportDeclaration':
           this.collectImport(statement as ImportDeclaration);
           break;
+        case 'ImportEqualsDeclaration':
+          this.collectImportEquals(statement as ImportEqualsDeclaration);
+          break;
       }
     }
+    signatures.forEach((overloads, name) => this.declareOverloads(name, overloads));
+  }
+
+  /**
+   * Calls of an overloaded function are checked against its overload
+   * signatures; the implementation's own signature is not callable. Without
+   * an implementation (`эълон функсия`) the signatures alone make the function.
+   */
+  private declareOverloads(name: string, overloads: Type[]): void {
+    const scope = this.scopes[this.scopes.length - 1];
+    const implementation = scope.get(name);
+    if (implementation?.kind === 'function' && !implementation.overloads) {
+      scope.set(name, { ...implementation, overloads });
+    } else if (!implementation) {
+      this.declare(name, overloads.length > 1 ? { ...overloads[0], overloads } : overloads[0]);
+    }
+  }
+
+  /**
+   * A namespace is an open object of its exported members (see
+   * `checkNamespace`); merged with a class, function or enum of its name
+   * (declared before it), it adds to that value instead.
+   */
+  private hoistNamespace(namespace: NamespaceDeclaration): void {
+    const name = namespace.name.name;
+    let target = this.scopes[this.scopes.length - 1].get(name);
+    if (!target) {
+      target = { kind: 'object', name, properties: new Map(), open: true };
+      this.declare(name, target);
+    }
+    // Members are known by name before the block is checked (and typed after)
+    for (const statement of namespace.body.statements) {
+      if (!namespace.declare && !(statement as { exported?: boolean }).exported) continue;
+      if (TypeChecker.TYPE_DECLARATIONS.has(statement.type)) continue;
+      for (const member of this.declaredNames(statement)) {
+        this.addNamespaceMember(target, member, UNKNOWN, false);
+      }
+    }
+  }
+
+  /** A member a namespace adds to its value: a property, or a static member of a class. */
+  private addNamespaceMember(target: Type, name: string, type: Type, replace: boolean): void {
+    if (target.kind === 'class') {
+      target.staticMembers?.add(name);
+    } else if (target.kind === 'object' && target.properties) {
+      if (replace || !target.properties.has(name)) {
+        target.properties.set(name, { type, optional: false });
+      }
+    }
+  }
+
+  /**
+   * Checks a namespace block in its own scope, where the members other blocks
+   * of the namespace export are known too. What it exports (everything, in an
+   * `эълон номфазо`) becomes a member of the namespace's value.
+   */
+  private checkNamespace(namespace: NamespaceDeclaration): void {
+    const target = this.lookup(namespace.name.name);
+    this.withScope(() => {
+      const statements = namespace.body.statements;
+      if (target?.kind === 'object' && !target.enumType) {
+        // What the other blocks export; this block's own declarations come next
+        const own = new Set(statements.flatMap(statement => this.declaredNames(statement)));
+        target.properties?.forEach((member, name) => {
+          if (!own.has(name)) this.declare(name, member.type);
+        });
+      }
+      this.checkStatements(statements);
+      if (!target) return;
+      const scope = this.scopes[this.scopes.length - 1];
+      for (const statement of statements) {
+        if (!namespace.declare && !(statement as { exported?: boolean }).exported) continue;
+        if (TypeChecker.TYPE_DECLARATIONS.has(statement.type)) continue;
+        for (const name of this.declaredNames(statement)) {
+          this.addNamespaceMember(target, name, scope.get(name) ?? UNKNOWN, true);
+        }
+      }
+    });
+  }
+
+  /** `ворид х = Н.а;`: the alias has the type of what it names. */
+  private checkImportEquals(declaration: ImportEqualsDeclaration): void {
+    if (!declaration.reference || declaration.importKind === 'type') return;
+    this.declare(declaration.id.name, this.inferExpressionType(declaration.reference));
   }
 
   private isDeclaredHere(classDecl: ClassDeclaration): boolean {
@@ -718,9 +877,199 @@ export class TypeChecker {
 
   private collectImport(importDecl: ImportDeclaration): void {
     // Register imported local names as 'unknown' so references don't trip the
-    // undefined-identifier diagnostic. Cross-module type inference isn't wired.
+    // undefined-identifier diagnostic. Cross-module type inference isn't wired,
+    // except for modules declared with `эълон модул "ном" { … }`.
+    const module = this.ambientModules.get(String(importDecl.source.value));
     for (const spec of importDecl.specifiers) {
-      this.declare(spec.local.name, UNKNOWN);
+      const typeOnly =
+        importDecl.importKind === 'type' || (spec as ImportSpecifier).importKind === 'type';
+      if (typeOnly) {
+        // `ворид навъ { Т }`: a type, not a value
+        this.declare(spec.local.name, { kind: 'unknown', name: spec.local.name, typeOnly: true });
+      } else {
+        const type = module ? this.ambientImportType(module, spec, importDecl) : UNKNOWN;
+        this.declare(spec.local.name, type);
+      }
+    }
+  }
+
+  /** The type of what one specifier imports from a declared module. */
+  private ambientImportType(
+    module: AmbientModuleExports,
+    spec: ImportDeclaration['specifiers'][number],
+    importDecl: ImportDeclaration
+  ): Type {
+    const exportAssignment = module.values.get('export=');
+    if (spec.type === 'ImportNamespaceSpecifier') {
+      return exportAssignment ?? this.ambientModuleObject(module, String(importDecl.source.value));
+    }
+    const isDefault = spec.type === 'ImportDefaultSpecifier';
+    const name = isDefault ? 'default' : (spec as ImportSpecifier).imported.name;
+    const type =
+      module.values.get(name) ??
+      (isDefault ? exportAssignment : undefined) ??
+      (exportAssignment ? this.getAllProperties(exportAssignment).get(name)?.type : undefined);
+    if (type) return type;
+    if (module.types.has(name) || (exportAssignment && this.isOpenType(exportAssignment))) {
+      return UNKNOWN;
+    }
+    const message = isDefault
+      ? `Module '"${importDecl.source.value}"' has no default export`
+      : `Module '"${importDecl.source.value}"' has no exported member '${name}'`;
+    this.addError(TypeCheckErrorCode.PropertyNotFound, message, spec.line, spec.column);
+    return UNKNOWN;
+  }
+
+  /** `ворид * чун м аз "ном"`: an object of the module's exports. */
+  private ambientModuleObject(module: AmbientModuleExports, source: string): Type {
+    const properties = new Map<string, PropertyType>();
+    module.values.forEach((type, name) => properties.set(name, { type, optional: false }));
+    return { kind: 'object', name: `"${source}"`, properties };
+  }
+
+  /** `ворид х = require("ном")`, `ворид х = Н.а;` (the alias is typed when checked). */
+  private collectImportEquals(declaration: ImportEqualsDeclaration): void {
+    const name = declaration.id.name;
+    if (declaration.importKind === 'type') {
+      this.declare(name, { kind: 'unknown', name, typeOnly: true });
+      return;
+    }
+    const source = declaration.source ? String(declaration.source.value) : '';
+    const module = this.ambientModules.get(source);
+    const type = module
+      ? (module.values.get('export=') ?? this.ambientModuleObject(module, source))
+      : UNKNOWN;
+    this.declare(name, type);
+  }
+
+  /**
+   * `эълон глобалӣ { … }` declares names of the global scope: its body is
+   * checked as top-level statements. Interfaces of built-in types there
+   * (`интерфейс Array<Т> { охирин(): Т; }`) add members to those types.
+   */
+  private expandGlobalDeclarations(statements: Statement[]): Statement[] {
+    return statements.flatMap(statement => {
+      const global = statement as AmbientModuleDeclaration;
+      if (global.type !== 'AmbientModuleDeclaration' || !global.global) return [statement];
+      return global.body.filter(inner => {
+        const declaration = this.unwrapExport(inner) as InterfaceDeclaration;
+        if (
+          declaration.type !== 'InterfaceDeclaration' ||
+          !AUGMENTABLE_BUILTINS.has(declaration.name.name)
+        ) {
+          return true;
+        }
+        this.collectBuiltinAugmentation(declaration);
+        return false;
+      });
+    });
+  }
+
+  private collectBuiltinAugmentation(declaration: InterfaceDeclaration): void {
+    const name = declaration.name.name;
+    const target: Type = {
+      kind: 'interface',
+      name,
+      properties: this.builtinAugmentations.get(name) ?? new Map(),
+    };
+    this.withTypeParameters(declaration.typeParameters, () =>
+      this.collectPropertySignatures(declaration.body.properties, target)
+    );
+    this.builtinAugmentations.set(name, target.properties!);
+  }
+
+  /** A member that `эълон глобалӣ` adds to a built-in type, by the built-in's kind. */
+  private augmentedMember(type: Type, name: string, jsName: string): PropertyType | undefined {
+    if (this.builtinAugmentations.size === 0) return undefined;
+    const owners = ['Object'];
+    if (type.kind === 'array' || type.kind === 'tuple') owners.push('Array', 'ReadonlyArray');
+    else if (this.isStringType(type)) owners.push('String');
+    else if (this.isNumericType(type)) owners.push('Number');
+    else if (type.kind === 'generic' && type.name) owners.push(type.name);
+    else if (this.getBaseType(type).name === 'boolean') owners.push('Boolean');
+    for (const owner of owners) {
+      const members = this.builtinAugmentations.get(owner);
+      const member = members && this.findProperty(members, name, jsName);
+      if (member) return member;
+    }
+    return undefined;
+  }
+
+  /**
+   * Collects what each `эълон модул "ном" { … }` exports: everything it
+   * declares, or only what it marks `содир` when it marks anything.
+   */
+  private collectAmbientModules(statements: Statement[]): void {
+    for (const statement of statements) {
+      const module = statement as AmbientModuleDeclaration;
+      if (module.type !== 'AmbientModuleDeclaration' || !module.name) continue;
+      const exports: AmbientModuleExports = { values: new Map(), types: new Set() };
+      const explicit = module.body.some(
+        inner => inner.type === 'ExportDeclaration' || inner.type === 'ExportAssignment'
+      );
+      this.withScope(() => {
+        this.collectTypeDefinitions(module.body);
+        this.hoistDeclarations(module.body);
+        const scope = this.scopes[this.scopes.length - 1];
+        for (const inner of module.body) {
+          this.collectModuleExports(inner, explicit, scope, exports);
+        }
+      });
+      this.ambientModules.set(String(module.name.value), exports);
+    }
+  }
+
+  private collectModuleExports(
+    statement: Statement,
+    explicit: boolean,
+    scope: Map<string, Type>,
+    exports: AmbientModuleExports
+  ): void {
+    if (statement.type === 'ExportAssignment') {
+      exports.values.set('export=', this.quietType((statement as ExportAssignment).expression));
+      return;
+    }
+    const exportDecl = statement as ExportDeclaration;
+    if (statement.type === 'ExportDeclaration' && !exportDecl.declaration) {
+      for (const spec of exportDecl.specifiers ?? []) {
+        const type = scope.get(spec.local.name);
+        if (type) exports.values.set(spec.exported.name, type);
+        else exports.types.add(spec.exported.name);
+      }
+      return;
+    }
+    if (explicit && statement.type !== 'ExportDeclaration') return;
+    const declaration = this.unwrapExport(statement);
+    for (const name of this.declaredNames(declaration)) {
+      if (TypeChecker.TYPE_DECLARATIONS.has(declaration.type)) {
+        exports.types.add(name);
+      } else {
+        exports.values.set(exportDecl.default ? 'default' : name, scope.get(name) ?? UNKNOWN);
+      }
+    }
+  }
+
+  /** Names a declaration binds (or, for interfaces and type aliases, declares as types). */
+  private declaredNames(statement: Statement): string[] {
+    switch (statement.type) {
+      case 'VariableDeclaration': {
+        const identifier = (statement as VariableDeclaration).identifier;
+        return identifier.type === 'Identifier' ? [identifier.name] : [];
+      }
+      case 'VariableDeclarationList':
+        return (statement as VariableDeclarationList).declarations.flatMap(d =>
+          this.declaredNames(d)
+        );
+      case 'FunctionDeclaration':
+      case 'FunctionSignature':
+      case 'ClassDeclaration':
+      case 'EnumDeclaration':
+      case 'NamespaceDeclaration':
+      case 'InterfaceDeclaration':
+      case 'TypeAlias':
+        return [(statement as FunctionDeclaration).name.name];
+      default:
+        return [];
     }
   }
 
@@ -840,27 +1189,55 @@ export class TypeChecker {
     this.collectPropertySignatures(interfaceDecl.body.properties, interfaceType);
   }
 
+  /**
+   * A method signature; several of one name (also from merged interfaces) are
+   * overloads (`м(х: рақам): рақам; м(х: сатр): сатр;`) calls must match.
+   * The type is named for diagnostics: "Function 'ном' expected 2 argument(s)".
+   */
+  private collectMethodSignature(prop: PropertySignature, type: Type, target: Type): void {
+    const name = prop.key.name;
+    const existing = target.properties!.get(name);
+    if (existing?.type.kind !== 'function') {
+      target.properties!.set(name, { type, optional: prop.optional });
+      return;
+    }
+    const overloads = existing.type.overloads ?? [existing.type];
+    target.properties!.set(name, {
+      type: { ...existing.type, overloads: [...overloads, type] },
+      optional: prop.optional && existing.optional,
+    });
+  }
+
+  /** `get ном(): Т;` alone is read-only; with `set ном(…)` it is not. */
+  private collectAccessorSignature(
+    kind: 'get' | 'set',
+    name: string,
+    type: Type,
+    target: Type
+  ): void {
+    const existing = target.properties!.get(name);
+    const readonly = kind === 'get' && !(existing && !existing.readonly);
+    target.properties!.set(name, {
+      type: kind === 'set' && existing ? existing.type : type,
+      optional: false,
+      ...(readonly && { readonly: true }),
+    });
+  }
+
   private collectPropertySignatures(signatures: PropertySignature[], target: Type): void {
-    const methods = new Set<string>();
     for (const prop of signatures ?? []) {
-      if (!prop.key || !prop.typeAnnotation) continue;
+      // A computed name (`[калид]: Т`) is only known at run time
+      if (!prop.key || !prop.typeAnnotation || prop.computed) continue;
       const type = this.withTypeParameters(prop.typeParameters, () =>
         this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
       );
       const name = prop.key.name;
       if (name === INDEX_SIGNATURE_KEY) {
         target.indexType = type;
-      } else if (prop.method && methods.has(name)) {
-        // Overloads (`м(х: рақам): рақам; м(х: сатр): сатр;`): calls aren't
-        // matched against one signature
-        target.properties!.set(name, {
-          type: { kind: 'function', returnType: UNKNOWN },
-          optional: prop.optional && target.properties!.get(name)!.optional,
-        });
       } else if (prop.method) {
-        // Named for diagnostics: "Function 'ном' expected 2 argument(s)"
-        target.properties!.set(name, { type: { ...type, name }, optional: prop.optional });
-        methods.add(name);
+        this.collectMethodSignature(prop, { ...type, name }, target);
+      } else if (prop.kind) {
+        this.collectAccessorSignature(prop.kind, name, type, target);
       } else {
         target.properties!.set(name, {
           type,
@@ -885,6 +1262,8 @@ export class TypeChecker {
   private collectClass(classDecl: ClassDeclaration): void {
     const classType = this.lookup(classDecl.name.name)!;
     classType.staticMembers = new Set();
+    if ((classDecl as ClassDeclaration & { abstract?: boolean }).abstract)
+      classType.abstract = true;
     this.withTypeParameters(classDecl.typeParameters, () =>
       this.collectClassMembers(classDecl, classType)
     );
@@ -904,11 +1283,18 @@ export class TypeChecker {
 
   private collectClassMembers(classDecl: ClassDeclaration, classType: Type): void {
     const properties = classType.properties!;
+    // Overload signatures of methods (`м(х: рақам): рақам;`), by name
+    const overloads = new Map<string, Type[]>();
     for (const member of classDecl.body.body) {
       if (member.type === 'StaticBlock') continue;
+      // `[калид]() {…}`: a name only known at run time
+      if (member.computed) continue;
+      if (member.type === 'PropertyDefinition' && member.indexSignature) {
+        this.collectClassIndexSignature(member, classType);
+        continue;
+      }
       if (member.static) {
-        const key = (member as PropertyDefinition | MethodDefinition).key;
-        if (key?.name) classType.staticMembers!.add(this.memberKeyName(key));
+        classType.staticMembers!.add(this.memberKeyName(member.key));
         continue;
       }
       if (member.type === 'PropertyDefinition') {
@@ -921,16 +1307,64 @@ export class TypeChecker {
           optional: Boolean(prop.optional),
           ...(prop.readonly && { readonly: true }),
         });
+      } else if (member.type === 'MethodDefinition' && member.signature) {
+        this.collectMethodOverload(member, overloads, properties);
       } else if (member.type === 'MethodDefinition') {
         this.collectMethod(member as MethodDefinition, properties);
       }
     }
+    overloads.forEach((list, name) => this.attachMethodOverloads(name, list, properties));
     this.collectParameterProperties(classDecl, properties);
   }
 
-  /** The name a class member is known by: `#ном` for private names. */
-  private memberKeyName(key: Identifier | PrivateIdentifier): string {
-    return key.type === 'PrivateIdentifier' ? `#${key.name}` : key.name;
+  /** A method signature without a body: an overload, or a member of an `эълон синф`. */
+  private collectMethodOverload(
+    member: MethodDefinition,
+    overloads: Map<string, Type[]>,
+    properties: Map<string, PropertyType>
+  ): void {
+    if (member.kind !== 'method') return;
+    const name = this.memberKeyName(member.key);
+    const list = overloads.get(name) ?? [];
+    list.push(this.buildFunctionType(name, member.value));
+    overloads.set(name, list);
+    if (member.optional) properties.set(name, { type: list[0], optional: true });
+  }
+
+  /**
+   * Calls of a method with overloads are checked against them; without an
+   * implementation (`эълон синф`, `м?(): Т;`) the signatures are the method.
+   */
+  private attachMethodOverloads(
+    name: string,
+    overloads: Type[],
+    properties: Map<string, PropertyType>
+  ): void {
+    const implementation = properties.get(name);
+    if (implementation?.type.kind === 'function' && !implementation.optional) {
+      properties.set(name, { ...implementation, type: { ...implementation.type, overloads } });
+      return;
+    }
+    const type = overloads.length > 1 ? { ...overloads[0], overloads } : overloads[0];
+    properties.set(name, { type, optional: Boolean(implementation?.optional) });
+  }
+
+  /** `[калид: сатр]: Т;` in a class: instances (or the class itself) accept any such key. */
+  private collectClassIndexSignature(member: PropertyDefinition, classType: Type): void {
+    if (member.static) {
+      classType.staticMembers!.add(INDEX_SIGNATURE_KEY);
+      return;
+    }
+    classType.indexType = member.typeAnnotation
+      ? this.resolveTypeNode(member.typeAnnotation.typeAnnotation)
+      : UNKNOWN;
+  }
+
+  /** The name a class member is known by: `#ном` for private names, a literal's value. */
+  private memberKeyName(key: Identifier | PrivateIdentifier | Expression): string {
+    if (key.type === 'PrivateIdentifier') return `#${(key as PrivateIdentifier).name}`;
+    if (key.type === 'Literal') return String((key as Literal).value);
+    return (key as Identifier).name;
   }
 
   /** `конструктор(хосусӣ х: рақам)` declares the instance property `х: рақам`. */
@@ -952,7 +1386,9 @@ export class TypeChecker {
       (member): member is MethodDefinition =>
         member.type === 'MethodDefinition' && member.kind === 'constructor'
     );
-    return (constructor?.value.params ?? []).filter(param => param.accessibility || param.readonly);
+    return (constructor?.value.params ?? []).filter(
+      param => param.accessibility || param.readonly || param.override
+    );
   }
 
   /**
@@ -1044,7 +1480,9 @@ export class TypeChecker {
     const name = this.memberKeyName(method.key);
     const methodType = this.buildFunctionType(name, method.value);
     const kind = method.kind === 'method' ? undefined : method.kind;
-    properties.set(name, this.methodProperty(kind, methodType, properties.get(name)));
+    const property = this.methodProperty(kind, methodType, properties.get(name));
+    // `м?() {…}`: an optional method
+    properties.set(name, method.optional ? { ...property, optional: true } : property);
   }
 
   /**
@@ -1072,8 +1510,16 @@ export class TypeChecker {
     for (const statement of declarations) {
       if (statement.type !== 'EnumDeclaration') continue;
       const enumDecl = statement as EnumDeclaration;
+      if (this.declaredEnums.has(enumDecl)) continue;
+      this.declaredEnums.add(enumDecl);
       const existing = this.scopes[this.scopes.length - 1].get(enumDecl.name.name);
-      if (!existing?.enumType) this.declare(enumDecl.name.name, this.buildEnumType(enumDecl));
+      if (existing?.enumType) {
+        // Merged enums (`шумориш Э { А } шумориш Э { Б = 1 }`) are one enum
+        const merged = this.buildEnumType(enumDecl, existing.properties);
+        existing.enumType = merged.enumType;
+      } else {
+        this.declare(enumDecl.name.name, this.buildEnumType(enumDecl));
+      }
     }
   }
 
@@ -1082,8 +1528,10 @@ export class TypeChecker {
    * and an unknown member is reported like one of any other object. As a
    * type, the enum's name stands for the union of its members' types.
    */
-  private buildEnumType(enumDecl: EnumDeclaration): Type {
-    const properties = new Map<string, PropertyType>();
+  private buildEnumType(
+    enumDecl: EnumDeclaration,
+    properties: Map<string, PropertyType> = new Map()
+  ): Type {
     for (const member of enumDecl.members) {
       const isString = this.isStringEnumInitializer(member.initializer, enumDecl, properties);
       properties.set(this.enumMemberName(member), {
@@ -1573,9 +2021,13 @@ export class TypeChecker {
     thisType?: Type,
     closure = false
   ): void {
-    this.withTypeParameters(fn.typeParameters, () =>
-      this.checkFunctionBodyIn(fn, functionType, thisType, closure)
-    );
+    this.withTypeParameters(fn.typeParameters, () => {
+      // `функсия ф(ин: Т)`: `ин` has the declared type in the body
+      const declaredThis = fn.thisType
+        ? this.resolveTypeNode(fn.thisType.typeAnnotation)
+        : thisType;
+      this.checkFunctionBodyIn(fn, functionType, declaredThis, closure);
+    });
   }
 
   private checkFunctionBodyIn(
@@ -1674,8 +2126,78 @@ export class TypeChecker {
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
     // Phase 2: Validate class relationships, property types and method bodies
     this.validateSuperClass(classDecl);
+    this.checkDecorators(classDecl);
+    this.checkOverrides(classDecl);
     this.checkParameterPropertyReads(classDecl);
     this.withTypeParameters(classDecl.typeParameters, () => this.checkClassMembers(classDecl));
+  }
+
+  /** Decorator expressions (`@ном(…)`) of a class, its members and their parameters. */
+  private checkDecorators(classDecl: ClassDeclaration): void {
+    const decorators: Decorator[] = [...(classDecl.decorators ?? [])];
+    for (const member of classDecl.body.body) {
+      if (member.type === 'StaticBlock') continue;
+      decorators.push(...(member.decorators ?? []));
+      if (member.type === 'MethodDefinition') {
+        member.value.params.forEach(param => decorators.push(...(param.decorators ?? [])));
+      }
+    }
+    decorators.forEach(decorator => this.inferExpressionType(decorator.expression));
+  }
+
+  /**
+   * A `бознавис` (override) member must override something: TypeScript's
+   * TS4112 (no base class) and TS4113 (the base class lacks the member).
+   */
+  private checkOverrides(classDecl: ClassDeclaration): void {
+    const overriding = this.overridingMembers(classDecl);
+    if (overriding.length === 0) return;
+    const base = classDecl.superClass ? this.lookup(classDecl.superClass.name) : undefined;
+    for (const member of overriding) {
+      const reason = this.invalidOverrideReason(classDecl, base, member);
+      if (reason) {
+        this.addError(
+          TypeCheckErrorCode.InvalidOverride,
+          `This member cannot have an 'бознавис' (override) modifier because ${reason}`,
+          member.line,
+          member.column
+        );
+      }
+    }
+  }
+
+  /** Members and parameter properties marked `бознавис`. */
+  private overridingMembers(
+    classDecl: ClassDeclaration
+  ): Array<{ name: string; isStatic: boolean; line: number; column: number }> {
+    const overriding: Array<{ name: string; isStatic: boolean; line: number; column: number }> = [];
+    for (const member of classDecl.body.body) {
+      if (member.type === 'StaticBlock' || !member.override || member.computed) continue;
+      const name = this.memberKeyName(member.key);
+      overriding.push({ name, isStatic: member.static, line: member.line, column: member.column });
+    }
+    for (const param of this.parameterProperties(classDecl)) {
+      if (param.override) overriding.push({ ...param, name: param.name.name, isStatic: false });
+    }
+    return overriding;
+  }
+
+  /** Why `member` overrides nothing, or undefined when it does (or the base is unknown). */
+  private invalidOverrideReason(
+    classDecl: ClassDeclaration,
+    base: Type | undefined,
+    member: { name: string; isStatic: boolean }
+  ): string | undefined {
+    if (!classDecl.superClass) {
+      return `its containing class '${classDecl.name.name}' does not extend another class`;
+    }
+    if (base?.kind !== 'class' || this.isOpenType(base)) return undefined;
+    const jsName = translateMemberName(member.name);
+    const exists = member.isStatic
+      ? this.hasStaticMember(base, member.name, jsName)
+      : Boolean(this.findProperty(this.getAllProperties(base), member.name, jsName)) ||
+        this.hasImplicitMember(base, member.name, jsName);
+    return exists ? undefined : `it is not declared in the base class '${base.name}'`;
   }
 
   private checkClassMembers(classDecl: ClassDeclaration): void {
@@ -1695,6 +2217,9 @@ export class TypeChecker {
         continue;
       }
       const thisType = member.static ? undefined : classType;
+      // Signatures without a body (overloads, `эълон синф`) and index signatures
+      if (member.type === 'MethodDefinition' && member.signature) continue;
+      if (member.type === 'PropertyDefinition' && member.indexSignature) continue;
       if (member.type === 'PropertyDefinition') {
         this.functionStack.push({ thisType });
         this.validatePropertyDefinition(member as PropertyDefinition);
@@ -2141,6 +2666,15 @@ export class TypeChecker {
 
   private inferIdentifierType(identifier: Identifier): Type {
     const sym = this.lookup(identifier.name);
+    if (sym?.typeOnly) {
+      this.addError(
+        TypeCheckErrorCode.TypeOnlyImportValue,
+        `'${identifier.name}' cannot be used as a value because it was imported using 'ворид навъ'`,
+        identifier.line,
+        identifier.column
+      );
+      return UNKNOWN;
+    }
     if (sym) {
       const key = this.referenceKey(identifier);
       return (key ? this.narrowed.get(key) : undefined) ?? sym;
@@ -2465,13 +2999,15 @@ export class TypeChecker {
     jsName: string
   ): { known: boolean; exists: boolean; type: Type } {
     const builtin = this.builtinMembersOf(type);
+    // Members `эълон глобалӣ { интерфейс Array<Т> { … } }` adds
+    const augmented = this.augmentedMember(type, name, jsName);
     if (builtin) {
       // A `танҳохонӣ` array has no methods that change it
       const removed = type.readonly && MUTATING_ARRAY_METHODS.has(jsName);
       return {
         known: true,
-        exists: builtin.has(jsName) && !removed,
-        type: this.builtinMemberType(type, jsName),
+        exists: (builtin.has(jsName) && !removed) || augmented !== undefined,
+        type: augmented?.type ?? this.builtinMemberType(type, jsName),
       };
     }
     if (!['class', 'interface', 'object'].includes(type.kind) || !type.properties) {
@@ -2485,6 +3021,7 @@ export class TypeChecker {
     const exists =
       Boolean(prop) ||
       BUILTIN_MEMBERS.object.has(jsName) ||
+      augmented !== undefined ||
       this.hasImplicitMember(type, name, jsName);
     const known = !this.isOpenType(type) && !type.fromLiteral;
     let propType = prop?.type ?? UNKNOWN;
@@ -2529,6 +3066,8 @@ export class TypeChecker {
       t = t.baseType, depth++
     ) {
       for (const member of t.staticMembers ?? []) {
+        // `статикӣ [калид: сатр]: Т;` accepts every name
+        if (member === INDEX_SIGNATURE_KEY) return true;
         if (member === name || translateMemberName(member) === jsName) return true;
       }
     }
@@ -3043,12 +3582,83 @@ export class TypeChecker {
     const functionType = callee ? this.inferExpressionType(callee) : UNKNOWN;
     this.calleeTypes.set(callExpr, functionType);
     if (functionType.kind === 'function' && !this.isOptionalChain(callExpr)) {
+      if (functionType.overloads) return this.inferOverloadedCall(callExpr, functionType);
       this.validateCallArguments(callExpr, functionType);
       return functionType.returnType ?? UNKNOWN;
     }
     // Still evaluate args so nested undefined identifiers are flagged.
     callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
     return UNKNOWN;
+  }
+
+  /**
+   * A call of an overloaded function: the first overload whose parameters fit
+   * the arguments (their count and types) decides the result; when none fits,
+   * that is TypeScript's "No overload matches this call".
+   */
+  private inferOverloadedCall(callExpr: CallExpression, functionType: Type): Type {
+    const overloads = functionType.overloads!;
+    const match = overloads.find(overload => this.overloadAccepts(callExpr, overload));
+    if (match) {
+      this.validateCallArguments(callExpr, match);
+      return match.returnType ?? UNKNOWN;
+    }
+    callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
+    const signatures = overloads.map(overload => this.functionTypeToString(overload)).join('; ');
+    this.addError(
+      TypeCheckErrorCode.NoMatchingOverload,
+      `No overload of '${functionType.name ?? 'anonymous'}' matches this call. Overloads: ${signatures}`,
+      callExpr.line,
+      callExpr.column
+    );
+    return UNKNOWN;
+  }
+
+  /** Whether the arguments of `callExpr` fit `overload`, judged without reporting anything. */
+  private overloadAccepts(callExpr: CallExpression, overload: Type): boolean {
+    const paramTypes = overload.paramTypes;
+    if (!paramTypes) return true;
+    const args = callExpr.arguments;
+    const shape = this.parameterShape(overload);
+    const spreadIndex = args.findIndex(arg => arg.type === 'SpreadElement');
+    if (
+      spreadIndex === -1 &&
+      (args.length < shape.requiredCount || (!shape.hasRest && args.length > shape.fixedCount))
+    ) {
+      return false;
+    }
+    return args.every((arg, i) => {
+      if (spreadIndex !== -1 && i >= spreadIndex) return true;
+      const declared = i < shape.fixedCount ? paramTypes[i] : shape.restElementType;
+      if (!declared) return true;
+      const paramType =
+        i < shape.fixedCount && shape.optional[i] ? this.optionalType(declared) : declared;
+      this.silent++;
+      try {
+        const argType = this.inferExpressionType(arg, paramType);
+        return this.isAssignableFrom(arg, argType, paramType);
+      } finally {
+        this.silent--;
+      }
+    });
+  }
+
+  /** Parameter counts of a function type: fixed, required, optional ones and the rest element. */
+  private parameterShape(functionType: Type): {
+    hasRest: boolean;
+    fixedCount: number;
+    requiredCount: number;
+    optional: boolean[];
+    restElementType?: Type;
+  } {
+    const paramTypes = functionType.paramTypes ?? [];
+    const hasRest = Boolean(functionType.hasRestParam);
+    const fixedCount = hasRest ? paramTypes.length - 1 : paramTypes.length;
+    const optional = functionType.paramOptional ?? paramTypes.map(() => false);
+    const requiredCount = optional.slice(0, fixedCount).filter(o => !o).length;
+    const restType = hasRest ? paramTypes[paramTypes.length - 1] : undefined;
+    const restElementType = restType?.kind === 'array' ? restType.elementType : undefined;
+    return { hasRest, fixedCount, requiredCount, optional, restElementType };
   }
 
   private validateCallArguments(callExpr: CallExpression, functionType: Type): void {
@@ -3061,10 +3671,7 @@ export class TypeChecker {
 
     const args = callExpr.arguments;
     const spreadIndex = args.findIndex(arg => arg.type === 'SpreadElement');
-    const hasRest = Boolean(functionType.hasRestParam);
-    const fixedCount = hasRest ? paramTypes.length - 1 : paramTypes.length;
-    const optional = functionType.paramOptional ?? paramTypes.map(() => false);
-    const requiredCount = optional.slice(0, fixedCount).filter(o => !o).length;
+    const { hasRest, fixedCount, optional, requiredCount } = this.parameterShape(functionType);
 
     if (
       spreadIndex === -1 &&
@@ -3128,6 +3735,14 @@ export class TypeChecker {
 
       const classType = this.lookup(className);
       if (classType && classType.kind === 'class') {
+        if (classType.abstract) {
+          this.addError(
+            TypeCheckErrorCode.AbstractInstantiation,
+            `Cannot create an instance of an abstract class '${className}'`,
+            newExpr.line,
+            newExpr.column
+          );
+        }
         // Return the actual class type with all its properties and baseType
         return classType;
       }
@@ -3363,7 +3978,12 @@ export class TypeChecker {
   private narrowTo(current: Type, target: Type): Type {
     if (this.isAnyLike(current)) return target;
     const kept = this.unionMembers(current).filter(t => this.isAssignable(t, target));
-    return kept.length > 0 ? this.unionOf(kept) : target;
+    if (kept.length > 0) return this.unionOf(kept);
+    // `ин аст { қимат: рақам }` on a class instance: both, as in TypeScript
+    if (['class', 'interface', 'object'].includes(current.kind)) {
+      return { kind: 'intersection', types: [current, target] };
+    }
+    return target;
   }
 
   /** `current` where a predicate says it is no `target`: the other union members. */
@@ -3747,20 +4367,24 @@ export class TypeChecker {
     targetType: Type,
     report: (_source: string, _target: string) => void
   ): void {
+    if (!this.isAssignableFrom(sourceExpr, sourceType, targetType)) {
+      report(this.typeToString(sourceType), this.typeToString(targetType));
+      return;
+    }
+    this.checkExcessProperties(sourceExpr, targetType);
+  }
+
+  /** Whether the value of `sourceExpr` (of type `sourceType`) may be assigned to `targetType`. */
+  private isAssignableFrom(sourceExpr: Expression, sourceType: Type, targetType: Type): boolean {
     // Control flow isn't tracked, so a union-typed reference may already be
     // narrowed (`агар (навъи х === "string") бозгашт х;`): accept it when any
     // member fits.
     const narrowable =
       sourceType.kind === 'union' &&
       (sourceExpr.type === 'Identifier' || sourceExpr.type === 'MemberExpression');
-    const assignable = narrowable
+    return narrowable
       ? this.isNarrowableUnionAssignable(sourceType, targetType)
       : this.isAssignable(sourceType, targetType);
-    if (!assignable) {
-      report(this.typeToString(sourceType), this.typeToString(targetType));
-      return;
-    }
-    this.checkExcessProperties(sourceExpr, targetType);
   }
 
   /**

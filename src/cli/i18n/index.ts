@@ -30,6 +30,7 @@ export interface Translations {
         noMinify: string;
         noTypeCheck: string;
         strict: string;
+        experimentalDecorators: string;
         watch: string;
       };
       messages: {

@@ -349,6 +349,7 @@ export class ModuleSystem {
       'strict',
       'watch',
       'compileOnSave',
+      'experimentalDecorators',
     ];
     for (const option of booleanOptions) {
       if (compilation[option] !== undefined && typeof compilation[option] !== 'boolean') {
@@ -965,6 +966,9 @@ export class ModuleSystem {
     if (config.strict !== undefined) {
       options.strict = config.strict;
     }
+    if (config.experimentalDecorators !== undefined) {
+      options.experimentalDecorators = config.experimentalDecorators;
+    }
 
     return options;
   }
@@ -1273,6 +1277,9 @@ export class ModuleSystem {
 
     const bundleBuilder = this.createBundleCodeBuilder();
     const generator = this.createSourceMapGenerator(options, result);
+    // The entry's `#!/usr/bin/env node` starts the bundle
+    const shebang = ModuleSystem.shebangOf(result.modules.get(result.entryPoint)?.code);
+    if (shebang) this.appendToBuilder(bundleBuilder, `${shebang}\n`);
 
     await this.buildModuleMapSection(
       bundleBuilder,
@@ -1303,6 +1310,11 @@ export class ModuleSystem {
       code: bundleBuilder.code,
       map: serializedMap,
     };
+  }
+
+  /** The `#!…` line a compiled module starts with, if any. */
+  private static shebangOf(code: string | undefined): string | undefined {
+    return code?.match(/^#![^\n\r]*/)?.[0];
   }
 
   private buildExternalCandidates(raw: string, entryPoint: string): string[] {
@@ -1386,7 +1398,9 @@ export class ModuleSystem {
     };
 
     for (const [moduleId, moduleData] of result.modules) {
-      const processedCode = this.rewriteRequiresForModule(moduleId, moduleData.code, context);
+      // A shebang is only valid on the bundle's first line; its line stays, empty
+      const code = moduleData.code.replace(/^#![^\n\r]*/, '');
+      const processedCode = this.rewriteRequiresForModule(moduleId, code, context);
       const key = moduleIdMapping.get(moduleId);
       if (!key) {
         continue;

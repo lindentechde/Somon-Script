@@ -23,6 +23,8 @@ const translations: Translations = {
         noMinify: 'Disable minification',
         noTypeCheck: 'Disable type checking',
         strict: 'Enable strict type checking',
+        experimentalDecorators:
+          'Use legacy (experimental) decorators, which may decorate parameters',
         watch: 'Recompile on file changes',
       },
       messages: {

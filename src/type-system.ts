@@ -25,6 +25,8 @@ export interface FunctionType extends TypeNode {
   type: 'FunctionType';
   parameters: Parameter[];
   returnType: TypeNode;
+  /** A `this` parameter: `(ин: Т, х: рақам) => беджавоб`. */
+  thisType?: TypeNode;
 }
 
 export interface UnionType extends TypeNode {
@@ -66,6 +68,13 @@ export interface PropertySignature extends ASTNode {
   method?: boolean;
   /** Type parameters of a generic method signature: `ҳамон<Т>(х: Т): Т`. */
   typeParameters?: TypeParameter[];
+  /**
+   * Accessor signature `get ном(): Т;` / `set ном(қ: Т);`; `typeAnnotation`
+   * holds the property's type.
+   */
+  kind?: 'get' | 'set';
+  /** A computed name, `[калид]: Т;`, known only at run time (`key` is a placeholder). */
+  computed?: boolean;
 }
 
 export interface TypeParameter extends ASTNode {
@@ -73,6 +82,11 @@ export interface TypeParameter extends ASTNode {
   name: Identifier;
   constraint?: TypeNode;
   default?: TypeNode;
+  /** `<собит Т>`: a const type parameter. */
+  const?: boolean;
+  /** Variance annotations `<дар Т>`, `<берун Т>`, `<дар берун Т>`. */
+  in?: boolean;
+  out?: boolean;
 }
 
 export interface TypeAlias extends Statement {
@@ -87,6 +101,8 @@ export interface NamespaceDeclaration extends Statement {
   name: Identifier;
   body: NamespaceBody;
   exported?: boolean;
+  /** `эълон номфазо …`: an ambient namespace, erased in the output. */
+  declare?: boolean;
 }
 
 export interface NamespaceBody extends ASTNode {

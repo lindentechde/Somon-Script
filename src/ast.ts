@@ -9,6 +9,8 @@ export interface ASTNode {
 export interface Program extends ASTNode {
   type: 'Program';
   body: Statement[];
+  /** `#!/usr/bin/env node` on the first line; emitted as the first line of the output. */
+  shebang?: string;
 }
 
 export interface Statement extends ASTNode {}
@@ -23,6 +25,13 @@ export interface VariableDeclaration extends Statement {
   init?: Expression;
   /** Definite assignment assertion `тағ х!: рақам;` (erased in the output). */
   definite?: boolean;
+  /** `эълон собит х: рақам;`: an ambient declaration, erased in the output. */
+  declare?: boolean;
+  /**
+   * `истифода х = …;` (TypeScript `using`, 'sync') or `интизор истифода х = …;`
+   * (`await using`, 'async'): `kind` is then 'СОБИТ'.
+   */
+  using?: 'sync' | 'async';
 }
 
 /** `тағ а = 1, б = 2;`: several declarations of one kind in one statement. */
@@ -30,6 +39,8 @@ export interface VariableDeclarationList extends Statement {
   type: 'VariableDeclarationList';
   kind: 'ТАҒЙИРЁБАНДА' | 'СОБИТ';
   declarations: VariableDeclaration[];
+  declare?: boolean;
+  using?: 'sync' | 'async';
 }
 
 export interface FunctionDeclaration extends Statement {
@@ -43,6 +54,32 @@ export interface FunctionDeclaration extends Statement {
   async?: boolean;
   /** Generator function: `функсия* ном() { … }`. */
   generator?: boolean;
+  /** A `this` parameter, `функсия ф(ин: Т)`: the type of `ин` in the body (erased). */
+  thisType?: TypeAnnotation;
+}
+
+/**
+ * A function without a body: an overload signature (`функсия ф(х: рақам): рақам;`
+ * before the implementation) or an ambient function (`эълон функсия ф(): беджавоб;`).
+ * Erased in the output.
+ */
+export interface FunctionSignature extends Statement {
+  type: 'FunctionSignature';
+  name: Identifier;
+  typeParameters?: TypeParameter[];
+  params: Parameter[];
+  returnType?: TypeAnnotation;
+  thisType?: TypeAnnotation;
+  async?: boolean;
+  generator?: boolean;
+  /** In an ambient context (`эълон функсия`, inside `эълон номфазо` / `эълон модул`). */
+  declare?: boolean;
+}
+
+/** `@ном`, `@ном(…)`, `@а.б`, `@(ифода)` before a class, class member or parameter. */
+export interface Decorator extends ASTNode {
+  type: 'Decorator';
+  expression: Expression;
 }
 
 export interface Parameter extends ASTNode {
@@ -66,6 +103,10 @@ export interface Parameter extends ASTNode {
   accessibility?: 'public' | 'private' | 'protected';
   /** `танҳохонӣ` parameter property. */
   readonly?: boolean;
+  /** `бознавис` parameter property. */
+  override?: boolean;
+  /** Parameter decorators (`experimentalDecorators` only): `конструктор(@ворид() х: Т)`. */
+  decorators?: Decorator[];
 }
 
 export interface BlockStatement extends Statement {
@@ -121,6 +162,8 @@ export interface EnumDeclaration extends Statement {
   name: Identifier;
   members: EnumMember[];
   const?: boolean;
+  /** `эълон шумориш`: erased in the output. */
+  declare?: boolean;
 }
 
 export interface EnumMember extends ASTNode {
@@ -345,12 +388,16 @@ export interface ImportDeclaration extends Statement {
   type: 'ImportDeclaration';
   specifiers: (ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier)[];
   source: Literal;
+  /** `ворид навъ { Т } аз "./м";`: imports types only, erased in the output. */
+  importKind?: 'type';
 }
 
 export interface ImportSpecifier extends ASTNode {
   type: 'ImportSpecifier';
   imported: Identifier;
   local: Identifier;
+  /** `ворид { навъ Т, х } аз …`: this name is a type, erased in the output. */
+  importKind?: 'type';
 }
 
 export interface ImportDefaultSpecifier extends ASTNode {
@@ -369,12 +416,49 @@ export interface ExportDeclaration extends Statement {
   specifiers?: ExportSpecifier[];
   source?: Literal;
   default?: boolean;
+  /** `содир навъ { Т };`, `содир навъ * аз "./м";`: types only, erased in the output. */
+  exportKind?: 'type';
 }
 
 export interface ExportSpecifier extends ASTNode {
   type: 'ExportSpecifier';
   exported: Identifier;
   local: Identifier;
+  /** `содир { навъ Т, х };`: this name is a type, erased in the output. */
+  exportKind?: 'type';
+}
+
+/**
+ * `ворид х = require("./м");` (TypeScript CommonJS interop) or the alias
+ * `ворид х = Н.а;`.
+ */
+export interface ImportEqualsDeclaration extends Statement {
+  type: 'ImportEqualsDeclaration';
+  id: Identifier;
+  /** The module of `require("./м")`; absent for an alias. */
+  source?: Literal;
+  /** The aliased name of `ворид х = Н.а;`. */
+  reference?: Expression;
+  /** `ворид навъ х = …`: a type only, erased in the output. */
+  importKind?: 'type';
+}
+
+/** `содир = ифода;` (TypeScript `export =`): the value becomes `module.exports`. */
+export interface ExportAssignment extends Statement {
+  type: 'ExportAssignment';
+  expression: Expression;
+}
+
+/**
+ * `эълон модул "ном" { … }` (an ambient module) or `эълон глобалӣ { … }`
+ * (global declarations): types only, erased in the output.
+ */
+export interface AmbientModuleDeclaration extends Statement {
+  type: 'AmbientModuleDeclaration';
+  /** The module name; absent for `эълон глобалӣ`. */
+  name?: Literal;
+  global?: boolean;
+  body: Statement[];
 }
 
 // Class-related AST nodes will be defined later to avoid duplication
@@ -425,6 +509,10 @@ export interface ClassDeclaration extends Statement {
   superClass?: Identifier;
   implements?: Identifier[];
   body: ClassBody;
+  /** `@ном синф …` */
+  decorators?: Decorator[];
+  /** `эълон синф …`: erased in the output. */
+  declare?: boolean;
 }
 
 /** `синф { … }` / `синф Ном мерос Асос { … }` in expression position. */
@@ -436,6 +524,7 @@ export interface ClassExpression extends Expression {
   superClass?: Identifier;
   implements?: Identifier[];
   body: ClassBody;
+  decorators?: Decorator[];
 }
 
 export interface ClassBody extends ASTNode {
@@ -451,17 +540,30 @@ export interface StaticBlock extends ASTNode {
 
 export interface MethodDefinition extends ASTNode {
   type: 'MethodDefinition';
-  key: Identifier | PrivateIdentifier;
+  /** An expression for a computed name, `[Symbol.iterator]() { … }` (`computed` is then set). */
+  key: Identifier | PrivateIdentifier | Expression;
   value: FunctionExpression;
   kind: 'constructor' | 'method' | 'get' | 'set';
   static: boolean;
   abstract?: boolean;
   accessibility?: 'public' | 'private' | 'protected';
+  computed?: boolean;
+  decorators?: Decorator[];
+  /** `бознавис м() { … }` */
+  override?: boolean;
+  /** `м?() { … }`, `м?(): Т;` */
+  optional?: boolean;
+  /**
+   * No body: an overload signature (`м(х: рақам): рақам;`) or a member of an
+   * `эълон синф`. Erased in the output, like an abstract method.
+   */
+  signature?: boolean;
 }
 
 export interface PropertyDefinition extends ASTNode {
   type: 'PropertyDefinition';
-  key: Identifier | PrivateIdentifier;
+  /** An expression for a computed name, `[калид] = 1;` (`computed` is then set). */
+  key: Identifier | PrivateIdentifier | Expression;
   value?: Expression;
   typeAnnotation?: TypeAnnotation;
   /** `ном?: сатр` */
@@ -472,6 +574,21 @@ export interface PropertyDefinition extends ASTNode {
   readonly?: boolean;
   static: boolean;
   accessibility?: 'public' | 'private' | 'protected';
+  computed?: boolean;
+  decorators?: Decorator[];
+  /** `бознавис ном = …;` */
+  override?: boolean;
+  /** `эълон ном: Т;`: declares the type of a field without emitting it. */
+  declare?: boolean;
+  /** `мавҳум ном: Т;`: erased in the output. */
+  abstract?: boolean;
+  /** `дастрасӣ ном = …;` (TypeScript `accessor`): an auto-accessor field. */
+  accessor?: boolean;
+  /**
+   * An index signature, `[калид: сатр]: рақам;`: the parameter `калид: сатр`
+   * (the value type is `typeAnnotation`). Erased in the output.
+   */
+  indexSignature?: Parameter;
 }
 
 export interface FunctionExpression extends Expression {
@@ -485,6 +602,8 @@ export interface FunctionExpression extends Expression {
   /** Generator: `функсия* () { … }`, methods `*ном() { … }`. */
   generator?: boolean;
   returnType?: TypeAnnotation;
+  /** A `this` parameter, `м(ин: Т)`: the type of `ин` in the body (erased). */
+  thisType?: TypeAnnotation;
 }
 
 export interface Super extends Expression {

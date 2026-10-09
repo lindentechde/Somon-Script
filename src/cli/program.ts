@@ -89,6 +89,7 @@ interface CliCompilerFlags {
   typeCheck?: boolean;
   strict?: boolean;
   production?: boolean;
+  experimentalDecorators?: boolean;
 }
 
 interface BundleOptions extends CliCompilerFlags {
@@ -108,6 +109,9 @@ function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
   if (flags.minify !== undefined) overrides.minify = flags.minify;
   if (flags.typeCheck === false) overrides.noTypeCheck = true;
   if (flags.strict !== undefined) overrides.strict = flags.strict;
+  if (flags.experimentalDecorators !== undefined) {
+    overrides.experimentalDecorators = flags.experimentalDecorators;
+  }
   return overrides;
 }
 
@@ -117,11 +121,17 @@ function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
  */
 function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags): CompilerOptions {
   // Output paths and watch settings in compilerOptions only apply to `compile`.
-  const { target, sourceMap, minify, noTypeCheck, strict } = config.compilerOptions ?? {};
+  const { target, sourceMap, minify, noTypeCheck, strict, experimentalDecorators } =
+    config.compilerOptions ?? {};
   const fromConfig = Object.fromEntries(
-    Object.entries({ target, sourceMap, minify, noTypeCheck, strict }).filter(
-      ([, value]) => value !== undefined
-    )
+    Object.entries({
+      target,
+      sourceMap,
+      minify,
+      noTypeCheck,
+      strict,
+      experimentalDecorators,
+    }).filter(([, value]) => value !== undefined)
   ) as CompilerOptions;
   return {
     ...fromConfig,
@@ -327,6 +337,7 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
       minify: options.minify,
       typeCheck: options.typeCheck !== false && !options.noTypeCheck,
       strict: options.strict,
+      experimentalDecorators: options.experimentalDecorators,
     });
 
     if (result.errors.length > 0) {
@@ -599,6 +610,7 @@ function addCompilerOptions(command: Command): Command {
     .option('--no-minify', options.noMinify)
     .option('--no-type-check', options.noTypeCheck)
     .option('--strict', options.strict)
+    .option('--experimental-decorators', options.experimentalDecorators)
     .addOption(new Option('--production').hideHelp());
 }
 
