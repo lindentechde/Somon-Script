@@ -201,6 +201,16 @@ function replaceSomExtension(file: string, suffix: string): string {
   return /\.som$/i.test(file) ? file.replace(/\.som$/i, suffix) : `${file}${suffix}`;
 }
 
+/**
+ * The declaration file TypeScript reads for a JavaScript file: `x.js` → `x.d.ts`,
+ * `x.mjs` → `x.d.mts`, `x.cjs` → `x.d.cts`; any other name gets `.d.ts` appended.
+ */
+function declarationFileFor(output: string): string {
+  const extension = /\.([cm]?)js$/i.exec(output);
+  if (!extension) return `${output}.d.ts`;
+  return `${output.slice(0, extension.index)}.d.${extension[1].toLowerCase()}ts`;
+}
+
 /** Report and refuse an output path that would overwrite the input file. */
 function isOutputSameAsInput(input: string, output: string): boolean {
   if (path.resolve(output) !== path.resolve(input)) return false;
@@ -944,7 +954,7 @@ export function createProgram(): Command {
             console.log(t().commands.compile.messages.sourceMapGenerated(sourceMapFile));
           }
           if (merged.options.declaration && result.declaration !== undefined) {
-            const declarationFile = outputFile.replace(/(?:\.[cm]?js)?$/i, '.d.ts');
+            const declarationFile = declarationFileFor(outputFile);
             // Next to the output the user names (S8707)
             fs.writeFileSync(declarationFile, result.declaration); // NOSONAR
             console.log(t().commands.compile.messages.declarationGenerated(declarationFile));
