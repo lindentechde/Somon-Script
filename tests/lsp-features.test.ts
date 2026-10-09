@@ -394,6 +394,21 @@ describe('LSP document symbols', () => {
     expect(symbols[1].range.start).toEqual({ line: 2, character: 0 });
     expect(symbols[1].selectionRange.start).toEqual({ line: 2, character: 8 });
   });
+
+  test('index signatures and computed names are not named members', () => {
+    const text = [
+      'интерфейс Луғат { [калид: сатр]: рақам; ном: сатр; [Symbol.iterator](): ҳар; }',
+      'синф К { [калид: сатр]: ҳар; статикӣ [к: рақам]: сатр; [Symbol.iterator]() {} х = 1; }',
+    ].join('\n');
+    const symbols = documentSymbols(analyze(text));
+    // Not the parser's placeholders `__computed__` and `__computed_name__`
+    expect(symbols.map(symbol => [symbol.name, symbol.children?.map(child => child.name)])).toEqual(
+      [
+        ['Луғат', ['ном']],
+        ['К', ['х']],
+      ]
+    );
+  });
 });
 
 describe('LSP semantic tokens', () => {

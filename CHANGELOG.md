@@ -118,6 +118,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon lsp` with `compilerOptions.checker: 'typescript'` reported every relative import as "Cannot find module './м.js'" (TS2307): the document's path did not reach the TypeScript checker, so imports were resolved from the working directory. Imported modules are now found and checked.
 * `somon lsp`: diagnostics of the TypeScript checker repeated the source line (`> …`) and the `Type error [TS2322]:` prefix in their message; the code is now the diagnostic's `code`, as for the SomonScript checker's diagnostics.
 * The lexer placed the spread/rest token `...` after itself (three columns too far right): errors about it pointed past it (`Unexpected token '...' at line 1, column 12` for `тағ х = ...;`), and in `somon lsp` a rest parameter's name spanned `...`'s columns (`р: ` for `...р: рақам[]`).
+* `somon lsp`'s outline listed index signatures (`[к: сатр]: Т`) of interfaces and classes, and computed names (`[Symbol.iterator]`) of interfaces, as members named `__computed__` and `__computed_name__`, the parser's placeholders; they are left out, as computed class members already were.
 
 ## 0.4.0 (2026-10-09)
 

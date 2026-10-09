@@ -390,6 +390,8 @@ class SymbolCollector {
       }
       this.nested(() => this.visitFunction(value));
     } else if (member.type === 'PropertyDefinition') {
+      // An index signature `[к: сатр]: Т;` names no member
+      if (member.indexSignature) return;
       this.member(member.key as AnyNode, 'property', extent, Boolean(member.static));
       if (isNode(member.value)) this.nested(() => this.visit(member.value as AnyNode));
     } else {
@@ -402,8 +404,9 @@ class SymbolCollector {
     const declaration = this.declare(node.name as AnyNode, 'interface', [this.offsetOf(node), end]);
     this.withContainer(declaration, () => {
       for (const property of ((node.body as AnyNode).properties as AnyNode[]) ?? []) {
-        // Call and construct signatures have no name
-        if (property.signature) continue;
+        // Call and construct signatures, index signatures and computed names (`[Symbol.iterator]`)
+        // have no name
+        if (property.signature || property.indexSignature || property.computed) continue;
         const kind: DeclarationKind = property.method ? 'method' : 'property';
         this.member(property.key as AnyNode, kind, [
           this.offsetOf(property),
