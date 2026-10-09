@@ -201,8 +201,9 @@ export async function runRepl(version: string): Promise<void> {
     },
   });
   await repl.start();
-  // Timers started in the session must not keep the CLI alive after `.exit`
-  process.stdout.write('', () => process.exit(process.exitCode ?? 0));
+  // Timers started in the session must not keep the CLI alive after `.exit`;
+  // process.exit() exits with process.exitCode, 0 when it is not set.
+  process.stdout.write('', () => process.exit());
 }
 
 // ---------------------------------------------------------------------------
