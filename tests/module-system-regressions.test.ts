@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vm from 'vm';
 
 import { ModuleLoader, ModuleRegistry, ModuleResolver, ModuleSystem } from '../src/module-system';
 import { isSystemPath } from '../src/module-system/module-resolver';
@@ -78,6 +79,51 @@ describe('module system regressions', () => {
       const entry = process.platform === 'win32' ? `main'x.som` : `main'"x.som`;
       write({ [entry]: 'чоп.сабт("ok");\n' });
       expect(await bundleAndRun(entry)).toBe('ok');
+    });
+  });
+
+  describe('requires in strings and comments', () => {
+    beforeEach(() => {
+      write({
+        'a.som': 'содир собит А = 1;\n',
+        'helper.js': [
+          "// require('./missing') is in a comment, and so is /* require('./a') */",
+          'const text = "require(\'./a\')";',
+          "exports.ёрдам = () => text + ' ' + require('./a.som').А;",
+        ].join('\n'),
+        'main.som': [
+          'ворид { А } аз "./a";',
+          'ворид { ёрдам } аз "./helper";',
+          'чоп.сабт("use require(x) or require(\'./a\') here", А, ёрдам());',
+        ].join('\n'),
+      });
+    });
+
+    const OUTPUT = "use require(x) or require('./a') here 1 require('./a') 1";
+
+    test('are no requires: the commonjs bundle keeps them as they are', async () => {
+      const ms = createSystem();
+      const bundle = await ms.bundle({ entryPoint: path.join(root, 'main.som') });
+      expect(bundle.code).toContain("// require('./missing') is in a comment");
+      expect(await bundleAndRun('main.som', { ms })).toBe(OUTPUT);
+    });
+
+    test('are no imports of esm bundles, and iife bundles do not need them', async () => {
+      const ms = createSystem();
+      const esm = await ms.bundle({ entryPoint: path.join(root, 'main.som'), format: 'esm' });
+      expect(esm.code).not.toMatch(/^import /m);
+      fs.writeFileSync(path.join(root, 'bundle.mjs'), esm.code);
+      const output = execFileSync(process.execPath, [path.join(root, 'bundle.mjs')], {
+        encoding: 'utf8',
+      });
+      expect(output.trim()).toBe(OUTPUT);
+
+      const iife = await ms.bundle({ entryPoint: path.join(root, 'main.som'), format: 'iife' });
+      const lines: string[] = [];
+      vm.runInNewContext(iife.code, {
+        console: { log: (...a: unknown[]) => lines.push(a.join(' ')) },
+      });
+      expect(lines).toEqual([OUTPUT]);
     });
   });
 

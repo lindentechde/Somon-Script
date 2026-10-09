@@ -15,6 +15,7 @@ import {
   externalRequireCode,
   shiftSourceMap,
 } from './bundle-formats';
+import { findRequireCalls } from './require-calls';
 import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
@@ -113,27 +114,14 @@ export interface BundleOutput {
   map?: string;
 }
 
-const SIMPLE_ESCAPES: Record<string, string> = {
-  n: '\n',
-  r: '\r',
-  t: '\t',
-  b: '\b',
-  f: '\f',
-  v: '\v',
-  '0': '\0',
-};
-
-/** The value of a JavaScript string literal body, e.g. `ё` → `ё`, `\"` → `"`. */
-function decodeStringLiteral(body: string): string {
-  return body.replaceAll(
-    /\\(?:u\{([\da-fA-F]+)\}|u([\da-fA-F]{4})|x([\da-fA-F]{2})|\r\n|([\s\S]))/g,
-    (sequence: string, codePoint?: string, unit?: string, byte?: string, other?: string) => {
-      const hex = codePoint ?? unit ?? byte;
-      if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
-      if (other === undefined || other === '\n' || other === '\r') return '';
-      return SIMPLE_ESCAPES[other] ?? other;
-    }
-  );
+/** A module of a bundle, its requires pointed at bundle keys. */
+interface BundleModule {
+  id: string;
+  key: string;
+  code: string;
+  map?: RawSourceMap;
+  /** Modules its remaining requires load at run time (not in the bundle). */
+  requires: string[];
 }
 
 /** Where a module's code is in the bundle body (1-based lines). */
@@ -674,8 +662,7 @@ export class ModuleSystem {
     const format =
       options.format ?? (this.resolveCompilationOptions().module === 'esm' ? 'esm' : 'commonjs');
     this.validateBundleOptions(options, format);
-    // The whole bundle is minified once at the end. Minifying modules as well would
-    // escape non-ASCII import paths, which the require rewriter cannot match.
+    // The whole bundle is minified once at the end, not every module as well
     const minify = options.minify ?? this.resolveCompilationOptions().minify;
     // Modules keep their syntax (checked against the target): the whole bundle is
     // lowered once, so TypeScript's helpers appear once. Every format keeps
@@ -1139,7 +1126,7 @@ export class ModuleSystem {
   /** The `modules` table. Returns the lines each module's code occupies in the body. */
   private async buildModuleMapSection(
     bundleBuilder: { code: string; line: number },
-    processedModules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }>,
+    processedModules: BundleModule[],
     externalModuleIds: Set<string>,
     generator: SourceMapGenerator | null,
     options: BundleOptions
@@ -1461,25 +1448,16 @@ export class ModuleSystem {
   }
 
   /**
-   * Modules the bundle loads at run time: string-literal requires that are not
-   * bundle keys. An ES module bundle imports them; a browser bundle has nothing
+   * Modules the bundle loads at run time: requires with a constant module that are
+   * not bundle keys. An ES module bundle imports them; a browser bundle has nothing
    * to load them with.
    */
-  private collectRuntimeImports(
-    modules: Array<{ key: string; code: string }>,
-    format: BundleFormat
-  ): string[] {
+  private collectRuntimeImports(modules: BundleModule[], format: BundleFormat): string[] {
     if (format === 'commonjs') return [];
     const keys = new Set(modules.map(module => module.key));
-    const imports = new Set<string>();
-    const literalRequire =
-      /(?<![\w$.])require\s*\(\s*(['"])((?:(?!\1)[^\\\n\r]|\\.){1,500})\1\s*\)/g;
-    for (const module of modules) {
-      for (const match of module.code.matchAll(literalRequire)) {
-        const specifier = decodeStringLiteral(match[2]);
-        if (!keys.has(specifier)) imports.add(specifier);
-      }
-    }
+    const imports = new Set(
+      modules.flatMap(module => module.requires).filter(specifier => !keys.has(specifier))
+    );
     if (format === 'iife' && imports.size > 0) {
       throw new Error(
         `An iife bundle runs without a module loader, but it needs ${[...imports]
@@ -1561,8 +1539,8 @@ export class ModuleSystem {
     moduleIdMapping: Map<string, string>,
     externals: Set<string>,
     externalModuleIds: Set<string>
-  ): Array<{ id: string; key: string; code: string; map?: RawSourceMap }> {
-    const modules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }> = [];
+  ): BundleModule[] {
+    const modules: BundleModule[] = [];
     const context: RequireRewriteContext = {
       moduleIdMapping,
       externals,
@@ -1573,124 +1551,96 @@ export class ModuleSystem {
     for (const [moduleId, moduleData] of result.modules) {
       // A shebang is only valid on the bundle's first line; its line stays, empty
       const code = moduleData.code.replace(/^#![^\n\r]*/, '');
-      const processedCode = this.rewriteRequiresForModule(moduleId, code, context);
+      const rewritten = this.rewriteRequiresForModule(moduleId, code, context);
       const key = moduleIdMapping.get(moduleId);
       if (!key) {
         continue;
       }
-      modules.push({ id: moduleId, key, code: processedCode, map: moduleData.map });
+      modules.push({ id: moduleId, key, ...rewritten, map: moduleData.map });
     }
 
     return modules;
   }
 
+  /**
+   * Point the requires of a module at the bundle's keys. Calls are found in the
+   * module's syntax tree, so requires in comments and strings stay as they are.
+   * Returns the code and the modules its other requires load at run time.
+   */
   private rewriteRequiresForModule(
     ownerModuleId: string,
     code: string,
     context: RequireRewriteContext
-  ): string {
-    if (typeof code !== 'string') {
-      throw new Error('Code input must be a string');
+  ): { code: string; requires: string[] } {
+    const calls = findRequireCalls(code);
+    if (!calls) {
+      // Local JavaScript that does not parse is bundled as it is
+      return { code, requires: [] };
     }
-    if (code.length > 10 * 1024 * 1024) {
-      throw new Error('Code input too large for require rewriting');
-    }
-
-    const normalizedOwner = path.isAbsolute(ownerModuleId)
-      ? ownerModuleId
-      : path.resolve(ownerModuleId);
 
     // Local JavaScript is bundled verbatim: its dynamic requires are left to the host
     // require instead of failing the bundle.
-    const isSomonModule = normalizedOwner.endsWith('.som');
-
-    // `(?<![\w$.])` keeps `obj.require(...)` and `_require(...)` untouched
-    const dynamicTemplatePattern = /(?<![\w$.])require\s*\(\s*`[^`]*\$\{[^`]*`\s*\)/;
-    if (isSomonModule && dynamicTemplatePattern.test(code)) {
-      throw new Error(
-        `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
-      );
+    const isSomonModule = ownerModuleId.endsWith('.som');
+    const dynamic = calls.find(call => call.specifier === undefined);
+    if (isSomonModule && dynamic) {
+      const kind = dynamic.template ? 'Dynamic template literal require' : 'Dynamic require';
+      throw new Error(`${kind} expressions are not supported in ${ownerModuleId}.`);
     }
 
-    const dynamicRequirePattern = /(?<![\w$.])require\s*\(\s*(?!['"`])/;
-    if (isSomonModule && dynamicRequirePattern.test(code)) {
-      throw new Error(`Dynamic require expressions are not supported in ${normalizedOwner}.`);
+    let rewritten = code;
+    const requires: string[] = [];
+    // From the end, so that the offsets of earlier calls stay valid
+    for (const call of [...calls].reverse()) {
+      if (call.specifier === undefined) continue;
+      const key = this.bundleKeyOf(ownerModuleId, call.specifier, context);
+      if (key === undefined) {
+        requires.unshift(call.specifier);
+      } else {
+        // A double-quoted literal whatever the characters of the key
+        rewritten =
+          rewritten.slice(0, call.start) + JSON.stringify(key) + rewritten.slice(call.end);
+      }
     }
+    return { code: rewritten, requires };
+  }
 
-    // Literals may contain escapes (quotes in file names, `\u` escapes from minifiers)
-    const singleQuotePattern = /(?<![\w$.])require\s*\(\s*'((?:[^'\\\n\r]|\\.){1,500})'\s*\)/g;
-    const doubleQuotePattern = /(?<![\w$.])require\s*\(\s*"((?:[^"\\\n\r]|\\.){1,500})"\s*\)/g;
-    const templatePattern = /(?<![\w$.])require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
-
-    const processMatch = (match: string, spec: string): string => {
-      if (!spec || spec.length === 0 || spec.length > 500) {
-        return match;
-      }
-
-      if (this.matchesExternal(spec, context.externals, context.entryPoint)) {
-        this.markExternalModule(ownerModuleId, spec, context.externalModuleIds, context.entryPoint);
-        return match;
-      }
-
-      const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
-        try {
-          const resolved = this.resolver.resolve(s, ownerModuleId);
-          const mapped = context.moduleIdMapping.get(resolved.resolvedPath);
-          if (!mapped) {
-            return null;
-          }
-          if (context.externalModuleIds.has(resolved.resolvedPath)) {
-            return null;
-          }
-          return { key: mapped, resolvedPath: resolved.resolvedPath };
-        } catch {
-          return null;
-        }
-      };
-
-      let resolved = tryResolveToKey(spec);
-      if (!resolved && /^(\.\.?\/).+\.js$/i.test(spec)) {
-        const fallbackSpec = spec.replace(/\.js$/i, '.som');
-        if (this.matchesExternal(fallbackSpec, context.externals, context.entryPoint)) {
-          this.markExternalModule(
-            ownerModuleId,
-            fallbackSpec,
-            context.externalModuleIds,
-            context.entryPoint
-          );
-          return match;
-        }
-        resolved = tryResolveToKey(fallbackSpec);
-      }
-      if (!resolved) {
-        return match;
-      }
-
-      // JSON.stringify produces a properly-escaped double-quoted JS string literal
-      // (handles ", \, \n, \r, \t, U+2028, U+2029, control chars). We do not rely
-      // on the inbound key shape — if something weird slipped in via filenames,
-      // emission stays syntactically valid.
-      const safeLiteral = JSON.stringify(resolved.key);
-      return `require(${safeLiteral})`;
-    };
-
-    let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, decodeStringLiteral(spec))
-    );
-    result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, decodeStringLiteral(spec))
-    );
-    result = result.replaceAll(templatePattern, (match: string, spec: string) => {
-      if (spec.includes('${')) {
-        if (!isSomonModule) return match;
-        throw new Error(
-          `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
+  /**
+   * The bundle key of the module that `require(specifier)` loads in `ownerModuleId`,
+   * or undefined when it stays a require at run time (externals, packages, Node.js
+   * modules, files that are not bundled). Compiled SomonScript requires `./x.js` for
+   * an import of `./x`, so when that is no bundled file, `./x.som` is tried.
+   */
+  private bundleKeyOf(
+    ownerModuleId: string,
+    specifier: string,
+    context: RequireRewriteContext
+  ): string | undefined {
+    const candidates = [specifier];
+    if (/^\.\.?\/.+\.js$/i.test(specifier)) {
+      candidates.push(`${specifier.slice(0, -'.js'.length)}.som`);
+    }
+    for (const candidate of candidates) {
+      if (this.matchesExternal(candidate, context.externals, context.entryPoint)) {
+        this.markExternalModule(
+          ownerModuleId,
+          candidate,
+          context.externalModuleIds,
+          context.entryPoint
         );
+        return undefined;
       }
-      return processMatch(match, spec);
-    });
-
-    return result;
+      let resolvedPath: string;
+      try {
+        resolvedPath = this.resolver.resolve(candidate, ownerModuleId).resolvedPath;
+      } catch {
+        continue;
+      }
+      const key = context.moduleIdMapping.get(resolvedPath);
+      if (key !== undefined && !context.externalModuleIds.has(resolvedPath)) {
+        return key;
+      }
+    }
+    return undefined;
   }
 
   /**

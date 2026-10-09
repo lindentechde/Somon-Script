@@ -143,7 +143,7 @@ Bundling:
   `externals` stay `require()` calls resolved by the host at runtime, relative
   to the bundle file. A relative `require()` in a local `.js` file that does not
   resolve at build time (an optional dependency in `try`/`catch`, say) is left
-  to the runtime as well; requires in comments are ignored.
+  to the runtime as well; `require(…)` in comments and strings is no require.
 - Bundles are relocatable: they contain no absolute paths of the build machine,
   and every bundled module sees the bundle file's `__filename` and `__dirname`.
   `somon run` instead bundles with `modulePaths: true`: each module gets its

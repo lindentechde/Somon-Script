@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
-import { parseSync } from '@babel/core';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
+import { findRequireCalls } from './require-calls';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import {
@@ -108,37 +108,7 @@ interface DependencyReference {
   optional?: boolean;
 }
 
-/** The parts of a Babel AST node that the JavaScript dependency scan looks at. */
-interface BabelNode {
-  type?: string;
-  name?: string;
-  value?: unknown;
-  callee?: BabelNode;
-  arguments?: BabelNode[];
-  expressions?: unknown[];
-  quasis?: Array<{ value?: { cooked?: string } }>;
-  loc?: { start: { line: number; column: number } };
-}
-
-/** `'./x'` for a `require('./x')` call with a constant relative specifier. */
-function relativeRequireSpecifier(node: BabelNode): string | undefined {
-  if (
-    node.type !== 'CallExpression' ||
-    node.callee?.type !== 'Identifier' ||
-    node.callee.name !== 'require' ||
-    node.arguments?.length !== 1
-  ) {
-    return undefined;
-  }
-  const [argument] = node.arguments;
-  let specifier: unknown;
-  if (argument.type === 'StringLiteral') {
-    specifier = argument.value;
-  } else if (argument.type === 'TemplateLiteral' && argument.expressions?.length === 0) {
-    specifier = argument.quasis?.[0]?.value?.cooked;
-  }
-  return typeof specifier === 'string' && /^\.{1,2}\//.test(specifier) ? specifier : undefined;
-}
+const RELATIVE_SPECIFIER = /^\.{1,2}\//;
 
 const MAX_SPECIFIER_LENGTH = 500;
 
@@ -518,46 +488,18 @@ export class ModuleLoader {
    * Babel cannot parse fall back to a plain text scan.
    */
   private extractJsDependencies(source: string): DependencyReference[] {
-    let ast: unknown;
-    try {
-      ast = parseSync(source, {
-        configFile: false,
-        babelrc: false,
-        sourceType: 'unambiguous',
-        parserOpts: { allowReturnOutsideFunction: true, errorRecovery: true },
-      });
-    } catch {
-      ast = null;
-    }
-    if (!ast) {
+    const calls = findRequireCalls(source);
+    if (!calls) {
       return this.scanJsRequires(source);
     }
-
-    const references: DependencyReference[] = [];
-    const visit = (node: unknown): void => {
-      if (Array.isArray(node)) {
-        node.forEach(visit);
-        return;
-      }
-      if (!node || typeof node !== 'object') return;
-      const call = node as BabelNode;
-      const specifier = relativeRequireSpecifier(call);
-      if (specifier !== undefined) {
-        references.push({
-          specifier,
-          line: call.loc?.start.line,
-          column: call.loc ? call.loc.start.column + 1 : undefined,
-          optional: true,
-        });
-      }
-      for (const [key, value] of Object.entries(node)) {
-        if (key !== 'loc' && key !== 'leadingComments' && key !== 'trailingComments') {
-          visit(value);
-        }
-      }
-    };
-    visit((ast as { program: unknown }).program);
-    return references;
+    return calls
+      .filter(call => call.specifier !== undefined && RELATIVE_SPECIFIER.test(call.specifier))
+      .map(call => ({
+        specifier: call.specifier!,
+        line: call.line,
+        column: call.column,
+        optional: true,
+      }));
   }
 
   private scanJsRequires(source: string): DependencyReference[] {
