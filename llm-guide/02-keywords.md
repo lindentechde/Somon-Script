@@ -183,4 +183,51 @@ every operator and statement.
 
 ---
 
+## English Keywords
+
+TypeScript's English spelling of these keywords works too, wherever the Tajik
+one does, so code moved from TypeScript keeps working while it is translated:
+
+| English                             | Tajik                                  |
+| ----------------------------------- | -------------------------------------- |
+| `return`, `throw`, `else`           | `бозгашт`, `партофтан`, `вагарна`      |
+| `new`, `function`, `this`, `super`  | `нав`, `функсия`, `ин`, `супер`        |
+| `case`, `default`                   | `ҳолат`, `пешфарз`                     |
+| `async`, `await`                    | `ҳамзамон`, `интизор`                  |
+| `in`, `of` (`for … of`)             | `дар`, `аз`                            |
+| `true`, `false`, `null`             | `дуруст`, `нодуруст`, `холӣ`           |
+| `static`, `public`, `private`       | `статикӣ`, `ҷамъиятӣ`, `хосусӣ`        |
+| `protected`, `readonly`, `abstract` | `муҳофизатшуда`, `танҳохонӣ`, `мавҳум` |
+| `extends`, `implements`, `keyof`    | `мерос`, `татбиқ`, `калидҳои`          |
+
+`typeof`, `void`, `delete`, `instanceof`, `do`, `yield`, `as`, `satisfies`,
+`is`, `asserts`, `infer`, `declare`, `override`, `accessor`, `using`, `enum`,
+`type`, `module` and `global` work as well. `async`, `of`, `readonly`,
+`abstract` and `keyof` remain usable as names, and every keyword, English or
+Tajik, may name a member (`о.return`, `{ нав: 1 }`). The other statement
+keywords (`if`, `for`, `while`, `let`, `const`, `class`, `try`, `import`,
+`export`, …) have only their Tajik form.
+
+```som
+abstract синф Шакл {
+    abstract масоҳат(): рақам;
+}
+синф Доира extends Шакл {
+    конструктор(private readonly радиус: рақам) {
+        super();
+    }
+    масоҳат(): рақам {
+        return Math.PI * this.радиус ** 2;
+    }
+}
+async function ҳисоб(): Ваъда<рақам> {
+    барои (собит ш of [нав Доира(1)]) {
+        агар (ш.масоҳат() > 3) return 1; else return 0;
+    }
+    throw new Error("холӣ");
+}
+```
+
+---
+
 **Next**: [Types & Operators](03-types.md)

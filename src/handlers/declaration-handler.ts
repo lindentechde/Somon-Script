@@ -21,7 +21,9 @@ export class DeclarationHandler {
       return this.parser.typeAlias();
     }
 
-    if (this.parser.match(TokenType.МАВҲУМ)) {
+    // `мавҳум синф`; `мавҳум` (or `abstract`) alone is a name
+    if (this.parser.checkSequence(TokenType.МАВҲУМ, TokenType.СИНФ)) {
+      this.parser.match(TokenType.МАВҲУМ);
       this.parser.consume(TokenType.СИНФ, "Expected 'синф' after 'мавҳум'");
       const classDecl = this.parser.classDeclaration();
       (classDecl as ClassDeclaration & { abstract?: boolean }).abstract = true;
@@ -37,8 +39,9 @@ export class DeclarationHandler {
     }
 
     // `ҳамзамон () => …` is an expression; only `ҳамзамон функсия` declares
-    if (this.parser.checkSequence(TokenType.ҲАМЗАМОН, TokenType.ФУНКСИЯ)) {
-      this.parser.match(TokenType.ҲАМЗАМОН);
+    if (this.parser.isAsyncFunctionStart()) {
+      // 'ҳамзамон', or the word 'async'
+      if (!this.parser.match(TokenType.ҲАМЗАМОН)) this.parser.match(TokenType.IDENTIFIER);
       this.parser.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
       const func = this.parser.functionDeclaration();
       func.async = true;

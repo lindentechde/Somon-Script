@@ -408,3 +408,123 @@ describe('members named with keywords', () => {
     ]);
   });
 });
+
+describe('English keywords', () => {
+  test('statements and expressions: else, return, throw, new, function, case, default, of, in', async () => {
+    expect(
+      await run(
+        [
+          'function ранг(н: рақам): сатр {',
+          '    интихоб (н) {',
+          '        case 1: return "як";',
+          '        case 2: return "ду";',
+          '        default: return "бисёр";',
+          '    }',
+          '}',
+          'собит дубора = function (х: рақам): рақам { return х * 2; };',
+          'тағ ҷамъ = 0;',
+          'барои (собит х of [1, 2]) ҷамъ += дубора(х);',
+          'барои (собит к in { а: 1 }) чоп.сабт(к, "а" in { а: 1 });',
+          'агар (ҷамъ > 10) {',
+          '    чоп.сабт("калон");',
+          '} else агар (ҷамъ === 6) {',
+          '    чоп.сабт(ранг(1), ранг(2), ранг(3), ҷамъ);',
+          '} else {',
+          '    чоп.сабт("хурд");',
+          '}',
+          'кӯшиш {',
+          '    throw new Хато("хато");',
+          '} гирифтан (е) {',
+          '    чоп.сабт(е instanceof Хато, new Map<сатр, рақам>().size);',
+          '}',
+          'function* шумораҳо(): Generator<рақам, беджавоб, беқимат> { yield 1; yield* [2, 3]; }',
+          'чоп.сабт([...шумораҳо()].join());',
+        ].join('\n')
+      )
+    ).toEqual(['а true', 'як ду бисёр 6', 'true 0', '1,2,3']);
+  });
+
+  test('async, await, static, this and the class modifiers', async () => {
+    expect(
+      await run(
+        [
+          'интерфейс Номдор { ном(): сатр; }',
+          'abstract синф Шакл implements Номдор {',
+          '    static шумора = 0;',
+          '    static { Шакл.шумора = 1; }',
+          '    abstract масоҳат(): рақам;',
+          '    ном(): сатр { return "шакл"; }',
+          '}',
+          'синф Мураббаъ extends Шакл {',
+          '    private readonly тараф: рақам;',
+          '    конструктор(тараф: рақам, public readonly ранг: сатр) {',
+          '        супер();',
+          '        this.тараф = тараф;',
+          '    }',
+          '    protected get дукарата(): рақам { return this.тараф * 2; }',
+          '    масоҳат(): рақам { return this.тараф ** 2 + this.дукарата * 0; }',
+          '    аст(): this is Мураббаъ { return true; }',
+          '    async дер(): Ваъда<рақам> { return this.масоҳат(); }',
+          '}',
+          'собит м = нав Мураббаъ(3, "сурх");',
+          'чоп.сабт(м.масоҳат(), м.ранг, м.ном(), Шакл.шумора, м.аст());',
+          'async function ду(): Ваъда<рақам> { return 2; }',
+          'собит се = async (): Ваъда<рақам> => (await ду()) + 1;',
+          'собит чор: (х: рақам) => Ваъда<рақам> = async х => х + 2;',
+          'собит о = { async панҷ(): Ваъда<рақам> { return 5; } };',
+          'ду().then(async х => чоп.сабт(х, await се(), await чор(2), await о.панҷ(), await м.дер()));',
+        ].join('\n')
+      )
+    ).toEqual(['9 сурх шакл 1 true', '2 3 4 5 9']);
+  });
+
+  test('types: extends, keyof, in, readonly, this predicates and assertions', async () => {
+    expect(
+      await run(
+        [
+          'навъ Танҳо<Т> = { readonly [К in keyof Т]: Т[К] };',
+          'навъ Сатрӣ<Т> = Т extends сатр ? "ҳа" : "не";',
+          'интерфейс Асос { а: рақам; }',
+          'интерфейс Зер extends Асос { б: рақам; }',
+          'синф Қуттӣ {',
+          '    қимат?: рақам;',
+          '    тасдиқ(): asserts this is { қимат: рақам } {',
+          '        агар (this.қимат === беқимат) throw new Хато("холӣ");',
+          '    }',
+          '}',
+          'собит т: Танҳо<Зер> = { а: 1, б: 2 };',
+          'собит с: Сатрӣ<сатр> = "ҳа";',
+          'собит қ: Қуттӣ = new Қуттӣ();',
+          'қ.қимат = 3;',
+          'қ.тасдиқ();',
+          'чоп.сабт(т.а + т.б, с, қ.қимат + 1);',
+        ].join('\n')
+      )
+    ).toEqual(['3 ҳа 4']);
+  });
+
+  test('async, of, abstract, readonly and keyof are still names; all of them name members', async () => {
+    expect(
+      await run(
+        [
+          'собит async = 1, of = 2, abstract = 3, readonly = 4, keyof = 5;',
+          'собит илова = (async: рақам) => async + 1;',
+          'собит о = { return: 1, new: 2, default: 3, static: 4 };',
+          'чоп.сабт(async + of + abstract + readonly + keyof, илова(of));',
+          'чоп.сабт(о.return + о.new + о.default + о.static);',
+        ].join('\n')
+      )
+    ).toEqual(['15 3', '10']);
+    // `async` before a line break, or with nothing an arrow needs after it, is a name
+    expect(expressionOf('async(1);')).toMatchObject({ type: 'CallExpression' });
+    expect(parseOk('тағ async = 1;\nasync\nфунксия ф() {}')).toHaveLength(3);
+  });
+
+  test('the TypeScript and JavaScript output spell them as TypeScript does', () => {
+    const source =
+      'abstract синф А { static х = 1; abstract м(): void; }\nfunction ф() { return this; }';
+    expect(typescriptOf(source)).toBe(
+      'abstract class А {\n  static х = 1;\n  abstract м(): void;\n}\nfunction ф() {\n  return this;\n}'
+    );
+  });
+});

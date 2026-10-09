@@ -197,7 +197,9 @@ export class Parser {
   constructor(tokens: Token[]) {
     // Line breaks are insignificant: statements end with ';', so expressions
     // may span lines freely.
-    this.tokens = tokens.filter(token => token.type !== TokenType.NEWLINE);
+    this.tokens = tokens
+      .filter(token => token.type !== TokenType.NEWLINE)
+      .map(token => Parser.withEnglishKeyword(token));
     this.importHandler = new ImportHandler(this);
     this.declarationHandler = new DeclarationHandler(this);
     this.loopHandler = new LoopHandler(this);
@@ -205,6 +207,78 @@ export class Parser {
 
   getErrors(): string[] {
     return this.errors;
+  }
+
+  /**
+   * English keywords the parser reads as their Tajik ones: those the lexer
+   * knows (`return`, `else`, `new`, …), the literals and `this`/`super`, and
+   * TypeScript's member modifiers and type words. All but `readonly`, `abstract` and `keyof` are reserved
+   * words in JavaScript; those three become words that are still names
+   * where no modifier or type operator fits. Any of them names a member
+   * (`о.return`, `{ new: 1 }`). `async` and `of` are keywords only in their
+   * places (see `isAsyncWord`, `isOfWord`); `typeof`, `void`, `delete`,
+   * `instanceof`, `do`, `yield`, `as`, `satisfies`, `is`, `asserts`,
+   * `infer`, `declare`, `override`, `accessor`, `using`, `enum`, `type`,
+   * `const`, `out`, `module` and `global` are read by their spelling.
+   */
+  private static readonly ENGLISH_KEYWORDS: ReadonlyMap<string, TokenType> = new Map([
+    ['return', TokenType.БОЗГАШТ],
+    ['throw', TokenType.ПАРТОФТАН],
+    ['new', TokenType.НАВ],
+    ['function', TokenType.ФУНКСИЯ],
+    ['else', TokenType.ВАГАРНА],
+    ['case', TokenType.ҲОЛАТ],
+    ['default', TokenType.ПЕШФАРЗ],
+    ['await', TokenType.ИНТИЗОР],
+    ['in', TokenType.ДАР],
+    ['this', TokenType.ИН],
+    ['super', TokenType.СУПЕР],
+    ['true', TokenType.ДУРУСТ],
+    ['false', TokenType.НОДУРУСТ],
+    ['null', TokenType.ХОЛӢ],
+    ['static', TokenType.СТАТИКӢ],
+    ['extends', TokenType.МЕРОС],
+    ['implements', TokenType.ТАТБИҚ],
+    ['public', TokenType.ҶАМЪИЯТӢ],
+    ['private', TokenType.ХОСУСӢ],
+    ['protected', TokenType.МУҲОФИЗАТШУДА],
+    ['abstract', TokenType.МАВҲУМ],
+    ['readonly', TokenType.ТАНҲОХОНӢ],
+    ['keyof', TokenType.КАЛИДҲОИ],
+  ]);
+
+  private static withEnglishKeyword(token: Token): Token {
+    if (token.type !== TokenType.IDENTIFIER) return token;
+    const type = Parser.ENGLISH_KEYWORDS.get(token.value);
+    return type ? { ...token, type } : token;
+  }
+
+  /**
+   * `ҳамзамон`, or `async` with more on its line (as in TypeScript, a line
+   * break after `async` makes it a name), `offset` tokens ahead.
+   */
+  isAsyncWord(offset = 0): boolean {
+    const token = this.tokens[this.current + offset];
+    if (token?.type === TokenType.ҲАМЗАМОН) return true;
+    const next = this.tokens[this.current + offset + 1];
+    return (
+      token?.type === TokenType.IDENTIFIER &&
+      token.value === 'async' &&
+      next !== undefined &&
+      next.line === token.line
+    );
+  }
+
+  /** `ҳамзамон функсия` / `async function` starts here. */
+  isAsyncFunctionStart(): boolean {
+    return this.isAsyncWord() && this.peekNext()?.type === TokenType.ФУНКСИЯ;
+  }
+
+  /** `аз` or `of` between the binding and the iterable of a for-of loop. */
+  private isOfWord(token: Token | undefined): boolean {
+    return (
+      token?.type === TokenType.АЗ || (token?.type === TokenType.IDENTIFIER && token.value === 'of')
+    );
   }
 
   parse(): Program {
@@ -1122,7 +1196,7 @@ export class Parser {
     const usingOffset = this.check(TokenType.ИНТИЗОР) ? 1 : 0;
     if (
       this.isUsingWord(this.tokens[lookaheadIndex + usingOffset]) &&
-      this.tokens[lookaheadIndex + usingOffset + 2]?.type === TokenType.АЗ
+      this.isOfWord(this.tokens[lookaheadIndex + usingOffset + 2])
     ) {
       return { isForOf: true, isForIn: false };
     }
@@ -1141,9 +1215,9 @@ export class Parser {
         const close = this.findMatchingBracket(lookaheadIndex);
         if (close !== -1) afterBinding = close + 1;
       }
-      const keyword = afterBinding === -1 ? undefined : this.tokens[afterBinding]?.type;
-      isForOf = keyword === TokenType.АЗ;
-      isForIn = keyword === TokenType.ДАР;
+      const keyword = afterBinding === -1 ? undefined : this.tokens[afterBinding];
+      isForOf = this.isOfWord(keyword);
+      isForIn = keyword?.type === TokenType.ДАР;
     }
     return { isForOf, isForIn };
   }
@@ -1213,7 +1287,10 @@ export class Parser {
     }
 
     if (isForOf) {
-      this.consume(TokenType.АЗ, "Expected 'аз' in for-of loop");
+      if (!this.isOfWord(this.peek())) {
+        throw new Error(this.unexpectedTokenMessage("Expected 'аз' in for-of loop"));
+      }
+      this.advance();
     } else {
       this.consume(TokenType.ДАР, "Expected 'дар' in for-in loop");
     }
@@ -1464,7 +1541,7 @@ export class Parser {
    */
   private tryParseArrowFunction(): ArrowFunctionExpression | null {
     const startToken = this.peek();
-    const offset = this.check(TokenType.ҲАМЗАМОН) ? 1 : 0;
+    const offset = this.isAsyncArrowStart() ? 1 : 0;
     const head = this.tokens[this.current + offset];
     if (!head) return null;
 
@@ -1537,6 +1614,21 @@ export class Parser {
     if (offset) arrow.isAsync = true;
     if (typeParameters) arrow.typeParameters = typeParameters;
     return arrow;
+  }
+
+  /**
+   * `ҳамзамон` / `async` before the parameters of an arrow function. `async`
+   * alone is a name: `async => 1`, `async(1)` (a call when no `=>` follows).
+   */
+  private isAsyncArrowStart(): boolean {
+    const next = this.peekNext();
+    if (!this.isAsyncWord() || !next) return false;
+    if (this.check(TokenType.ҲАМЗАМОН)) return true;
+    return (
+      next.type === TokenType.LEFT_PAREN ||
+      next.type === TokenType.LESS_THAN ||
+      (this.isPlainIdentifierToken(next) && this.tokens[this.current + 2]?.type === TokenType.ARROW)
+    );
   }
 
   /**
@@ -2822,7 +2914,7 @@ export class Parser {
       return this.classExpression();
     }
 
-    if (this.check(TokenType.ҲАМЗАМОН) && this.peekNext()?.type === TokenType.ФУНКСИЯ) {
+    if (this.isAsyncFunctionStart()) {
       const asyncToken = this.advance();
       this.advance(); // consume 'функсия'
       const func = this.parseFunctionExpression(asyncToken);
@@ -3637,7 +3729,8 @@ export class Parser {
     // This includes: функсия, синф, собит, тағйирёбанда, интерфейс, навъ, ҳамзамон функсия
 
     // Special handling for async functions
-    if (this.match(TokenType.ҲАМЗАМОН)) {
+    if (this.isAsyncWord()) {
+      this.advance();
       this.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
       const func = this.functionDeclaration();
       func.async = true;
@@ -3889,13 +3982,7 @@ export class Parser {
    * literal — unless `ҳамзамон` is itself the key.
    */
   private parseObjectMethodModifiers(): { isAsync: boolean; generator: boolean } {
-    const afterStart = this.peekNext()?.type;
-    const isAsync =
-      this.check(TokenType.ҲАМЗАМОН) &&
-      ![TokenType.LEFT_PAREN, TokenType.COLON, TokenType.COMMA, TokenType.RIGHT_BRACE].includes(
-        afterStart as TokenType
-      ) &&
-      this.match(TokenType.ҲАМЗАМОН);
+    const isAsync = this.isAsyncWord() && this.modifierApplies() && !!this.advance();
     return { isAsync, generator: this.match(TokenType.MULTIPLY) };
   }
 
@@ -4623,7 +4710,7 @@ export class Parser {
       const token = this.previous();
       return {
         type: 'LiteralType',
-        value: token.value === 'дуруст',
+        value: token.type === TokenType.ДУРУСТ,
         line: token.line,
         column: token.column,
       } as LiteralType;
@@ -4676,7 +4763,8 @@ export class Parser {
     const token = this.previous();
     const primitiveType: PrimitiveType = {
       type: 'PrimitiveType',
-      name: token.value as PrimitiveType['name'],
+      // `null` is read as `холӣ`
+      name: (token.type === TokenType.ХОЛӢ ? 'холӣ' : token.value) as PrimitiveType['name'],
       line: token.line,
       column: token.column,
     };
@@ -5930,7 +6018,7 @@ export class Parser {
 
   /** `ҳамзамон ном() {…}` — unless `ҳамзамон` is itself the member name. */
   private matchAsyncModifier(): boolean {
-    if (!this.check(TokenType.ҲАМЗАМОН) || !this.modifierApplies()) return false;
+    if (!this.isAsyncWord() || !this.modifierApplies()) return false;
     this.advance();
     return true;
   }
