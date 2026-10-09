@@ -281,6 +281,48 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('loading.cache: false', () => {
+    test('compiles and bundles, reading every file again in each build', async () => {
+      write({
+        'shared.som': 'содир собит Ш = 1;\n',
+        'a.som': 'ворид { Ш } аз "./shared";\nсодир собит А = Ш;\n',
+        'b.som': 'ворид { Ш } аз "./shared";\nсодир собит Б = Ш;\n',
+        'main.som': 'ворид { А } аз "./a";\nворид { Б } аз "./b";\nчоп.сабт(А + Б);\n',
+      });
+      const ms = createSystem({ loading: { cache: false } });
+      const entry = path.join(root, 'main.som');
+      const result = await ms.compile(entry);
+      expect(result.errors).toEqual([]);
+      expect(result.modules.size).toBe(4);
+      expect(await bundleAndRun('main.som', { ms })).toBe('2');
+
+      // Same size and mtime: only a build that reads the file again sees the edit
+      const shared = path.join(root, 'shared.som');
+      const stat = fs.statSync(shared);
+      fs.writeFileSync(shared, 'содир собит Ш = 4;\n');
+      fs.utimesSync(shared, stat.atime, stat.mtime);
+      expect(await bundleAndRun('main.som', { ms })).toBe('8');
+    });
+
+    test('a load reads a module shared by two importers once', () => {
+      write({
+        'shared.som': 'содир собит Ш = 1;\n',
+        'a.som': 'ворид { Ш } аз "./shared";\n',
+        'main.som': 'ворид { Ш } аз "./shared";\nворид "./a";\n',
+      });
+      const loader = new ModuleLoader(new ModuleResolver({ baseUrl: root }), { cache: false });
+      const first = loader.loadSync('./main', root);
+      const shared = loader.getModule(path.join(root, 'shared.som'));
+      expect(shared?.isLoaded).toBe(true);
+      expect(loader.getModule(path.join(root, 'a.som'))?.resolvedDependencies).toEqual([
+        shared!.id,
+      ]);
+      // The next load starts again
+      expect(loader.loadSync('./main', root)).not.toBe(first);
+      expect(loader.getModule(path.join(root, 'shared.som'))).not.toBe(shared);
+    });
+  });
+
   describe('cache limits', () => {
     test('a build larger than maxCacheSize keeps every module it needs', async () => {
       write({
