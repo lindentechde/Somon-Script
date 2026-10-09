@@ -1462,8 +1462,7 @@ export class Parser {
       }
     }
 
-    // Skip generic type parameters if present (e.g., new Class<T>(args))
-    this.skipGenericTypeArguments();
+    const typeArguments = this.parseNewTypeArguments();
 
     // Arguments are optional: `нав Сана`
     const args = this.match(TokenType.LEFT_PAREN) ? this.parseArguments() : [];
@@ -1471,9 +1470,38 @@ export class Parser {
       type: 'NewExpression',
       callee,
       arguments: args,
+      ...(typeArguments && { typeArguments }),
       line: token.line,
       column: token.column,
     } as NewExpression;
+  }
+
+  /**
+   * Type arguments of `нав Map<сатр, рақам>()`. When the tokens after '<' are
+   * not a type argument list, they are skipped the way they were before type
+   * arguments were kept.
+   */
+  private parseNewTypeArguments(): TypeNode[] | undefined {
+    if (!this.check(TokenType.LESS_THAN)) return undefined;
+    const start = this.current;
+    const tokens = [...this.tokens];
+    const errorCount = this.errors.length;
+    try {
+      this.advance();
+      const typeArguments: TypeNode[] = [];
+      do {
+        typeArguments.push(this.parseType());
+      } while (this.match(TokenType.COMMA));
+      this.consumeTypeArgumentsClose();
+      if (this.errors.length === errorCount) return typeArguments;
+    } catch {
+      // Not a type argument list
+    }
+    this.tokens = tokens;
+    this.current = start;
+    this.errors.length = errorCount;
+    this.skipGenericTypeArguments();
+    return undefined;
   }
 
   private parseDynamicImport(importToken: Token): ImportExpression {
@@ -3595,8 +3623,8 @@ export class Parser {
         ? accessibility
         : undefined;
 
-    // Optional property marker (`ном?: сатр`); types are erased, so it only affects parsing
-    this.match(TokenType.QUESTION);
+    // Optional property marker (`ном?: сатр`): the property may be `беқимат`
+    const optional = this.match(TokenType.QUESTION);
 
     // Optional type annotation
     let typeAnnotation: TypeAnnotation | undefined;
@@ -3623,6 +3651,7 @@ export class Parser {
       },
       value: value,
       typeAnnotation: typeAnnotation,
+      ...(optional && { optional }),
       static: isStatic || false,
       accessibility: accessProp,
       line: nameToken.line,

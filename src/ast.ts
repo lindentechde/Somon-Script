@@ -1,5 +1,5 @@
 // AST Node types
-import type { TypeAnnotation } from './type-system';
+import type { TypeAnnotation, TypeNode } from './type-system';
 export interface ASTNode {
   type: string;
   line: number;
@@ -293,6 +293,8 @@ export interface NewExpression extends Expression {
   type: 'NewExpression';
   callee: Expression;
   arguments: Expression[];
+  /** Explicit type arguments: `нав Map<сатр, рақам>()` */
+  typeArguments?: TypeNode[];
 }
 
 export interface ClassDeclaration extends Statement {
@@ -323,6 +325,8 @@ export interface PropertyDefinition extends ASTNode {
   key: Identifier;
   value?: Expression;
   typeAnnotation?: TypeAnnotation;
+  /** `ном?: сатр` */
+  optional?: boolean;
   static: boolean;
   accessibility?: 'public' | 'private' | 'protected';
 }
