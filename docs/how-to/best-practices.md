@@ -56,7 +56,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ): Корбар {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Too long line
 тағйирёбанда паёми_дароз = "Ин паёми хеле дароз аст ва бояд ба якчанд сатр тақсим шавад то хондан осон бошад ва стандарти кодгузорӣ риоя шавад.";
 ```
@@ -70,7 +72,9 @@ writing clean, maintainable, and efficient SomonScript code.
 агар (х > 0 && у < 10) {
   тағйирёбанда ҷавоб = ҳисоб_кардан(х, у);
 }
+```
 
+```som
 // ❌ Bad: Inconsistent spacing
 тағйирёбанда натиҷа=(а+б)*с;
 
@@ -167,7 +171,9 @@ writing clean, maintainable, and efficient SomonScript code.
 функсия корбар_ёфтан(идентификатор: сатр): Promise<Корбар | холӣ> {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Missing types
 функсия ҳисоби_фоиз(маблағ, фоиз) {
   бозгашт маблағ * (фоиз / 100);
@@ -191,7 +197,9 @@ writing clean, maintainable, and efficient SomonScript code.
     бозгашт маълумот ? "рост" : "нодуруст";
   }
 }
+```
 
+```som
 // ❌ Bad: Overly broad types
 тағйирёбанда статус: ҳар = "барқарор";
 функсия коркарди_маълумот(маълумот: ҳар): ҳар {
@@ -315,7 +323,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ): Promise<Корбар> {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Too many parameters
 функсия корбар_эҷод_кардан(
   ном: сатр,
@@ -363,7 +373,9 @@ writing clean, maintainable, and efficient SomonScript code.
     бозгашт маблағ > 0 && маблағ <= ин.баланс;
   }
 }
+```
 
+```som
 // ❌ Bad: All properties public
 синф Ҳисобдор {
   ҷамъиятӣ баланс: рақам;
@@ -476,7 +488,9 @@ writing clean, maintainable, and efficient SomonScript code.
     }
   }
 }
+```
 
+```som
 // ❌ Bad: Catching and ignoring errors
 ҳамзамон функсия корбар_гирифтан(идентификатор: сатр): Promise<Корбар | холӣ> {
   кӯшиш {
@@ -534,7 +548,9 @@ writing clean, maintainable, and efficient SomonScript code.
   // Use map for transformations
   бозгашт маълумот.filter(қ => қ > 0).map(қ => қ * 2).slice(0, 1000); // Limit result size
 }
+```
 
+```som
 // ❌ Bad: Creating unnecessary intermediate arrays
 функсия коркарди_маълумоти_калон(маълумот: рақам[]): рақам[] {
   тағйирёбанда натиҷа = [];
@@ -599,7 +615,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ворид * чун path аз "path";
 
 ворид РиёзӣКунҷ аз "./math";
+```
 
+```som
 // ❌ Bad: Mixed import styles and unclear grouping
 ворид { ПИ } аз "./math";
 ворид * чун fs аз "fs";

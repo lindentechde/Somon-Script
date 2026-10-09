@@ -389,7 +389,9 @@ Object.entries(корбар);        // Get key-value pairs
 
 // Namespace import
 ворид * чун Math аз "./math";
+```
 
+```som
 // Mixed imports
 ворид асосӣ, { ҷамъ, ПИ } аз "./math";
 

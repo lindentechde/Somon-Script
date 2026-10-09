@@ -326,7 +326,9 @@ typeof қимат;                 // typeof
 содир пешфарз синф Асосӣ {
     // implementation
 }
+```
 
+```som
 // Imports
 ворид { ҷамъ, ПИ } аз "./math";
 ворид Асосӣ аз "./main";

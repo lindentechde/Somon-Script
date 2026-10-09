@@ -204,7 +204,9 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
 содир функсия ҳисоб_кардан(а: рақам, б: рақам): рақам {
     бозгашт а + б;
 }
+```
 
+```som
 // Import from other modules
 ворид { ҳисоб_кардан } аз "./math";
 ворид пешфарз_функсия аз "./utils";
@@ -277,7 +279,9 @@ applications:
 содир пешфарз функсия ҳисобкунак(амал: сатр, а: рақам, б: рақам): рақам {
     // Default export implementation
 }
+```
 
+```som
 // main.som - Import and use modules
 ворид ҳисобкунак, { ҷамъ, ПИ } аз "./math";
 ворид { формат } аз "./string-utils";

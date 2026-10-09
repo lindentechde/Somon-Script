@@ -358,7 +358,9 @@ Error: Cannot resolve module "./math" from "src/main.som"
    ```som
    // Instead of
    ворид { ҷамъ } аз "./math";
+   ```
 
+   ```som
    // Use
    ворид { ҷамъ } аз "./math.som";
    ```

@@ -139,7 +139,9 @@ somon run main.som
 функсия ҳисоб_кардан(а, б) {
     бозгашт а + б;
 }
+```
 
+```som
 // After: Typed
 функсия ҳисоб_кардан(а: рақам, б: рақам): рақам {
     бозгашт а + б;
@@ -184,13 +186,19 @@ const user = {
 ```som
 // Problem: Import not found
 ворид { utils } аз "./utilities";
+```
 
+```som
 // Solution 1: Add file extension
 ворид { utils } аз "./utilities.som";
+```
 
+```som
 // Solution 2: Check file path
 ворид { utils } аз "../shared/utilities.som";
+```
 
+```som
 // Solution 3: Use index file
 // Create utilities/index.som
 содир * аз "./math";
@@ -209,7 +217,9 @@ const user = {
 
 // Solution 1: Fix the call
 коркард("123");
+```
 
+```som
 // Solution 2: Use union types
 функсия коркард(маълумот: сатр | рақам): сатр {
     бозгашт String(маълумот).toUpperCase();
