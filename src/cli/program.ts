@@ -22,7 +22,7 @@ import {
   type SomonConfig,
 } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
-import { normalizeLib, TARGETS, validateLib } from '../targets';
+import { BUNDLE_FORMATS, normalizeLib, TARGETS, validateGlobalName, validateLib } from '../targets';
 import { LANGUAGES, t, type Translations } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -50,6 +50,12 @@ function parseLibList(value: string): string[] {
   const problems = validateLib(lib.length > 0 ? lib : ['']);
   if (problems.length > 0) throw new InvalidArgumentError(problems.join('; '));
   return lib;
+}
+
+function parseGlobalName(value: string): string {
+  const problem = validateGlobalName(value);
+  if (problem) throw new InvalidArgumentError(problem);
+  return value;
 }
 
 function logConfigError(error: ConfigError): void {
@@ -103,7 +109,8 @@ interface CliCompilerFlags {
 
 interface BundleOptions extends CliCompilerFlags {
   output?: string;
-  format?: string;
+  format?: ModuleBundleOptions['format'];
+  globalName?: string;
   inlineSources?: boolean;
   externals?: string;
 }
@@ -226,12 +233,6 @@ function createBundleOptions(
   loaded: LoadedConfig
 ): ModuleBundleOptions {
   const config = loaded.config;
-  const formatValue = options.format ?? config.bundle?.format ?? 'commonjs';
-  const requestedFormat = typeof formatValue === 'string' ? formatValue.toLowerCase() : 'commonjs';
-
-  if (requestedFormat !== 'commonjs') {
-    throw new Error(t().commands.bundle.messages.onlyCommonJsSupported(requestedFormat));
-  }
 
   // -o is relative to the current directory, bundle.output to the config file.
   let outputPath: string | undefined;
@@ -244,7 +245,9 @@ function createBundleOptions(
   return {
     entryPoint: path.resolve(input),
     outputPath,
-    format: 'commonjs',
+    // --format is checked by commander, bundle.format by the configuration
+    format: options.format ?? config.bundle?.format ?? 'commonjs',
+    globalName: options.globalName ?? config.bundle?.globalName,
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
     inlineSources: options.inlineSources ?? config.bundle?.inlineSources,
@@ -823,7 +826,14 @@ export function createProgram(): Command {
     .usage(tr.commands.bundle.usage)
     .argument('<input>', tr.commands.bundle.args.input)
     .option('-o, --output <file>', tr.commands.bundle.options.output)
-    .option('-f, --format <format>', tr.commands.bundle.options.format, 'commonjs')
+    .addOption(
+      new Option('-f, --format <format>', tr.commands.bundle.options.format).choices(BUNDLE_FORMATS)
+    )
+    .addOption(
+      new Option('--global-name <name>', tr.commands.bundle.options.globalName).argParser(
+        parseGlobalName
+      )
+    )
     .option('--inline-sources', tr.commands.bundle.options.inlineSources)
     .option('--externals <modules>', tr.commands.bundle.options.externals);
   addCompilerOptions(bundleCommand).action(async (input: string, options: BundleOptions) => {

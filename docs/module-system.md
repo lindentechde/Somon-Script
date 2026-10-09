@@ -125,8 +125,13 @@ Compilation:
 
 Bundling:
 
-- CommonJS: produces a self-contained module map + simple loader, then executes
-  the entry (currently the only supported bundle target).
+- Produces a self-contained module map + simple loader, then executes the entry.
+  `format` decides how the entry's exports reach the host: `'commonjs'`
+  (default) sets `module.exports`, `'esm'` is an ES module that `export`s them
+  (and `import`s what is not bundled), `'iife'` is a browser script that stores
+  them in `globalThis[globalName]`. The whole bundle is lowered once for
+  `compilation.target` (see
+  [llm-guide/16-targets.md](../llm-guide/16-targets.md)).
 - Local `.js` dependencies are included verbatim (their relative requires are
   rewritten too) and `.json` dependencies as `module.exports = <json>`. Packages
   from `node_modules` and `externals` stay `require()` calls resolved by the

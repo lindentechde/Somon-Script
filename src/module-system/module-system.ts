@@ -9,10 +9,32 @@ import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 import { moduleSystemLogger as logger } from './logger';
 import {
+  bundleWrapper,
+  collectExportNames,
+  externalRequireCode,
+  shiftSourceMap,
+} from './bundle-formats';
+import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
 } from '../compiler';
-import { TARGETS, validateLib } from '../targets';
+import {
+  BUNDLE_FORMATS,
+  composeSourceMaps,
+  DEFAULT_TARGET,
+  isBundleFormat,
+  lowerToTarget,
+  TARGETS,
+  validateGlobalName,
+  validateLib,
+  type BundleFormat,
+} from '../targets';
+
+/**
+ * Compiler options for the modules of one build. `downlevel: false` keeps the
+ * modules' syntax: the bundler lowers the whole bundle for the target once.
+ */
+type ModuleCompilationOptions = CompilerOptions & Pick<PipelineCompileOptions, 'downlevel'>;
 
 export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
 
@@ -63,7 +85,15 @@ export interface CompilationResult {
 export interface BundleOptions {
   entryPoint: string;
   outputPath?: string;
-  format?: 'commonjs';
+  /**
+   * 'commonjs' (default): `module.exports` is the entry's exports. 'esm': an ES
+   * module that exports them (`export`), modules not in the bundle are
+   * imported. 'iife': a script for browsers without `require` or `module`
+   * that stores them in `globalThis[globalName]`.
+   */
+  format?: BundleFormat;
+  /** For 'iife': the global, or dotted path of globals, that receives the entry's exports. */
+  globalName?: string;
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
@@ -102,6 +132,13 @@ function decodeStringLiteral(body: string): string {
       return SIMPLE_ESCAPES[other] ?? other;
     }
   );
+}
+
+/** Where a module's code is in the bundle body (1-based lines). */
+interface BundleModuleLines {
+  key: string;
+  start: number;
+  end: number;
 }
 
 type RequireRewriteContext = {
@@ -499,7 +536,7 @@ export class ModuleSystem {
 
   private compileModulesInOrder(
     compilationOrder: string[],
-    compilationConfig: CompilerOptions,
+    compilationConfig: ModuleCompilationOptions,
     modules: Map<string, CompiledModule>,
     errors: CompilationError[],
     warnings: string[]
@@ -570,7 +607,7 @@ export class ModuleSystem {
   async compile(
     entryPoint: string,
     externals?: string[],
-    overrideCompilation?: Partial<CompilerOptions>
+    overrideCompilation?: Partial<ModuleCompilationOptions>
   ): Promise<CompilationResult> {
     const errors: CompilationError[] = [];
     const warnings: string[] = [];
@@ -625,15 +662,16 @@ export class ModuleSystem {
    */
   async bundle(options: BundleOptions): Promise<BundleOutput> {
     const format = options.format ?? 'commonjs';
-    if (format !== 'commonjs') {
-      throw new Error(
-        `Only the 'commonjs' bundle format is currently supported. Received '${format}'.`
-      );
-    }
+    this.validateBundleOptions(options, format);
     // The whole bundle is minified once at the end. Minifying modules as well would
     // escape non-ASCII import paths, which the require rewriter cannot match.
     const minify = options.minify ?? this.resolveCompilationOptions().minify;
-    const compilationOverrides: Partial<CompilerOptions> = { minify: false };
+    // Modules keep their syntax (checked against the target): the whole bundle is
+    // lowered once, so TypeScript's helpers appear once.
+    const compilationOverrides: Partial<ModuleCompilationOptions> = {
+      minify: false,
+      downlevel: false,
+    };
     if (options.sourceMaps !== undefined) {
       compilationOverrides.sourceMap = options.sourceMaps;
     }
@@ -684,12 +722,28 @@ export class ModuleSystem {
 
     // Generate bundle based on format
     try {
-      return await this.generateCommonJSBundle(compilationResult, { ...options, minify });
+      return await this.generateBundle(compilationResult, { ...options, format, minify });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
       // Fail fast on bundle generation errors
       throw new Error(`Failed to generate bundle: ${message}`);
+    }
+  }
+
+  /** Reject a bundle format, global name or module-path mode that cannot work. */
+  private validateBundleOptions(options: BundleOptions, format: unknown): void {
+    if (!isBundleFormat(format)) {
+      throw new Error(
+        `Unsupported bundle format '${String(format)}'. Supported formats: ${BUNDLE_FORMATS.join(', ')}.`
+      );
+    }
+    if (options.globalName !== undefined) {
+      const problem = validateGlobalName(options.globalName);
+      if (problem) throw new Error(`Invalid bundle globalName: ${problem}`);
+    }
+    if (options.modulePaths && format !== 'commonjs') {
+      throw new Error(`Module paths need the commonjs bundle format, not '${format}'.`);
     }
   }
 
@@ -948,7 +1002,9 @@ export class ModuleSystem {
     }
   }
 
-  private resolveCompilationOptions(overrides?: Partial<CompilerOptions>): CompilerOptions {
+  private resolveCompilationOptions(
+    overrides?: Partial<ModuleCompilationOptions>
+  ): ModuleCompilationOptions {
     if (!overrides || Object.keys(overrides).length === 0) {
       return { ...this.defaultCompilation };
     }
@@ -956,7 +1012,7 @@ export class ModuleSystem {
     return { ...this.defaultCompilation, ...overrides };
   }
 
-  private toPipelineOptions(config: CompilerOptions): PipelineCompileOptions {
+  private toPipelineOptions(config: ModuleCompilationOptions): PipelineCompileOptions {
     const options: PipelineCompileOptions = {};
 
     if (config.target) {
@@ -982,6 +1038,9 @@ export class ModuleSystem {
     }
     if (config.useDefineForClassFields !== undefined) {
       options.useDefineForClassFields = config.useDefineForClassFields;
+    }
+    if (config.downlevel !== undefined) {
+      options.downlevel = config.downlevel;
     }
 
     return options;
@@ -1053,14 +1112,16 @@ export class ModuleSystem {
     });
   }
 
+  /** The `modules` table. Returns the lines each module's code occupies in the body. */
   private async buildModuleMapSection(
     bundleBuilder: { code: string; line: number },
     processedModules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }>,
     externalModuleIds: Set<string>,
     generator: SourceMapGenerator | null,
     options: BundleOptions
-  ): Promise<void> {
-    this.appendToBuilder(bundleBuilder, "(function() {\n  'use strict';\n\n  var modules = {\n");
+  ): Promise<BundleModuleLines[]> {
+    this.appendToBuilder(bundleBuilder, "  'use strict';\n\n  var modules = {\n");
+    const moduleLines: BundleModuleLines[] = [];
 
     const inlinedSources = new Set<string>();
     let firstModule = true;
@@ -1085,6 +1146,7 @@ export class ModuleSystem {
       );
       const moduleStartLine = bundleBuilder.line;
       this.appendToBuilder(bundleBuilder, module.code);
+      moduleLines.push({ key: module.key, start: moduleStartLine, end: bundleBuilder.line });
 
       if (generator && module.map) {
         await this.addModuleSourceMappings(
@@ -1100,6 +1162,7 @@ export class ModuleSystem {
     }
 
     this.appendToBuilder(bundleBuilder, '\n  };\n\n');
+    return moduleLines;
   }
 
   private async addModuleSourceMappings(
@@ -1146,16 +1209,13 @@ export class ModuleSystem {
   private addBundleRuntimeCode(
     bundleBuilder: { code: string; line: number },
     entryKey: string,
-    modulePaths: Map<string, string> | null
+    modulePaths: Map<string, string> | null,
+    options: { format: BundleFormat; imports: readonly string[] }
   ): void {
     this.appendToBuilder(
       bundleBuilder,
       '  var cache = {};\n' +
-        "  var __externalRequire = typeof module !== 'undefined' && module.require\n" +
-        '    ? module.require.bind(module)\n' +
-        "    : typeof require === 'function'\n" +
-        '      ? require\n' +
-        '      : null;\n' +
+        externalRequireCode(options.format, options.imports) +
         '  var __hasOwn = Object.prototype.hasOwnProperty;\n\n'
     );
 
@@ -1203,19 +1263,6 @@ export class ModuleSystem {
     this.appendToBuilder(
       bundleBuilder,
       `  // Start with entry point and expose its exports\n  var entryModule = _require(${JSON.stringify(entryKey)});\n\n`
-    );
-
-    this.appendToBuilder(
-      bundleBuilder,
-      '  // Expose entry point exports as bundle exports (for Node.js)\n' +
-        "  if (typeof module !== 'undefined' && module.exports) {\n" +
-        '    module.exports = entryModule;\n' +
-        '  }\n\n'
-    );
-
-    this.appendToBuilder(
-      bundleBuilder,
-      '  // Return entry point exports (for other environments)\n' + '  return entryModule;\n})();'
     );
   }
 
@@ -1272,9 +1319,14 @@ export class ModuleSystem {
     }
   }
 
-  private async generateCommonJSBundle(
+  /**
+   * The bundle: a body (the module table and the runtime, which ends with
+   * `entryModule`) lowered for the target as a whole, inside the wrapper of the
+   * format that hands the entry's exports to the host.
+   */
+  private async generateBundle(
     result: CompilationResult,
-    options: BundleOptions
+    options: BundleOptions & { format: BundleFormat }
   ): Promise<BundleOutput> {
     const context = this.initializeBundleContext(result, options);
     const processedModules = this.prepareModulesForBundle(
@@ -1288,15 +1340,13 @@ export class ModuleSystem {
     if (!entryKey) {
       throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
     }
+    const bundled = processedModules.filter(module => !context.externalModuleIds.has(module.id));
+    const imports = this.collectRuntimeImports(bundled, options.format);
 
-    const bundleBuilder = this.createBundleCodeBuilder();
+    const body = this.createBundleCodeBuilder();
     const generator = this.createSourceMapGenerator(options, result);
-    // The entry's `#!/usr/bin/env node` starts the bundle
-    const shebang = ModuleSystem.shebangOf(result.modules.get(result.entryPoint)?.code);
-    if (shebang) this.appendToBuilder(bundleBuilder, `${shebang}\n`);
-
-    await this.buildModuleMapSection(
-      bundleBuilder,
+    const moduleLines = await this.buildModuleMapSection(
+      body,
       processedModules,
       context.externalModuleIds,
       generator,
@@ -1306,9 +1356,29 @@ export class ModuleSystem {
     const modulePaths = options.modulePaths
       ? new Map(processedModules.map(module => [module.key, module.id]))
       : null;
-    this.addBundleRuntimeCode(bundleBuilder, entryKey, modulePaths);
+    this.addBundleRuntimeCode(body, entryKey, modulePaths, { format: options.format, imports });
 
-    let rawMap = this.generateBundleSourceMap(generator);
+    let rawMap = this.lowerBundleBody(body, this.generateBundleSourceMap(generator), moduleLines);
+
+    const wrapper = bundleWrapper({
+      format: options.format,
+      globalName: options.globalName,
+      imports,
+      exportNames:
+        options.format === 'esm'
+          ? collectExportNames(entryKey, new Map(bundled.map(module => [module.key, module.code])))
+          : [],
+      defaultIsExportsObject: !result.entryPoint.endsWith('.som'),
+    });
+    const bundleBuilder = this.createBundleCodeBuilder();
+    // The entry's `#!/usr/bin/env node` starts a bundle that runs under Node.js
+    // (a browser script has none)
+    const shebang = ModuleSystem.shebangOf(result.modules.get(result.entryPoint)?.code);
+    if (shebang && options.format !== 'iife') this.appendToBuilder(bundleBuilder, `${shebang}\n`);
+    this.appendToBuilder(bundleBuilder, wrapper.prefix);
+    if (rawMap) rawMap = shiftSourceMap(rawMap, bundleBuilder.line - 1);
+    this.appendToBuilder(bundleBuilder, body.code + wrapper.suffix);
+
     rawMap = await this.applyMinification(bundleBuilder, rawMap, options);
     if (rawMap && options.outputPath) {
       // Sources are keyed relative to the entry; tools resolve them from the map file.
@@ -1329,6 +1399,71 @@ export class ModuleSystem {
   /** The `#!…` line a compiled module starts with, if any. */
   private static shebangOf(code: string | undefined): string | undefined {
     return code?.match(/^#![^\n\r]*/)?.[0];
+  }
+
+  /**
+   * Lower the bundle body for the compilation target once (modules were only
+   * checked against it), so TypeScript's helpers appear once. Local JavaScript
+   * bundled as it is gets lowered too; what it uses that the target cannot
+   * express fails the bundle.
+   */
+  private lowerBundleBody(
+    body: { code: string; line: number },
+    map: RawSourceMap | undefined,
+    moduleLines: BundleModuleLines[]
+  ): RawSourceMap | undefined {
+    const compilation = this.resolveCompilationOptions();
+    const target = compilation.target ?? DEFAULT_TARGET;
+    const lowered = lowerToTarget(body.code, {
+      target,
+      useDefineForClassFields: compilation.useDefineForClassFields,
+      experimentalDecorators: compilation.experimentalDecorators,
+      sourceMap: map !== undefined,
+    });
+    if (lowered.diagnostics.length > 0) {
+      const details = lowered.diagnostics.map(diagnostic => {
+        const module = moduleLines.find(
+          lines => diagnostic.line >= lines.start && diagnostic.line <= lines.end
+        );
+        const where = module
+          ? `${module.key}:${diagnostic.line - module.start + 1}:${diagnostic.column + 1}`
+          : `bundle:${diagnostic.line}:${diagnostic.column + 1}`;
+        return `  ${where}: ${diagnostic.message}`;
+      });
+      throw new Error(`The bundle cannot run on ${target}:\n${details.join('\n')}`);
+    }
+    body.code = lowered.code;
+    return map && lowered.map ? composeSourceMaps(lowered.map, map) : map;
+  }
+
+  /**
+   * Modules the bundle loads at run time: string-literal requires that are not
+   * bundle keys. An ES module bundle imports them; a browser bundle has nothing
+   * to load them with.
+   */
+  private collectRuntimeImports(
+    modules: Array<{ key: string; code: string }>,
+    format: BundleFormat
+  ): string[] {
+    if (format === 'commonjs') return [];
+    const keys = new Set(modules.map(module => module.key));
+    const imports = new Set<string>();
+    const literalRequire =
+      /(?<![\w$.])require\s*\(\s*(['"])((?:(?!\1)[^\\\n\r]|\\.){1,500})\1\s*\)/g;
+    for (const module of modules) {
+      for (const match of module.code.matchAll(literalRequire)) {
+        const specifier = decodeStringLiteral(match[2]);
+        if (!keys.has(specifier)) imports.add(specifier);
+      }
+    }
+    if (format === 'iife' && imports.size > 0) {
+      throw new Error(
+        `An iife bundle runs without a module loader, but it needs ${[...imports]
+          .map(specifier => `'${specifier}'`)
+          .join(', ')}. Bundle those modules or use the commonjs or esm format.`
+      );
+    }
+    return [...imports];
   }
 
   private buildExternalCandidates(raw: string, entryPoint: string): string[] {
@@ -1558,7 +1693,7 @@ export class ModuleSystem {
   private compileModule(params: {
     module: LoadedModule;
     moduleId: string;
-    compilationConfig: CompilerOptions;
+    compilationConfig: ModuleCompilationOptions;
     modules: Map<string, { code: string; map?: RawSourceMap }>;
     errors: CompilationError[];
     warnings: string[];

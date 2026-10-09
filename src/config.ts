@@ -1,7 +1,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { TARGETS, validateLib, type Target } from './targets';
+import {
+  BUNDLE_FORMATS,
+  TARGETS,
+  validateGlobalName,
+  validateLib,
+  type BundleFormat,
+  type Target,
+} from './targets';
 
 export interface CompilerOptions {
   output?: string;
@@ -173,7 +180,9 @@ export interface ModuleSystemConfig {
 }
 
 export interface BundleConfig {
-  format?: 'commonjs';
+  format?: BundleFormat;
+  /** For the 'iife' format: the global (`globalThis[globalName]`) that receives the entry's exports. */
+  globalName?: string;
   minify?: boolean;
   sourceMaps?: boolean;
   inlineSources?: boolean;
@@ -236,6 +245,7 @@ const KNOWN_LOADING_KEYS = ['encoding', 'cache', 'circularDependencyStrategy'] a
 
 const KNOWN_BUNDLE_KEYS = [
   'format',
+  'globalName',
   'minify',
   'sourceMaps',
   'inlineSources',
@@ -377,6 +387,10 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 
   // Validate each property separately to reduce complexity
   errors.push(...validateBundleFormat(obj.format, basePath));
+  if (obj.globalName !== undefined) {
+    const problem = validateGlobalName(obj.globalName);
+    if (problem) errors.push({ path: `${basePath}.globalName`, message: problem });
+  }
   errors.push(...validateBundleBooleanProps(obj, basePath));
   errors.push(...validateBundleOutput(obj.output, basePath));
   errors.push(...validateBundleExternals(obj.externals, basePath));
@@ -385,11 +399,12 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 }
 
 function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
-  if (format !== undefined && format !== 'commonjs') {
+  const formats: readonly unknown[] = BUNDLE_FORMATS;
+  if (format !== undefined && !formats.includes(format)) {
     return [
       {
         path: `${basePath}.format`,
-        message: "SomonScript currently supports only the 'commonjs' bundle format",
+        message: `must be one of: ${BUNDLE_FORMATS.join(', ')}`,
       },
     ];
   }

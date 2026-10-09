@@ -90,6 +90,7 @@ export interface Translations {
       options: {
         output: string;
         format: string;
+        globalName: string;
         inlineSources: string;
         externals: string;
       };
@@ -98,7 +99,6 @@ export interface Translations {
         bundleCreated: (_output: string) => string;
         sourceMapCreated: (_file: string) => string;
         bundledModules: (_count: number) => string;
-        onlyCommonJsSupported: (_format: string) => string;
         bundleError: string;
       };
     };

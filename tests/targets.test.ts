@@ -5,11 +5,13 @@ import * as vm from 'vm';
 import { compile } from '../src/compiler';
 import {
   analyzeSyntax,
+  BUNDLE_FORMATS,
   composeSourceMaps,
   DEFAULT_TARGET,
   defaultLib,
   defaultUseDefineForClassFields,
   hasInvalidEscape,
+  isBundleFormat,
   isTarget,
   loweringCompilerOptions,
   lowerToTarget,
@@ -21,6 +23,7 @@ import {
   TARGETS,
   targetAtLeast,
   typeScriptLibNames,
+  validateGlobalName,
   validateLib,
   type Target,
 } from '../src/targets';
@@ -87,6 +90,19 @@ describe('targets', () => {
     for (const target of TARGETS) {
       expect(typeof scriptTargetFor(target)).toBe('number');
     }
+  });
+
+  test('bundle formats and global names', () => {
+    expect(BUNDLE_FORMATS).toEqual(['commonjs', 'esm', 'iife']);
+    expect(isBundleFormat('iife')).toBe(true);
+    expect(isBundleFormat('umd')).toBe(false);
+    expect(isBundleFormat(undefined)).toBe(false);
+    expect(validateGlobalName('МоКитоб')).toBeUndefined();
+    expect(validateGlobalName('app.lib_2.$x')).toBeUndefined();
+    expect(validateGlobalName('a..b')).toMatch(/identifier/);
+    expect(validateGlobalName('2x')).toMatch(/identifier/);
+    expect(validateGlobalName('a-b')).toMatch(/identifier/);
+    expect(validateGlobalName(5)).toMatch(/identifier/);
   });
 });
 

@@ -86,7 +86,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Output file path',
-        format: "Bundle format (only 'commonjs' is supported)",
+        format: 'Bundle format: commonjs, esm or iife',
+        globalName: 'Global that receives the exports of an iife bundle',
         inlineSources: 'Inline original sources into emitted source maps',
         externals: 'External modules (comma-separated)',
       },
@@ -95,8 +96,6 @@ const translations: Translations = {
         bundleCreated: (output: string) => `✅ Bundle created: ${output}`,
         sourceMapCreated: (file: string) => `🗺️ Source map created: ${file}`,
         bundledModules: (count: number) => `📊 Bundled ${count} modules`,
-        onlyCommonJsSupported: (format: string) =>
-          `SomonScript currently supports only the 'commonjs' bundle format. Received '${format}'.`,
         bundleError: 'Bundle error:',
       },
     },

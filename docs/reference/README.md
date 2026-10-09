@@ -376,7 +376,8 @@ somon run <file> [options]
 
 # Module operations
 somon bundle <entry> [options]
-  --format         Output format (only 'commonjs' is supported)
+  --format         Output format: commonjs (default), esm or iife
+  --global-name    Global that receives the exports of an iife bundle
   --output, -o     Bundle output path
   --minify         Minify bundle
   --source-map     Generate source maps

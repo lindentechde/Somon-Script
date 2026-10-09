@@ -85,7 +85,7 @@ describe('somon.config.json loader/validation', () => {
   test('rejects unsupported bundle format', () => {
     fs.writeFileSync(
       path.join(tempDir, 'somon.config.json'),
-      JSON.stringify({ bundle: { format: 'esm' } }, null, 2)
+      JSON.stringify({ bundle: { format: 'umd' } }, null, 2)
     );
 
     expect(() => loadConfig(tempDir)).toThrow(ConfigError);
@@ -217,6 +217,21 @@ describe('somon.config.json: targets, lib and bundle formats', () => {
     expect(problems({ compilerOptions: { useDefineForClassFields: false } })).toEqual([]);
     expect(problems({ compilerOptions: { useDefineForClassFields: 'no' } })).toEqual([
       { path: 'compilerOptions.useDefineForClassFields', message: 'must be a boolean' },
+    ]);
+  });
+
+  test('accepts the commonjs, esm and iife bundle formats and a global name', () => {
+    for (const format of ['commonjs', 'esm', 'iife']) {
+      expect(problems({ bundle: { format, globalName: 'app.Китоб' } })).toEqual([]);
+    }
+    expect(problems({ bundle: { format: 'umd' } })).toEqual([
+      { path: 'bundle.format', message: 'must be one of: commonjs, esm, iife' },
+    ]);
+    expect(problems({ bundle: { globalName: 'app-kitob' } })).toEqual([
+      {
+        path: 'bundle.globalName',
+        message: 'must be an identifier or a dotted path of identifiers, e.g. "MyLib" or "app.lib"',
+      },
     ]);
   });
 });

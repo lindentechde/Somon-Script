@@ -509,21 +509,21 @@ describe('CLI Program (in-process)', () => {
     expect(fs.existsSync(path.join(tempDir, 'bundle-ext.js'))).toBe(true);
   });
 
-  test('bundle: should reject non-commonjs formats', async () => {
+  test('bundle: should reject unknown formats', async () => {
     const program = createProgram();
-    program.exitOverride();
+    // Subcommands were created before: they need their own override
+    for (const command of [program, ...program.commands]) {
+      command.exitOverride();
+      command.configureOutput({ writeErr: () => {} });
+    }
 
-    const mainFile = path.join(tempDir, 'esm.som');
+    const mainFile = path.join(tempDir, 'umd.som');
     fs.writeFileSync(mainFile, 'чоп.сабт("test");');
 
-    await program.parseAsync(['bundle', mainFile, '--format', 'esm'], { from: 'user' });
-
-    // Check for error about bundle format
-    const errors = consoleErrorSpy.mock.calls.map(c => String(c[0]));
-    const hasFormatError = errors.some(
-      msg => msg.toLowerCase().includes('commonjs') || msg.toLowerCase().includes('bundle format')
-    );
-    expect(hasFormatError || process.exitCode === 1).toBe(true);
+    // commonjs, esm and iife are the formats (tests/bundle-formats.test.ts)
+    await expect(
+      program.parseAsync(['bundle', mainFile, '--format', 'umd'], { from: 'user' })
+    ).rejects.toThrow(/umd/);
   });
 
   test('module-info: should display module statistics', async () => {

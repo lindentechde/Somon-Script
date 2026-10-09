@@ -30,6 +30,31 @@ export type Target = (typeof TARGETS)[number];
 
 export const DEFAULT_TARGET: Target = 'es2020';
 
+/**
+ * Bundle formats: a CommonJS module, an ES module that exports the entry's
+ * exports, or a script for browsers that stores them in a global.
+ */
+export const BUNDLE_FORMATS = ['commonjs', 'esm', 'iife'] as const;
+
+export type BundleFormat = (typeof BUNDLE_FORMATS)[number];
+
+export function isBundleFormat(value: unknown): value is BundleFormat {
+  return typeof value === 'string' && (BUNDLE_FORMATS as readonly string[]).includes(value);
+}
+
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+
+/**
+ * Why `name` cannot be an IIFE bundle's global name, if it cannot: it must be
+ * an identifier or a dotted path of them (`МоКитобхона`, `app.lib`).
+ */
+export function validateGlobalName(name: unknown): string | undefined {
+  if (typeof name !== 'string' || !name.split('.').every(part => IDENTIFIER.test(part))) {
+    return 'must be an identifier or a dotted path of identifiers, e.g. "MyLib" or "app.lib"';
+  }
+  return undefined;
+}
+
 export function isTarget(value: unknown): value is Target {
   return typeof value === 'string' && (TARGETS as readonly string[]).includes(value);
 }

@@ -86,7 +86,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Роҳи файли баромад',
-        format: "Формати баста (танҳо 'commonjs' дастгирӣ мешавад)",
+        format: 'Формати баста: commonjs, esm ё iife',
+        globalName: 'Тағйирёбандаи глобалӣ, ки содироти бастаи iife-ро мегирад',
         inlineSources: 'Манбаъҳои аслиро дар харитаи манбаъҳо ҷойгир кардан',
         externals: 'Модулҳои берунӣ (бо вергул ҷудошуда)',
       },
@@ -95,8 +96,6 @@ const translations: Translations = {
         bundleCreated: (output: string) => `✅ Баста эҷод шуд: ${output}`,
         sourceMapCreated: (file: string) => `🗺️ Харитаи манбаъ эҷод шуд: ${file}`,
         bundledModules: (count: number) => `📊 ${count} модул баста шуд`,
-        onlyCommonJsSupported: (format: string) =>
-          `СомонСкрипт дар ҳоли ҳозир танҳо формати бастаи 'commonjs'-ро дастгирӣ мекунад. Қабул шуд: '${format}'.`,
         bundleError: 'Хатои бастабандӣ:',
       },
     },

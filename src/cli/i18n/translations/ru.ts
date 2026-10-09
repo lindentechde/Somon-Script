@@ -86,7 +86,8 @@ const translations: Translations = {
       },
       options: {
         output: 'Путь к выходному файлу',
-        format: "Формат пакета (поддерживается только 'commonjs')",
+        format: 'Формат пакета: commonjs, esm или iife',
+        globalName: 'Глобальная переменная, получающая экспорты пакета iife',
         inlineSources: 'Встроить оригинальные источники в карты источников',
         externals: 'Внешние модули (через запятую)',
       },
@@ -95,8 +96,6 @@ const translations: Translations = {
         bundleCreated: (output: string) => `✅ Пакет создан: ${output}`,
         sourceMapCreated: (file: string) => `🗺️ Карта источников создана: ${file}`,
         bundledModules: (count: number) => `📊 Собрано модулей: ${count}`,
-        onlyCommonJsSupported: (format: string) =>
-          `СомонСкрипт в настоящее время поддерживает только формат пакета 'commonjs'. Получено: '${format}'.`,
         bundleError: 'Ошибка сборки:',
       },
     },

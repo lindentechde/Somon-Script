@@ -505,9 +505,9 @@ describe('Module System', () => {
       });
       expect(cjsBundle.code).toContain('module.exports');
 
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as any })
-      ).rejects.toThrow(/commonjs/i);
+      // ES module bundles are supported (tests/bundle-formats.test.ts)
+      const esmBundle = await moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' });
+      expect(esmBundle.code).toContain('export {');
 
       await expect(
         moduleSystem.bundle({ entryPoint: mainFile, format: 'umd' as any })
