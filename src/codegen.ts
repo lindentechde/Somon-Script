@@ -3,6 +3,7 @@ import {
   Statement,
   Expression,
   VariableDeclaration,
+  VariableDeclarationList,
   FunctionDeclaration,
   FunctionExpression,
   BlockStatement,
@@ -389,6 +390,8 @@ export class CodeGenerator {
         return this.generateExportDeclaration(node as ExportDeclaration);
       case 'VariableDeclaration':
         return this.generateVariableDeclaration(node as VariableDeclaration);
+      case 'VariableDeclarationList':
+        return this.generateVariableDeclarationList(node as VariableDeclarationList);
       case 'FunctionDeclaration':
         return this.generateFunctionDeclaration(node as FunctionDeclaration);
       case 'BlockStatement':
@@ -492,10 +495,21 @@ export class CodeGenerator {
 
   private generateVariableDeclaration(node: VariableDeclaration): string {
     const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
+    return this.indent(`${kind} ${this.generateDeclarator(node)};`);
+  }
+
+  /** `тағ а = 1, б = 2;` → `let а = 1, б = 2;` */
+  private generateVariableDeclarationList(node: VariableDeclarationList): string {
+    const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
+    const declarators = node.declarations.map(declaration => this.generateDeclarator(declaration));
+    return this.indent(`${kind} ${declarators.join(', ')};`);
+  }
+
+  /** The binding and initializer of one declaration: `а = 1`, `[б, в] = р`. */
+  private generateDeclarator(node: VariableDeclaration): string {
     const pattern = this.generatePattern(node.identifier);
     const init = node.init ? ` = ${this.generateExpression(node.init, PREC.ASSIGNMENT)}` : '';
-
-    return this.indent(`${kind} ${pattern}${init};`);
+    return `${pattern}${init}`;
   }
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
@@ -1292,6 +1306,11 @@ export class CodeGenerator {
       case 'VariableDeclaration':
         this.collectPatternNames((stmt as VariableDeclaration).identifier, names);
         break;
+      case 'VariableDeclarationList':
+        for (const declaration of (stmt as VariableDeclarationList).declarations) {
+          this.collectPatternNames(declaration.identifier, names);
+        }
+        break;
       case 'FunctionDeclaration':
       case 'ClassDeclaration':
       case 'NamespaceDeclaration':
@@ -1965,8 +1984,8 @@ export class CodeGenerator {
   }
 
   private generateExportedNamespaceMember(stmt: Statement, namespaceName: string): string {
-    const memberName = this.getMemberName(stmt);
-    if (!memberName) {
+    const memberNames = this.getMemberNames(stmt);
+    if (memberNames.length === 0) {
       return '';
     }
 
@@ -1974,7 +1993,7 @@ export class CodeGenerator {
       return this.generateNestedNamespaceExport(
         stmt as NamespaceDeclaration,
         namespaceName,
-        memberName
+        memberNames[0]
       );
     }
 
@@ -1986,11 +2005,24 @@ export class CodeGenerator {
       if (!stmtCode.endsWith('\n')) {
         result += '\n';
       }
-      result += this.indent(
-        `${namespaceName}.${translateMemberName(memberName)} = ${memberName};\n`
-      );
+      for (const memberName of memberNames) {
+        result += this.indent(
+          `${namespaceName}.${translateMemberName(memberName)} = ${memberName};\n`
+        );
+      }
     }
     return result;
+  }
+
+  /** Names an exported namespace member binds: one, or each of `содир тағ а = 1, б = 2`. */
+  private getMemberNames(stmt: Statement): string[] {
+    const statements =
+      stmt.type === 'VariableDeclarationList'
+        ? (stmt as VariableDeclarationList).declarations
+        : [stmt];
+    return statements
+      .map(statement => this.getMemberName(statement))
+      .filter((name): name is string => name !== null);
   }
 
   private generateNestedNamespaceExport(

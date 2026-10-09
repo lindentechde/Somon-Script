@@ -25,6 +25,13 @@ export interface VariableDeclaration extends Statement {
   definite?: boolean;
 }
 
+/** `тағ а = 1, б = 2;`: several declarations of one kind in one statement. */
+export interface VariableDeclarationList extends Statement {
+  type: 'VariableDeclarationList';
+  kind: 'ТАҒЙИРЁБАНДА' | 'СОБИТ';
+  declarations: VariableDeclaration[];
+}
+
 export interface FunctionDeclaration extends Statement {
   type: 'FunctionDeclaration';
   name: Identifier;
@@ -125,7 +132,7 @@ export interface EnumMember extends ASTNode {
 
 export interface ForStatement extends Statement {
   type: 'ForStatement';
-  init: VariableDeclaration | ExpressionStatement | null;
+  init: VariableDeclaration | VariableDeclarationList | ExpressionStatement | null;
   test: Expression | null;
   update: Expression | null;
   body: Statement;

@@ -354,7 +354,6 @@ describe('invalid programs fail instead of emitting wrong code', () => {
     ['a JavaScript reserved word as a name', 'тағ class = 1;'],
     ['an unterminated block comment', 'чоп.сабт(1);\n/* never closed\nчоп.сабт(2);'],
     ['a malformed number', 'тағ а = 10px;'],
-    ['an unsupported multi-declarator', 'тағ а = 1, б = 2;'],
   ])('%s', (_name, source) => {
     const result = compile(source);
     expect(result.errors.length).toBeGreaterThan(0);
@@ -446,6 +445,11 @@ describe('JavaScript early errors are compile errors', () => {
     ],
     ['a labeled declaration', 'л: тағ х = 1;', /declaration cannot be labeled/],
     ['for await outside a ҳамзамон function', 'барои интизор (собит х аз []) {}', /for await/],
+    [
+      'a name declared twice in one declaration',
+      'тағ а = 1, а = 2;',
+      /'а' has already been declared/,
+    ],
   ])('%s', (_name, source, message) => {
     for (const typeCheck of [true, false]) {
       const result = compile(source, { typeCheck });
@@ -696,6 +700,13 @@ describe('statements and generators', () => {
       'debugger and empty statements',
       ';; тағ х = 0; агар (х); барои (тағ и = 0; и < 3; и++); debugger; { ; }\nчоп.сабт("ok");',
       ['ok'],
+    ],
+    [
+      'several variables in one declaration',
+      'тағ а = 1, б = 2, в;\nсобит [г, д] = [3, 4], е = 5;\nв = а + б + г + д + е;\nчоп.сабт(в);\n' +
+        'барои (тағ и = 0, ҷ = 3; и < ҷ; и++, ҷ--) { чоп.сабт(и, ҷ); }\n' +
+        'номфазо Н { содир тағ х = 1, у = 2; }\nчоп.сабт(Н.х + Н.у);',
+      ['15', '0 3', '1 2', '3'],
     ],
     [
       'numeric, string and computed enum members',

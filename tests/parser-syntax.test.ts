@@ -557,11 +557,33 @@ describe('Parser: destructuring patterns', () => {
     });
   });
 
-  test('multiple declarators are a clear error, not silently dropped', () => {
-    const { ast, errors } = parse('тағ а = 1, б = 2;');
-    expect(ast.body).toHaveLength(0);
-    expect(errors).toEqual([
-      expect.stringMatching(/Multiple variables in one declaration are not supported at line 1/),
+  test('several declarators make one VariableDeclarationList', () => {
+    const [list] = parseOk('тағ а = 1, б: рақам, [в, г] = р;');
+    expect(list).toMatchObject({
+      type: 'VariableDeclarationList',
+      kind: 'ТАҒЙИРЁБАНДА',
+      declarations: [
+        { type: 'VariableDeclaration', identifier: { name: 'а' }, init: { value: 1 } },
+        { type: 'VariableDeclaration', identifier: { name: 'б' }, typeAnnotation: {} },
+        { type: 'VariableDeclaration', identifier: { type: 'ArrayPattern' } },
+      ],
+    });
+    // A single declarator keeps the plain VariableDeclaration
+    expect(parseOk('тағ а = 1;')[0].type).toBe('VariableDeclaration');
+  });
+
+  test('several declarators in a барои head', () => {
+    const [loop] = parseOk('барои (тағ и = 0, ҷ = 9; и < ҷ; и++, ҷ--) {}') as ForStatement[];
+    expect(loop.init).toMatchObject({
+      type: 'VariableDeclarationList',
+      declarations: [{ identifier: { name: 'и' } }, { identifier: { name: 'ҷ' } }],
+    });
+    expect(loop.update).toMatchObject({ type: 'SequenceExpression' });
+  });
+
+  test('every собит declarator needs an initializer', () => {
+    expect(parse('собит а = 1, б;').errors).toEqual([
+      expect.stringMatching(/Missing initializer in constant declaration at line 1, column 14/),
     ]);
   });
 });

@@ -317,6 +317,11 @@ describe('TypeScript operators in SomonScript', () => {
   describe('statements', () => {
     test.each([
       [
+        'several variables in one declaration',
+        'тағ а = 1, б = 2; барои (тағ и = 0, ҷ = 2; и < ҷ; и++, ҷ--) { чоп.сабт(и, ҷ); } чоп.сабт(а + б);',
+        '0 2\n3',
+      ],
+      [
         'if / else if / else',
         'тағ а = 2; агар (а === 1) { чоп.сабт(1); } вагарна агар (а === 2) { чоп.сабт(2); } вагарна { чоп.сабт(3); }',
         '2',

@@ -1109,3 +1109,36 @@ describe('CodeGenerator - literals, classes and object members', () => {
     ).toEqual([expect.stringContaining('Illegal break statement')]);
   });
 });
+
+describe('CodeGenerator - several declarators', () => {
+  test('one declaration, in a statement, a барои head and a namespace export', () => {
+    expect(
+      emitted([
+        'тағ а = 1, б, [в] = [2];',
+        'барои (тағ и = 0, ҷ = 9; и < ҷ; и++, ҷ--) {}',
+        'номфазо Н {',
+        '    содир собит х = 1, у = 2;',
+        '}',
+      ])
+    ).toBe(
+      [
+        'let а = 1, б, [в] = [2];',
+        'for (let и = 0, ҷ = 9; и < ҷ; и++, ҷ--) {}',
+        'const Н = (function() {',
+        '  const Н = {};',
+        '  const х = 1, у = 2;',
+        '  Н.х = х;',
+        '  Н.у = у;',
+        '  return Н;',
+        '})();',
+        '',
+      ].join('\n')
+    );
+  });
+
+  test('exports every name of a declaration', () => {
+    expect(emitted(['содир тағ а = 1, б = 2;'])).toBe(
+      ['let а = 1, б = 2;', 'module.exports.а = а;', 'module.exports.б = б;'].join('\n')
+    );
+  });
+});

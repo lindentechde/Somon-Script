@@ -5,6 +5,7 @@ import {
   Statement,
   Expression,
   VariableDeclaration,
+  VariableDeclarationList,
   FunctionDeclaration,
   FunctionExpression,
   BlockStatement,
@@ -240,11 +241,37 @@ export class Parser {
     throw error;
   }
 
-  /** `allowDefinite`: false in a `барои (…; …; …)` head, where `х!` is not permitted. */
-  public variableDeclaration(allowDefinite = true): VariableDeclaration {
+  /**
+   * `тағ х = 1;` or `тағ а = 1, б = 2;` (a VariableDeclarationList).
+   * `allowDefinite`: false in a `барои (…; …; …)` head, where `х!` is not permitted.
+   */
+  public variableDeclaration(allowDefinite = true): VariableDeclaration | VariableDeclarationList {
     const kindToken = this.previous();
     const kind = kindToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
+    const declarations = [this.variableDeclarator(kind, kindToken, allowDefinite)];
+    while (this.match(TokenType.COMMA)) {
+      declarations.push(this.variableDeclarator(kind, this.peek(), allowDefinite));
+    }
+
+    this.consumeSemicolon("Expected ';' after variable declaration");
+
+    if (declarations.length === 1) return declarations[0];
+    return {
+      type: 'VariableDeclarationList',
+      kind,
+      declarations,
+      line: kindToken.line,
+      column: kindToken.column,
+    };
+  }
+
+  /** One `ном: Т = қимат` of a declaration; `start` is where it begins (its `тағ` for the first). */
+  private variableDeclarator(
+    kind: VariableDeclaration['kind'],
+    start: Token,
+    allowDefinite: boolean
+  ): VariableDeclaration {
     // Parse pattern (identifier, array destructuring, or object destructuring)
     const identifier = this.parsePattern();
 
@@ -265,22 +292,12 @@ export class Parser {
       init = this.assignment();
     } else if (kind === 'СОБИТ') {
       throw new Error(
-        `Missing initializer in constant declaration at line ${kindToken.line}, column ${kindToken.column}`
+        `Missing initializer in constant declaration at line ${start.line}, column ${start.column}`
       );
     }
     if (definite) {
       this.checkDefiniteAssignment(definite, Boolean(init), Boolean(typeAnnotation), allowDefinite);
     }
-
-    if (this.check(TokenType.COMMA)) {
-      // VariableDeclaration holds a single binding; never drop the others silently
-      const token = this.peek();
-      throw new Error(
-        `Multiple variables in one declaration are not supported at line ${token.line}, column ${token.column}; declare each variable separately`
-      );
-    }
-
-    this.consumeSemicolon("Expected ';' after variable declaration");
 
     return {
       type: 'VariableDeclaration',
@@ -289,8 +306,8 @@ export class Parser {
       typeAnnotation,
       init,
       ...(definite && { definite: true }),
-      line: kindToken.line,
-      column: kindToken.column,
+      line: start.line,
+      column: start.column,
     };
   }
 
@@ -497,6 +514,7 @@ export class Parser {
   /** Statements that JavaScript does not allow as the body of a label. */
   private static readonly DECLARATION_TYPES: ReadonlySet<string> = new Set([
     'VariableDeclaration',
+    'VariableDeclarationList',
     'FunctionDeclaration',
     'ClassDeclaration',
     'InterfaceDeclaration',
@@ -792,14 +810,15 @@ export class Parser {
   }
 
   private parseTraditionalForLoop(forToken: Token): ForStatement {
-    let init: VariableDeclaration | ExpressionStatement | null = null;
-    if (this.match(TokenType.ТАҒЙИРЁБАНДА)) {
+    let init: VariableDeclaration | VariableDeclarationList | ExpressionStatement | null = null;
+    if (this.match(TokenType.ТАҒЙИРЁБАНДА, TokenType.СОБИТ)) {
+      // `барои (тағ и = 0, ҷ = н - 1; …)`
       init = this.variableDeclaration(false);
     } else if (!this.check(TokenType.SEMICOLON)) {
       init = this.expressionStatement();
     }
 
-    if (init && init.type !== 'VariableDeclaration') {
+    if (init && init.type === 'ExpressionStatement') {
       // ExpressionStatement already consumed the semicolon
     } else if (!init) {
       this.consume(TokenType.SEMICOLON, "Expected ';' after for loop initializer");

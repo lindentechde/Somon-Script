@@ -30,6 +30,7 @@ import {
   TypeNode,
   UnionType,
   VariableDeclaration,
+  VariableDeclarationList,
   TypeAnnotation,
   UniqueType,
   ConstructorType,
@@ -430,6 +431,8 @@ export class TypeChecker {
 
   private readonly statementHandlers: Record<string, (_statement: Statement) => void> = {
     VariableDeclaration: s => this.checkVariableDeclaration(s as VariableDeclaration),
+    VariableDeclarationList: s =>
+      (s as VariableDeclarationList).declarations.forEach(d => this.checkVariableDeclaration(d)),
     FunctionDeclaration: s => this.checkFunctionDeclaration(s as FunctionDeclaration),
     ClassDeclaration: s => this.checkClassDeclaration(s as ClassDeclaration),
     ExpressionStatement: s => this.checkExpressionStatement(s as ExpressionStatement),
@@ -676,6 +679,11 @@ export class TypeChecker {
           break;
         case 'VariableDeclaration':
           this.hoistVariableDeclaration(statement as VariableDeclaration);
+          break;
+        case 'VariableDeclarationList':
+          (statement as VariableDeclarationList).declarations.forEach(d =>
+            this.hoistVariableDeclaration(d)
+          );
           break;
         case 'NamespaceDeclaration':
           this.declare((statement as NamespaceDeclaration).name.name, UNKNOWN);
@@ -1287,7 +1295,11 @@ export class TypeChecker {
     this.withScope(() => {
       const init = statement.init as Statement | Expression | null;
       if (init) {
-        if (init.type === 'VariableDeclaration' || init.type === 'ExpressionStatement') {
+        if (
+          init.type === 'VariableDeclaration' ||
+          init.type === 'VariableDeclarationList' ||
+          init.type === 'ExpressionStatement'
+        ) {
           this.checkStatements([init]);
         } else {
           this.inferExpressionType(init);
