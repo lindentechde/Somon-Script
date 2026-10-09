@@ -18,6 +18,7 @@ import {
   needsLowering,
   normalizeLib,
   readLibNames,
+  readsAlikeAsTypeScript,
   regExpFeatures,
   scriptTargetFor,
   TARGETS,
@@ -471,6 +472,53 @@ describe('lowerToTarget', () => {
     const { code } = lowerToTarget('var д = а < б > (в < г);', { target: 'es5' });
     expect(code).toContain('а < б > (в < г)');
   });
+
+  // Found by tests/fuzz.test.ts: TypeScript 5.4's checker crashed while emitting this JavaScript
+  const evolvingArraySwitch =
+    'let х = [];\nswitch (х) {\n  case "а":\n    break;\n}\nconsole.log(х);\n';
+
+  test('lowers JavaScript that crashes TypeScript 5.4 as TypeScript, when it reads the same', () => {
+    const { code, diagnostics } = lowerToTarget(
+      `${evolvingArraySwitch}import { а } from "./а";\nconsole.log(х ?? 1);`,
+      { target: 'es2017' }
+    );
+    expect(diagnostics).toEqual([]);
+    expect(code).toContain('х !== null && х !== void 0 ? х : 1');
+    // As in JavaScript, an import whose binding is unused stays
+    expect(code).toContain('import { а } from "./а";');
+    const result = compile('тағ х = [];\nинтихоб (х) { ҳолат "а": шикастан; }\nчоп.сабт(х ?? 1);', {
+      target: 'es5',
+      typeCheck: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(run(result.code)).toEqual(['']);
+  });
+
+  /** TypeScript 5.6 and later no longer check the file while they transpile it. */
+  const typeScriptCrashes = ((): boolean => {
+    try {
+      ts.transpileModule(evolvingArraySwitch, {
+        fileName: 'module.js',
+        compilerOptions: { allowJs: true },
+      });
+      return false;
+    } catch {
+      return true;
+    }
+  })();
+
+  (typeScriptCrashes ? test : test.skip)(
+    'a crash on code TypeScript reads differently stays an error',
+    () => {
+      expect(readsAlikeAsTypeScript('а < б > (в);')).toBe(false);
+      expect(readsAlikeAsTypeScript(evolvingArraySwitch)).toBe(true);
+      expect(() =>
+        lowerToTarget(`${evolvingArraySwitch}console.log(х ?? (а < б > (в)));`, {
+          target: 'es2017',
+        })
+      ).toThrow(/Debug Failure/);
+    }
+  );
 
   test('useDefineForClassFields chooses defined or assigned fields', () => {
     const code = 'class К { а = 1; б; }';

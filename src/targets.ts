@@ -837,6 +837,44 @@ export function loweringCompilerOptions(
 }
 
 /**
+ * `ts.transpileModule` of JavaScript: a `.js` name, since the input is
+ * JavaScript (`a < b > (c)` is no generic call). TypeScript before 5.6
+ * type-checks the file while it emits, and its checker crashes on some valid
+ * JavaScript ("Debug Failure. Unhandled object type EvolvingArray" for an
+ * `интихоб` over a variable that holds `[]`). The code is then transpiled as
+ * TypeScript, which has no such arrays, when TypeScript reads it as the same
+ * program.
+ */
+function transpileJavaScript(code: string, options: ts.TranspileOptions): ts.TranspileOutput {
+  try {
+    return ts.transpileModule(code, { ...options, fileName: 'module.js' });
+  } catch (error) {
+    const crashed = error instanceof Error && error.message.startsWith('Debug Failure');
+    if (!crashed || !readsAlikeAsTypeScript(code)) throw error;
+    return ts.transpileModule(code, {
+      ...options,
+      fileName: 'module.ts',
+      // Keep every import, as for JavaScript
+      compilerOptions: { ...options.compilerOptions, verbatimModuleSyntax: true },
+    });
+  }
+}
+
+/** Whether TypeScript parses `code` as TypeScript to the same syntax tree as JavaScript. */
+export function readsAlikeAsTypeScript(code: string): boolean {
+  const shape = (kind: ts.ScriptKind): string => {
+    const nodes: number[] = [];
+    const visit = (node: ts.Node): void => {
+      nodes.push(node.kind, node.pos, node.end);
+      ts.forEachChild(node, visit);
+    };
+    visit(ts.createSourceFile('module', code, ts.ScriptTarget.Latest, false, kind));
+    return nodes.join(',');
+  };
+  return shape(ts.ScriptKind.JS) === shape(ts.ScriptKind.TS);
+}
+
+/**
  * Make JavaScript run on `options.target`: report what the target cannot
  * express, and lower newer syntax with TypeScript. Code that only uses syntax
  * the target has is returned as it is.
@@ -853,9 +891,7 @@ export function lowerToTarget(code: string, options: LowerOptions): LowerResult 
     return { code, diagnostics: [], lowered: false };
   }
 
-  // A `.js` name: the input is JavaScript (`a < b > (c)` is no generic call)
-  const output = ts.transpileModule(code, {
-    fileName: 'module.js',
+  const output = transpileJavaScript(code, {
     compilerOptions: loweringCompilerOptions(options, report.neverNative),
     transformers: { before: [targetFixes(options.target)], after: [readableStrings] },
   });
