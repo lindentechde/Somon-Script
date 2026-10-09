@@ -39,6 +39,19 @@ function isObject(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
 }
 
+function rejectUnknownKeys(
+  obj: object,
+  known: readonly string[],
+  basePath: string
+): ConfigValidationError[] {
+  return Object.keys(obj)
+    .filter(key => !known.includes(key))
+    .map(key => ({
+      path: `${basePath}.${key}`,
+      message: `unknown property. Known properties: ${known.join(', ')}`,
+    }));
+}
+
 function validateCompilerOptions(
   options: unknown,
   path = 'compilerOptions'
@@ -176,6 +189,26 @@ function validateModuleSystemTopLevel(config: object, basePath: string): ConfigV
   return errors;
 }
 
+const KNOWN_RESOLUTION_KEYS = [
+  'baseUrl',
+  'paths',
+  'extensions',
+  'moduleDirectories',
+  'allowJs',
+  'resolveJsonModule',
+] as const;
+
+const KNOWN_LOADING_KEYS = ['encoding', 'cache', 'circularDependencyStrategy'] as const;
+
+const KNOWN_BUNDLE_KEYS = [
+  'format',
+  'minify',
+  'sourceMaps',
+  'inlineSources',
+  'externals',
+  'output',
+] as const;
+
 function validateResolutionSection(resolution: unknown, basePath: string): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
   if (resolution === undefined) return errors;
@@ -185,6 +218,8 @@ function validateResolutionSection(resolution: unknown, basePath: string): Confi
   }
 
   const res = resolution as NonNullable<ModuleSystemConfig['resolution']>;
+
+  errors.push(...rejectUnknownKeys(res, KNOWN_RESOLUTION_KEYS, basePath));
 
   // Validate individual properties
   errors.push(...validateResolutionBaseUrl(res.baseUrl, basePath));
@@ -272,6 +307,8 @@ function validateLoadingSection(loading: unknown, basePath: string): ConfigValid
 
   const load = loading as NonNullable<ModuleSystemConfig['loading']>;
 
+  errors.push(...rejectUnknownKeys(load, KNOWN_LOADING_KEYS, basePath));
+
   if (load.encoding !== undefined && typeof load.encoding !== 'string') {
     errors.push({ path: `${basePath}.encoding`, message: 'must be a string' });
   }
@@ -301,6 +338,8 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
   }
 
   const obj = config as Partial<BundleConfig>;
+
+  errors.push(...rejectUnknownKeys(obj, KNOWN_BUNDLE_KEYS, basePath));
 
   // Validate each property separately to reduce complexity
   errors.push(...validateBundleFormat(obj.format, basePath));
@@ -417,16 +456,31 @@ function loadConfigFromFile(configPath: string): SomonConfig {
   return parsed as SomonConfig;
 }
 
-export function loadConfig(startPath: string): SomonConfig {
+export interface LoadedConfig {
+  config: SomonConfig;
+  /** Absolute path of the somon.config.json that was found, if any. */
+  configPath?: string;
+  /** Directory containing the config file; relative paths in the config resolve against it. */
+  configDir?: string;
+}
+
+/**
+ * Find the nearest somon.config.json at or above `startPath` and report where it was found.
+ */
+export function loadConfigWithPath(startPath: string): LoadedConfig {
   let dir = path.resolve(startPath);
   let parent = '';
   while (dir !== parent) {
     const configPath = path.join(dir, 'somon.config.json');
     if (fs.existsSync(configPath)) {
-      return loadConfigFromFile(configPath);
+      return { config: loadConfigFromFile(configPath), configPath, configDir: dir };
     }
     parent = dir;
     dir = path.dirname(dir);
   }
-  return {};
+  return { config: {} };
+}
+
+export function loadConfig(startPath: string): SomonConfig {
+  return loadConfigWithPath(startPath).config;
 }
