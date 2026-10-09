@@ -98,7 +98,8 @@ function classify(analysis: Analysis, token: LocatedToken, index: number): Class
 
 function fromDeclaration(declaration: Declaration, token: LocatedToken): Classified {
   let modifiers = declaration.nameStart === token.start ? DECLARATION : 0;
-  if (declaration.kind === 'constant') modifiers |= READONLY;
+  // Modifier flags are distinct powers of two: adding one sets its bit
+  if (declaration.kind === 'constant') modifiers += READONLY;
   const type =
     declaration.kind === 'import' && declaration.importedName === '*'
       ? 'namespace'

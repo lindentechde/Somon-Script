@@ -109,7 +109,7 @@ export function firstTokenFrom(tokens: readonly LocatedToken[], offset: number):
   let low = 0;
   let high = tokens.length;
   while (low < high) {
-    const middle = (low + high) >> 1;
+    const middle = Math.floor((low + high) / 2);
     if (tokens[middle].start < offset) low = middle + 1;
     else high = middle;
   }
