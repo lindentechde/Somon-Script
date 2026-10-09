@@ -15,6 +15,8 @@ vscode-extension/
 
 # Build output
 dist/
+# Browser bundle copied next to the playground (npm run build:browser)
+docs/playground/somonscript.js
 *.tsbuildinfo
 
 # Generated documentation

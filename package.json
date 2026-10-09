@@ -21,6 +21,7 @@
   "scripts": {
     "build": "npm run clean && npx tsc",
     "build:watch": "npx tsc --watch",
+    "build:browser": "node scripts/build-browser.js",
     "dev": "npm run build:watch",
     "pretest": "npm run build",
     "test": "./jest-wrapper.sh",
@@ -102,6 +103,7 @@
     "husky": "^8.0.0",
     "jest": "^29.0.0",
     "lint-staged": "^13.0.0",
+    "playwright-core": "~1.56.1",
     "prettier": "^3.0.0",
     "ts-jest": "^29.4.1",
     "typedoc": "^0.25.0"
