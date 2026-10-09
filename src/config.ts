@@ -1,9 +1,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { TARGETS, validateLib, type Target } from './targets';
+
 export interface CompilerOptions {
   output?: string;
-  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  target?: Target;
+  /** TypeScript lib names, e.g. ["es2022", "dom"]. */
+  lib?: string[];
+  useDefineForClassFields?: boolean;
   sourceMap?: boolean;
   minify?: boolean;
   noTypeCheck?: boolean;
@@ -54,6 +59,30 @@ function rejectUnknownKeys(
     }));
 }
 
+/** `target`, `lib` (names of the libs TypeScript ships) and `useDefineForClassFields`. */
+function validateTargetOptions(options: UnknownRecord, path: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (options.target !== undefined) {
+    const validTargets: readonly string[] = TARGETS;
+    if (typeof options.target !== 'string' || !validTargets.includes(options.target)) {
+      errors.push({
+        path: `${path}.target`,
+        message: `must be one of: ${validTargets.join(', ')}`,
+      });
+    }
+  }
+  if (options.lib !== undefined) {
+    for (const message of validateLib(options.lib)) {
+      errors.push({ path: `${path}.lib`, message });
+    }
+  }
+  const useDefine = options.useDefineForClassFields;
+  if (useDefine !== undefined && typeof useDefine !== 'boolean') {
+    errors.push({ path: `${path}.useDefineForClassFields`, message: 'must be a boolean' });
+  }
+  return errors;
+}
+
 function validateCompilerOptions(
   options: unknown,
   path = 'compilerOptions'
@@ -64,16 +93,8 @@ function validateCompilerOptions(
     return [{ path, message: 'must be an object' }];
   }
 
-  // Validate target
-  if (options.target !== undefined) {
-    const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
-    if (typeof options.target !== 'string' || !validTargets.includes(options.target)) {
-      errors.push({
-        path: `${path}.target`,
-        message: `must be one of: ${validTargets.join(', ')}`,
-      });
-    }
-  }
+  // Validate target, lib and useDefineForClassFields
+  errors.push(...validateTargetOptions(options, path));
 
   // Validate boolean options
   const booleanOptions = [
@@ -109,6 +130,8 @@ function validateCompilerOptions(
   const knownOptions = [
     'output',
     'target',
+    'lib',
+    'useDefineForClassFields',
     'sourceMap',
     'minify',
     'noTypeCheck',

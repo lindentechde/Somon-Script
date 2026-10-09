@@ -1,10 +1,19 @@
 import { transformSync, type PluginItem } from '@babel/core';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
-import ts from 'typescript';
 
-import { CodeGenerator, type CodeMapping, type LoweringNeeds } from './codegen';
+import { CodeGenerator, type CodeMapping } from './codegen';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
+import {
+  composeSourceMaps,
+  DEFAULT_TARGET,
+  isTarget,
+  lowerToTarget,
+  TARGETS,
+  validateLib,
+  type Target,
+  type TargetDiagnostic,
+} from './targets';
 import { TypeChecker } from './type-checker';
 
 /**
@@ -26,9 +35,30 @@ export interface CompileOptions {
    */
   minify?: boolean;
   /**
-   * JavaScript target version for the generated code. Defaults to `es2020` for modern runtimes.
+   * ECMAScript version the generated code must run on (`es5` … `es2024`,
+   * `esnext`). Defaults to `es2020`. Newer syntax is lowered with TypeScript;
+   * what the target cannot express (BigInt literals, some regular expression
+   * flags) is a compile error.
    */
-  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  target?: Target;
+  /**
+   * TypeScript lib names (`["es2022", "dom"]`) describing the APIs available
+   * at run time, used by the TypeScript checker. Defaults to the target's
+   * ECMAScript lib and the DOM. Validated against the libs TypeScript ships.
+   */
+  lib?: string[];
+  /**
+   * Class fields are defined (`Object.defineProperty` semantics) rather than
+   * assigned in the constructor. Defaults to TypeScript's default for the
+   * target: on from `es2022`.
+   */
+  useDefineForClassFields?: boolean;
+  /**
+   * Lower newer syntax for `target` (default). With `false` the code is only
+   * checked against the target and keeps its syntax: the bundler lowers the
+   * whole bundle once instead of every module.
+   */
+  downlevel?: boolean;
   /**
    * Toggle semantic analysis. Disable only when experimenting with partially valid programs.
    */
@@ -91,6 +121,10 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
   const warnings: string[] = [];
 
   try {
+    if (routeTargetOptionErrors(options, errors)) {
+      return { code: '', errors, warnings };
+    }
+
     const { ast, parserErrors } = parseSource(source);
 
     if (routeParserErrors(parserErrors, errors)) {
@@ -106,6 +140,24 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
     errors.push(error instanceof Error ? error.message : String(error));
     return { code: '', errors, warnings };
   }
+}
+
+/**
+ * `target` and `lib` come from untyped sources too (JavaScript callers,
+ * configuration files): reject unknown values instead of guessing. Returns
+ * true when compilation must stop.
+ */
+function routeTargetOptionErrors(options: CompileOptions, errors: string[]): boolean {
+  const before = errors.length;
+  if (options.target !== undefined && !isTarget(options.target)) {
+    errors.push(
+      `Unknown target '${String(options.target)}'. Expected one of: ${TARGETS.join(', ')}`
+    );
+  }
+  if (options.lib !== undefined) {
+    errors.push(...validateLib(options.lib).map(message => `Invalid lib: ${message}`));
+  }
+  return errors.length > before;
 }
 
 /**
@@ -156,10 +208,20 @@ function emitCode(
   let map = options.sourceMap
     ? buildSourceMap(generated.mappings, sourceFileName, source)
     : undefined;
-  const transpileResult = transpile(generated.code, options, generator.getLoweringNeeds());
-  let code = transpileResult.code;
-  if (map && transpileResult.map) {
-    map = chainSourceMaps(transpileResult.map, map, source);
+  const lowered = lowerToTarget(generated.code, {
+    target: options.target ?? DEFAULT_TARGET,
+    useDefineForClassFields: options.useDefineForClassFields,
+    experimentalDecorators: options.experimentalDecorators,
+    sourceMap: options.sourceMap,
+    downlevel: options.downlevel,
+  });
+  if (lowered.diagnostics.length > 0) {
+    errors.push(...targetErrors(lowered.diagnostics, generated.mappings, source));
+    return { code: '', errors, warnings };
+  }
+  let code = lowered.code;
+  if (map && lowered.map) {
+    map = composeSourceMaps(lowered.map, map);
   }
 
   if (options.minify) {
@@ -201,49 +263,27 @@ function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: 
 }
 
 /**
- * Whether the generated code has syntax no JavaScript runtime runs yet:
- * decorators, `accessor` fields, `using` declarations.
+ * Errors for what the target cannot express, at the position of the statement
+ * around it in the SomonScript source (the code generator maps statements).
  */
-function needsLowering(lowering: LoweringNeeds | undefined): boolean {
-  return Boolean(
-    lowering &&
-      (lowering.decorators ||
-        lowering.parameterDecorators ||
-        lowering.autoAccessors ||
-        lowering.usingDeclarations)
-  );
-}
-
-function transpile(code: string, options: CompileOptions, lowering?: LoweringNeeds) {
-  const targetMap: Record<NonNullable<CompileOptions['target']>, ts.ScriptTarget> = {
-    es5: ts.ScriptTarget.ES5,
-    es2015: ts.ScriptTarget.ES2015,
-    es2020: ts.ScriptTarget.ES2020,
-    esnext: ts.ScriptTarget.ESNext,
-  };
-  const target = options.target ?? 'es2020';
-  const lower = needsLowering(lowering);
-  if (target === 'es2020' && !lower) {
-    return { code };
-  }
-  // The es2020 output is the generated code as is (ES2022 classes included);
-  // TypeScript lowers decorators, `accessor` and `using` only below ESNext
-  const scriptTarget = target === 'es2020' ? ts.ScriptTarget.ES2022 : targetMap[target];
-  const transpile = ts.transpileModule(code, {
-    compilerOptions: {
-      target: lower ? Math.min(scriptTarget, ts.ScriptTarget.ES2022) : scriptTarget,
-      module: ts.ModuleKind.ESNext,
-      sourceMap: options.sourceMap,
-      ...(options.experimentalDecorators && { experimentalDecorators: true }),
-    },
+function targetErrors(
+  diagnostics: TargetDiagnostic[],
+  mappings: CodeMapping[],
+  source: string
+): string[] {
+  const sourceLines = source.split(/\r?\n/);
+  const messages = diagnostics.map(diagnostic => {
+    let original = { line: diagnostic.line, column: 0 };
+    for (const mapping of mappings) {
+      const { line, column } = mapping.generated;
+      if (line > diagnostic.line || (line === diagnostic.line && column > diagnostic.column)) break;
+      original = mapping.original;
+    }
+    const snippet = (sourceLines[original.line - 1] ?? '').trim();
+    return `Target error at line ${original.line}, column ${original.column + 1}: ${diagnostic.message}\n> ${snippet}`;
   });
-  const map =
-    options.sourceMap && transpile.sourceMapText
-      ? (JSON.parse(transpile.sourceMapText) as unknown as RawSourceMap)
-      : undefined;
-  // TypeScript points at a `module.js.map` file that is never written
-  const outputText = transpile.outputText.replace(/\n?\/\/# sourceMappingURL=\S*\s*$/, '\n');
-  return { code: outputText, map };
+  // Two literals in one statement end up at the same position
+  return [...new Set(messages)];
 }
 
 function outputFileName(sourceFileName: string): string {
@@ -263,74 +303,6 @@ function buildSourceMap(
     generator.addMapping({ ...mapping, source: sourceFileName });
   }
   return generator.toJSON();
-}
-
-/**
- * Compose `outer` (transpiled JS → generated JS) with `inner` (generated JS →
- * `.som`). Done by hand because `source-map`'s consumer is asynchronous and
- * `compile` is not. Each outer segment takes the nearest inner mapping at or
- * before its position on the same line.
- */
-function chainSourceMaps(outer: RawSourceMap, inner: RawSourceMap, source: string): RawSourceMap {
-  const innerLines = decodeMappings(inner.mappings);
-  const sourceFileName = inner.sources[0];
-  const generator = new SourceMapGenerator({ file: inner.file });
-  generator.setSourceContent(sourceFileName, source);
-
-  decodeMappings(outer.mappings).forEach((segments, outerLine) => {
-    for (const [column, , line, originalColumn] of segments) {
-      if (line === undefined) continue;
-      const candidates = innerLines[line] ?? [];
-      let match: number[] | undefined;
-      for (const candidate of candidates) {
-        if (candidate[0] > originalColumn) break;
-        match = candidate;
-      }
-      match ??= candidates[0];
-      if (!match || match.length < 4) continue;
-      generator.addMapping({
-        generated: { line: outerLine + 1, column },
-        original: { line: match[2] + 1, column: match[3] },
-        source: sourceFileName,
-      });
-    }
-  });
-  return generator.toJSON();
-}
-
-const BASE64_DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/**
- * Decode a source map `mappings` string into absolute segments per generated
- * line: [column, sourceIndex, originalLine (0-based), originalColumn, name].
- */
-function decodeMappings(mappings: string): number[][][] {
-  const state = [0, 0, 0, 0, 0];
-  return mappings.split(';').map(lineText => {
-    state[0] = 0;
-    return lineText
-      .split(',')
-      .filter(segment => segment.length > 0)
-      .map(segment => decodeVlq(segment).map((delta, index) => (state[index] += delta)));
-  });
-}
-
-function decodeVlq(segment: string): number[] {
-  const values: number[] = [];
-  let value = 0;
-  let shift = 0;
-  for (const char of segment) {
-    const digit = BASE64_DIGITS.indexOf(char);
-    value += (digit & 31) << shift;
-    if (digit & 32) {
-      shift += 5;
-    } else {
-      values.push(value & 1 ? -(value >>> 1) : value >>> 1);
-      value = 0;
-      shift = 0;
-    }
-  }
-  return values;
 }
 
 let minifyPreset: PluginItem | undefined;

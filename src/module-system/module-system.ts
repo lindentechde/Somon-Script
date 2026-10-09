@@ -12,6 +12,7 @@ import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
 } from '../compiler';
+import { TARGETS, validateLib } from '../targets';
 
 export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
 
@@ -333,12 +334,19 @@ export class ModuleSystem {
 
     // Validate target
     if (compilation.target !== undefined) {
-      const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
+      const validTargets: readonly string[] = TARGETS;
       if (!validTargets.includes(compilation.target)) {
         errors.push(
           `compilation.target must be one of: ${validTargets.join(', ')}, got: ${compilation.target}`
         );
       }
+    }
+    if (compilation.lib !== undefined) {
+      errors.push(...validateLib(compilation.lib).map(message => `compilation.lib ${message}`));
+    }
+    const useDefine = compilation.useDefineForClassFields;
+    if (useDefine !== undefined && typeof useDefine !== 'boolean') {
+      errors.push('compilation.useDefineForClassFields must be a boolean');
     }
 
     // Validate boolean options
@@ -968,6 +976,12 @@ export class ModuleSystem {
     }
     if (config.experimentalDecorators !== undefined) {
       options.experimentalDecorators = config.experimentalDecorators;
+    }
+    if (config.lib !== undefined) {
+      options.lib = config.lib;
+    }
+    if (config.useDefineForClassFields !== undefined) {
+      options.useDefineForClassFields = config.useDefineForClassFields;
     }
 
     return options;

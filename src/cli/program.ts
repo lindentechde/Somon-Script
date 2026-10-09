@@ -6,7 +6,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { Command, Option } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import chokidar from 'chokidar';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -22,6 +22,7 @@ import {
   type SomonConfig,
 } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
+import { normalizeLib, TARGETS, validateLib } from '../targets';
 import { LANGUAGES, t, type Translations } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -43,7 +44,13 @@ function findPackageJson(): { name: string; version: string } {
 }
 const pkg = findPackageJson();
 
-const TARGETS = ['es5', 'es2015', 'es2020', 'esnext'] as const;
+/** `--lib es2022,dom` → ['es2022', 'dom'], rejecting names TypeScript does not ship. */
+function parseLibList(value: string): string[] {
+  const lib = normalizeLib(value.split(','));
+  const problems = validateLib(lib.length > 0 ? lib : ['']);
+  if (problems.length > 0) throw new InvalidArgumentError(problems.join('; '));
+  return lib;
+}
 
 function logConfigError(error: ConfigError): void {
   console.error(t().common.configError);
@@ -83,6 +90,8 @@ type BufferEncoding =
 /** Compiler flags shared by compile, run and bundle (as parsed by commander). */
 interface CliCompilerFlags {
   target?: CompilerOptions['target'];
+  lib?: string[];
+  useDefineForClassFields?: boolean;
   sourceMap?: boolean;
   minify?: boolean;
   /** `--no-type-check` is stored by commander as `typeCheck: false`. */
@@ -105,6 +114,10 @@ type RunOptions = CliCompilerFlags;
 function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
   const overrides: CompilerOptions = {};
   if (flags.target !== undefined) overrides.target = flags.target;
+  if (flags.lib !== undefined) overrides.lib = flags.lib;
+  if (flags.useDefineForClassFields !== undefined) {
+    overrides.useDefineForClassFields = flags.useDefineForClassFields;
+  }
   if (flags.sourceMap !== undefined) overrides.sourceMap = flags.sourceMap;
   if (flags.minify !== undefined) overrides.minify = flags.minify;
   if (flags.typeCheck === false) overrides.noTypeCheck = true;
@@ -123,9 +136,12 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
   // Output paths and watch settings in compilerOptions only apply to `compile`.
   const { target, sourceMap, minify, noTypeCheck, strict, experimentalDecorators } =
     config.compilerOptions ?? {};
+  const { lib, useDefineForClassFields } = config.compilerOptions ?? {};
   const fromConfig = Object.fromEntries(
     Object.entries({
       target,
+      lib,
+      useDefineForClassFields,
       sourceMap,
       minify,
       noTypeCheck,
@@ -332,6 +348,8 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
     const source = fs.readFileSync(input, 'utf-8');
     const result = compile(source, {
       target: options.target,
+      lib: options.lib,
+      useDefineForClassFields: options.useDefineForClassFields,
       sourceMap: options.sourceMap,
       sourceFileName: options.sourceFileName,
       minify: options.minify,
@@ -604,6 +622,9 @@ function addCompilerOptions(command: Command): Command {
   const options = t().commands.compile.options;
   return command
     .addOption(new Option('--target <target>', options.target).choices(TARGETS))
+    .addOption(new Option('--lib <libs>', options.lib).argParser(parseLibList))
+    .option('--use-define-for-class-fields', options.useDefineForClassFields)
+    .option('--no-use-define-for-class-fields', options.noUseDefineForClassFields)
     .option('--source-map', options.sourceMap)
     .option('--no-source-map', options.noSourceMap)
     .option('--minify', options.minify)

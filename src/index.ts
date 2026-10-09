@@ -24,3 +24,5 @@
  */
 export { compile } from './compiler';
 export type { CompileOptions, CompileResult } from './compiler';
+export { TARGETS, DEFAULT_TARGET, defaultLib, typeScriptLibNames } from './targets';
+export type { Target } from './targets';

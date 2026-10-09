@@ -24,6 +24,9 @@ export interface Translations {
         output: string;
         outDir: string;
         target: string;
+        lib: string;
+        useDefineForClassFields: string;
+        noUseDefineForClassFields: string;
         sourceMap: string;
         noSourceMap: string;
         minify: string;
