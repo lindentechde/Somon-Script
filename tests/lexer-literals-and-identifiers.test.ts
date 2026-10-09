@@ -71,6 +71,25 @@ describe('Lexer: numeric literals', () => {
     expect(significant('...а').map(t => t.type)).toEqual([TokenType.SPREAD, TokenType.IDENTIFIER]);
   });
 
+  test('the spread token is placed where it starts, not after it', () => {
+    const source = 'ф(1,\n  ...рақамҳо);';
+    expect(significant(source).map(t => [t.value, t.line, t.column])).toEqual([
+      ['ф', 1, 1],
+      ['(', 1, 2],
+      ['1', 1, 3],
+      [',', 1, 4],
+      ['\n', 1, 5],
+      ['...', 2, 3],
+      ['рақамҳо', 2, 6],
+      [')', 2, 13],
+      [';', 2, 14],
+    ]);
+    // Messages about it point at it
+    expect(compile('тағ х = ...;').errors).toEqual([
+      "Parse error: Unexpected token '...' at line 1, column 9",
+    ]);
+  });
+
   test('"?." followed by a digit is a conditional with a leading-dot number', () => {
     expect(significant('а?.5:1').map(t => [t.type, t.value])).toEqual([
       [TokenType.IDENTIFIER, 'а'],

@@ -488,7 +488,7 @@ export class Lexer {
       this.advance();
       this.advance();
       this.advance();
-      return this.createToken(TokenType.SPREAD, '...');
+      return this.createToken(TokenType.SPREAD, '...', this.line, this.column - 3);
     }
     return this.singleCharToken(TokenType.DOT);
   }
