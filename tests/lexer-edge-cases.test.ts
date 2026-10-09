@@ -83,6 +83,19 @@ describe('Lexer: template interpolations', () => {
     expect(run('чоп.сабт(`${ /а+/.test("ааа")}`);')).toEqual(['true']);
   });
 
+  test('a regular expression ending in `*` is no block comment', () => {
+    // `/а*/` ends with `*/`, but there is no `/*` before it: the next `/` divides
+    expect(run('чоп.сабт(`${/а*/ / 1}`);')).toEqual(['NaN']);
+  });
+
+  test('a `}` in a line comment of an interpolation has no `{`', () => {
+    expect(run('чоп.сабт(`${8 // }\n / 2}`);')).toEqual(['4']);
+  });
+
+  test('an object literal after an operator divides', () => {
+    expect(run('чоп.сабт(`${1 + {} / 2}`);')).toEqual(['NaN']);
+  });
+
   test('after `++` or `--` a `/` divides; after another `+` it starts a regular expression', () => {
     expect(run('тағ х = 4;\nчоп.сабт(`${х++ / 2} ${х-- / 1} ${"а" + /б}/.source}`);')).toEqual([
       '2 5 аб}',
