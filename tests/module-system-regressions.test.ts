@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { ModuleLoader, ModuleResolver, ModuleSystem } from '../src/module-system';
+import { isSystemPath } from '../src/module-system/module-resolver';
 import { canonicalTmpDir } from './helpers/paths';
 import type { ModuleSystemOptions } from '../src/module-system';
 
@@ -313,6 +314,30 @@ describe('module system regressions', () => {
       expect(() => resolver.resolve('/lib/o', path.join(root, 'main.som'))).toThrow(
         /outside baseUrl/
       );
+    });
+
+    test('system paths: Unix system directories, Windows drives and UNC shares', () => {
+      // Paths as path.normalize leaves them on each OS
+      for (const systemPath of [
+        '/home/u/x.som',
+        '/Users/u/x',
+        '/tmp/x',
+        'C:\\Users\\u\\x.som',
+        'c:/x',
+        '\\\\server\\share\\lib\\x.som',
+        '\\\\?\\C:\\x',
+      ]) {
+        expect([systemPath, isSystemPath(systemPath)]).toEqual([systemPath, true]);
+      }
+      for (const projectPath of [
+        '/lib/utils',
+        '/homeless/x',
+        '\\lib\\utils',
+        'C:x',
+        '\\\\server',
+      ]) {
+        expect([projectPath, isSystemPath(projectPath)]).toEqual([projectPath, false]);
+      }
     });
 
     test('relative imports outside baseUrl stay allowed', () => {

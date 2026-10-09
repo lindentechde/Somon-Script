@@ -25,6 +25,22 @@ const REQUIRE_CONDITIONS: ReadonlySet<string> = new Set(['require', 'node', 'def
  */
 const IMPORT_CONDITIONS: ReadonlySet<string> = new Set(['import', 'node', 'default']);
 
+const UNIX_SYSTEM_PREFIXES = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
+
+/**
+ * Whether a normalized absolute path names a place of the file system rather than
+ * of the project (see `ModuleResolver`): a common Unix system directory, a Windows
+ * drive (`C:\…`) or a UNC path (`\\server\share\…`, `\\?\C:\…`).
+ * @internal
+ */
+export function isSystemPath(normalizedPath: string): boolean {
+  return (
+    UNIX_SYSTEM_PREFIXES.some(prefix => normalizedPath.startsWith(prefix)) ||
+    /^[A-Za-z]:[/\\]/.test(normalizedPath) ||
+    /^[/\\]{2}[^/\\]+[/\\]/.test(normalizedPath)
+  );
+}
+
 export class ModuleResolver {
   private options: Required<ModuleResolutionOptions>;
 
@@ -461,7 +477,7 @@ export class ModuleResolver {
 
   /**
    * Classify an absolute import specifier. Absolute imports are allowed: a path inside
-   * baseUrl or under a common system prefix (/home/, /tmp/, C:\ …) is used as-is;
+   * baseUrl or under a common system prefix (/home/, /tmp/, C:\, \\server\share\ …) is used as-is;
    * anything else (e.g. /lib/utils) is project-relative, resolved against baseUrl and
    * confined to it.
    *
@@ -471,21 +487,8 @@ export class ModuleResolver {
    * Relative imports (`./`, `../`) and OS-absolute imports are not confined —
    * SomonScript sources are trusted code.
    */
-  private isOsLevelAbsolutePath(absolutePath: string): boolean {
-    const normalizedPath = path.normalize(absolutePath);
-
-    if (this.isInsideDir(normalizedPath, this.options.baseUrl)) {
-      return true;
-    }
-
-    const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
-    const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
-
-    if (unixOsPrefixes.some(prefix => normalizedPath.startsWith(prefix))) {
-      return true;
-    }
-
-    return windowsDrivePattern.test(normalizedPath);
+  private isOsLevelAbsolutePath(normalizedPath: string): boolean {
+    return isSystemPath(normalizedPath) || this.isInsideDir(normalizedPath, this.options.baseUrl);
   }
 
   /**
