@@ -136,7 +136,9 @@ export function tajikAliases(
 
 /** JavaScript names worth offering (no `__proto__`-style internals, no `constructor`). */
 export function englishMembers(builtin: ReadonlySet<string>): string[] {
-  return [...builtin].filter(name => !name.startsWith('__') && name !== 'constructor').sort();
+  return [...builtin]
+    .filter(name => !name.startsWith('__') && name !== 'constructor')
+    .sort((a, b) => a.localeCompare(b));
 }
 
 /** The type of a member of a value of type `type`, when the checker knows it. */

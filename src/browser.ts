@@ -210,7 +210,7 @@ export function execute(code: string, consoleLike: ConsoleLike): unknown {
   };
   // Running the compiled program is what this function is for
   const run = new Function('console', 'require', 'module', 'exports', code); // NOSONAR
-  run(consoleLike, require, module, module.exports);
+  run(consoleLike, require, module, module.exports); // NOSONAR: runs the user's own program (S1523)
   return module.exports;
 }
 

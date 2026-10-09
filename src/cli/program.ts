@@ -635,7 +635,10 @@ async function writeEsmModules(
     throw new Error(formatCompilationErrors(result));
   }
   const files = [...result.modules.keys()].filter(id => path.isAbsolute(id));
-  const root = commonDirectory([path.dirname(entry), ...files.map(file => path.dirname(file))]);
+  const root = commonDirectory(
+    path.dirname(entry),
+    files.map(file => path.dirname(file))
+  );
   const outputPath = (file: string): string =>
     path.join(dir, path.relative(root, file).replace(/\.som$/i, '.js'));
 
@@ -659,15 +662,15 @@ async function writeEsmModules(
   return outputPath(entry);
 }
 
-/** The deepest directory containing every one of `directories`. */
-function commonDirectory(directories: string[]): string {
-  return directories.reduce((common, directory) => {
+/** The deepest directory containing `first` and every one of `others`. */
+function commonDirectory(first: string, others: string[]): string {
+  return others.reduce((common, directory) => {
     let candidate = common;
     while (path.relative(candidate, directory).startsWith('..')) {
       candidate = path.dirname(candidate);
     }
     return candidate;
-  });
+  }, first);
 }
 
 /** The nearest node_modules directory at or above `start`. */

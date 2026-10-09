@@ -141,18 +141,18 @@ export function extentEnd(tokens: readonly LocatedToken[], index: number): numbe
 
 /** End offset of the first `{ … }` group at or after token `index` (same depth). */
 export function braceGroupEnd(tokens: readonly LocatedToken[], index: number): number | undefined {
-  for (let i = index; i < tokens.length; i++) {
+  let i = index;
+  while (i < tokens.length) {
     const token = tokens[i];
     if (token.type === TokenType.LEFT_BRACE) {
       return token.match === undefined ? tokens[tokens.length - 1].end : tokens[token.match].end;
     }
     if (token.type === TokenType.SEMICOLON || CLOSERS.has(token.type)) return undefined;
-    if (
-      (token.type === TokenType.LEFT_PAREN || token.type === TokenType.LEFT_BRACKET) &&
-      token.match !== undefined
-    ) {
-      i = token.match;
-    }
+    const groupEnd =
+      token.type === TokenType.LEFT_PAREN || token.type === TokenType.LEFT_BRACKET
+        ? token.match
+        : undefined;
+    i = groupEnd === undefined ? i + 1 : groupEnd + 1;
   }
   return undefined;
 }

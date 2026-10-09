@@ -54,7 +54,7 @@ const SOURCE = 'somon';
 
 /** Where compiler messages give positions: `at line 3, column 5`, `(3,5)`, `:3:5`. */
 const POSITION_PATTERNS: readonly RegExp[] = [
-  /\s*\bat line (\d+), column (\d+)/,
+  / ?\bat line (\d+), column (\d+)/,
   /\bline (\d+), column (\d+)/,
   /\((\d+),\s*(\d+)\)/,
   /:(\d+):(\d+)\b/,

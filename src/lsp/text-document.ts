@@ -22,7 +22,7 @@ export class TextDocument {
     this.version = version;
     this.languageId = languageId;
     this.lineStarts = computeLineStarts(text);
-    this.bomLength = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+    this.bomLength = text.startsWith('\uFEFF') ? 1 : 0;
   }
 
   get lineCount(): number {

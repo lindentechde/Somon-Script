@@ -239,6 +239,13 @@ const ASSERTION_TYPES: ReadonlySet<string> = new Set([
   'NonNullExpression',
 ]);
 
+/** `code` without the line breaks at its end (a loop, not a backtracking `/\n+$/`). */
+function withoutTrailingNewlines(code: string): string {
+  let end = code.length;
+  while (end > 0 && code[end - 1] === '\n') end--;
+  return code.slice(0, end);
+}
+
 /** Types are erased: an assertion is emitted as the expression it wraps. */
 function skipAssertions(node: Expression): Expression {
   let current = node;
@@ -1568,7 +1575,9 @@ export class CodeGenerator {
       ? [`module.exports.default = ${exportNames[0]};`]
       : exportNames.map(name => `module.exports.${translateMemberName(name)} = ${name};`);
 
-    return [code.replace(/\n+$/, ''), ...commonjsExports.map(line => this.indent(line))].join('\n');
+    return [withoutTrailingNewlines(code), ...commonjsExports.map(line => this.indent(line))].join(
+      '\n'
+    );
   }
 
   protected extractExportNames(declaration: Statement): string[] {
@@ -1707,9 +1716,10 @@ export class CodeGenerator {
       if (declaration.type === 'FunctionDeclaration' || declaration.type === 'ClassDeclaration') {
         return CodeGenerator.prefixDeclaration(code, 'export default ');
       }
-      return [code.replace(/\n+$/, ''), this.indent(`export { ${names[0]} as default };`)].join(
-        '\n'
-      );
+      return [
+        withoutTrailingNewlines(code),
+        this.indent(`export { ${names[0]} as default };`),
+      ].join('\n');
     }
     // A name that is a built-in member name is exported under its JavaScript name
     if (names.every(name => translateMemberName(name) === name)) {
@@ -1719,7 +1729,9 @@ export class CodeGenerator {
       const exported = translateMemberName(name);
       return exported === name ? name : `${name} as ${exported}`;
     });
-    return [code.replace(/\n+$/, ''), this.indent(`export { ${list.join(', ')} };`)].join('\n');
+    return [withoutTrailingNewlines(code), this.indent(`export { ${list.join(', ')} };`)].join(
+      '\n'
+    );
   }
 
   /**

@@ -581,7 +581,7 @@ export function translateMessage(
   let aliasNamed: string | undefined;
   // TypeScript escapes non-ASCII characters of string literal types (`"м"`)
   const readable = message.replace(/\\u([0-9A-Fa-f]{4})/g, (_escape, hex: string) =>
-    String.fromCharCode(parseInt(hex, 16))
+    String.fromCodePoint(Number.parseInt(hex, 16))
   );
   const translated = readable.replace(
     /(['"«])([^'"«»\n]*)(['"»])/g,
