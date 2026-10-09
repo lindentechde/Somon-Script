@@ -332,8 +332,8 @@ function validateResolutionPaths(paths: unknown, basePath: string): ConfigValida
     return [{ path: `${basePath}.paths`, message: 'must be an object' }];
   }
 
-  for (const [k, v] of Object.entries(paths)) {
-    if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
+  for (const v of Object.values(paths)) {
+    if (!Array.isArray(v) || v.some(x => typeof x !== 'string')) {
       return [{ path: `${basePath}.paths`, message: 'must be Record<string,string[]>' }];
     }
   }
@@ -526,14 +526,8 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   if ((config as SomonConfig).compilerOptions !== undefined) {
     errors.push(...validateCompilerOptions((config as SomonConfig).compilerOptions));
   }
-  // Validate moduleSystem if present
-  if ((config as SomonConfig).moduleSystem !== undefined) {
-    errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
-  }
-  // Validate bundle if present
-  if ((config as SomonConfig).bundle !== undefined) {
-    errors.push(...validateBundle((config as SomonConfig).bundle));
-  }
+  errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
+  errors.push(...validateBundle((config as SomonConfig).bundle));
   errors.push(...validateFmt((config as SomonConfig).fmt));
 
   return errors;
@@ -553,8 +547,8 @@ function loadConfigFromFile(configPath: string): SomonConfig {
     // Editors on Windows may save UTF-8 with a byte order mark, which JSON rejects
     parsed = JSON.parse(fileContents.replace(/^\uFEFF/, ''));
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new ConfigError(`Failed to parse config file ${configPath}: ${reason}`);
+    // JSON.parse throws a SyntaxError
+    throw new ConfigError(`Failed to parse config file ${configPath}: ${(error as Error).message}`);
   }
 
   const validationErrors = validateConfig(parsed);
