@@ -136,6 +136,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * The type checker did not know the names an exported destructuring declaration of a namespace binds (`номфазо Н { содир собит { а } = о; }`): `Н.а` had no type, so nothing using it was checked, and another block of the namespace could not use `а`; they are members of the namespace, typed as declared.
 * A declared module that exports from another module (`эълон модул "м" { содир * аз "н"; содир { х } аз "н"; содир * чун Н аз "н"; }`), as TypeScript allows, made each import of those names from it the error "Module '"м"' has no exported member"; they have the type the other declared module gives them, or no known type when that module is not declared in the program.
 * The type checker did not count an exported import alias (`номфазо Н { содир ворид х = А.б; }`) among the members of a namespace: `Н.х` had no type and another block of the namespace could not use `х`. In a declared module an alias is exported only when marked `содир`, as in TypeScript.
+* `танҳохонӣ` before a type other than an array or tuple type (`тағ х: танҳохонӣ сатр`, `танҳохонӣ Array<сатр>`) was accepted and ignored; it is the parse error TypeScript reports (TS1354), "'танҳохонӣ' type modifier is only permitted on array and tuple types".
 
 ## 0.4.0 (2026-10-09)
 

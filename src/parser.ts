@@ -4901,9 +4901,16 @@ export class Parser {
       return undefined;
     }
     const readonlyToken = this.advance();
+    const typeAnnotation = this.primaryType();
+    // TypeScript's TS1354: not `танҳохонӣ сатр`, nor `танҳохонӣ Array<сатр>`
+    if (typeAnnotation.type !== 'ArrayType' && typeAnnotation.type !== 'TupleType') {
+      this.errors.push(
+        `'танҳохонӣ' type modifier is only permitted on array and tuple types at line ${readonlyToken.line}, column ${readonlyToken.column}`
+      );
+    }
     return {
       type: 'ReadonlyType',
-      typeAnnotation: this.primaryType(),
+      typeAnnotation,
       line: readonlyToken.line,
       column: readonlyToken.column,
     };

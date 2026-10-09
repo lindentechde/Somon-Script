@@ -2622,11 +2622,12 @@ export class TypeChecker {
   /** `танҳохонӣ Т[]`, `ин`, `нав () => Т`, and a type predicate as a return type (a мантиқӣ). */
   private resolveTypeOperator(typeNode: TypeNode): Type {
     switch (typeNode.type) {
-      case 'ReadonlyType': {
-        const operand = this.resolveTypeNode((typeNode as ReadonlyType).typeAnnotation);
-        const isList = operand.kind === 'array' || operand.kind === 'tuple';
-        return isList ? { ...operand, readonly: true } : operand;
-      }
+      case 'ReadonlyType':
+        // An array or tuple type (the parser reports any other operand)
+        return {
+          ...this.resolveTypeNode((typeNode as ReadonlyType).typeAnnotation),
+          readonly: true,
+        };
       case 'ThisType':
         return THIS_TYPE;
       case 'TypePredicate':

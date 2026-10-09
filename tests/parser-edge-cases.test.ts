@@ -49,6 +49,22 @@ describe('parser: type parameter lists', () => {
   });
 });
 
+describe('parser: `танҳохонӣ` types', () => {
+  test('only an array or tuple type may be read-only, as in TypeScript', () => {
+    // TypeScript's TS1354; `танҳохонӣ сатр` was accepted and meant `сатр`
+    for (const type of ['сатр', 'Array<сатр>', 'Т']) {
+      expect(errorsOf(`навъ Т = рақам[];\nтағ х: танҳохонӣ ${type};`)).toEqual([
+        "'танҳохонӣ' type modifier is only permitted on array and tuple types at line 2, column 8",
+      ]);
+    }
+    for (const type of ['сатр[]', '(сатр | рақам)[]', '[сатр, рақам]', 'рақам[][]']) {
+      expect(errorsOf(`тағ х: танҳохонӣ ${type};`)).toEqual([]);
+    }
+    // A property named `танҳохонӣ`, and a read-only property, are no such types
+    expect(errorsOf('навъ Т = { танҳохонӣ а: рақам; танҳохонӣ: сатр };')).toEqual([]);
+  });
+});
+
 describe('parser: the end of the input where an operand belongs', () => {
   test('is named as such, not as an empty token', () => {
     expect(errorsOf('тағ х =')).toEqual(['Unexpected token end of input at line 1, column 8']);
