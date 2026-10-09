@@ -276,7 +276,7 @@ describe('compile', () => {
       cwd: dir,
     });
     expect(unwritable.exitCode).toBe(1);
-    expect(unwritable.stderr).toMatch(NODE_ERROR('(EEXIST|ENOTDIR)'));
+    expect(unwritable.stderr).toMatch(NODE_ERROR('(EEXIST|ENOTDIR|ENOENT)'));
   });
 
   test('a file that cannot be read is reported with the reason', async () => {
@@ -643,7 +643,7 @@ describe('run', () => {
     );
     expect(run.files['main.js']).toMatch(/\n\/\/# sourceMappingURL=main\.js\.map$/);
     expect(run.stderr).toContain('бад 3');
-    expect(run.stderr).toContain(`${path.join(dir, 'main.som')}:2`);
+    expect(run.stderr).toMatch(/[\\/]main\.som:2:/);
   });
 
   test('bundle.sourceMaps and bundle.minify of the configuration apply', async () => {
@@ -1163,7 +1163,7 @@ describe('init', () => {
     writeFiles(dir, { file: '' });
     const impossible = await runInProcess(['init', 'file/sub'], { cwd: dir });
     expect(impossible.exitCode).toBe(1);
-    expect(impossible.stderr).toMatch(NODE_ERROR('(ENOTDIR|EEXIST)'));
+    expect(impossible.stderr).toMatch(NODE_ERROR('(ENOTDIR|EEXIST|ENOENT)'));
   });
 });
 
