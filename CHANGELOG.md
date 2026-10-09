@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Parse errors are always fatal: `compile()` returns no code and the CLI exits non-zero. Previously they were warnings and statements were silently dropped from the output.
 * Keywords are matched with their exact spelling; `Агар`, `ТАҒЙИРЁБАНДА`, … are ordinary identifiers.
 * JavaScript reserved words (`class`, `new`, …) cannot be used as names.
-* Built-in member aliases are translated consistently: an object key such as `дарозӣ` is emitted as `length`, matching `о.дарозӣ`.
+* Built-in member aliases are translated consistently: an object key such as `дарозӣ` is emitted as `length`, matching `о.дарозӣ`. Destructuring keys and exported/imported names are translated too, so destructuring an object from outside SomonScript (e.g. JSON with a key `вақт`) needs a non-aliased name or an explicit quoted key (`{ "вақт": вақт }`), and JavaScript code importing a SomonScript export named `илова` sees `push`.
 * The localized CLI has a single command tree: English command names always work, Tajik/Russian names are aliases. `SOMON_LOCALIZATION_MODE` is gone, an invalid `--lang` is an error, and `LC_ALL` overrides `LANG`.
 * Config paths (`outDir`, `output`, `bundle.output`, `resolution.baseUrl`) resolve against the config file's directory.
 * `--production` is deprecated and has no effect; `start-server.sh`, `src/core` and `src/error-aggregator.ts` were removed; the npm package only ships `dist` and the docs.

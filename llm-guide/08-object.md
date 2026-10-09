@@ -53,3 +53,14 @@ name, but the emitted JavaScript uses the English name:
 
 Pick a different name if the key must appear unchanged in the output, for
 example in JSON sent to another program.
+
+Destructuring keys are translated too, so destructuring an object that was not
+created by SomonScript (parsed JSON, a JavaScript library) with such a key reads
+the English property instead: `собит { вақт } = JSON.parse('{"вақт": 7}')` looks
+up `time` and binds `undefined`. Use a non-aliased name there, or map the key
+explicitly with a quoted key: `собит { "вақт": вақт } = …`.
+
+Exported names follow the same rule: `содир функсия илова` is exported as
+`push`, and `ворид { илова }` and `Л.илова` on a namespace import both look up
+`push`, so SomonScript modules work together. A JavaScript module importing it
+must use the English name.

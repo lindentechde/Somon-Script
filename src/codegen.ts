@@ -1179,7 +1179,8 @@ export class CodeGenerator {
     if (namedImports.length > 0) {
       const destructuring = namedImports
         .map(spec => {
-          const imported = spec.imported.name;
+          // Exported names are member names: `содир функсия илова` exports `push`
+          const imported = this.mapMemberName(spec.imported.name);
           const local = this.generateIdentifier(spec.local, true);
           return imported === local ? imported : `${imported}: ${local}`;
         })
@@ -1228,7 +1229,7 @@ export class CodeGenerator {
 
     const commonjsExports = node.default
       ? [`module.exports.default = ${exportNames[0]};`]
-      : exportNames.map(name => `module.exports.${name} = ${name};`);
+      : exportNames.map(name => `module.exports.${this.mapMemberName(name)} = ${name};`);
 
     return [code.replace(/\n+$/, ''), ...commonjsExports.map(line => this.indent(line))].join('\n');
   }
@@ -1258,8 +1259,8 @@ export class CodeGenerator {
     results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     for (const spec of node.specifiers!) {
-      const exported = spec.exported.name;
-      const local = spec.local.name;
+      const exported = this.mapMemberName(spec.exported.name);
+      const local = this.mapMemberName(spec.local.name);
       results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
     }
 
@@ -1269,7 +1270,7 @@ export class CodeGenerator {
   private generateDirectExportSpecifiers(node: ExportDeclaration): string {
     return node
       .specifiers!.map(spec => {
-        const exported = spec.exported.name;
+        const exported = this.mapMemberName(spec.exported.name);
         const local = this.generateIdentifier(spec.local);
         return this.indent(`module.exports.${exported} = ${local};`);
       })
@@ -1815,7 +1816,7 @@ export class CodeGenerator {
     this.indentLevel--;
     result += this.indent('})();\n');
     if (node.exported) {
-      result += this.indent(`module.exports.${name} = ${name};\n`);
+      result += this.indent(`module.exports.${this.mapMemberName(name)} = ${name};\n`);
     }
 
     return result;
@@ -1843,7 +1844,9 @@ export class CodeGenerator {
       if (!stmtCode.endsWith('\n')) {
         result += '\n';
       }
-      result += this.indent(`${namespaceName}.${memberName} = ${memberName};\n`);
+      result += this.indent(
+        `${namespaceName}.${this.mapMemberName(memberName)} = ${memberName};\n`
+      );
     }
     return result;
   }
@@ -1867,7 +1870,7 @@ export class CodeGenerator {
         ? nestedCode.substring(assignmentStart + 2) // Skip "= "
         : nestedCode;
 
-    return this.indent(`${parentName}.${memberName} = ${nestedIIFE}`);
+    return this.indent(`${parentName}.${this.mapMemberName(memberName)} = ${nestedIIFE}`);
   }
 
   private getMemberName(stmt: Statement): string | null {

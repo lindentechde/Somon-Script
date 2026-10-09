@@ -96,6 +96,12 @@ const cases: Array<[string, string, string[]]> = [
     ['16 7 3 bigint bigint bigint 510'],
   ],
   [
+    'namespace members named like builtins',
+    'номфазо Н {\n  содир функсия илова(): рақам { бозгашт 1; }\n  содир собит филтр = 2;\n' +
+      '  содир номфазо Д { содир собит х = 3; }\n}\nчоп.сабт(Н.илова(), Н.филтр, Н.Д.х);',
+    ['1 2 3'],
+  ],
+  [
     'expressions spanning several lines',
     'тағ а = 1 +\n  2;\nчоп.сабт(а, [1, 2, 3]\n  .map(х => х * 2)\n  .join(","));',
     ['3 2,4,6'],
