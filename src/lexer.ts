@@ -456,7 +456,24 @@ export class Lexer {
     return this.createToken(TokenType.STRING, value, startLine, startColumn);
   }
 
+  /**
+   * Reads a template literal. The token value is the source text between the
+   * backticks exactly as written (escapes and `${…}` included); the parser
+   * splits it into quasis and expressions and decodes the escapes.
+   */
   private readTemplateLiteral(startLine: number, startColumn: number): Token {
+    const value = this.readTemplateBody();
+
+    if (this.isAtEnd()) {
+      throw new Error(`Unterminated template literal at line ${startLine}, column ${startColumn}`);
+    }
+
+    this.advance(); // Skip closing backtick
+    return this.createToken(TokenType.TEMPLATE_LITERAL, value, startLine, startColumn);
+  }
+
+  /** Copies template text after the opening backtick up to (not including) the closing one. */
+  private readTemplateBody(): string {
     let value = '';
     this.advance(); // Skip opening backtick
 
@@ -469,56 +486,71 @@ export class Lexer {
         value += this.handleRegularCharacter();
       }
     }
-
-    if (this.isAtEnd()) {
-      throw new Error(`Unterminated template literal at line ${startLine}, column ${startColumn}`);
-    }
-
-    this.advance(); // Skip closing backtick
-    return this.createToken(TokenType.TEMPLATE_LITERAL, value, startLine, startColumn);
+    return value;
   }
 
+  /** Keeps an escape sequence as written; the parser decodes it. */
   private handleEscapeSequence(): string {
     this.advance(); // Skip backslash
     if (this.isAtEnd()) return '\\';
-
-    const escaped = this.currentChar();
-    this.advance();
-
-    switch (escaped) {
-      case 'n':
-        return '\n';
-      case 't':
-        return '\t';
-      case 'r':
-        return '\r';
-      case '\\':
-        return '\\';
-      case '`':
-        return '`';
-      case '$':
-        return '$';
-      default:
-        return escaped;
-    }
+    return '\\' + this.processStringCharacter();
   }
 
+  /**
+   * Copies `${…}` as written. Braces inside string literals and nested
+   * template literals do not count towards the closing '}'.
+   */
   private handleInterpolation(): string {
     let result = '${';
     this.advance(); // Skip $
     this.advance(); // Skip {
 
     let braceCount = 1;
-    while (!this.isAtEnd() && braceCount > 0) {
-      if (this.currentChar() === '{') {
-        braceCount++;
-      } else if (this.currentChar() === '}') {
-        braceCount--;
+    while (!this.isAtEnd()) {
+      const char = this.currentChar();
+      if (char === '"' || char === "'") {
+        result += this.copyQuotedString(char);
+        continue;
       }
-      result += this.currentChar();
-      this.advance();
+      if (char === '`') {
+        result += '`' + this.readTemplateBody();
+        if (!this.isAtEnd()) {
+          result += '`';
+          this.advance();
+        }
+        continue;
+      }
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          this.advance();
+          return result + '}';
+        }
+      }
+      result += this.processStringCharacter();
     }
 
+    return result;
+  }
+
+  /** Copies a quoted string inside an interpolation, escapes included. */
+  private copyQuotedString(quote: string): string {
+    let result = quote;
+    this.advance(); // Skip opening quote
+    while (!this.isAtEnd() && this.currentChar() !== quote) {
+      if (this.currentChar() === '\\') {
+        result += '\\';
+        this.advance();
+        if (this.isAtEnd()) break;
+      }
+      result += this.processStringCharacter();
+    }
+    if (!this.isAtEnd()) {
+      result += quote;
+      this.advance();
+    }
     return result;
   }
 

@@ -59,7 +59,8 @@ describe('Error Handling Tests', () => {
     });
 
     test('should handle missing semicolons', () => {
-      const missingSemicolon = 'тағйирёбанда ном = "test"';
+      // A line break, '}' or the end of input ends a statement; two on one line do not
+      const missingSemicolon = 'тағйирёбанда ном = "test" чоп.сабт(ном);';
       const lexer = new Lexer(missingSemicolon);
       const tokens = lexer.tokenize();
       const parser = new Parser(tokens);

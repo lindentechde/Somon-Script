@@ -36,7 +36,9 @@ export class DeclarationHandler {
       return this.parser.variableDeclaration();
     }
 
-    if (this.parser.match(TokenType.ҲАМЗАМОН)) {
+    // `ҳамзамон () => …` is an expression; only `ҳамзамон функсия` declares
+    if (this.parser.checkSequence(TokenType.ҲАМЗАМОН, TokenType.ФУНКСИЯ)) {
+      this.parser.match(TokenType.ҲАМЗАМОН);
       this.parser.consume(TokenType.ФУНКСИЯ, "Expected 'функсия' after 'ҳамзамон'");
       const func = this.parser.functionDeclaration();
       (func as FunctionDeclaration & { async?: boolean }).async = true;
