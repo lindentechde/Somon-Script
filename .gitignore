@@ -87,7 +87,7 @@ temp/
 .ona/
 
 # CI/CD artifacts
-codecov/
+codecov
 codecov.SHA256SUM*
 example-audit-report.json
 
