@@ -75,28 +75,29 @@ type argument; otherwise `<` and `>` compare. As in TypeScript,
 
 ## Statements
 
-| TypeScript                  | SomonScript                      | Notes                                  |
-| --------------------------- | -------------------------------- | -------------------------------------- |
-| `let a = 1, b = 2;`         | `тағ а = 1, б = 2;`              | also in `барои (тағ и = 0, ҷ = н; …)`  |
-| `if / else if / else`       | `агар / вагарна агар / вагарна`  |                                        |
-| `switch / case / default`   | `интихоб / ҳолат / пешфарз`      |                                        |
-| `while (c) { }`             | `то (ш) { }`                     |                                        |
-| `do { } while (c);`         | `кун { } то (ш);`                | contextual `кун`; `do` also works      |
-| `for (;;)`                  | `барои (;;)`                     |                                        |
-| `for (const x of xs)`       | `барои (собит х аз хҳо)`         | patterns: `барои (собит [к, в] аз …)`  |
-| `for (const k in o)`        | `барои (собит к дар о)`          |                                        |
-| `for await (const x of xs)` | `барои интизор (собит х аз хҳо)` | inside `ҳамзамон` functions            |
-| `break; continue;`          | `шикастан; давом;`               |                                        |
-| `label: …`, `break label;`  | `нишона: …`, `шикастан нишона;`  | also `давом нишона;`                   |
-| `return`                    | `бозгашт`                        |                                        |
-| `throw`                     | `партофтан`                      |                                        |
-| `try / catch / finally`     | `кӯшиш / гирифтан / ниҳоят`      | `гирифтан { }` without a binding       |
-| `catch (e: unknown)`        | `гирифтан (е: ношинос)`          | also `ҳар`; a pattern: `({ message })` |
-| `debugger;`                 | `debugger;`                      |                                        |
-| `;`                         | `;`                              | empty statement                        |
-| `function* g() { }`         | `функсия* г() { }`               | also `ҳамзамон функсия*`, `*м() {}`    |
-| `enum E { A, B = 5 }`       | `шумориш Э { А, Б = 5 }`         | contextual `шумориш`; `enum` too       |
-| `const enum E { }`          | `собит шумориш Э { }`            |                                        |
+| TypeScript                        | SomonScript                             | Notes                                  |
+| --------------------------------- | --------------------------------------- | -------------------------------------- |
+| `let a = 1, b = 2;`               | `тағ а = 1, б = 2;`                     | also in `барои (тағ и = 0, ҷ = н; …)`  |
+| `if / else if / else`             | `агар / вагарна агар / вагарна`         |                                        |
+| `switch / case / default`         | `интихоб / ҳолат / пешфарз`             |                                        |
+| `while (c) { }`                   | `то (ш) { }`                            |                                        |
+| `do { } while (c);`               | `кун { } то (ш);`                       | contextual `кун`; `do` also works      |
+| `for (;;)`                        | `барои (;;)`                            |                                        |
+| `for (const x of xs)`             | `барои (собит х аз хҳо)`                | patterns: `барои (собит [к, в] аз …)`  |
+| `for (const k in o)`              | `барои (собит к дар о)`                 |                                        |
+| `for (x of xs)`, `for (o.k in o)` | `барои (х аз хҳо)`, `барои (о.к дар о)` | also `барои ([а, б] аз …)`             |
+| `for await (const x of xs)`       | `барои интизор (собит х аз хҳо)`        | inside `ҳамзамон` functions            |
+| `break; continue;`                | `шикастан; давом;`                      |                                        |
+| `label: …`, `break label;`        | `нишона: …`, `шикастан нишона;`         | also `давом нишона;`                   |
+| `return`                          | `бозгашт`                               |                                        |
+| `throw`                           | `партофтан`                             |                                        |
+| `try / catch / finally`           | `кӯшиш / гирифтан / ниҳоят`             | `гирифтан { }` without a binding       |
+| `catch (e: unknown)`              | `гирифтан (е: ношинос)`                 | also `ҳар`; a pattern: `({ message })` |
+| `debugger;`                       | `debugger;`                             |                                        |
+| `;`                               | `;`                                     | empty statement                        |
+| `function* g() { }`               | `функсия* г() { }`                      | also `ҳамзамон функсия*`, `*м() {}`    |
+| `enum E { A, B = 5 }`             | `шумориш Э { А, Б = 5 }`                | contextual `шумориш`; `enum` too       |
+| `const enum E { }`                | `собит шумориш Э { }`                   |                                        |
 
 ```som
 тағ и = 0;

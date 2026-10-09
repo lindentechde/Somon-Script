@@ -1092,14 +1092,22 @@ export class CodeGenerator {
     return this.indent(`for (${init}; ${test}; ${update}) `) + this.generateBody(node.body);
   }
 
+  /** The left side of a for-in/of head: a declaration, or a target `х`, `о.а`, `[а, б]`. */
+  private generateForInOfLeft(left: VariableDeclaration | Expression): string {
+    if (left.type === 'VariableDeclaration') {
+      return this.generateStatement(left).trim().replace(/;$/, '');
+    }
+    return this.generateExpression(left, PREC.CALL);
+  }
+
   private generateForInStatement(node: ForInStatement): string {
-    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const left = this.generateForInOfLeft(node.left);
     const right = this.generateExpression(node.right);
     return this.indent(`for (${left} in ${right}) `) + this.generateBody(node.body);
   }
 
   private generateForOfStatement(node: ForOfStatement): string {
-    const left = this.generateStatement(node.left).trim().replace(/;$/, '');
+    const left = this.generateForInOfLeft(node.left);
     const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
     const head = node.await ? 'for await' : 'for';
     return this.indent(`${head} (${left} of ${right}) `) + this.generateBody(node.body);
@@ -2304,7 +2312,12 @@ export class CodeGenerator {
   }
 
   private generateArrayExpression(node: ArrayExpression): string {
-    return `[${this.generateArguments(node.elements)}]`;
+    // Holes stay holes: `[1, , 3]`, and `[1, ,]` keeps its trailing one
+    const elements = node.elements.map(element =>
+      element ? this.generateArguments([element]) : ''
+    );
+    const trailingHole = node.elements.length > 0 && !node.elements[node.elements.length - 1];
+    return `[${elements.join(', ')}${trailingHole ? ',' : ''}]`;
   }
 
   private generateObjectExpression(node: ObjectExpression): string {
@@ -3215,7 +3228,7 @@ export class CodeGenerator {
   private generatePropertyPattern(node: PropertyPattern): string {
     const key = node.computed
       ? `[${this.generateExpression(node.key as Expression, PREC.ASSIGNMENT)}]`
-      : this.generatePropertyKey(node.key);
+      : this.generatePropertyKey(node.key as Identifier | Literal);
     // Shorthand `{ п }` binds a variable named like the key
     const value = node.value ?? (node.key as Identifier);
 

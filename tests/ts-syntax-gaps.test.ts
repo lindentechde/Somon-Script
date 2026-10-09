@@ -908,4 +908,43 @@ describe('classes, loops and patterns', () => {
       'class А extends Н.Б<number> {}\nclass В extends ф() {}'
     );
   });
+
+  test('for-in and for-of loops that assign to a target', async () => {
+    expect(
+      await run(
+        [
+          'тағ х = 0;',
+          'барои (х аз [1, 2]) чоп.сабт(х);',
+          'собит о = { к: "" };',
+          'барои (о.к дар { а: 1 }) чоп.сабт(о.к);',
+          'тағ а = 0, б = 0;',
+          'барои ([а, б] аз [[3, 4]]) чоп.сабт(а + б);',
+          'барои ({ а, б } of [{ а: 5, б: 6 }]) чоп.сабт(а * б);',
+        ].join('\n')
+      )
+    ).toEqual(['1', '2', 'а', '7', '30']);
+    expect(errorsOf('барои (1 аз [1]) {}')).toEqual([
+      'Invalid left-hand side in a for-of loop at line 1, column 8',
+    ]);
+    expect(compile('барои (о.к дар х) {}', { typeCheck: false }).code).toBe('for (о.к in х) {}');
+  });
+
+  test('array holes, computed and numeric keys in patterns, enum members in brackets', async () => {
+    expect(
+      await run(
+        [
+          'собит р: (рақам | беқимат)[] = [1, , 3, ,];',
+          'собит [, дуюм] = [1, 2];',
+          'собит калид = "б";',
+          'собит { [калид]: б, 0: сифр }: ҳар = { б: 4, 0: 5 };',
+          'шумориш Э { ["номи дароз"] = 1, [`кӯтоҳ`] = 2 }',
+          'чоп.сабт(р.length, р[1], дуюм, б, сифр, Э["номи дароз"], Э.кӯтоҳ);',
+        ].join('\n')
+      )
+    ).toEqual(['4 undefined 2 4 5 1 2']);
+    expect(compile('тағ р = [, 1, , ];', { typeCheck: false }).code).toBe('let р = [, 1, ,];');
+    expect(errorsOf('шумориш Э { [1 + 1] = 1 }')).toEqual([
+      'Computed property names are not allowed in enums at line 1, column 14',
+    ]);
+  });
 });

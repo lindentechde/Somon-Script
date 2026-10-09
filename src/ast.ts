@@ -308,8 +308,8 @@ export interface AssignmentExpression extends Expression {
 
 export interface ArrayExpression extends Expression {
   type: 'ArrayExpression';
-  /** May contain `SpreadElement` nodes: `[...а, 1]`. */
-  elements: Expression[];
+  /** May contain `SpreadElement` nodes, `[...а, 1]`, and holes (null), `[1, , 3]`. */
+  elements: Array<Expression | null>;
 }
 
 export interface ObjectExpression extends Expression {
@@ -685,7 +685,8 @@ export interface ObjectPattern extends ASTNode {
 
 export interface PropertyPattern extends ASTNode {
   type: 'PropertyPattern';
-  key: Identifier | Literal;
+  /** The name, or an expression when `computed`: `{ [калид]: қимат }`. */
+  key: Identifier | Literal | Expression;
   /** For shorthand `{ а }` the parser sets `value` to an Identifier equal to `key`. */
   value: Identifier | ArrayPattern | ObjectPattern | AssignmentPattern;
   computed: boolean;

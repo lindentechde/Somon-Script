@@ -2051,7 +2051,12 @@ export class TypeChecker {
         this.bindPatternTypes(prop as SpreadElement, UNKNOWN);
         continue;
       }
-      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+      // `{ [калид]: қимат }`: the property is only known at run time
+      if (prop.computed) this.inferExpressionType(prop.key as Expression);
+      const keyName =
+        prop.key.type === 'Identifier'
+          ? (prop.key as Identifier).name
+          : String((prop.key as Literal).value);
       const propType = prop.computed ? undefined : properties.get(keyName);
       // Shorthand `{ а }` may arrive without a value from older parsers
       const target = prop.value ?? (prop.key.type === 'Identifier' ? prop.key : undefined);
@@ -2781,7 +2786,10 @@ export class TypeChecker {
     for (let i = 0; i < arrayExpr.elements.length; i++) {
       const element = arrayExpr.elements[i];
       const targetElementType = this.tupleElementAt(targetType, i) ?? UNKNOWN;
-      const inferredType = this.inferExpressionType(element, targetElementType);
+      // A hole (`[1, , 3]`) is `беқимат`
+      const inferredType = element
+        ? this.inferExpressionType(element, targetElementType)
+        : UNDEFINED_TYPE;
       inferredTypes.push(inferredType);
     }
     return { kind: 'tuple', types: inferredTypes };
@@ -2806,7 +2814,7 @@ export class TypeChecker {
   }
 
   private inferArrayExpressionType(arrayExpr: ArrayExpression, contextType?: Type): Type {
-    const elements = arrayExpr.elements.filter(Boolean);
+    const elements = arrayExpr.elements.filter((element): element is Expression => !!element);
     const hasSpread = elements.some(e => e.type === 'SpreadElement');
     const targetType = this.arrayContextType(contextType, elements.length);
 
@@ -3596,7 +3604,7 @@ export class TypeChecker {
         }
         return {
           kind: 'tuple',
-          types: elements.map(element => this.constType(element)),
+          types: elements.map(element => this.constType(element!)),
           constant: true,
           readonly: true,
         };

@@ -1159,6 +1159,8 @@ export class Parser {
     let id: Identifier | Literal;
     if (this.match(TokenType.STRING)) {
       id = this.createLiteral(token.value, token);
+    } else if (this.match(TokenType.LEFT_BRACKET)) {
+      id = this.computedEnumMemberName();
     } else if (this.isIdentifierNameToken(token)) {
       id = this.createIdentifier(this.advance());
     } else {
@@ -1172,6 +1174,27 @@ export class Parser {
       line: token.line,
       column: token.column,
     };
+  }
+
+  /**
+   * `["номи дароз"]` and `` [`ном`] `` name enum members, as in TypeScript;
+   * any other computed name is TypeScript's error TS1164. After the `[`.
+   */
+  private computedEnumMemberName(): Literal {
+    const token = this.peek();
+    let name: string | undefined;
+    if (this.match(TokenType.STRING)) {
+      name = token.value;
+    } else if (this.check(TokenType.TEMPLATE_LITERAL) && !token.value.includes('${')) {
+      name = this.cookTemplateText(this.advance().value, token);
+    } else {
+      this.assignment();
+      this.errors.push(
+        `Computed property names are not allowed in enums at line ${token.line}, column ${token.column}`
+      );
+    }
+    this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after the enum member name");
+    return this.createLiteral(name ?? '', token);
   }
 
   public forStatement(): ForStatement | ForInStatement | ForOfStatement {
@@ -1191,7 +1214,7 @@ export class Parser {
       loop = this.parseForOfOrForInLoop(forToken, loopType.isForOf);
     } else {
       this.current = savedIndex;
-      loop = this.parseTraditionalForLoop(forToken);
+      loop = this.parseForInOfAssignment(forToken) ?? this.parseTraditionalForLoop(forToken);
     }
 
     if (isAwait && loop.type === 'ForOfStatement') {
@@ -1202,6 +1225,38 @@ export class Parser {
       );
     }
     return loop;
+  }
+
+  /**
+   * `барои (х аз …)`, `барои (о.а дар …)`, `барои ([а, б] аз …)`: a for-of or
+   * for-in loop that assigns to an existing variable, property or pattern.
+   * Null when the head is that of a `барои (…; …; …)` loop.
+   */
+  private parseForInOfAssignment(forToken: Token): ForOfStatement | ForInStatement | null {
+    if (this.check(TokenType.SEMICOLON) || this.check(TokenType.ТАҒЙИРЁБАНДА)) return null;
+    const head = this.speculate(() => {
+      const left = this.call();
+      const isForOf = this.isOfWord(this.peek());
+      if (!isForOf && !this.check(TokenType.ДАР)) return undefined;
+      return { left, isForOf, keyword: this.advance() };
+    });
+    if (!head) return null;
+    if (!this.isAssignmentTarget(head.left, true)) {
+      throw new Error(
+        `Invalid left-hand side in a for-${head.isForOf ? 'of' : 'in'} loop at line ${head.left.line}, column ${head.left.column}`
+      );
+    }
+    const right = head.isForOf ? this.assignment() : this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for-of/for-in clauses");
+    const body = this.statement()!;
+    return {
+      type: head.isForOf ? 'ForOfStatement' : 'ForInStatement',
+      left: head.left,
+      right,
+      body,
+      line: forToken.line,
+      column: forToken.column,
+    } as ForOfStatement | ForInStatement;
   }
 
   private detectForLoopType(): { isForOf: boolean; isForIn: boolean } {
@@ -4050,9 +4105,14 @@ export class Parser {
 
   private arrayExpression(): ArrayExpression {
     const leftBracket = this.previous();
-    const elements: Expression[] = [];
+    const elements: Array<Expression | null> = [];
 
     while (!this.check(TokenType.RIGHT_BRACKET)) {
+      // A hole: `[1, , 3]`
+      if (this.match(TokenType.COMMA)) {
+        elements.push(null);
+        continue;
+      }
       elements.push(this.spreadOrAssignment());
       if (!this.match(TokenType.COMMA)) break;
     }
@@ -7091,9 +7151,17 @@ export class Parser {
   /** `ном`, `ном = 1`, `калид: ном`, `калид: { … } = {}` */
   private parsePropertyPattern(): PropertyPattern {
     const keyToken = this.peek();
-    let key: Identifier | Literal;
+    let key: Identifier | Literal | Expression;
+    let computed = false;
     if (this.match(TokenType.STRING)) {
       key = this.createLiteral(keyToken.value, keyToken);
+    } else if (this.match(TokenType.NUMBER)) {
+      key = this.createNumericLiteral(keyToken);
+    } else if (this.match(TokenType.LEFT_BRACKET)) {
+      // `{ [калид]: қимат }`
+      key = this.assignment();
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property name");
+      computed = true;
     } else if (this.isIdentifierNameToken(keyToken)) {
       key = this.createIdentifier(this.advance());
     } else {
@@ -7115,7 +7183,7 @@ export class Parser {
       type: 'PropertyPattern',
       key,
       value,
-      computed: false,
+      computed,
       line: keyToken.line,
       column: keyToken.column,
     };
