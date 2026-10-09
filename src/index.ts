@@ -16,9 +16,9 @@
  * ```ts
  * import { compile } from "jsr:@lindentechde/somon-script";
  *
- * const result = compile("навис: 'Салом ҷаҳон!'");
+ * const result = compile("чоп.сабт('Салом, ҷаҳон!');");
  * if (result.errors.length === 0) {
- *   console.log(result.code);
+ *   console.log(result.code); // console.log("Салом, ҷаҳон!");
  * }
  * ```
  */

@@ -3,6 +3,8 @@
  * caller and when code is suppressed.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { CodeGenerator } from '../src/codegen';
 import { compile } from '../src/compiler';
 
@@ -35,5 +37,16 @@ describe('compiler pipeline', () => {
     });
     expect(result.errors).toEqual([]);
     expect(result.code).toContain('о.class + о.new');
+  });
+});
+
+describe('public API documentation', () => {
+  test('the src/index.ts example compiles', () => {
+    const indexSource = fs.readFileSync(path.join(__dirname, '../src/index.ts'), 'utf8');
+    const example = /compile\("((?:[^"\\]|\\.)*)"\)/.exec(indexSource);
+    expect(example).not.toBeNull();
+    const result = compile(JSON.parse(`"${example![1]}"`) as string);
+    expect(result.errors).toEqual([]);
+    expect(result.code).toBe('console.log("Салом, ҷаҳон!");');
   });
 });
