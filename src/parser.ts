@@ -498,7 +498,7 @@ export class Parser {
     }
 
     // Generic type parameters: `<Т>`, `<Т мерос { дарозӣ: рақам } = сатр>`
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
@@ -2654,59 +2654,6 @@ export class Parser {
     return Parser.OPERAND_START_TOKENS.has(token.type) || this.isIdentifierNameToken(token);
   }
 
-  private skipGenericTypeArguments(): void {
-    if (!this.match(TokenType.LESS_THAN)) {
-      return;
-    }
-
-    let depth = 1;
-    let tokenCount = 0;
-    const maxTokens = 50; // Prevent infinite loops
-
-    while (depth > 0 && !this.isAtEnd() && tokenCount < maxTokens) {
-      const currentToken = this.peek();
-
-      // Early exit if we hit tokens that shouldn't be inside generics
-      if (
-        currentToken.type === TokenType.LEFT_BRACE ||
-        currentToken.type === TokenType.ФУНКСИЯ ||
-        currentToken.type === TokenType.СИНФ ||
-        currentToken.type === TokenType.SEMICOLON ||
-        currentToken.type === TokenType.EOF
-      ) {
-        // We've gone too far or hit EOF, this isn't a valid generic
-        // Reset by going back one token if we consumed the initial <
-        if (tokenCount === 0) {
-          this.current--; // Undo the initial match of <
-        }
-        return;
-      }
-
-      if (currentToken.type === TokenType.LESS_THAN) {
-        depth++;
-      } else {
-        // `>`, and `>>` / `>>>` as in `<А<Б>>`, close one or more levels
-        depth -= Parser.CLOSING_ANGLES.get(currentToken.type) ?? 0;
-      }
-
-      this.advance();
-      tokenCount++;
-    }
-
-    // If we hit the token limit, something went wrong
-    if (tokenCount >= maxTokens) {
-      throw new Error(
-        `Unterminated type argument list at line ${this.peek().line}, column ${this.peek().column}`
-      );
-    }
-  }
-
-  private static readonly CLOSING_ANGLES: ReadonlyMap<TokenType, number> = new Map([
-    [TokenType.GREATER_THAN, 1],
-    [TokenType.RIGHT_SHIFT, 2],
-    [TokenType.UNSIGNED_RIGHT_SHIFT, 3],
-  ]);
-
   /** The call of `callee`, after its consumed '('. */
   private finishCall(callee: Expression, typeArguments?: TypeNode[]): CallExpression {
     const args = this.parseArguments();
@@ -2809,17 +2756,9 @@ export class Parser {
     } as NewExpression;
   }
 
-  /**
-   * Type arguments of a heritage clause (`мерос Асос<рақам>`). When the
-   * tokens after '<' are not a type argument list, they are skipped the way
-   * they were before type arguments were kept.
-   */
+  /** Type arguments of a heritage clause: `мерос Асос<рақам>`. */
   private parseNewTypeArguments(): TypeNode[] | undefined {
-    if (!this.check(TokenType.LESS_THAN)) return undefined;
-    const typeArguments = this.speculateCleanly(() => this.parseTypeArgumentList());
-    if (typeArguments) return typeArguments;
-    this.skipGenericTypeArguments();
-    return undefined;
+    return this.check(TokenType.LESS_THAN) ? this.parseTypeArgumentList() : undefined;
   }
 
   private parseDynamicImport(importToken: Token): ImportExpression {
@@ -2836,7 +2775,7 @@ export class Parser {
 
   private parseFunctionExpression(funcToken: Token): FunctionExpression {
     const generator = this.match(TokenType.MULTIPLY);
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
     const { params, thisType } = this.withGenerator(false, () =>
@@ -4246,7 +4185,7 @@ export class Parser {
     };
 
     // A generic method's type parameters: `{ ҳамон<Т>(х: Т): Т { … } }`
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     if (this.match(TokenType.LEFT_PAREN)) {
       this.parseMethodShorthand(property, startToken, accessor, modifiers);
       if (typeParameters) (property.value as FunctionExpression).typeParameters = typeParameters;
@@ -5496,18 +5435,6 @@ export class Parser {
     return true;
   }
 
-  /**
-   * Type parameters of a function, class or method. Lists that are not
-   * understood are skipped, the way all of them were before they were kept.
-   */
-  private parseTypeParametersOrSkip(): TypeParameter[] | undefined {
-    if (!this.check(TokenType.LESS_THAN)) return undefined;
-    const typeParameters = this.speculateCleanly(() => this.parseTypeParameters());
-    if (typeParameters) return typeParameters;
-    this.skipGenericTypeArguments();
-    return undefined;
-  }
-
   /** `мерос А, Б<Т>` — the parent interfaces, or undefined without a clause. */
   private parseInterfaceExtendsClause(): TypeNode[] | undefined {
     if (!this.match(TokenType.МЕРОС)) {
@@ -5618,7 +5545,7 @@ export class Parser {
     readonly: boolean,
     optional: boolean
   ): PropertySignature {
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
     const openParen = this.consume(TokenType.LEFT_PAREN, "Expected '(' in method signature");
     const { params: parameters, thisType } = this.parseParametersWithThis(
@@ -5688,7 +5615,7 @@ export class Parser {
    * missing return type is `ҳар`, as in TypeScript.
    */
   private parseCallSignature(kind: 'call' | 'construct', start: Token): PropertySignature {
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
     const open = this.consume(TokenType.LEFT_PAREN, "Expected '(' in a call signature");
     const { params: parameters, thisType } = this.parseParametersWithThis(
@@ -5967,7 +5894,7 @@ export class Parser {
     const classToken = this.previous();
     const nameToken = this.parseImportOrExportName('Expected class name');
 
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'class');
 
     const superClass = this.parseClassExtendsClause();
@@ -6017,7 +5944,7 @@ export class Parser {
         ? undefined
         : this.parseImportOrExportName("Expected class name or '{'");
 
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'class');
 
     const superClass = this.parseClassExtendsClause();
@@ -6395,7 +6322,7 @@ export class Parser {
     this.checkPrivateMemberName(name.token, head.accessibility);
     const optional = this.matchOptionalMethodMarker();
     // A generic method: `метод<Т>(х: Т)`
-    const typeParameters = this.parseTypeParametersOrSkip();
+    const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
 
     if (accessor || this.check(TokenType.LEFT_PAREN)) {
