@@ -78,7 +78,9 @@ function collectFiles(paths: string[], accept: (_file: string) => boolean): stri
 }
 
 function walk(directory: string, accept: (_file: string) => boolean): string[] {
-  const entries = fs.readdirSync(directory, { withFileTypes: true });
+  // Searching the directories the user names is the command's purpose (rule S8707
+  // is accepted for src/cli, see sonar-project.properties)
+  const entries = fs.readdirSync(directory, { withFileTypes: true }); // NOSONAR
   entries.sort((a, b) => a.name.localeCompare(b.name));
   return entries.flatMap(entry => {
     const full = path.join(directory, entry.name);
@@ -213,7 +215,7 @@ export async function runMigrate(input: string, options: MigrateCommandOptions):
     fail(t().commands.fmt.messages.pathNotFound(input));
     return;
   }
-  const isDirectory = fs.statSync(input).isDirectory();
+  const isDirectory = fs.statSync(input).isDirectory(); // NOSONAR: the user-named input (S8707)
   const files = isDirectory ? walk(input, tools.isTypeScriptSource) : [input];
   if (files.length === 0) {
     fail(messages.noFiles(input));

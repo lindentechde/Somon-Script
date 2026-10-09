@@ -312,7 +312,8 @@ export class Repl {
     const ending = lastStatementKind(source);
     try {
       const script = prepareScript(compiled.code, ending !== 'other');
-      let value = new vm.Script(script.code, { filename: 'repl' }).runInContext(this.context);
+      // Running the code the user types is what a REPL is for (rule S1523)
+      let value = new vm.Script(script.code, { filename: 'repl' }).runInContext(this.context); // NOSONAR
       if (script.async) value = await value;
       // `чоп.сабт(х)` prints nothing more; a call that returns something shows it
       const hasValue = ending === 'expression' || (ending === 'call' && value !== undefined);

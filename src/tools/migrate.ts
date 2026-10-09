@@ -496,7 +496,7 @@ class Converter {
       return;
     }
     // `declare global { … }`: TypeScript reads `global` as the module's name
-    if (ts.isModuleDeclaration(parent) && parent.flags & ts.NodeFlags.GlobalAugmentation) {
+    if (ts.isModuleDeclaration(parent) && (parent.flags & ts.NodeFlags.GlobalAugmentation) !== 0) {
       this.optionalKeyword(node, 'глобалӣ', 'declareGlobal');
       return;
     }
