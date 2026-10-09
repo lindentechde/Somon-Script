@@ -40,6 +40,8 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
   gets lowered, `lib`, class fields, bundle formats and browser use
 - **[17-tools.md](17-tools.md)** - Formatter (`somon fmt`), REPL (`somon repl`)
   and TypeScript migration (`somon migrate`)
+- **[18-editors.md](18-editors.md)** - Editor support: the language server
+  (`somon lsp`), the VS Code extension and the browser build and playground
 
 ---
 
