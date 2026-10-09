@@ -35,6 +35,14 @@ const cases: Array<[string, string, string[]]> = [
     ['1 undefined'],
   ],
   [
+    'parentheses end an optional chain',
+    'тағ о: ҳар = холӣ;\nтағ п = { а: { б: 2 }, ф: () => 3 };\n' +
+      'кӯшиш { чоп.сабт((о?.а).б); } гирифтан (х) { чоп.сабт("а", х instanceof TypeError); }\n' +
+      'кӯшиш { чоп.сабт((о?.ф)()); } гирифтан (х) { чоп.сабт("ф", х instanceof TypeError); }\n' +
+      'чоп.сабт((п?.а).б, (п?.ф)(), о?.а.б, (о?.а)?.б);',
+    ['а true', 'ф true', '2 3 undefined undefined'],
+  ],
+  [
     'spread in arrays, objects and calls',
     'тағ м = [1, 2];\nтағ н = [...м, 3];\nтағ о = { ...{ з: 4 }, и: 5 };\n' +
       'чоп.сабт(н.join(","), о.з + о.и, Math.max(...м));',

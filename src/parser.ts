@@ -18,6 +18,7 @@ import {
   UnaryExpression,
   UpdateExpression,
   CallExpression,
+  ChainExpression,
   ConditionalExpression,
   SequenceExpression,
   AssignmentPattern,
@@ -1495,8 +1496,16 @@ export class Parser {
 
   private parseGroupingOrCollection(): Expression | null {
     if (this.match(TokenType.LEFT_PAREN)) {
-      const expr = this.expression();
+      let expr = this.expression();
       this.consume(TokenType.RIGHT_PAREN, "Expected ')' after expression");
+      if (this.containsOptionalLink(expr)) {
+        expr = {
+          type: 'ChainExpression',
+          expression: expr,
+          line: expr.line,
+          column: expr.column,
+        } as ChainExpression;
+      }
       this.parenthesized.add(expr);
       return expr;
     }
@@ -1507,6 +1516,19 @@ export class Parser {
       return this.objectExpression();
     }
     return null;
+  }
+
+  /** Whether the member/call chain of `expr` has a `?.` link. */
+  private containsOptionalLink(expr: Expression): boolean {
+    let current = expr;
+    while (current.type === 'MemberExpression' || current.type === 'CallExpression') {
+      if ((current as MemberExpression | CallExpression).optional) return true;
+      current =
+        current.type === 'MemberExpression'
+          ? (current as MemberExpression).object
+          : (current as CallExpression).callee;
+    }
+    return false;
   }
 
   private primary(): Expression {

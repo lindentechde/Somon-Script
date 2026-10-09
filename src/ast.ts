@@ -218,6 +218,16 @@ export interface MemberExpression extends Expression {
   optional?: boolean;
 }
 
+/**
+ * A parenthesised optional chain, `(о?.а)`: the parentheses end the chain, so
+ * `(о?.а).б` throws when `о` is nullish while `о?.а.б` does not. Created only
+ * when the grouped expression contains an optional link.
+ */
+export interface ChainExpression extends Expression {
+  type: 'ChainExpression';
+  expression: Expression;
+}
+
 export interface ImportDeclaration extends Statement {
   type: 'ImportDeclaration';
   specifiers: (ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier)[];

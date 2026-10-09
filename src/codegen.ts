@@ -19,6 +19,7 @@ import {
   UnaryExpression,
   UpdateExpression,
   CallExpression,
+  ChainExpression,
   ArrowFunctionExpression,
   AssignmentExpression,
   MemberExpression,
@@ -996,7 +997,12 @@ export class CodeGenerator {
       return this.generateOperatorExpression(node);
     }
 
-    const callExpressions = ['CallExpression', 'AssignmentExpression', 'MemberExpression'];
+    const callExpressions = [
+      'CallExpression',
+      'AssignmentExpression',
+      'MemberExpression',
+      'ChainExpression',
+    ];
     if (callExpressions.includes(node.type)) {
       return this.generateCallAssignmentExpression(node);
     }
@@ -1064,6 +1070,9 @@ export class CodeGenerator {
         return this.generateAssignmentExpression(node as AssignmentExpression);
       case 'MemberExpression':
         return this.generateMemberExpression(node as MemberExpression);
+      case 'ChainExpression':
+        // The parentheses end the optional chain: `(о?.а).б`, `(о?.ф)()`
+        return `(${this.generateExpression((node as ChainExpression).expression)})`;
       default:
         return this.handleUnknownExpression(node);
     }
