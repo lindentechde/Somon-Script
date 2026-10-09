@@ -88,12 +88,14 @@ describe('browser compiler entry', () => {
     expect(codegen.errors[0]).toMatch(/^Code generation error: Undefined label 'берун'/);
   });
 
-  test('modern targets need no TypeScript', () => {
-    for (const target of ['es2020', 'es2022', 'esnext', 'ESNext']) {
+  test('es2022 (the default) and newer targets need no TypeScript', () => {
+    for (const target of [undefined, 'es2022', 'es2023', 'es2024', 'esnext', 'ESNext']) {
       const result = compile('тағ а = 2 ** 3;', { target });
       expect([target, result.errors, result.needsTypeScript]).toEqual([target, [], undefined]);
       expect(result.code).toBe('let а = 2 ** 3;');
     }
+    // Older targets may need lowering
+    expect(compile('тағ а = 1;', { target: 'es2021' }).needsTypeScript).toBe(true);
   });
 
   test('lowering asks for TypeScript when none is loaded', () => {
@@ -138,8 +140,19 @@ describe('browser compiler entry', () => {
     expect(legacy.code).toContain('__param');
 
     expect(compile('тағ а = 1;', { target: 'es1999', typescript }).errors).toEqual([
-      "Unknown target 'es1999'",
+      "Unknown target 'es1999'. Targets: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, esnext",
     ]);
+
+    // Class fields keep their [[Define]] semantics only from es2022
+    const fields = compile('синф К { а = 1; }', { target: 'es2020', typescript });
+    expect(fields.code).toContain('this.а = 1');
+    // es2024 is newer than this TypeScript knows: lowered as for the newest it knows
+    const newest = compile('функсия ф(а: ҳар, б: ҳар) {}\n@ф синф К {}', {
+      target: 'es2024',
+      typescript,
+    });
+    expect(newest.errors).toEqual([]);
+    expect(newest.code).toContain('__esDecorate');
   });
 
   test('the version is filled in by the bundle', () => {

@@ -4,11 +4,14 @@
  * module system, no Babel). scripts/build-browser.js bundles this module and
  * the compiler stages it imports into one file.
  *
- * TypeScript is not bundled. The generated code runs as is for the es2020
- * target and newer; TypeScript's `transpileModule` is needed only to lower it
- * (decorators, `дастрасӣ` accessors, `истифода`, or an older target). Pass
- * the TypeScript API as `options.typescript`, or load `typescript.js` so that
- * `globalThis.ts` exists, before compiling such programs.
+ * TypeScript is not bundled. The generated code (ES2022) runs as is for the
+ * es2022 target (the default) and newer; TypeScript's `transpileModule` is
+ * needed only to lower it: for decorators, `дастрасӣ` accessors and
+ * `истифода`, which no runtime runs yet, and for older targets. Pass the
+ * TypeScript API as `options.typescript`, or load `typescript.js` so that
+ * `globalThis.ts` exists, before compiling such programs. Lowering uses the
+ * TypeScript options of the Node compiler (src/targets.ts), which this module
+ * cannot import: it loads TypeScript itself.
  */
 
 import type { Program } from './ast';
@@ -21,14 +24,15 @@ import { TypeChecker } from './type-checker';
 export interface TypeScriptApi {
   ScriptTarget: Record<string, number | string>;
   ModuleKind: { ESNext: number };
+  NewLineKind: { LineFeed: number };
   transpileModule(
     _input: string,
-    _options: { compilerOptions: Record<string, unknown> }
+    _options: { fileName?: string; compilerOptions: Record<string, unknown> }
   ): { outputText: string };
 }
 
 export interface BrowserCompileOptions {
-  /** JavaScript version of the output: 'es5', 'es2015', …, 'es2020' (default), …, 'esnext'. */
+  /** JavaScript version of the output: 'es5', 'es2015', …, 'es2022' (default), …, 'esnext'. */
   target?: string;
   /** Type-check the program (default true). */
   typeCheck?: boolean;
@@ -54,15 +58,24 @@ export interface BrowserCompileResult {
   needsTypeScript?: boolean;
 }
 
-/** Targets the generated code already satisfies: no lowering unless the syntax needs it. */
-const NATIVE_TARGETS: ReadonlySet<string> = new Set([
+/** The targets of src/targets.ts, oldest first. */
+const TARGETS = [
+  'es5',
+  'es2015',
+  'es2016',
+  'es2017',
+  'es2018',
+  'es2019',
   'es2020',
   'es2021',
   'es2022',
   'es2023',
   'es2024',
   'esnext',
-]);
+];
+
+/** The code generator emits ES2022: from this target on nothing needs lowering but new syntax. */
+const NATIVE_FROM = TARGETS.indexOf('es2022');
 
 export function compile(source: string, options: BrowserCompileOptions = {}): BrowserCompileResult {
   const errors: string[] = [];
@@ -119,44 +132,55 @@ function lower(
   errors: string[],
   warnings: string[]
 ): BrowserCompileResult {
-  const target = (options.target ?? 'es2020').toLowerCase();
-  const syntax =
+  const target = (options.target ?? 'es2022').toLowerCase();
+  const index = TARGETS.indexOf(target);
+  if (index === -1) {
+    errors.push(`Unknown target '${target}'. Targets: ${TARGETS.join(', ')}`);
+    return { code: '', errors, warnings };
+  }
+  // Decorators, `accessor` and `using`: no runtime runs them yet
+  const neverNative =
     needs.decorators || needs.parameterDecorators || needs.autoAccessors || needs.usingDeclarations;
-  if (!syntax && NATIVE_TARGETS.has(target)) return { code, errors, warnings };
+  if (!neverNative && index >= NATIVE_FROM) return { code, errors, warnings };
 
   const ts = options.typescript ?? globalTypeScript();
   if (!ts) {
     errors.push(
-      syntax
+      neverNative
         ? 'This program uses decorators, accessors or `истифода`, which TypeScript lowers: load TypeScript (typescript.js) and compile again'
         : `The '${target}' target needs TypeScript to lower the code: load TypeScript (typescript.js) and compile again`
     );
     return { code: '', errors, warnings, needsTypeScript: true };
   }
-  const scriptTarget = scriptTargetOf(ts, target);
-  if (scriptTarget === undefined) {
-    errors.push(`Unknown target '${target}'`);
-    return { code: '', errors, warnings };
-  }
-  const es2022 = ts.ScriptTarget.ES2022 as number;
-  // As in the Node compiler: es2020 output keeps ES2022 classes; decorators,
-  // accessors and `using` are lowered below ESNext
-  const base = target === 'es2020' ? es2022 : scriptTarget;
+  // As src/targets.ts does: TypeScript keeps decorators for ESNext, so lower them as for es2024
+  const lowerTo = neverNative && target === 'esnext' ? 'es2024' : target;
   const output = ts.transpileModule(code, {
+    // A `.js` name: the input is JavaScript
+    fileName: 'module.js',
     compilerOptions: {
-      target: syntax ? Math.min(base, es2022) : base,
+      target: scriptTargetOf(ts, lowerTo),
       module: ts.ModuleKind.ESNext,
+      allowJs: true,
+      downlevelIteration: true,
+      useDefineForClassFields: index >= NATIVE_FROM,
+      newLine: ts.NewLineKind.LineFeed,
       ...(options.experimentalDecorators && { experimentalDecorators: true }),
     },
   });
   return { code: output.outputText, errors, warnings };
 }
 
-/** `ts.ScriptTarget` of a target name: 'es5' → ES5, 'es2017' → ES2017, 'esnext' → ESNext. */
-function scriptTargetOf(ts: TypeScriptApi, target: string): number | undefined {
-  const name = target === 'esnext' ? 'ESNext' : target.toUpperCase();
-  const value = ts.ScriptTarget[name];
-  return typeof value === 'number' ? value : undefined;
+/**
+ * `ts.ScriptTarget` of a target: 'es2017' → ES2017, 'esnext' → ESNext. A
+ * target newer than the loaded TypeScript knows uses the newest older one.
+ */
+function scriptTargetOf(ts: TypeScriptApi, target: string): number {
+  if (target === 'esnext') return ts.ScriptTarget.ESNext as number;
+  for (let index = TARGETS.indexOf(target); index > 0; index--) {
+    const value = ts.ScriptTarget[TARGETS[index].toUpperCase()];
+    if (typeof value === 'number') return value;
+  }
+  return ts.ScriptTarget.ES5 as number;
 }
 
 function globalTypeScript(): TypeScriptApi | undefined {
@@ -184,8 +208,8 @@ export function execute(code: string, consoleLike: ConsoleLike): unknown {
   const require = (id: string): never => {
     throw new Error(`Cannot load the module '${id}': modules are not available in the browser`);
   };
-  // eslint-disable-next-line no-new-func
-  const run = new Function('console', 'require', 'module', 'exports', code);
+  // Running the compiled program is what this function is for
+  const run = new Function('console', 'require', 'module', 'exports', code); // NOSONAR
   run(consoleLike, require, module, module.exports);
   return module.exports;
 }
