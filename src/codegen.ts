@@ -1048,15 +1048,8 @@ export class CodeGenerator {
 
   private generateImportExpression(node: ImportExpression): string {
     // Dynamic import: ворид(specifier) -> import(specifier)
-    let source = this.generateExpression(node.source);
-
-    // Handle .som extension conversion for dynamic imports
-    if (source.includes('.som')) {
-      source = source.replaceAll('.som', '.js');
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
-      // For relative imports without extension, add .js
-      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
-    }
+    // Handle .som extension conversion for dynamic imports (string specifiers only)
+    const source = this.convertSourcePath(this.generateExpression(node.source, PREC.ASSIGNMENT));
 
     return `import(${source})`;
   }
@@ -1069,15 +1062,8 @@ export class CodeGenerator {
 
   private generateImportDeclaration(node: ImportDeclaration): string {
     const specifiers = node.specifiers;
-    let source = this.generateLiteral(node.source);
-
     // Module resolution: convert .som extensions to .js
-    if (source.includes('.som')) {
-      source = source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
-      // For relative imports without extension, add .js
-      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
-    }
+    const source = this.convertSourcePath(this.generateLiteral(node.source));
 
     const results: string[] = [];
     const tmpVar = `__somon_import_${this.importCounter++}`;
@@ -1086,7 +1072,7 @@ export class CodeGenerator {
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      const localName = defaultImports[0].local.name;
+      const localName = this.generateIdentifier(defaultImports[0].local);
       results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
     }
 
@@ -1094,7 +1080,9 @@ export class CodeGenerator {
       | ImportNamespaceSpecifier
       | undefined;
     if (namespaceImport) {
-      results.push(this.indent(`const ${namespaceImport.local.name} = ${tmpVar};`));
+      results.push(
+        this.indent(`const ${this.generateIdentifier(namespaceImport.local)} = ${tmpVar};`)
+      );
     }
 
     // Handle named imports
@@ -1103,7 +1091,7 @@ export class CodeGenerator {
       const destructuring = namedImports
         .map(spec => {
           const imported = spec.imported.name;
-          const local = spec.local.name;
+          const local = this.generateIdentifier(spec.local);
           return imported === local ? imported : `${imported}: ${local}`;
         })
         .join(', ');
@@ -1130,33 +1118,40 @@ export class CodeGenerator {
   }
 
   private generateExportWithDeclaration(node: ExportDeclaration): string {
-    const declaration = this.generateStatement(node.declaration!);
-    const exportName = this.extractExportName(node.declaration!);
+    const declaration = node.declaration!;
+
+    // `содир пешфарз <expression>;`
+    if (node.default && declaration.type === 'ExpressionStatement') {
+      const value = this.generateExpression(
+        (declaration as ExpressionStatement).expression,
+        PREC.ASSIGNMENT
+      );
+      return this.indent(`module.exports.default = ${value};`);
+    }
+
+    const code = this.generateStatement(declaration);
+    const exportNames = this.extractExportNames(declaration);
 
     // Type-only declarations don't generate runtime exports
-    if (!exportName) {
-      return declaration;
+    if (exportNames.length === 0) {
+      return code;
     }
 
-    const commonjsExport = node.default
-      ? `module.exports.default = ${exportName};`
-      : `module.exports.${exportName} = ${exportName};`;
+    const commonjsExports = node.default
+      ? [`module.exports.default = ${exportNames[0]};`]
+      : exportNames.map(name => `module.exports.${name} = ${name};`);
 
-    return declaration + '\n' + this.indent(commonjsExport);
+    return [code.replace(/\n+$/, ''), ...commonjsExports.map(line => this.indent(line))].join('\n');
   }
 
-  private extractExportName(declaration: Statement): string {
-    if (declaration.type === 'FunctionDeclaration') {
-      return (declaration as FunctionDeclaration).name.name;
-    }
-    if (declaration.type === 'VariableDeclaration') {
-      return ((declaration as VariableDeclaration).identifier as Identifier).name;
-    }
-    if (declaration.type === 'ClassDeclaration') {
-      return (declaration as ClassDeclaration).name.name;
-    }
+  private extractExportNames(declaration: Statement): string[] {
     // Interfaces and TypeAlias don't generate runtime code
-    return '';
+    if (declaration.type === 'InterfaceDeclaration' || declaration.type === 'TypeAlias') {
+      return [];
+    }
+    const names: string[] = [];
+    this.collectDeclaredNames(declaration, names);
+    return names;
   }
 
   private generateExportWithSpecifiers(node: ExportDeclaration): string {
@@ -1186,7 +1181,7 @@ export class CodeGenerator {
     return node
       .specifiers!.map(spec => {
         const exported = spec.exported.name;
-        const local = spec.local.name;
+        const local = this.generateIdentifier(spec.local);
         return this.indent(`module.exports.${exported} = ${local};`);
       })
       .join('\n');
@@ -1207,12 +1202,23 @@ export class CodeGenerator {
     return results.join('\n');
   }
 
+  /**
+   * Rewrite a quoted module specifier for the emitted CommonJS: a trailing
+   * `.som` becomes `.js`, and a relative specifier without a JavaScript/JSON
+   * extension gets `.js` appended. Anything else is returned unchanged.
+   */
   private convertSourcePath(source: string): string {
-    if (source.includes('.som')) {
-      return source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+    const match = /^(["'])(.*)\1$/s.exec(source);
+    if (!match) {
+      return source;
+    }
+    const [, quote, specifier] = match;
+    if (specifier.endsWith('.som')) {
+      return `${quote}${specifier.slice(0, -'.som'.length)}.js${quote}`;
+    }
+    if (/^\.\.?\//.test(specifier) && !/\.(?:[cm]?js|json)$/.test(specifier)) {
       // For relative imports without extension, add .js
-      return source.replace(/["']$/, '.js"').replace(/^'/, '"');
+      return `${quote}${specifier}.js${quote}`;
     }
     return source;
   }
