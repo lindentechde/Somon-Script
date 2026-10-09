@@ -110,7 +110,7 @@ describe('TypeScript emitter: declarations', () => {
     ['И[калидҳои И]', 'И[keyof И]'],
     ['А & (Б | В)', 'А & (Б | В)'],
     ['[рақам, сатр?, ...мантиқӣ[]]', '[number, string?, ...boolean[]]'],
-    ['[х: рақам, у?: рақам]', '[number, number?]'],
+    ['[х: рақам, у?: рақам]', '[х: number, у?: number]'],
     ['танҳохонӣ рақам[]', 'readonly number[]'],
     ['беназир рамз', 'unique symbol'],
     ['"а" | 1 | дуруст | нодуруст', '"а" | 1 | true | false'],

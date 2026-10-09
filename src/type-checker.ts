@@ -214,6 +214,7 @@ export interface PropertyType {
   type: Type;
   optional: boolean;
   readonly?: boolean; // `танҳохонӣ ном: Т`
+  writeType?: Type; // A setter's parameter type when it differs from the getter's: what may be assigned
 }
 
 /**
@@ -1536,10 +1537,20 @@ export class TypeChecker {
   ): PropertyType {
     if (kind === 'get') {
       const type = methodType.returnType ?? UNKNOWN;
-      return { type, optional: false, ...(!existing && { readonly: true }) };
+      // A setter came first: it decides what may be assigned
+      const writeType = existing && !existing.readonly ? existing.type : undefined;
+      return {
+        type,
+        optional: false,
+        ...(!existing && { readonly: true }),
+        ...(writeType && { writeType }),
+      };
     }
     if (kind === 'set') {
-      return { type: existing?.type ?? methodType.paramTypes?.[0] ?? UNKNOWN, optional: false };
+      const writeType = methodType.paramTypes?.[0] ?? UNKNOWN;
+      if (!existing) return { type: writeType, optional: false };
+      // `get х(): рақам` with `set х(в: рақам | сатр)` (TypeScript 5.1): reads and writes differ
+      return { type: existing.type, optional: false, writeType };
     }
     return { type: methodType, optional: false };
   }
@@ -2456,15 +2467,18 @@ export class TypeChecker {
         return this.resolveIdentifierType(typeNode as Identifier);
       case 'FunctionType': {
         const fnType = typeNode as FunctionType;
-        return this.buildFunctionType(undefined, {
-          params: fnType.parameters,
-          returnType: {
-            type: 'TypeAnnotation',
-            typeAnnotation: fnType.returnType,
-            line: 0,
-            column: 0,
-          },
-        });
+        // `<Т>(х: Т) => Т`: `Т` is a type parameter in the signature
+        return this.withTypeParameters(fnType.typeParameters, () =>
+          this.buildFunctionType(undefined, {
+            params: fnType.parameters,
+            returnType: {
+              type: 'TypeAnnotation',
+              typeAnnotation: fnType.returnType,
+              line: 0,
+              column: 0,
+            },
+          })
+        );
       }
       default:
         return this.resolveTypeOperator(typeNode);
@@ -2485,7 +2499,7 @@ export class TypeChecker {
         return (typeNode as TypePredicate).asserts ? VOID_TYPE : BOOLEAN_TYPE;
       case 'ConstructorType': {
         const constructorType = typeNode as ConstructorType;
-        return {
+        return this.withTypeParameters(constructorType.typeParameters, () => ({
           ...this.buildFunctionType(undefined, {
             params: constructorType.parameters,
             returnType: {
@@ -2496,7 +2510,7 @@ export class TypeChecker {
             },
           }),
           kind: 'constructor',
-        };
+        }));
       }
       case 'OptionalType':
       case 'RestType':
@@ -3264,13 +3278,30 @@ export class TypeChecker {
       return this.removeNullish(this.inferAssignmentTargetType(inner));
     }
     if (target.type === 'MemberExpression') {
-      return this.inferMemberType(target as MemberExpression, true);
+      return (
+        this.memberWriteType(target as MemberExpression) ??
+        this.inferMemberType(target as MemberExpression, true)
+      );
     }
     if (target.type === 'Identifier') {
       const declared = this.lookup((target as Identifier).name);
       if (declared) return declared;
     }
     return this.inferExpressionType(target);
+  }
+
+  /** What `о.х = …` may assign when `х` has a setter whose type differs from its getter's. */
+  private memberWriteType(member: MemberExpression): Type | undefined {
+    if (member.computed || member.property.type !== 'Identifier') return undefined;
+    const objectType = this.removeNullish(this.quietType(member.object));
+    if (!['class', 'interface', 'object'].includes(objectType.kind)) return undefined;
+    const name = (member.property as Identifier).name;
+    const property = this.findProperty(
+      this.getAllProperties(objectType),
+      name,
+      translateMemberName(name)
+    );
+    return property?.writeType;
   }
 
   /**
@@ -3374,6 +3405,11 @@ export class TypeChecker {
       case '-':
       case '+':
       case '~': {
+        // `-1` is the literal type `-1`, as in TypeScript
+        if (unary.operator === '-' && argument.kind === 'literal') {
+          if (typeof argument.value === 'number')
+            return { kind: 'literal', value: -argument.value };
+        }
         const operand = this.checkNotNullish(unary.argument, argument);
         return this.isNumericType(operand) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
       }

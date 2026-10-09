@@ -125,25 +125,26 @@ type argument; otherwise `<` and `>` compare. As in TypeScript,
 
 ## Classes
 
-| TypeScript                           | SomonScript                       |
-| ------------------------------------ | --------------------------------- |
-| `get x() { }`, `set x(v) { }`        | same (also in object literals)    |
-| `static x = 1;`, `static { … }`      | `статикӣ х = 1;`, `статикӣ { … }` |
-| `#x = 1;`, `#m() { }`                | same                              |
-| `constructor(private x: number)`     | `конструктор(хосусӣ х: рақам)`    |
-| `readonly x: number;`                | `танҳохонӣ х: рақам;`             |
-| `x!: number;`, `x?: number;`         | same                              |
-| `*gen() { }`, `async m() { }`        | `*ген() { }`, `ҳамзамон м() { }`  |
-| `abstract class`, `abstract m(): T;` | `мавҳум синф`, `мавҳум м(): Т;`   |
-| `abstract x: T;`, `abstract get x()` | `мавҳум х: Т;`, `мавҳум get х()`  |
-| `override m() { }`                   | `бознавис м() { }`                |
-| `accessor x = 1;`                    | `дастрасӣ х = 1;`                 |
-| `declare x: T;`                      | `эълон х: Т;` (no field emitted)  |
-| `[key: string]: T;`                  | `[калид: сатр]: Т;`               |
-| `[Symbol.iterator]() { }`, `"a b"()` | same (computed and literal names) |
-| `m?(): T;`, `m?() { }`               | same (optional methods)           |
-| `m(x: number): T;` before `m(x) { }` | same (overload signatures)        |
-| `@dec m() { }`                       | `@ороиш м() { }` (decorators)     |
+| TypeScript                            | SomonScript                       |
+| ------------------------------------- | --------------------------------- |
+| `get x() { }`, `set x(v) { }`         | same (also in object literals)    |
+| `static x = 1;`, `static { … }`       | `статикӣ х = 1;`, `статикӣ { … }` |
+| `#x = 1;`, `#m() { }`                 | same                              |
+| `constructor(private x: number)`      | `конструктор(хосусӣ х: рақам)`    |
+| `readonly x: number;`                 | `танҳохонӣ х: рақам;`             |
+| `x!: number;`, `x?: number;`          | same                              |
+| `*gen() { }`, `async m() { }`         | `*ген() { }`, `ҳамзамон м() { }`  |
+| `abstract class`, `abstract m(): T;`  | `мавҳум синф`, `мавҳум м(): Т;`   |
+| `abstract x: T;`, `abstract get x()`  | `мавҳум х: Т;`, `мавҳум get х()`  |
+| `override m() { }`                    | `бознавис м() { }`                |
+| `accessor x = 1;`                     | `дастрасӣ х = 1;`                 |
+| `declare x: T;`                       | `эълон х: Т;` (no field emitted)  |
+| `[key: string]: T;`                   | `[калид: сатр]: Т;`               |
+| `[Symbol.iterator]() { }`, `"a b"()`  | same (computed and literal names) |
+| `m?(): T;`, `m?() { }`                | same (optional methods)           |
+| `m(x: number): T;` before `m(x) { }`  | same (overload signatures)        |
+| `get x(): A;` with `set x(v: A \| B)` | same (the setter decides writes)  |
+| `@dec m() { }`                        | `@ороиш м() { }` (decorators)     |
 
 ```som
 синф Ҳисоб {
@@ -397,33 +398,38 @@ namespace keeps its usual output.
 
 ## Type Operators
 
-| TypeScript                           | SomonScript                                    |
-| ------------------------------------ | ---------------------------------------------- |
-| `A \| B`, `A & B`                    | same                                           |
-| `\| A \| B`, `& A & B` (leading)     | same, also across lines                        |
-| `keyof T`                            | `калидҳои Т`                                   |
-| `typeof x` (in a type)               | `навъи х`                                      |
-| `T["k"]`, `T[K]`                     | same                                           |
-| `T extends U ? X : Y`                | `Т мерос У ? Х : Я`                            |
-| `infer U`                            | `инфер У`                                      |
-| `{ [K in keyof T]?: T[K] }`          | `{ [К дар калидҳои Т]?: Т[К] }`                |
-| `-readonly`, `+?`, `-?`              | `-танҳохонӣ`, `+?`, `-?`                       |
-| `[K in keyof T as N]`                | `[К дар калидҳои Т чун Н]`                     |
-| `` `pre_${T}` ``                     | same                                           |
-| `unique symbol`                      | `беназир рамз`                                 |
-| `readonly T[]`, `readonly [A, B]`    | `танҳохонӣ Т[]`, `танҳохонӣ [А, Б]`            |
-| `x is T`                             | `х аст Т` (`is` also works)                    |
-| `this is T`                          | `ин аст Т`                                     |
-| `asserts x`, `asserts x is T`        | `тасдиқ х`, `тасдиқ х аст Т` (`asserts` works) |
-| `[A, B?]`, `[A, ...B[]]`, `[x: A]`   | same                                           |
-| `asserts this`, `asserts this is T`  | `тасдиқ ин`, `тасдиқ ин аст Т`                 |
-| `{ get x(): T; set x(v: T); }`       | same (accessor signatures)                     |
-| `{ (x: A): B }`, `{ new (x: A): B }` | same (call and construct signatures)           |
-| `{ [k]: T }` with `k: unique symbol` | same (computed member names)                   |
-| `new (a: A) => T`                    | `нав (а: А) => Т`                              |
-| `abstract new () => T`               | `мавҳум нав () => Т`                           |
-| `this` (type)                        | `ин`                                           |
-| `<T extends U = D>`                  | `<Т мерос У = Д>` (`extends` also works)       |
+| TypeScript                            | SomonScript                                    |
+| ------------------------------------- | ---------------------------------------------- |
+| `A \| B`, `A & B`                     | same                                           |
+| `\| A \| B`, `& A & B` (leading)      | same, also across lines                        |
+| `keyof T`                             | `калидҳои Т`                                   |
+| `typeof x` (in a type)                | `навъи х`                                      |
+| `T["k"]`, `T[K]`                      | same                                           |
+| `T extends U ? X : Y`                 | `Т мерос У ? Х : Я`                            |
+| `infer U`                             | `инфер У`                                      |
+| `{ [K in keyof T]?: T[K] }`           | `{ [К дар калидҳои Т]?: Т[К] }`                |
+| `-readonly`, `+?`, `-?`               | `-танҳохонӣ`, `+?`, `-?`                       |
+| `[K in keyof T as N]`                 | `[К дар калидҳои Т чун Н]`                     |
+| `` `pre_${T}` ``                      | same                                           |
+| `unique symbol`                       | `беназир рамз`                                 |
+| `readonly T[]`, `readonly [A, B]`     | `танҳохонӣ Т[]`, `танҳохонӣ [А, Б]`            |
+| `x is T`                              | `х аст Т` (`is` also works)                    |
+| `this is T`                           | `ин аст Т`                                     |
+| `asserts x`, `asserts x is T`         | `тасдиқ х`, `тасдиқ х аст Т` (`asserts` works) |
+| `[A, B?]`, `[A, ...B[]]`, `[x: A]`    | same                                           |
+| `asserts this`, `asserts this is T`   | `тасдиқ ин`, `тасдиқ ин аст Т`                 |
+| `{ get x(): T; set x(v: T); }`        | same (accessor signatures)                     |
+| `{ (x: A): B }`, `{ new (x: A): B }`  | same (call and construct signatures)           |
+| `{ [k]: T }` with `k: unique symbol`  | same (computed member names)                   |
+| `new (a: A) => T`                     | `нав (а: А) => Т`                              |
+| `abstract new () => T`                | `мавҳум нав () => Т`                           |
+| `<T>(x: T) => T`, `new <T>() => T`    | `<Т>(х: Т) => Т`, `нав <Т>() => Т`             |
+| `infer U extends string`              | `инфер У мерос сатр`                           |
+| `typeof f<number>`                    | `навъи ф<рақам>`                               |
+| `import("./m").T`, `typeof import(…)` | `ворид("./м").Т`, `навъи ворид("./м")`         |
+| `-1`, `1n` (literal types)            | same                                           |
+| `this` (type)                         | `ин`                                           |
+| `<T extends U = D>`                   | `<Т мерос У = Д>` (`extends` also works)       |
 
 ```som
 навъ Самт =
@@ -437,6 +443,10 @@ namespace keeps its usual output.
 интерфейс Созанда {
     нав (ном: сатр): { ном: сатр }; // construct signature: `нав с("…")`
 }
+
+навъ Нуқта = [х: рақам, у?: рақам];        // named tuple members
+навъ Ҳамон = <Т>(х: Т) => Т;               // generic function type
+навъ Аввал<Т> = Т мерос [инфер А мерос сатр, ...ҳар[]] ? А : абадан;
 
 функсия сатрАст(х: ношинос): х аст сатр {
     бозгашт навъи х === "string";

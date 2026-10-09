@@ -213,11 +213,11 @@ one does, so code moved from TypeScript keeps working while it is translated:
 
 `typeof`, `void`, `delete`, `instanceof`, `do`, `yield`, `as`, `satisfies`,
 `is`, `asserts`, `infer`, `declare`, `override`, `accessor`, `using`, `enum`,
-`type`, `module` and `global` work as well. `async`, `of`, `readonly`,
-`abstract` and `keyof` remain usable as names, and every keyword, English or
-Tajik, may name a member (`о.return`, `{ нав: 1 }`). The other statement
-keywords (`if`, `for`, `while`, `let`, `const`, `class`, `try`, `import`,
-`export`, …) have only their Tajik form.
+`type`, `module`, `global` and `unique` work as well. `async`, `of`, `readonly`,
+`abstract`, `keyof` and `unique` remain usable as names, and every keyword,
+English or Tajik, may name a member (`о.return`, `{ нав: 1 }`). The other
+statement keywords (`if`, `for`, `while`, `let`, `const`, `class`, `try`,
+`import`, `export`, …) have only their Tajik form.
 
 ```som
 abstract синф Шакл {

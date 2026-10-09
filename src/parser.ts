@@ -113,6 +113,7 @@ import {
   TypeQuery,
   TemplateLiteralType,
   InstantiationExpression,
+  ImportType,
 } from './types';
 import { Lexer, isRegexStartInText, regexLiteralEnd } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
@@ -212,8 +213,9 @@ export class Parser {
   /**
    * English keywords the parser reads as their Tajik ones: those the lexer
    * knows (`return`, `else`, `new`, …), the literals and `this`/`super`, and
-   * TypeScript's member modifiers and type words. All but `readonly`, `abstract` and `keyof` are reserved
-   * words in JavaScript; those three become words that are still names
+   * TypeScript's member modifiers and type words. All but `readonly`,
+   * `abstract`, `keyof` and `unique` are reserved words in JavaScript; those
+   * four become words that are still names
    * where no modifier or type operator fits. Any of them names a member
    * (`о.return`, `{ new: 1 }`). `async` and `of` are keywords only in their
    * places (see `isAsyncWord`, `isOfWord`); `typeof`, `void`, `delete`,
@@ -245,6 +247,7 @@ export class Parser {
     ['abstract', TokenType.МАВҲУМ],
     ['readonly', TokenType.ТАНҲОХОНӢ],
     ['keyof', TokenType.КАЛИДҲОИ],
+    ['unique', TokenType.БЕНАЗИР],
   ]);
 
   private static withEnglishKeyword(token: Token): Token {
@@ -4597,19 +4600,7 @@ export class Parser {
   }
 
   private primaryType(): TypeNode {
-    let type =
-      this.parseParenthesizedOrArrayType() ??
-      this.parseConstructorType() ??
-      this.parseReadonlyType() ??
-      this.parseThisType() ??
-      this.parseUniqueType() ??
-      this.parseKeyofType() ??
-      this.parseLiteralType() ??
-      this.parsePrimitiveType() ??
-      this.parseGenericOrIdentifierType() ??
-      this.parseTupleType() ??
-      this.parseObjectType() ??
-      this.errorExpectedType();
+    let type = this.primaryTypeOperand();
 
     // Postfix forms: array `Т[]` and indexed access `Т[К]`, on the line of `Т`
     while (!this.hasLineBreakBefore() && this.match(TokenType.LEFT_BRACKET)) {
@@ -4633,6 +4624,26 @@ export class Parser {
       }
     }
     return type;
+  }
+
+  /** A type without the `[]` or `[К]` after it. */
+  private primaryTypeOperand(): TypeNode {
+    return (
+      this.parseGenericFunctionType() ??
+      this.parseImportType() ??
+      this.parseParenthesizedOrArrayType() ??
+      this.parseConstructorType() ??
+      this.parseReadonlyType() ??
+      this.parseThisType() ??
+      this.parseUniqueType() ??
+      this.parseKeyofType() ??
+      this.parseLiteralType() ??
+      this.parsePrimitiveType() ??
+      this.parseGenericOrIdentifierType() ??
+      this.parseTupleType() ??
+      this.parseObjectType() ??
+      this.errorExpectedType()
+    );
   }
 
   /** `калидҳои Т` (keyof) */
@@ -4669,34 +4680,78 @@ export class Parser {
     return false;
   }
 
-  /** `(а: рақам, ...б: сатр[]) => мантиқӣ` */
-  private parseFunctionType(): FunctionType {
+  /** `(а: рақам, ...б: сатр[]) => мантиқӣ`, at the `(`; `typeParameters` came before it. */
+  private parseFunctionType(typeParameters?: TypeParameter[], start?: Token): FunctionType {
     const openParen = this.advance();
     const { params: parameters, thisType } = this.parseParametersWithThis(
       "Expected ')' after function type parameters"
     );
     this.consume(TokenType.ARROW, "Expected '=>' in function type");
+    const position = start ?? openParen;
     return {
       type: 'FunctionType',
+      ...(typeParameters && { typeParameters }),
       parameters,
       returnType: this.parseReturnType(),
       ...(thisType && { thisType: thisType.typeAnnotation }),
-      line: openParen.line,
-      column: openParen.column,
+      line: position.line,
+      column: position.column,
     };
   }
 
-  /** `нав (а: рақам) => Т`, `мавҳум нав () => Т` */
+  /** A generic function type: `<Т>(х: Т) => Т`. */
+  private parseGenericFunctionType(): FunctionType | undefined {
+    if (!this.check(TokenType.LESS_THAN)) return undefined;
+    const start = this.peek();
+    const typeParameters = this.parseTypeParameters()!;
+    this.checkTypeParameterModifiers(typeParameters, 'function');
+    if (!this.check(TokenType.LEFT_PAREN)) {
+      throw new Error(this.unexpectedTokenMessage("Expected '(' after type parameters"));
+    }
+    return this.parseFunctionType(typeParameters, start);
+  }
+
+  /**
+   * `ворид("./м")`, `ворид("./м").Т<У>` (TypeScript `import("./m").T`) and,
+   * after `навъи`, `навъи ворид("./м")`: types of another module.
+   */
+  private parseImportType(isTypeOf = false, start = this.peek()): ImportType | undefined {
+    if (!this.checkSequence(TokenType.ВОРИД, TokenType.LEFT_PAREN)) return undefined;
+    this.advance(); // 'ворид'
+    this.advance(); // '('
+    const source = this.consume(TokenType.STRING, 'Expected a module path in an import type');
+    this.consume(TokenType.RIGHT_PAREN, "Expected ')' after the module path");
+    const names: string[] = [];
+    while (this.match(TokenType.DOT)) {
+      names.push(this.parsePropertyName("Expected a name after '.'").name);
+    }
+    const typeArguments =
+      !isTypeOf && this.check(TokenType.LESS_THAN) ? this.parseTypeArgumentList() : undefined;
+    return {
+      type: 'ImportType',
+      argument: this.createLiteral(source.value, source),
+      ...(names.length > 0 && { qualifier: names.join('.') }),
+      ...(typeArguments && { typeArguments }),
+      ...(isTypeOf && { isTypeOf }),
+      line: start.line,
+      column: start.column,
+    };
+  }
+
+  /** `нав (а: рақам) => Т`, `нав <Т>(а: Т) => Т`, `мавҳум нав () => Т` */
   private parseConstructorType(): ConstructorType | undefined {
     const isAbstract = this.checkSequence(TokenType.МАВҲУМ, TokenType.НАВ);
     if (!isAbstract && !this.check(TokenType.НАВ)) return undefined;
     const start = this.advance();
     if (isAbstract) this.advance(); // 'нав'
+    const typeParameters = this.parseTypeParameters();
+    this.checkTypeParameterModifiers(typeParameters, 'function');
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав' in constructor type");
     const parameters = this.parseParameterList("Expected ')' after constructor type parameters");
     this.consume(TokenType.ARROW, "Expected '=>' in constructor type");
     return {
       type: 'ConstructorType',
+      ...(typeParameters && { typeParameters }),
       parameters,
       returnType: this.parseType(),
       ...(isAbstract && { abstract: true }),
@@ -4865,41 +4920,84 @@ export class Parser {
   private parseTypeQueryOrInfer(): TypeNode | undefined {
     const token = this.peek();
     const next = this.peekNext();
-    if (!next || next.line !== token.line || !this.isTypeNameToken(next)) return undefined;
-    const isQuery =
-      token.type === TokenType.НАВЪИ ||
-      (token.type === TokenType.IDENTIFIER && token.value === 'typeof');
-    const isInfer =
-      token.type === TokenType.ИНФЕР ||
-      (token.type === TokenType.IDENTIFIER && token.value === 'infer');
-    if (!isQuery && !isInfer) return undefined;
+    const word = Parser.typeOperatorWord(token);
+    if (!word || !next || next.line !== token.line) return undefined;
+    // `навъи ворид("./м")`
+    const isImport =
+      next.type === TokenType.ВОРИД && this.tokens[this.current + 2]?.type === TokenType.LEFT_PAREN;
+    if (word === 'query' && isImport) {
+      this.advance();
+      return this.parseImportType(true, token);
+    }
+    if (!this.isTypeNameToken(next)) return undefined;
     this.advance();
     const nameToken = this.advance();
-    if (isInfer) {
-      return {
-        type: 'InferType',
-        typeParameter: {
-          type: 'TypeParameter',
-          name: this.createIdentifier(nameToken),
-          line: nameToken.line,
-          column: nameToken.column,
-        },
-        line: token.line,
-        column: token.column,
-      } as InferType;
-    }
-    // `навъи о.а.б`: a dotted value name
+    return word === 'infer' ? this.inferType(token, nameToken) : this.typeQuery(token, nameToken);
+  }
+
+  /** `навъи`/`typeof` starts a type query, `инфер`/`infer` an infer type. */
+  private static typeOperatorWord(token: Token): 'query' | 'infer' | undefined {
+    if (token.type === TokenType.НАВЪИ) return 'query';
+    if (token.type === TokenType.ИНФЕР) return 'infer';
+    if (token.type !== TokenType.IDENTIFIER) return undefined;
+    if (token.value === 'typeof') return 'query';
+    return token.value === 'infer' ? 'infer' : undefined;
+  }
+
+  /** `инфер У`, `инфер У мерос сатр`: after the name. */
+  private inferType(inferToken: Token, nameToken: Token): InferType {
+    return {
+      type: 'InferType',
+      typeParameter: {
+        type: 'TypeParameter',
+        name: this.createIdentifier(nameToken),
+        ...this.parseInferConstraint(),
+        line: nameToken.line,
+        column: nameToken.column,
+      },
+      line: inferToken.line,
+      column: inferToken.column,
+    } as InferType;
+  }
+
+  /** `навъи х`, `навъи о.а.б`, `навъи ф<рақам>`: after the first name. */
+  private typeQuery(queryToken: Token, nameToken: Token): TypeQuery {
+    // `навъи о.а.б`: a dotted value name, whose members may be named with keywords
     let name = nameToken.value;
-    while (this.check(TokenType.DOT) && this.peekNext() && this.isTypeNameToken(this.peekNext()!)) {
+    while (
+      this.check(TokenType.DOT) &&
+      this.peekNext() &&
+      this.isIdentifierNameToken(this.peekNext()!)
+    ) {
       this.advance();
       name += `.${this.advance().value}`;
     }
+    // `навъи ф<рақам>`: the type of an instantiation expression (TypeScript 4.7)
+    const typeArguments =
+      this.check(TokenType.LESS_THAN) && !this.hasLineBreakBefore()
+        ? (this.speculateCleanly(() => this.parseTypeArgumentList()) ?? undefined)
+        : undefined;
     return {
       type: 'TypeQuery',
       exprName: { type: 'Identifier', name, line: nameToken.line, column: nameToken.column },
-      line: token.line,
-      column: token.column,
+      ...(typeArguments && { typeArguments }),
+      line: queryToken.line,
+      column: queryToken.column,
     } as TypeQuery;
+  }
+
+  /**
+   * `инфер У мерос сатр` (TypeScript 4.7): a constraint, unless a `?` follows
+   * it, when the `мерос` starts a conditional type around the `инфер`.
+   */
+  private parseInferConstraint(): { constraint?: TypeNode } {
+    if (!this.check(TokenType.МЕРОС)) return {};
+    const constraint = this.speculate(() => {
+      this.advance(); // 'мерос'
+      const type = this.unionType();
+      return this.check(TokenType.QUESTION) ? undefined : type;
+    });
+    return constraint ? { constraint } : {};
   }
 
   /** A name in a type: an identifier, a contextual keyword, or `ин`. */
@@ -4928,13 +5026,10 @@ export class Parser {
     // Build the full name, handling qualified types like Foo.Bar
     let fullName = nameToken.value;
 
-    // Handle qualified type names (e.g., Namespace.Type)
+    // Handle qualified type names (e.g., Namespace.Type), whose parts may be any word
     while (this.match(TokenType.DOT)) {
-      if (this.check(TokenType.IDENTIFIER)) {
+      if (this.isIdentifierNameToken(this.peek())) {
         const nextToken = this.advance();
-        fullName += '.' + nextToken.value;
-      } else if (this.matchBuiltinIdentifier()) {
-        const nextToken = this.previous();
         fullName += '.' + nextToken.value;
       } else {
         // If we can't parse what comes after the dot, treat it as an error
@@ -4968,55 +5063,77 @@ export class Parser {
   }
 
   /**
-   * Named tuple members (`[х: рақам, у?: рақам]`): the label is documentation
-   * only. Returns true for an optional label (`у?:`).
+   * The label of a named tuple member (`[х: рақам, у?: рақам]`), which may be
+   * any word; `optional` for `у?:`.
    */
-  private skipTupleMemberLabel(): boolean {
-    if (!this.check(TokenType.IDENTIFIER) && !this.isBuiltinIdentifierType(this.peek().type)) {
-      return false;
-    }
+  private parseTupleMemberLabel(): { label?: Identifier; optional: boolean } {
+    if (!this.isIdentifierNameToken(this.peek())) return { optional: false };
     const optional = this.peekNext()?.type === TokenType.QUESTION;
-    if (this.tokens[this.current + (optional ? 2 : 1)]?.type !== TokenType.COLON) return false;
-    this.current += optional ? 3 : 2;
-    return optional;
+    if (this.tokens[this.current + (optional ? 2 : 1)]?.type !== TokenType.COLON) {
+      return { optional: false };
+    }
+    const label = this.createIdentifier(this.advance());
+    this.current += optional ? 2 : 1;
+    return { label, optional };
   }
 
   /** A tuple element: `Т`, optional `Т?` / `н?: Т`, or rest `...Т[]` / `...н: Т[]`. */
-  private parseTupleElement(): TypeNode {
+  private parseTupleElement(): { type: TypeNode; label?: Identifier } {
     const spread = this.match(TokenType.SPREAD) ? this.previous() : undefined;
-    const optionalLabel = this.skipTupleMemberLabel();
-    const elementType = this.unionType();
+    const { label, optional: optionalLabel } = this.parseTupleMemberLabel();
+    // Any type, a conditional one too: `[Т мерос сатр ? 1 : 2]`
+    const elementType = this.parseType();
     if (spread) {
-      return {
+      const rest = {
         type: 'RestType',
         typeAnnotation: elementType,
         line: spread.line,
         column: spread.column,
       } as RestType;
+      return { type: rest, label };
     }
-    if (!optionalLabel && !this.match(TokenType.QUESTION)) return elementType;
-    return {
+    const optionalType =
+      !optionalLabel && this.check(TokenType.QUESTION) ? this.advance() : undefined;
+    if (label && optionalType) {
+      // TypeScript's TS5086: the `?` of a named member goes after the name
+      this.errors.push(
+        `A labeled tuple element is declared as optional with a question mark after the name and before the colon, rather than after the type at line ${optionalType.line}, column ${optionalType.column}`
+      );
+    }
+    if (!optionalLabel && !optionalType) return { type: elementType, label };
+    const optional = {
       type: 'OptionalType',
       typeAnnotation: elementType,
       line: elementType.line,
       column: elementType.column,
     } as OptionalType;
+    return { type: optional, label };
   }
 
   private parseTupleType(): TypeNode | undefined {
     if (!this.match(TokenType.LEFT_BRACKET)) return undefined;
-    const types: TypeNode[] = [];
+    const open = this.previous();
+    const elements: Array<{ type: TypeNode; label?: Identifier }> = [];
     if (!this.check(TokenType.RIGHT_BRACKET)) {
       do {
-        types.push(this.parseTupleElement());
+        elements.push(this.parseTupleElement());
       } while (this.match(TokenType.COMMA));
     }
     this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
+    const labels = elements.filter(element => element.label).length;
+    if (labels > 0 && labels < elements.length) {
+      // TypeScript's TS5084
+      this.errors.push(
+        `Tuple members must all have names or all not have names at line ${open.line}, column ${open.column}`
+      );
+    }
     const tupleType: TupleType = {
       type: 'TupleType',
-      elementTypes: types,
-      line: this.previous().line,
-      column: this.previous().column,
+      elementTypes: elements.map(element => element.type),
+      ...(labels === elements.length &&
+        labels > 0 && { elementNames: elements.map(element => element.label!) }),
+      line: open.line,
+      column: open.column,
     };
     return tupleType;
   }

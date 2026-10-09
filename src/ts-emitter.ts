@@ -33,6 +33,7 @@ import type {
   GenericType,
   Identifier,
   ImportEqualsDeclaration,
+  ImportType,
   InstantiationExpression,
   IndexedAccessType,
   InferType,
@@ -719,7 +720,9 @@ export class TsEmitter extends CodeGenerator {
           .map(type => this.typeText(type, TYPE_PREC.OPERATOR))
           .join(' & ');
       case 'TupleType':
-        return `[${(node as TupleType).elementTypes.map(type => this.typeText(type)).join(', ')}]`;
+        return this.tupleTypeText(node as TupleType);
+      case 'ImportType':
+        return this.importTypeText(node as ImportType);
       case 'OptionalType':
         return `${this.typeText((node as OptionalType).typeAnnotation, TYPE_PREC.PRIMARY)}?`;
       case 'RestType':
@@ -736,12 +739,14 @@ export class TsEmitter extends CodeGenerator {
     switch (node.type) {
       case 'FunctionType': {
         const fn = node as FunctionType;
-        return `(${this.signatureParams(fn.parameters, fn.thisType)}) => ${this.typeText(fn.returnType)}`;
+        const typeParameters = this.typeParametersText(fn.typeParameters);
+        return `${typeParameters}(${this.signatureParams(fn.parameters, fn.thisType)}) => ${this.typeText(fn.returnType)}`;
       }
       case 'ConstructorType': {
         const ctor = node as ConstructorType;
         const prefix = ctor.abstract ? 'abstract new' : 'new';
-        return `${prefix} (${this.signatureParams(ctor.parameters)}) => ${this.typeText(ctor.returnType)}`;
+        const typeParameters = this.typeParametersText(ctor.typeParameters);
+        return `${prefix} ${typeParameters}(${this.signatureParams(ctor.parameters)}) => ${this.typeText(ctor.returnType)}`;
       }
       case 'KeyofType':
         return `keyof ${this.typeText((node as KeyofType).operand, TYPE_PREC.OPERATOR)}`;
@@ -767,14 +772,44 @@ export class TsEmitter extends CodeGenerator {
         return 'this';
       case 'TypePredicate':
         return this.predicateText(node as TypePredicate);
-      case 'TypeQuery':
-        return `typeof ${this.typeQueryName((node as TypeQuery).exprName)}`;
+      case 'TypeQuery': {
+        const query = node as TypeQuery;
+        return `typeof ${this.typeQueryName(query.exprName)}${this.typeArgumentsText(query.typeArguments)}`;
+      }
       case 'TemplateLiteralType':
         return this.templateTypeText(node as TemplateLiteralType);
       default:
         this.errors.push(`Unknown type node: ${node.type}`);
         return 'any';
     }
+  }
+
+  /** `[number, string]`, `[x: number, y?: number, ...rest: string[]]` */
+  private tupleTypeText(tuple: TupleType): string {
+    const elements = tuple.elementTypes.map((type, index) => {
+      const label = tuple.elementNames?.[index];
+      if (!label) return this.typeText(type);
+      const name = this.markPosition(label, label.name);
+      if (type.type === 'RestType') {
+        return `...${name}: ${this.typeText((type as RestType).typeAnnotation)}`;
+      }
+      if (type.type === 'OptionalType') {
+        return `${name}?: ${this.typeText((type as OptionalType).typeAnnotation)}`;
+      }
+      return `${name}: ${this.typeText(type)}`;
+    });
+    return `[${elements.join(', ')}]`;
+  }
+
+  /** `import("./м.js").Т<У>`, `typeof import("./м.js")` */
+  private importTypeText(node: ImportType): string {
+    const source = this.markPosition(
+      node.argument,
+      this.convertSourcePath(this.generateLiteral(node.argument))
+    );
+    const qualifier = node.qualifier ? `.${node.qualifier}` : '';
+    const typeOf = node.isTypeOf ? 'typeof ' : '';
+    return `${typeOf}import(${source})${qualifier}${this.typeArgumentsText(node.typeArguments)}`;
   }
 
   private static literalTypeText(value: string | number | boolean): string {

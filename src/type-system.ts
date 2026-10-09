@@ -20,9 +20,11 @@ export interface ArrayType extends TypeNode {
   elementType: TypeNode;
 }
 
-/** `(а: рақам, б?: сатр, ...в: рақам[]) => мантиқӣ` */
+/** `(а: рақам, б?: сатр, ...в: рақам[]) => мантиқӣ`, `<Т>(х: Т) => Т` */
 export interface FunctionType extends TypeNode {
   type: 'FunctionType';
+  /** A generic function type: `<Т>(х: Т) => Т`. */
+  typeParameters?: TypeParameter[];
   parameters: Parameter[];
   returnType: TypeNode;
   /** A `this` parameter: `(ин: Т, х: рақам) => беджавоб`. */
@@ -161,6 +163,22 @@ export interface TypeQuery extends TypeNode {
   type: 'TypeQuery';
   /** The value, a dotted name such as `о.а` kept in one identifier. */
   exprName: Identifier;
+  /** `навъи ф<рақам>`: the type of an instantiation expression. */
+  typeArguments?: TypeNode[];
+}
+
+/**
+ * `ворид("./м")`, `ворид("./м").Т<У>` and `навъи ворид("./м")` (TypeScript's
+ * `import("./m").T`, `typeof import("./m")`): a type of another module.
+ */
+export interface ImportType extends TypeNode {
+  type: 'ImportType';
+  argument: Literal;
+  /** The dotted name after the module: `Т`, `Н.Т`. */
+  qualifier?: string;
+  typeArguments?: TypeNode[];
+  /** `навъи ворид("./м")`: the type of the module itself. */
+  isTypeOf?: boolean;
 }
 
 /** `` `пеш_${К}` `` in a type: `quasis` (raw text) has one element more than `types`. */
@@ -225,6 +243,8 @@ export interface TypePredicate extends TypeNode {
 /** `нав (а: рақам) => Т`, `мавҳум нав () => Т` */
 export interface ConstructorType extends TypeNode {
   type: 'ConstructorType';
+  /** `нав <Т>(а: Т) => Т` */
+  typeParameters?: TypeParameter[];
   parameters: Parameter[];
   returnType: TypeNode;
   abstract?: boolean;
@@ -234,6 +254,8 @@ export interface TupleType extends TypeNode {
   type: 'TupleType';
   /** Element types; optional and rest elements are `OptionalType` / `RestType` nodes. */
   elementTypes: TypeNode[];
+  /** Names of a named tuple, one per element: `[х: рақам, у?: рақам, ...боқӣ: сатр[]]`. */
+  elementNames?: Identifier[];
 }
 
 export interface LiteralType extends TypeNode {

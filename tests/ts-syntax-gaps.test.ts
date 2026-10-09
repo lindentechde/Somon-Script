@@ -756,3 +756,82 @@ describe('anonymous default exports', () => {
     ).toEqual(['FunctionDeclaration', 'ClassDeclaration']);
   });
 });
+
+describe('the rest of the TypeScript 5.4 type syntax', () => {
+  test('named tuples, generic function types, `инфер … мерос`, `навъи ф<Т>`', async () => {
+    expect(
+      await run(
+        [
+          'навъ Нуқта = [х: рақам, у?: рақам, ...боқӣ: сатр[]];',
+          'навъ Ҳамон = <Т,>(х: Т) => Т;',
+          'навъ Созанда = нав <Т>(қимат: Т) => { қимат: Т };',
+          'навъ Аввал<Т> = Т мерос [инфер А мерос сатр, ...ҳар[]] ? А : абадан;',
+          'навъ Шарт<Т> = Т мерос [инфер А мерос сатр ? 1 : 2] ? А : абадан;',
+          'функсия ҳамон<Т>(х: Т): Т { бозгашт х; }',
+          'навъ ҲамонРақам = навъи ҳамон<рақам>;',
+          'собит о = { агар: { нав: 1 } };',
+          'навъ Нав = навъи о.агар.нав;',
+          'навъ Ҳолат = -1 | 0 | 1n;',
+          'тағ н: Нуқта = [1, 2, "а"];',
+          'собит ҳ: Ҳамон = х => х;',
+          'собит р: ҲамонРақам = х => х * 2;',
+          'тағ а: Аввал<["х", 1]> = "х";',
+          'тағ ш: Шарт<[1]> | рақам = 1;',
+          'тағ в: Нав = 2;',
+          'тағ ҳолат: Ҳолат = -1;',
+          'чоп.сабт(н.length, ҳ("ҳ"), р(2), а, ш, в, ҳолат);',
+        ].join('\n')
+      )
+    ).toEqual(['3 ҳ 4 х 1 2 -1']);
+    expect(
+      typescriptOf(
+        'навъ Н = [х: рақам, у?: сатр, ...б: мантиқӣ[]];\nнавъ Ф = <Т,>(х: Т) => Т;\nнавъ К = нав <Т>(х: Т) => Т;\nнавъ А<Т> = Т мерос [инфер У мерос сатр] ? У : абадан;'
+      )
+    ).toBe(
+      'type Н = [х: number, у?: string, ...б: boolean[]];\ntype Ф = <Т>(х: Т) => Т;\ntype К = new <Т>(х: Т) => Т;\ntype А<Т> = Т extends [infer У extends string] ? У : never;'
+    );
+  });
+
+  test('tuple names follow TypeScript’s rules', () => {
+    expect(errorsOf('навъ Н = [х: рақам, сатр];')).toEqual([
+      'Tuple members must all have names or all not have names at line 1, column 10',
+    ]);
+    expect(errorsOf('навъ Н = [х: рақам?];')[0]).toContain(
+      'A labeled tuple element is declared as optional with a question mark after the name'
+    );
+  });
+
+  test('import types', () => {
+    expect(
+      typescriptOf(
+        'навъ Т = ворид("./модул").Корбар<рақам>;\nнавъ М = навъи ворид("./модул");\nнавъ Н = ворид("fs").promises.FileHandle;'
+      )
+    ).toBe(
+      'type Т = import("./модул.js").Корбар<number>;\ntype М = typeof import("./модул.js");\ntype Н = import("fs").promises.FileHandle;'
+    );
+    expect(compile('навъ Т = ворид("./м").Т;\nтағ т: Т;', { typeCheck: true }).errors).toEqual([]);
+  });
+
+  test('`unique symbol` in English, where `unique` is still a name', async () => {
+    expect(typescriptOf('эълон собит р: unique symbol;')).toBe('declare const р: unique symbol;');
+    expect(await run('собит unique = 1;\nчоп.сабт(unique);')).toEqual(['1']);
+  });
+
+  test('a getter and a setter of different types', async () => {
+    const source = [
+      'синф Андоза {',
+      '    #қимат = 0;',
+      '    get қимат(): рақам { бозгашт ин.#қимат; }',
+      '    set қимат(қ: рақам | сатр) { ин.#қимат = Number(қ); }',
+      '}',
+      'собит а = нав Андоза();',
+      'а.қимат = "3";',
+      'собит н: рақам = а.қимат + 1;',
+      'чоп.сабт(н);',
+    ].join('\n');
+    expect(await run(source)).toEqual(['4']);
+    expect(check(`${source}\nа.қимат = дуруст;`)).toEqual([
+      "TYPE_NOT_ASSIGNABLE 10:11 Type 'true' is not assignable to type 'рақам | сатр'",
+    ]);
+  });
+});

@@ -370,6 +370,7 @@ describe('VS Code extension: keyword coverage', () => {
       abstract: 'abstract синф А {}',
       readonly: 'readonly х = 1;',
       keyof: 'навъ К = keyof Т;',
+      unique: 'эълон собит р: unique symbol;',
     };
     for (const [word, source] of Object.entries(contexts)) {
       expect([word, covered(source, word)]).toEqual([word, true]);
