@@ -133,6 +133,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * An enum member initialized by a template literal whose substitutions are constants (`Ф = \`${Н}-${А}\``) was computed at run time, so the enum also mapped its string value back to the member name, which TypeScript does for number members only; the template is folded to a string, as TypeScript folds it, and so is a member read as `Р[\`А\`]`.
 * A named function expression (`собит факт = функсия ф(н) { … ф(н - 1) … }`, also `функсия* г()`, `ҳамзамон функсия к()`), valid in JavaScript and TypeScript, was the parse error "Expected '(' after 'функсия'"; the name is bound in the function's body only, for both type checkers, the output and `somon lsp`.
 * A shorthand property with a default in a destructuring assignment (`({ а = 1, б } = о)`, `[{ а = 1 }] = рӯйхат`, `барои ({ а = 1 } аз рӯйхат)`), valid JavaScript and TypeScript, was the parse error "Expected ':' after property key"; it is the default of `а`. Anywhere else (`({ а = 1 })`) it is the error "Invalid shorthand property initializer", as in JavaScript.
+* The type checker did not know the names an exported destructuring declaration of a namespace binds (`номфазо Н { содир собит { а } = о; }`): `Н.а` had no type, so nothing using it was checked, and another block of the namespace could not use `а`; they are members of the namespace, typed as declared.
 
 ## 0.4.0 (2026-10-09)
 

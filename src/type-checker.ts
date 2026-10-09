@@ -226,6 +226,15 @@ interface FunctionContext {
   thisType?: Type;
 }
 
+/** A binding target: a name or a destructuring pattern. */
+type Pattern =
+  | Identifier
+  | ArrayPattern
+  | ObjectPattern
+  | AssignmentPattern
+  | SpreadElement
+  | RestElement;
+
 type FunctionLike = {
   /** The name of a function declaration or a named function expression. */
   name?: Identifier;
@@ -1076,10 +1085,8 @@ export class TypeChecker {
   /** Names a declaration binds (or, for interfaces and type aliases, declares as types). */
   private declaredNames(statement: Statement): string[] {
     switch (statement.type) {
-      case 'VariableDeclaration': {
-        const identifier = (statement as VariableDeclaration).identifier;
-        return identifier.type === 'Identifier' ? [identifier.name] : [];
-      }
+      case 'VariableDeclaration':
+        return TypeChecker.patternNames((statement as VariableDeclaration).identifier);
       case 'VariableDeclarationList':
         return (statement as VariableDeclarationList).declarations.flatMap(d =>
           this.declaredNames(d)
@@ -1094,6 +1101,29 @@ export class TypeChecker {
         return [(statement as FunctionDeclaration).name.name];
       default:
         return [];
+    }
+  }
+
+  /** Names a binding declares: `х`, or each name of a pattern (`{ а, б: [в, ...г] = [] }`). */
+  private static patternNames(pattern: Pattern): string[] {
+    switch (pattern.type) {
+      case 'Identifier':
+        return [(pattern as Identifier).name];
+      case 'ArrayPattern':
+        return (pattern as ArrayPattern).elements.flatMap(element =>
+          element ? TypeChecker.patternNames(element as Pattern) : []
+        );
+      case 'ObjectPattern':
+        return (pattern as ObjectPattern).properties.flatMap(property =>
+          TypeChecker.patternNames(
+            (property.type === 'PropertyPattern' ? property.value : property) as Pattern
+          )
+        );
+      case 'AssignmentPattern':
+        return TypeChecker.patternNames((pattern as AssignmentPattern).left);
+      default:
+        // `...рест`
+        return TypeChecker.patternNames((pattern as SpreadElement).argument as Pattern);
     }
   }
 
@@ -2007,16 +2037,7 @@ export class TypeChecker {
     return this.inferClassExpressionType(init as ClassExpression, name);
   }
 
-  private bindPatternTypes(
-    pattern:
-      | Identifier
-      | ArrayPattern
-      | ObjectPattern
-      | AssignmentPattern
-      | SpreadElement
-      | RestElement,
-    type: Type
-  ): void {
+  private bindPatternTypes(pattern: Pattern, type: Type): void {
     switch (pattern.type) {
       case 'Identifier':
         this.declare((pattern as Identifier).name, type);
