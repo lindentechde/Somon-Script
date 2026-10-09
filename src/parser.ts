@@ -2258,7 +2258,9 @@ export class Parser {
 
   /**
    * `навъи` / `typeof`, `void` and `delete` act as unary operators when an
-   * operand follows; otherwise they are ordinary identifiers.
+   * operand follows; otherwise they are ordinary identifiers. `typeof`,
+   * `void` and `delete` are reserved words, so `void -1` is `void (-1)`;
+   * `навъи` is a name too, so `навъи - 1` stays a subtraction.
    */
   private unaryKeywordOperator(): string | null {
     const token = this.peek();
@@ -2283,8 +2285,30 @@ export class Parser {
         TokenType.LEFT_BRACKET,
         TokenType.NOT,
         TokenType.BITWISE_NOT,
-      ].includes(next.type);
+      ].includes(next.type) ||
+      // `навъи {}`: a name is never followed by `{` on its line
+      (next.type === TokenType.LEFT_BRACE && next.line === token.line) ||
+      // `навъи --х`, but `навъи++` (a name, incremented)
+      (Parser.isUpdateToken(next) && this.isOperandAfterUpdate(token)) ||
+      (token.type === TokenType.IDENTIFIER &&
+        [TokenType.MINUS, TokenType.PLUS].includes(next.type));
     return startsOperand ? operator : null;
+  }
+
+  private static isUpdateToken(token: Token): boolean {
+    return token.type === TokenType.INCREMENT || token.type === TokenType.DECREMENT;
+  }
+
+  /** Whether `++`/`--` after a unary keyword updates the name after it, all on one line. */
+  private isOperandAfterUpdate(keyword: Token): boolean {
+    const update = this.tokens[this.current + 1];
+    const operand = this.tokens[this.current + 2];
+    return (
+      operand !== undefined &&
+      this.isIdentifierNameToken(operand) &&
+      update.line === keyword.line &&
+      operand.line === keyword.line
+    );
   }
 
   private static readonly UNARY_KEYWORDS: ReadonlySet<string> = new Set([
@@ -5926,7 +5950,10 @@ export class Parser {
     if (this.check(TokenType.RIGHT_BRACE)) {
       this.advance();
     } else {
-      this.errors.push(`Expected '}' after class body at line ${this.peek().line}`);
+      const token = this.peek();
+      this.errors.push(
+        `Expected '}' after class body at line ${token.line}, column ${token.column}`
+      );
     }
 
     return body;
@@ -6977,26 +7004,36 @@ export class Parser {
   private parseSwitchCases(): SwitchCase[] {
     const cases: SwitchCase[] = [];
     let foundDefault = false;
+    // Tokens skipped up to the next `ҳолат`/`пешфарз` are one error, not one each
+    let skipping = false;
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
       if (this.match(TokenType.ҲОЛАТ)) {
+        skipping = false;
         cases.push(this.parseRegularCase());
         continue;
       }
 
       if (this.match(TokenType.ПЕШФАРЗ)) {
+        skipping = false;
         if (foundDefault) {
-          this.errors.push('Multiple default cases in switch');
+          const token = this.previous();
+          this.errors.push(
+            `Multiple default cases in switch at line ${token.line}, column ${token.column}`
+          );
         }
         foundDefault = true;
         cases.push(this.parseDefaultCase());
         continue;
       }
 
-      this.errors.push(
-        `Unexpected token '${this.peek().value}' in switch at line ${this.peek().line}`
-      );
-      this.advance();
+      const token = this.advance();
+      if (!skipping) {
+        this.errors.push(
+          `Unexpected token '${token.value}' in switch at line ${token.line}, column ${token.column}`
+        );
+      }
+      skipping = true;
     }
 
     return cases;

@@ -162,6 +162,25 @@ describe('Parser: operators', () => {
     expect(expr.left).toMatchObject({ type: 'UnaryExpression', operator: 'typeof' });
   });
 
+  test('typeof, void and delete before {, ++, -- and a sign', () => {
+    // Found by tests/fuzz.test.ts: `навъи {}`, `void ++х` and `typeof -1` did not parse
+    const unary = (source: string): unknown => expressionOf<UnaryExpression>(source);
+    expect(unary('навъи {};')).toMatchObject({
+      operator: 'typeof',
+      argument: { type: 'ObjectExpression' },
+    });
+    expect(unary('void ++х;')).toMatchObject({ operator: 'void', argument: { prefix: true } });
+    expect(unary('навъи --х;')).toMatchObject({ operator: 'typeof', argument: { operator: '--' } });
+    expect(unary('typeof -1;')).toMatchObject({ operator: 'typeof', argument: { operator: '-' } });
+    expect(unary('void +х;')).toMatchObject({ operator: 'void', argument: { operator: '+' } });
+    // `навъи` is also a name: a sign after it is subtraction, `++` after it an increment
+    expect(expressionOf<BinaryExpression>('навъи - 1;')).toMatchObject({ operator: '-' });
+    expect(expressionOf('навъи++;')).toMatchObject({ type: 'UpdateExpression', prefix: false });
+    expect(run('тағ х = 1; чоп.сабт(навъи {}, void -1, typeof -1, навъи --х, х);')).toEqual([
+      'object undefined number number 0',
+    ]);
+  });
+
   test('in and instanceof', () => {
     expect(expressionOf<BinaryExpression>('"а" дар о;').operator).toBe('in');
     expect(expressionOf<BinaryExpression>('х instanceof Хато;').operator).toBe('instanceof');
@@ -749,6 +768,23 @@ describe('Parser: error reporting', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/line 1, column 9/);
     expect(ast.body).toHaveLength(2);
+  });
+
+  test('a stray run of tokens in a switch is one error, with a position', () => {
+    // Found by tests/fuzz.test.ts: one error per token, each without a column
+    const { errors } = parse(
+      'интихоб (х) {\n  а б в;\n  ҳолат 1: шикастан;\n  пешфарз: шикастан;\n  пешфарз:\n}'
+    );
+    expect(errors).toEqual([
+      "Unexpected token 'а' in switch at line 2, column 3",
+      'Multiple default cases in switch at line 5, column 3',
+    ]);
+  });
+
+  test('an unclosed class body is reported with a position', () => {
+    expect(parse('синф К {').errors).toEqual([
+      expect.stringMatching(/^Expected '}' after class body at line 1, column \d+$/),
+    ]);
   });
 
   test('an error inside a block does not swallow the enclosing block', () => {
