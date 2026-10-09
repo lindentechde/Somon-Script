@@ -7,17 +7,17 @@
  * Licensed under the MIT License. See the LICENSE file for details.
  */
 
-import { getLocalizedProgram } from './cli/localized-program';
-import { i18n } from './cli/i18n';
+import { createProgram } from './cli/program';
+import { detectLanguage, i18n } from './cli/i18n';
 
-// Detect language from arguments before creating program
-const langIndex = process.argv.indexOf('--lang');
-if (langIndex !== -1 && process.argv[langIndex + 1]) {
-  const lang = process.argv[langIndex + 1];
-  if (lang === 'tj' || lang === 'ru' || lang === 'en') {
-    i18n.setLanguage(lang as 'en' | 'tj' | 'ru');
-  }
+// The language must be known before the program is built: command aliases,
+// descriptions and messages are taken from the active translation.
+try {
+  i18n.setLanguage(detectLanguage(process.argv.slice(2), process.env));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
 }
 
-const program = getLocalizedProgram();
+const program = createProgram();
 program.parse(process.argv);

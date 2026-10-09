@@ -145,18 +145,25 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'hello.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("Салом ҷаҳон!");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 0,
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 0, signal: null });
 
-    await program.parseAsync(['run', inputFile, '--strict', 'input.txt'], { from: 'user' });
+    await program.parseAsync(['run', inputFile, '--strict', 'input.txt', '--', '--flag'], {
+      from: 'user',
+    });
 
     expect(executeSpy).toHaveBeenCalledTimes(1);
     const [tempFilePath, forwardedArgv, spawnOptions] = executeSpy.mock.calls[0];
-    expect(tempFilePath).toContain(path.dirname(inputFile));
-    expect(tempFilePath).toMatch(/hello\.somon-run-[^.]+\.js$/);
-    expect(forwardedArgv).toEqual(['run', inputFile, '--strict', 'input.txt']);
+    // The bundle goes to a private temp directory, never next to the source.
+    expect(path.dirname(tempFilePath)).not.toBe(path.dirname(inputFile));
+    expect(path.basename(path.dirname(tempFilePath))).toMatch(/^somon-run-/);
+    expect(path.basename(tempFilePath)).toBe('hello.js');
+    // Only the program's own arguments are forwarded, not the CLI's.
+    expect(forwardedArgv).toEqual(['input.txt', '--flag']);
     expect(spawnOptions).toMatchObject({ cwd: path.dirname(inputFile) });
+    // The temp directory is removed once the program has finished.
+    expect(fs.existsSync(path.dirname(tempFilePath))).toBe(false);
     expect(process.exitCode).toBe(0);
 
     executeSpy.mockRestore();
@@ -600,9 +607,9 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'run-prod.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("run prod");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 0,
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 0, signal: null });
 
     await program.parseAsync(['run', inputFile, '--production'], { from: 'user' });
 
@@ -616,10 +623,9 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'run-error.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("test");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 1,
-      error: new Error('Execution failed'),
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 1, signal: null, error: new Error('Execution failed') });
 
     await program.parseAsync(['run', inputFile], { from: 'user' });
 
@@ -633,9 +639,9 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'run-signal.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("test");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      signal: 'SIGTERM',
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: null, signal: 'SIGTERM' });
 
     await program.parseAsync(['run', inputFile], { from: 'user' });
 
@@ -762,15 +768,16 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'cleanup.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("cleanup");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 0,
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 0, signal: null });
 
     await program.parseAsync(['run', inputFile], { from: 'user' });
 
-    // Verify temp file was cleaned up
-    const tempFiles = fs.readdirSync(tempDir).filter(f => f.includes('.somon-run-'));
-    expect(tempFiles.length).toBe(0);
+    // Verify the temp directory was cleaned up and nothing was written next to the source
+    const [tempFilePath] = executeSpy.mock.calls[0];
+    expect(fs.existsSync(path.dirname(tempFilePath))).toBe(false);
+    expect(fs.readdirSync(tempDir)).toEqual(['cleanup.som']);
 
     executeSpy.mockRestore();
   });
@@ -789,9 +796,9 @@ describe('CLI Program (in-process)', () => {
 
     fs.writeFileSync(inputFile, somonCode);
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 0,
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 0, signal: null });
 
     // Run with absolute path (this should not cause path duplication)
     const absolutePath = path.resolve(inputFile);
@@ -804,7 +811,7 @@ describe('CLI Program (in-process)', () => {
     // Verify the compiled file path doesn't contain duplicated paths
     const [tempFilePath] = executeSpy.mock.calls[0];
     expect(tempFilePath).toBeTruthy();
-    expect(tempFilePath).toContain(path.dirname(absolutePath));
+    expect(path.basename(tempFilePath)).toBe('hello_world.js');
     // Ensure path is not duplicated (shouldn't contain the path twice)
     const pathParts = tempFilePath.split(path.sep);
     const uniqueParts = new Set(pathParts);
@@ -900,9 +907,9 @@ describe('CLI Program (in-process)', () => {
     const inputFile = path.join(tempDir, 'no-type.som');
     fs.writeFileSync(inputFile, 'чоп.сабт("no type check");');
 
-    const executeSpy = jest.spyOn(cliProgram.cliRuntime, 'executeCompiledFile').mockReturnValue({
-      status: 0,
-    } as ReturnType<typeof cliProgram.cliRuntime.executeCompiledFile>);
+    const executeSpy = jest
+      .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+      .mockResolvedValue({ status: 0, signal: null });
 
     await program.parseAsync(['run', inputFile, '--no-type-check'], { from: 'user' });
 
@@ -933,5 +940,306 @@ describe('CLI Program (in-process)', () => {
 
     const outputFile = path.join(tempDir, 'no-min.js');
     expect(fs.existsSync(outputFile)).toBe(true);
+  });
+  describe('review regressions', () => {
+    const TYPE_ERROR_SOURCE = 'тағйирёбанда х: рақам = "матн";\nчоп.сабт(х);';
+
+    test('compile: --no-type-check skips type checking', () => {
+      const program = createProgram();
+      program.exitOverride();
+      const inputFile = path.join(tempDir, 'te.som');
+      fs.writeFileSync(inputFile, TYPE_ERROR_SOURCE);
+
+      program.parse(['compile', inputFile, '--no-type-check'], { from: 'user' });
+
+      expect(process.exitCode).toBe(0);
+      const output = fs.readFileSync(path.join(tempDir, 'te.js'), 'utf-8');
+      expect(output).toContain('"матн"');
+    });
+
+    test('compile: type errors are still reported without --no-type-check', () => {
+      const program = createProgram();
+      program.exitOverride();
+      const inputFile = path.join(tempDir, 'te.som');
+      fs.writeFileSync(inputFile, TYPE_ERROR_SOURCE);
+
+      program.parse(['compile', inputFile], { from: 'user' });
+
+      expect(process.exitCode).toBe(1);
+      expect(fs.existsSync(path.join(tempDir, 'te.js'))).toBe(false);
+    });
+
+    test('run: --no-type-check and config compilerOptions reach the module system', async () => {
+      const inputFile = path.join(tempDir, 'te.som');
+      fs.writeFileSync(inputFile, TYPE_ERROR_SOURCE);
+      const executeSpy = jest
+        .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+        .mockImplementation(async filePath => {
+          // The bundle must exist (type checking skipped) while the program runs.
+          expect(fs.readFileSync(filePath, 'utf-8')).toContain('"матн"');
+          return { status: 0, signal: null };
+        });
+
+      try {
+        await createProgram().parseAsync(['run', inputFile], { from: 'user' });
+        expect(executeSpy).not.toHaveBeenCalled();
+        expect(process.exitCode).toBe(1);
+
+        process.exitCode = 0;
+        await createProgram().parseAsync(['run', inputFile, '--no-type-check'], {
+          from: 'user',
+        });
+        expect(executeSpy).toHaveBeenCalledTimes(1);
+        expect(process.exitCode).toBe(0);
+
+        fs.writeFileSync(
+          path.join(tempDir, 'somon.config.json'),
+          JSON.stringify({ compilerOptions: { noTypeCheck: true } })
+        );
+        await createProgram().parseAsync(['run', inputFile], { from: 'user' });
+        expect(executeSpy).toHaveBeenCalledTimes(2);
+        expect(process.exitCode).toBe(0);
+      } finally {
+        executeSpy.mockRestore();
+      }
+    });
+
+    test('run: --target is passed through to the module system', async () => {
+      const inputFile = path.join(tempDir, 'target.som');
+      fs.writeFileSync(inputFile, 'собит а = 5;\nчоп.сабт(а);');
+      let bundled = '';
+      const executeSpy = jest
+        .spyOn(cliProgram.cliRuntime, 'executeCompiledFile')
+        .mockImplementation(async filePath => {
+          bundled = fs.readFileSync(filePath, 'utf-8');
+          return { status: 0, signal: null };
+        });
+
+      try {
+        await createProgram().parseAsync(['run', inputFile, '--target', 'es5'], {
+          from: 'user',
+        });
+        expect(bundled).toContain('var а = 5');
+      } finally {
+        executeSpy.mockRestore();
+      }
+    });
+
+    test('bundle: --no-type-check skips type checking', async () => {
+      const inputFile = path.join(tempDir, 'te.som');
+      fs.writeFileSync(inputFile, TYPE_ERROR_SOURCE);
+      const outputFile = path.join(tempDir, 'te.bundle.js');
+
+      await createProgram().parseAsync(['bundle', inputFile], { from: 'user' });
+      expect(process.exitCode).toBe(1);
+      expect(fs.existsSync(outputFile)).toBe(false);
+
+      process.exitCode = 0;
+      await createProgram().parseAsync(['bundle', inputFile, '--no-type-check'], {
+        from: 'user',
+      });
+      expect(process.exitCode).toBe(0);
+      expect(fs.readFileSync(outputFile, 'utf-8')).toContain('"матн"');
+    });
+
+    test('compile: a non-.som input is written to <input>.js and never overwritten', () => {
+      const inputFile = path.join(tempDir, 'src.txt');
+      const source = 'чоп.сабт("салом");';
+      fs.writeFileSync(inputFile, source);
+
+      createProgram().parse(['compile', inputFile], { from: 'user' });
+
+      expect(fs.readFileSync(inputFile, 'utf-8')).toBe(source);
+      expect(fs.readFileSync(`${inputFile}.js`, 'utf-8')).toContain('console.log');
+    });
+
+    test('compile: an extension-less input with --out-dir keeps its name plus .js', () => {
+      const inputFile = path.join(tempDir, 'script');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+      const outDir = path.join(tempDir, 'out');
+
+      createProgram().parse(['compile', inputFile, '--out-dir', outDir], { from: 'user' });
+
+      expect(fs.existsSync(path.join(outDir, 'script.js'))).toBe(true);
+    });
+
+    test.each([
+      ['compile', '-o'],
+      ['bundle', '-o'],
+    ])('%s: refuses an output path equal to the input', async (command, flag) => {
+      const inputFile = path.join(tempDir, 'same.som');
+      const source = 'чоп.сабт("салом");';
+      fs.writeFileSync(inputFile, source);
+      process.chdir(tempDir);
+
+      await createProgram().parseAsync([command, inputFile, flag, './same.som'], {
+        from: 'user',
+      });
+
+      expect(process.exitCode).toBe(1);
+      expect(fs.readFileSync(inputFile, 'utf-8')).toBe(source);
+      expect(consoleErrorSpy.mock.calls.some(c => String(c[0]).includes('same as the input'))).toBe(
+        true
+      );
+    });
+
+    test('compile: config outDir/output resolve against the config file directory', () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'somon.config.json'),
+        JSON.stringify({ compilerOptions: { outDir: 'dist' } })
+      );
+      const srcDir = path.join(tempDir, 'src');
+      fs.mkdirSync(srcDir);
+      const inputFile = path.join(srcDir, 'main.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+
+      createProgram().parse(['compile', inputFile], { from: 'user' });
+
+      expect(fs.existsSync(path.join(tempDir, 'dist', 'main.js'))).toBe(true);
+      expect(fs.existsSync(path.join(srcDir, 'dist'))).toBe(false);
+
+      fs.writeFileSync(
+        path.join(tempDir, 'somon.config.json'),
+        JSON.stringify({ compilerOptions: { output: 'build/app.js' } })
+      );
+      createProgram().parse(['compile', inputFile], { from: 'user' });
+      expect(fs.existsSync(path.join(tempDir, 'build', 'app.js'))).toBe(true);
+    });
+
+    test('bundle: config bundle.output resolves against the config file directory', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'somon.config.json'),
+        JSON.stringify({ bundle: { output: 'dist/app.js' } })
+      );
+      const srcDir = path.join(tempDir, 'src');
+      fs.mkdirSync(srcDir);
+      const inputFile = path.join(srcDir, 'main.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+
+      await createProgram().parseAsync(['bundle', inputFile], { from: 'user' });
+
+      expect(process.exitCode).toBe(0);
+      expect(fs.existsSync(path.join(tempDir, 'dist', 'app.js'))).toBe(true);
+    });
+
+    test('bundle: -o resolves against the current directory', async () => {
+      const srcDir = path.join(tempDir, 'src');
+      fs.mkdirSync(srcDir);
+      const inputFile = path.join(srcDir, 'main.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+      process.chdir(tempDir);
+
+      await createProgram().parseAsync(['bundle', inputFile, '-o', 'out/app.js'], {
+        from: 'user',
+      });
+
+      expect(fs.existsSync(path.join(tempDir, 'out', 'app.js'))).toBe(true);
+    });
+
+    test('moduleSystem.resolution.baseUrl resolves against the config file directory', async () => {
+      fs.writeFileSync(
+        path.join(tempDir, 'somon.config.json'),
+        JSON.stringify({
+          moduleSystem: { resolution: { baseUrl: '.', paths: { '@lib/*': ['lib/*'] } } },
+        })
+      );
+      fs.mkdirSync(path.join(tempDir, 'lib'));
+      fs.writeFileSync(path.join(tempDir, 'lib', 'util.som'), 'содир собит қимат = 42;');
+      const srcDir = path.join(tempDir, 'src');
+      fs.mkdirSync(srcDir);
+      const inputFile = path.join(srcDir, 'main.som');
+      fs.writeFileSync(inputFile, 'ворид { қимат } аз "@lib/util";\nчоп.сабт(қимат);');
+      const outputFile = path.join(tempDir, 'bundle.js');
+
+      await createProgram().parseAsync(['bundle', inputFile, '-o', outputFile], { from: 'user' });
+
+      expect(process.exitCode).toBe(0);
+      expect(fs.readFileSync(outputFile, 'utf-8')).toContain('42');
+    });
+
+    test('compile: an unwritable output path is reported with exit code 1', () => {
+      const inputFile = path.join(tempDir, 'w.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+      // A regular file cannot be used as a directory.
+      const output = path.join(inputFile, 'out.js');
+
+      createProgram().parse(['compile', inputFile, '-o', output], { from: 'user' });
+
+      expect(process.exitCode).toBe(1);
+      expect(consoleErrorSpy.mock.calls.some(c => String(c[0]) === 'Error:')).toBe(true);
+    });
+
+    test('--production is accepted, hidden from help and reported as deprecated', () => {
+      const inputFile = path.join(tempDir, 'prod.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+
+      createProgram().parse(['compile', inputFile, '--production'], { from: 'user' });
+
+      expect(fs.existsSync(path.join(tempDir, 'prod.js'))).toBe(true);
+      expect(consoleWarnSpy.mock.calls.some(c => String(c[0]).includes('--production'))).toBe(true);
+      for (const name of ['compile', 'run', 'bundle']) {
+        const help = createProgram()
+          .commands.find(cmd => cmd.name() === name)!
+          .helpInformation();
+        expect(help).not.toContain('--production');
+      }
+    });
+
+    test('--target is validated on the command line', () => {
+      const inputFile = path.join(tempDir, 'target.som');
+      fs.writeFileSync(inputFile, 'чоп.сабт(1);');
+      const program = createProgram();
+      program.exitOverride();
+      program.commands.forEach(cmd => cmd.exitOverride().configureOutput({ writeErr: () => {} }));
+
+      expect(() =>
+        program.parse(['compile', inputFile, '--target', 'es3000'], { from: 'user' })
+      ).toThrow(/es3000/);
+      expect(fs.existsSync(path.join(tempDir, 'target.js'))).toBe(false);
+    });
+
+    test('compile --watch: a successful recompile clears the earlier failure', () => {
+      const chokidarModule = require('chokidar');
+      const watchMock = chokidarModule.watch as jest.Mock;
+      // Earlier tests reset the mock, so install a minimal fake watcher.
+      const listeners = new Map<string, (changedPath: string) => void>();
+      const fakeWatcher = {
+        on: jest.fn((event: string, handler: (changedPath: string) => void) => {
+          listeners.set(event, handler);
+          return fakeWatcher;
+        }),
+        close: jest.fn().mockResolvedValue(undefined),
+      };
+      watchMock.mockReset();
+      watchMock.mockReturnValue(fakeWatcher);
+      const onceSpy = jest.spyOn(process, 'once');
+
+      const inputFile = path.join(tempDir, 'w.som');
+      fs.writeFileSync(inputFile, TYPE_ERROR_SOURCE);
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      try {
+        createProgram().parse(['compile', inputFile, '--watch'], { from: 'user' });
+        expect(process.exitCode).toBe(1);
+
+        fs.writeFileSync(inputFile, 'тағйирёбанда х: рақам = 1;\nчоп.сабт(х);');
+        listeners.get('change')!(path.resolve(inputFile));
+        expect(process.exitCode).toBe(0);
+        expect(fs.existsSync(path.join(tempDir, 'w.js'))).toBe(true);
+
+        // Exactly one shutdown handler per signal.
+        const signals = onceSpy.mock.calls.map(call => call[0]);
+        expect(signals.filter(signal => signal === 'SIGINT')).toHaveLength(1);
+        expect(signals.filter(signal => signal === 'SIGTERM')).toHaveLength(1);
+      } finally {
+        for (const call of onceSpy.mock.calls) {
+          process.removeListener(call[0] as 'SIGINT', call[1]);
+        }
+        onceSpy.mockRestore();
+        process.env.NODE_ENV = originalEnv;
+        watchMock.mockReset();
+      }
+    });
   });
 });

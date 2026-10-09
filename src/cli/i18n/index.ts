@@ -31,7 +31,6 @@ export interface Translations {
         noTypeCheck: string;
         strict: string;
         watch: string;
-        production: string;
       };
       messages: {
         fileNotFound: (_file: string) => string;
@@ -42,7 +41,11 @@ export interface Translations {
         watching: (_file: string) => string;
         recompiling: (_file: string) => string;
         configChanged: (_file: string) => string;
+        sourceRemoved: (_file: string) => string;
+        configRemoved: (_file: string) => string;
+        stoppingWatcher: (_signal: string) => string;
         watchError: string;
+        watchCloseFailed: string;
       };
     };
     run: {
@@ -52,21 +55,12 @@ export interface Translations {
       usage: string;
       args: {
         input: string;
-      };
-      options: {
-        target: string;
-        sourceMap: string;
-        noSourceMap: string;
-        minify: string;
-        noMinify: string;
-        noTypeCheck: string;
-        strict: string;
-        production: string;
+        args: string;
       };
       messages: {
         failedToExecute: string;
         terminatedWithSignal: (_signal: string) => string;
-        productionValidationFailed: string;
+        cleanupFailed: string;
       };
     };
     init: {
@@ -92,11 +86,8 @@ export interface Translations {
       options: {
         output: string;
         format: string;
-        minify: string;
-        sourceMap: string;
         inlineSources: string;
         externals: string;
-        production: string;
       };
       messages: {
         bundling: (_input: string) => string;
@@ -155,72 +146,78 @@ export interface Translations {
         resolveError: string;
       };
     };
-    serve: {
-      name: string;
-      description: string;
-      options: {
-        port: string;
-        config: string;
-        production: string;
-        json: string;
-      };
-    };
-    help: {
-      name: string;
-      description: string;
-    };
   };
   common: {
     version: string;
     help: string;
-    displayHelp: string;
     error: string;
     configError: string;
-    productionValidationFailed: string;
     languageOption: string;
+    invalidLanguage: (_value: string) => string;
+    outputEqualsInput: (_file: string) => string;
+    productionDeprecated: string;
   };
 }
 
+type Environment = Readonly<Record<string, string | undefined>>;
+
+export const LANGUAGES: readonly Language[] = ['en', 'tj', 'ru'];
+
+const translations: Record<Language, Translations> = {
+  en: require('./translations/en').default,
+  tj: require('./translations/tj').default,
+  ru: require('./translations/ru').default,
+};
+
+function isLanguage(value: string): value is Language {
+  return (LANGUAGES as readonly string[]).includes(value);
+}
+
+// Matches the language part of a POSIX locale such as 'ru_RU.UTF-8', 'tg_TJ' or 'tj'.
+const LOCALE_PATTERN = /^(ru|tg|tj)(?:[_.@-]|$)/i;
+
+function languageFromLocale(locale: string): Language {
+  const match = LOCALE_PATTERN.exec(locale);
+  if (!match) return 'en';
+  return match[1].toLowerCase() === 'ru' ? 'ru' : 'tj';
+}
+
+/**
+ * Language from the environment: SOMON_LANG, then the POSIX locale variables in
+ * their standard precedence (LC_ALL > LC_MESSAGES > LANG). Empty values are ignored.
+ */
+export function detectEnvLanguage(env: Environment): Language {
+  const locale = [env.SOMON_LANG, env.LC_ALL, env.LC_MESSAGES, env.LANG].find(
+    value => value !== undefined && value !== ''
+  );
+  return locale ? languageFromLocale(locale) : 'en';
+}
+
+/**
+ * Detect the CLI language from the user arguments (`--lang X` or `--lang=X`, the
+ * last one before `--` wins) and fall back to the environment.
+ * Throws when `--lang` names an unsupported language.
+ */
+export function detectLanguage(argv: readonly string[], env: Environment): Language {
+  let requested: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--') break;
+    if (arg === '--lang' && i + 1 < argv.length) {
+      requested = argv[++i];
+    } else if (arg.startsWith('--lang=')) {
+      requested = arg.slice('--lang='.length);
+    }
+  }
+
+  const envLanguage = detectEnvLanguage(env);
+  if (requested === undefined) return envLanguage;
+  if (isLanguage(requested)) return requested;
+  throw new Error(translations[envLanguage].common.invalidLanguage(requested));
+}
+
 class I18n {
-  private language: Language = 'en';
-  private readonly translations: Map<Language, Translations> = new Map();
-
-  constructor() {
-    this.detectLanguage();
-    this.loadTranslations();
-  }
-
-  private detectLanguage(): void {
-    // Check environment variables
-    const envLang =
-      process.env.SOMON_LANG || process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES;
-
-    if (envLang) {
-      if (envLang.includes('tj') || envLang.includes('tg')) {
-        this.language = 'tj';
-      } else if (envLang.includes('ru')) {
-        this.language = 'ru';
-      } else {
-        this.language = 'en';
-      }
-    }
-
-    // Check CLI argument for language override
-    const langIndex = process.argv.indexOf('--lang');
-    if (langIndex !== -1 && process.argv[langIndex + 1]) {
-      const lang = process.argv[langIndex + 1];
-      if (lang === 'tj' || lang === 'ru' || lang === 'en') {
-        this.language = lang as Language;
-      }
-    }
-  }
-
-  private loadTranslations(): void {
-    // Lazy load translations based on selected language
-    this.translations.set('en', require('./translations/en').default);
-    this.translations.set('tj', require('./translations/tj').default);
-    this.translations.set('ru', require('./translations/ru').default);
-  }
+  private language: Language = detectEnvLanguage(process.env);
 
   public setLanguage(lang: Language): void {
     this.language = lang;
@@ -231,7 +228,7 @@ class I18n {
   }
 
   public t(): Translations {
-    return this.translations.get(this.language) || this.translations.get('en')!;
+    return translations[this.language];
   }
 
   public get isRTL(): boolean {
