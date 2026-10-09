@@ -219,22 +219,21 @@ function emitSom(fileName: string, source: string, ast?: Program): TsEmitResult 
 /**
  * A module with ambient modules references their declaration file, so they
  * are declared whenever the module is part of the program. The directive
- * goes first (after a shebang); the mappings move down a line.
+ * goes first (after a shebang, which has no mapping); the mappings move down
+ * a line.
  */
 function withAmbientReference(result: TsEmitResult, somFile: string): TsEmitResult {
   if (!result.ambient) return result;
   const directive = `/// <reference path="./${path.basename(somFile)}${AMBIENT_SUFFIX}" />`;
   const lines = result.code.split('\n');
-  const at = lines[0]?.startsWith('#!') ? 1 : 0;
-  lines.splice(at, 0, directive);
+  lines.splice(lines[0].startsWith('#!') ? 1 : 0, 0, directive);
   return {
     ...result,
     code: lines.join('\n'),
-    mappings: result.mappings.map(mapping =>
-      mapping.generated.line > at
-        ? { ...mapping, generated: { ...mapping.generated, line: mapping.generated.line + 1 } }
-        : mapping
-    ),
+    mappings: result.mappings.map(mapping => ({
+      ...mapping,
+      generated: { ...mapping.generated, line: mapping.generated.line + 1 },
+    })),
   };
 }
 
@@ -315,9 +314,11 @@ function createHost(
     directoryExists: directory => ts.sys.directoryExists(directory),
     getCanonicalFileName: fileName => fileName,
     useCaseSensitiveFileNames: () => ts.sys.useCaseSensitiveFileNames,
-    getNewLine: () => '\n',
+    // Required by the interface; TypeScript 5 takes the line break from `compilerOptions.newLine`
+    getNewLine: /* istanbul ignore next */ () => '\n',
     fileExists,
-    readFile: fileName => (isVirtual(fileName) ? virtualCode(fileName) : ts.sys.readFile(fileName)),
+    // TypeScript reads package.json files with it; source files come from getSourceFile
+    readFile: fileName => ts.sys.readFile(fileName),
     realpath: ts.sys.realpath,
     resolveModuleNameLiterals(moduleLiterals, containingFile, redirectedReference, compilerOpts) {
       return moduleLiterals.map(literal => {
@@ -482,8 +483,9 @@ function toTypeCheckError(
   let column = 1;
   if (diagnostic.file && diagnostic.start !== undefined) {
     const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+    // A diagnostic is in the checked file or in the declaration file of its ambient modules
     const mappings = isAmbient(diagnostic.file.fileName)
-      ? (file.emitted.ambient?.mappings ?? [])
+      ? file.emitted.ambient!.mappings
       : file.emitted.mappings;
     const original = originalPosition(mappings, position.line + 1, position.character);
     if (original) {
@@ -491,7 +493,8 @@ function toTypeCheckError(
       column = original.column + 1;
     }
   }
-  const sourceLine = file.source.split('\n')[line - 1] ?? '';
+  // Mapped positions are in the source
+  const sourceLine = file.source.split('\n')[line - 1];
   const raw = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
   return {
     code: `TS${diagnostic.code}`,
@@ -612,10 +615,10 @@ export function translateMessage(
   return translated;
 }
 
-/** `number[] | Promise<string>` → `рақам[] | Ваъда<сатр>`; string literal types are kept. */
+/**
+ * `number[] | Promise<string>` → `рақам[] | Ваъда<сатр>`. The quoted text has
+ * no `"`, so string literal types (`'"number"'`) never reach here.
+ */
 function translateTypeText(text: string): string {
-  return text.replace(/("[^"]*")|\b([A-Za-z]+)\b/g, (whole, literal?: string, name?: string) => {
-    if (literal || !name) return whole;
-    return TAJIK_TYPE_WORDS.get(name) ?? whole;
-  });
+  return text.replace(/\b[A-Za-z]+\b/g, name => TAJIK_TYPE_WORDS.get(name) ?? name);
 }
