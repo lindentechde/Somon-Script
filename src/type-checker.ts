@@ -1311,7 +1311,8 @@ export class TypeChecker {
     classType.implicitMembers = this.collectImplicitMembers(classDecl);
 
     if (classDecl.superClass) {
-      const parent = this.lookup(classDecl.superClass.name);
+      const parentName = TypeChecker.superClassName(classDecl);
+      const parent = parentName === undefined ? undefined : this.lookup(parentName);
       if (parent?.kind === 'class') {
         classType.baseType = parent;
       } else {
@@ -2208,7 +2209,8 @@ export class TypeChecker {
   private checkOverrides(classDecl: ClassDeclaration): void {
     const overriding = this.overridingMembers(classDecl);
     if (overriding.length === 0) return;
-    const base = classDecl.superClass ? this.lookup(classDecl.superClass.name) : undefined;
+    const baseName = TypeChecker.superClassName(classDecl);
+    const base = baseName === undefined ? undefined : this.lookup(baseName);
     for (const member of overriding) {
       const reason = this.invalidOverrideReason(classDecl, base, member);
       if (reason) {
@@ -2332,10 +2334,21 @@ export class TypeChecker {
     return classType;
   }
 
+  /** The name of a class's base class, or undefined for none or an expression (`Омехта(А)`). */
+  private static superClassName(classDecl: ClassDeclaration | ClassExpression): string | undefined {
+    const superClass = classDecl.superClass;
+    return superClass?.type === 'Identifier' ? (superClass as Identifier).name : undefined;
+  }
+
   private validateSuperClass(classDecl: ClassDeclaration): void {
     if (!classDecl.superClass) return;
 
-    const parentName = classDecl.superClass.name;
+    const parentName = TypeChecker.superClassName(classDecl);
+    // `мерос Н.Асос`, `мерос Омехта(Асос)`: the expression is checked, its class is not known
+    if (parentName === undefined) {
+      this.inferExpressionType(classDecl.superClass);
+      return;
+    }
     const parentType = this.lookup(parentName);
     const interfaceType = this.interfaceTable.get(parentName);
 
@@ -2388,7 +2401,7 @@ export class TypeChecker {
       parentType.kind === 'interface' ? 'an interface' : `a ${parentType.kind}`;
     this.addError(
       TypeCheckErrorCode.InvalidExtends,
-      `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass!.name}' is ${kindDescription}`,
+      `Class '${classDecl.name.name}' can only extend other classes, but '${TypeChecker.superClassName(classDecl)}' is ${kindDescription}`,
       classDecl.line,
       classDecl.column
     );

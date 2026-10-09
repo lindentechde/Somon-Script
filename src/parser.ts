@@ -5763,14 +5763,26 @@ export class Parser {
     };
   }
 
-  /** `мерос Асос<{ а: рақам }>`: the superclass and its type arguments (erased in JavaScript). */
-  private parseClassExtendsClause(): HeritageEntry | undefined {
+  /**
+   * `мерос Асос<Т>`: the base class, as in TypeScript any left-hand side
+   * expression (`мерос Н.Асос`, `мерос Омехта(Асос)`), and its type arguments.
+   */
+  private parseClassExtendsClause():
+    | { expression: Expression; typeArguments?: TypeNode[] }
+    | undefined {
     if (!this.match(TokenType.МЕРОС)) {
       return undefined;
     }
-
-    const token = this.parseImportOrExportName("Expected superclass name after 'мерос'");
-    return { token, typeArguments: this.parseNewTypeArguments() };
+    if (this.check(TokenType.LEFT_BRACE)) {
+      throw new Error(this.unexpectedTokenMessage("Expected superclass name after 'мерос'"));
+    }
+    const expression = this.applyCallChaining(this.primary());
+    // `мерос Асос<Т>` before a line break reads as an instantiation expression
+    if (expression.type === 'InstantiationExpression' && !this.parenthesized.has(expression)) {
+      const instantiation = expression as InstantiationExpression;
+      return { expression: instantiation.expression, typeArguments: instantiation.typeArguments };
+    }
+    return { expression, typeArguments: this.parseNewTypeArguments() };
   }
 
   private parseClassImplementsClause(): HeritageEntry[] {
@@ -5789,7 +5801,7 @@ export class Parser {
 
   /** The heritage fields of a class node, from its `мерос` / `татбиқ` clauses. */
   private heritageFields(
-    superClass: HeritageEntry | undefined,
+    superClass: { expression: Expression; typeArguments?: TypeNode[] } | undefined,
     implementsEntries: HeritageEntry[]
   ): Pick<
     ClassDeclaration,
@@ -5799,7 +5811,7 @@ export class Parser {
       ClassDeclaration,
       'superClass' | 'superTypeArguments' | 'implements' | 'implementsTypeArguments'
     > = {
-      superClass: superClass ? this.createIdentifier(superClass.token) : undefined,
+      superClass: superClass?.expression,
       implements: implementsEntries.map(entry => this.createIdentifier(entry.token)),
     };
     if (superClass?.typeArguments) fields.superTypeArguments = superClass.typeArguments;

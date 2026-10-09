@@ -143,6 +143,7 @@ type argument; otherwise `<` and `>` compare. As in TypeScript,
 | `[Symbol.iterator]() { }`, `"a b"()`  | same (computed and literal names) |
 | `m?(): T;`, `m?() { }`                | same (optional methods)           |
 | `m(x: number): T;` before `m(x) { }`  | same (overload signatures)        |
+| `extends mixin(B)`, `extends N.B`     | `мерос омехта(Б)`, `мерос Н.Б`    |
 | `get x(): A;` with `set x(v: A \| B)` | same (the setter decides writes)  |
 | `@dec m() { }`                        | `@ороиш м() { }` (decorators)     |
 

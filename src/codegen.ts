@@ -2927,7 +2927,7 @@ export class CodeGenerator {
     const className = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
     const typeParameters = this.typeParametersText(node.typeParameters);
     const extendsClause = node.superClass
-      ? ` extends ${this.generateIdentifier(node.superClass)}${this.typeArgumentsText(node.superTypeArguments)}`
+      ? ` extends ${this.generateExpression(node.superClass, PREC.CALL)}${this.typeArgumentsText(node.superTypeArguments)}`
       : '';
     const implementsClause = this.implementsClause(node);
     // JavaScript has no abstract classes: only TypeScript output gets `abstract` (classModifiers)

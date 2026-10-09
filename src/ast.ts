@@ -525,7 +525,8 @@ export interface ClassDeclaration extends Statement {
   name: Identifier;
   /** `синф Қуттӣ<Т мерос { а: рақам }>` */
   typeParameters?: TypeParameter[];
-  superClass?: Identifier;
+  /** The base class: a name or, as in TypeScript, any expression (`мерос Омехта(Асос)`). */
+  superClass?: Expression;
   /** Type arguments of the superclass: `мерос Асос<рақам>`. */
   superTypeArguments?: TypeNode[];
   implements?: Identifier[];
@@ -546,7 +547,8 @@ export interface ClassExpression extends Expression {
   abstract?: boolean;
   /** `синф<Т> { … }` */
   typeParameters?: TypeParameter[];
-  superClass?: Identifier;
+  /** The base class: a name or, as in TypeScript, any expression (`мерос Омехта(Асос)`). */
+  superClass?: Expression;
   superTypeArguments?: TypeNode[];
   implements?: Identifier[];
   implementsTypeArguments?: (TypeNode[] | undefined)[];
