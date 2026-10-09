@@ -11,7 +11,8 @@ module.exports = {
     node: true,
     jest: true,
   },
-  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/'],
+  // tests/fixtures holds input programs for the tools, not code of this project
+  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/', 'tests/fixtures/'],
   rules: {
     // General rules
     'no-console': 'off', // Allow console for CLI tool
