@@ -109,6 +109,52 @@ jobs:
     - name: Audit examples
       run: npm run audit:examples
 
+  runtimes:
+    # The examples and LeetCode solutions, compiled by SomonScript, run on Bun
+    # and Deno and must print what they print on Node.js
+    # (scripts/run-runtimes.js). Independent of the test matrix, and not part
+    # of the PR Checks Summary until it has proven reliable.
+    name: Run on ${{ matrix.runtime }}
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [bun, deno]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+
+    - name: Setup Bun
+      if: matrix.runtime == 'bun'
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Setup Deno
+      if: matrix.runtime == 'deno'
+      uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build
+      run: npm run build
+
+    - name: Run the examples and LeetCode solutions on ${{ matrix.runtime }}
+      run: node scripts/run-runtimes.js --runtime ${{ matrix.runtime }}
+
   pr-checks-summary:
     name: PR Checks Summary
     runs-on: ubuntu-latest

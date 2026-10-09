@@ -1,0 +1,65 @@
+name: Nightly Verification
+
+# The long verification runs that pull requests sample: every program on
+# every target (tests/targets-matrix.test.ts), every program in every cell of
+# the differential test against TypeScript (tests/differential.test.ts), and
+# many more fuzz runs (tests/fuzz.test.ts) with a new seed each night. A
+# failing fuzz property prints its seed and path; see
+# llm-guide/19-verification.md to replay it.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz-runs:
+        description: 'Runs per fuzz property'
+        required: false
+        default: '2000'
+      fuzz-seed:
+        description: 'Fuzz seed (empty: the run id)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  full-verification:
+    name: Full matrix, differential and fuzz tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      HUSKY: 0
+      SOMON_FULL_MATRIX: 1
+      SOMON_FUZZ_RUNS: ${{ github.event.inputs.fuzz-runs || '2000' }}
+      SOMON_FUZZ_SEED: ${{ github.event.inputs.fuzz-seed || github.run_id }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build
+      run: npm run build
+
+    - name: Fuzz seed
+      run: echo "SOMON_FUZZ_SEED=$SOMON_FUZZ_SEED, SOMON_FUZZ_RUNS=$SOMON_FUZZ_RUNS"
+
+    - name: Every program on every target
+      run: npx jest --ci tests/targets-matrix.test.ts
+
+    - name: Differential test against TypeScript, every cell
+      run: npx jest --ci tests/differential.test.ts
+
+    - name: Fuzz tests
+      run: npx jest --ci tests/fuzz.test.ts
