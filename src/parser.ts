@@ -2351,18 +2351,20 @@ export class Parser {
 
     let handler: CatchClause | undefined = undefined;
     if (this.match(TokenType.ГИРИФТАН)) {
-      this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'гирифтан'");
       let param: Identifier | undefined = undefined;
-      if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
-        const paramToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
-        param = {
-          type: 'Identifier',
-          name: paramToken.value,
-          line: paramToken.line,
-          column: paramToken.column,
-        };
+      // The binding is optional, as in `catch { … }` (ES2019).
+      if (this.match(TokenType.LEFT_PAREN)) {
+        if (this.check(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()) {
+          const paramToken = this.check(TokenType.IDENTIFIER) ? this.advance() : this.previous();
+          param = {
+            type: 'Identifier',
+            name: paramToken.value,
+            line: paramToken.line,
+            column: paramToken.column,
+          };
+        }
+        this.consume(TokenType.RIGHT_PAREN, "Expected ')' after catch parameter");
       }
-      this.consume(TokenType.RIGHT_PAREN, "Expected ')' after catch parameter");
       this.consume(TokenType.LEFT_BRACE, "Expected '{' after catch clause");
       const body = this.blockStatement();
 

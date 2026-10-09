@@ -1334,7 +1334,16 @@ export class CodeGenerator {
     }
 
     // Map built-in constructors/objects (when used as identifiers)
-    const builtinConstructors = ['сатр', 'рӯйхат', 'объект', 'математика', 'Риёзӣ', 'сатрМетодҳо'];
+    const builtinConstructors = [
+      'сатр',
+      'рӯйхат',
+      'объект',
+      'математика',
+      'Риёзӣ',
+      'сатрМетодҳо',
+      'ваъда',
+      'Ваъда',
+    ];
     return builtinConstructors.includes(name) ? this.builtinMappings.get(name) : undefined;
   }
 

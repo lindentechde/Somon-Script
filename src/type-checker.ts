@@ -191,6 +191,9 @@ export class TypeChecker {
     'хато',
     'Хато',
     'рӯйхат',
+    'сатр',
+    'ваъда', // Promise
+    'Ваъда',
     // Tajik literal keywords that surface as Identifier expressions
     'беқимат', // undefined
     'холӣ', // null (also a primitive type name)
