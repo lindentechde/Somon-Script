@@ -4715,7 +4715,6 @@ export class TypeChecker {
       this.isArrayAssignable(source, target) ||
       this.isTupleAssignable(source, target) ||
       this.isTupleToArrayAssignable(source, target) ||
-      this.isArrayToTupleAssignable(source, target) ||
       this.isUnionAssignable(source, target) ||
       this.isIntersectionAssignable(source, target)
     );
@@ -4860,22 +4859,6 @@ export class TypeChecker {
   private isTupleToArrayAssignable(source: Type, target: Type): boolean {
     if (source.kind !== 'tuple' || target.kind !== 'array' || !source.types) return false;
     return source.types.every(t => this.isAssignable(t, target.elementType ?? UNKNOWN));
-  }
-
-  private isArrayToTupleAssignable(source: Type, target: Type): boolean {
-    if (source.kind !== 'array' || target.kind !== 'tuple') {
-      return false;
-    }
-    // An array is assignable to a tuple if the array element type
-    // is assignable to all tuple element types
-    if (!target.types || target.types.length === 0) {
-      return true; // Empty tuple accepts any array
-    }
-    const sourceElementType = source.elementType || UNKNOWN;
-    // Check if source element type is compatible with all tuple positions
-    return target.types.every(tupleElementType =>
-      this.isAssignable(sourceElementType, tupleElementType)
-    );
   }
 
   private isUnionAssignable(source: Type, target: Type): boolean {

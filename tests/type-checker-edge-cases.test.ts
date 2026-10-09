@@ -26,6 +26,33 @@ function typeScriptErrors(source: string): string[] {
   );
 }
 
+describe('type checker: tuples', () => {
+  test('an array is not assignable to a tuple, of whatever elements', () => {
+    const source = [
+      'тағ а: рақам[] = [1];',
+      'тағ б: ҳар[] = [];',
+      'тағ т: [рақам] = а;',
+      'тағ у: [] = а;',
+      'тағ в: [рақам] = б;',
+      // Literals, returns, arguments and `чун` give tuples where a tuple is expected
+      'тағ к: [рақам, сатр] = [1, "а"];',
+      'функсия ф(): [рақам, рақам] { бозгашт [1, 2]; }',
+      'функсия г(п: [рақам, сатр]) {}',
+      'г([1, "б"]);',
+      'тағ ж: [сатр, рақам][] = [["а", 1]];',
+      'собит о = { п: [1, 2] чун [рақам, рақам] };',
+      'тағ з: [рақам, рақам] = о.п;',
+    ].join('\n');
+    // They were accepted when every element type fitted every position
+    expect(check(source)).toEqual([
+      "TYPE_NOT_ASSIGNABLE 3:18 Type 'рақам[]' is not assignable to type '[рақам]'",
+      "TYPE_NOT_ASSIGNABLE 4:13 Type 'рақам[]' is not assignable to type '[]'",
+      "TYPE_NOT_ASSIGNABLE 5:18 Type 'ҳар[]' is not assignable to type '[рақам]'",
+    ]);
+    expect(typeScriptErrors(source)).toEqual(['TS2322 3', 'TS2322 4', 'TS2322 5']);
+  });
+});
+
 describe('type checker: declared modules', () => {
   test('a module exports what it exports from another declared module', () => {
     const source = [
