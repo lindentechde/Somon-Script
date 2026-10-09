@@ -36,6 +36,8 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
   statement in SomonScript
 - **[16-targets.md](16-targets.md)** - JavaScript targets (ES5 … ESNext), what
   gets lowered, `lib`, class fields, bundle formats and browser use
+- **[17-tools.md](17-tools.md)** - Formatter (`somon fmt`), REPL (`somon repl`)
+  and TypeScript migration (`somon migrate`)
 
 ---
 
