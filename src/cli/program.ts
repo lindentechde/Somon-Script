@@ -260,6 +260,8 @@ export interface CompileOptions extends CompilerOptions {
   /** `--no-type-check` is stored by commander as `typeCheck: false`. */
   typeCheck?: boolean;
   production?: boolean;
+  /** Name of the input in the source map, relative to the map file. */
+  sourceFileName?: string;
 }
 
 interface MergedCompileOptions {
@@ -321,6 +323,7 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
     const result = compile(source, {
       target: options.target,
       sourceMap: options.sourceMap,
+      sourceFileName: options.sourceFileName,
       minify: options.minify,
       typeCheck: options.typeCheck !== false && !options.noTypeCheck,
       strict: options.strict,
@@ -647,16 +650,26 @@ export function createProgram(): Command {
           const { outputFile } = merged;
           if (isOutputSameAsInput(input, outputFile)) return false;
 
-          const result = compileFile(input, merged.options);
+          const outputDir = path.dirname(path.resolve(outputFile));
+          const result = compileFile(input, {
+            ...merged.options,
+            sourceFileName: path.relative(outputDir, path.resolve(input)).split(path.sep).join('/'),
+          });
           if (result.errors.length > 0) return false;
 
-          fs.mkdirSync(path.dirname(path.resolve(outputFile)), { recursive: true });
-          fs.writeFileSync(outputFile, result.code);
+          fs.mkdirSync(outputDir, { recursive: true });
+          const sourceMapFile =
+            merged.options.sourceMap && result.sourceMap ? `${outputFile}.map` : undefined;
+          let code = result.code;
+          if (sourceMapFile) {
+            const map = JSON.parse(result.sourceMap!) as { file?: string };
+            map.file = path.basename(outputFile);
+            fs.writeFileSync(sourceMapFile, JSON.stringify(map));
+            code = `${code}\n//# sourceMappingURL=${path.basename(sourceMapFile)}`;
+          }
+          fs.writeFileSync(outputFile, code);
           console.log(t().commands.compile.messages.compiled(input, outputFile));
-
-          if (merged.options.sourceMap && result.sourceMap) {
-            const sourceMapFile = `${outputFile}.map`;
-            fs.writeFileSync(sourceMapFile, result.sourceMap);
+          if (sourceMapFile) {
             console.log(t().commands.compile.messages.sourceMapGenerated(sourceMapFile));
           }
 
