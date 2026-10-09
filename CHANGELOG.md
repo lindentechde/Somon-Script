@@ -97,6 +97,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `ModuleResolver.resolve()` returned the whole specifier of a package subpath as `packageName` (`somon resolve pkg/lib/x` printed "Package: pkg/lib/x"); it is the package's name (`pkg`, `@scope/kit`).
 * A `package.json` that is not valid JSON made module resolution fail with JSON's bare message, which does not say which file is broken, and one that is not an object, or has a `main` that is not a string, failed with a `TypeError`; the error names the file (`Invalid package.json …/package.json: …`), and like Node a `main` that is not a string is ignored.
 * On Windows an import of a UNC path (`//server/share/lib/x`) outside `baseUrl` was resolved against `baseUrl`'s drive (`C:\server\share\lib\x`) as if it were project-relative; UNC paths are system paths like `C:\…`.
+* The dependency levels of the module registry treated a module reached a second time as level 0 (`main → c` and `main → b → c`), so `maxDependencyDepth` (`somon module-info --stats`) and the levels of `getDependencyTree()` were too small.
 
 ## 0.4.0 (2026-10-09)
 

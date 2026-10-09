@@ -297,26 +297,27 @@ export class ModuleRegistry {
     this.calculateLevels();
   }
 
+  /**
+   * A module's level is 0 without dependencies and otherwise one more than the
+   * deepest of its dependencies; a dependency back into the path being computed
+   * (a cycle) counts as 0.
+   */
   private calculateLevels(): void {
-    const visited = new Set<string>();
+    const done = new Set<string>();
+    const inProgress = new Set<string>();
 
     const calculateLevel = (moduleId: string): number => {
-      if (visited.has(moduleId)) return 0;
-      visited.add(moduleId);
+      // Called for nodes of the graph only: its keys and their resolved dependencies
+      const node = this.dependencyGraph.get(moduleId)!;
+      if (done.has(moduleId)) return node.level;
+      if (inProgress.has(moduleId)) return 0;
+      inProgress.add(moduleId);
 
-      const node = this.dependencyGraph.get(moduleId);
-      if (!node || node.dependencies.length === 0) {
-        node && (node.level = 0);
-        return 0;
-      }
+      const dependencyLevels = this.getResolvedDependencies(moduleId).map(calculateLevel);
+      node.level = node.dependencies.length === 0 ? 0 : Math.max(0, ...dependencyLevels) + 1;
 
-      // Use resolved adjacency for level calculation
-      const resolvedDeps = this.getResolvedDependencies(moduleId);
-      const maxDepLevel = resolvedDeps.length
-        ? Math.max(...resolvedDeps.map(depId => calculateLevel(depId)))
-        : 0;
-
-      node.level = maxDepLevel + 1;
+      inProgress.delete(moduleId);
+      done.add(moduleId);
       return node.level;
     };
 

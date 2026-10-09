@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { ModuleLoader, ModuleResolver, ModuleSystem } from '../src/module-system';
+import { ModuleLoader, ModuleRegistry, ModuleResolver, ModuleSystem } from '../src/module-system';
 import { isSystemPath } from '../src/module-system/module-resolver';
 import { canonicalTmpDir } from './helpers/paths';
 import type { ModuleSystemOptions } from '../src/module-system';
@@ -582,6 +582,55 @@ describe('module system regressions', () => {
       expect(graph.get(ids[1])).toEqual([ids[2]]);
       expect(ms.getStatistics().totalModules).toBe(3);
       expect(ms.getStatistics().totalDependencies).toBe(3);
+    });
+  });
+
+  describe('dependency levels', () => {
+    test('a module shared by several paths counts with its own depth', async () => {
+      // main → c → d and main → b → c: the longest chain is main, b, c, d
+      write({
+        'd.som': 'содир собит Д = 1;\n',
+        'c.som': 'ворид { Д } аз "./d";\nсодир собит В = Д;\n',
+        'b.som': 'ворид { В } аз "./c";\nсодир собит Б = В;\n',
+        'main.som': 'ворид { В } аз "./c";\nворид { Б } аз "./b";\nчоп.сабт(В + Б);\n',
+      });
+      const ms = createSystem();
+      await ms.loadModule('./main', root);
+
+      expect(ms.getStatistics().maxDependencyDepth).toBe(3);
+    });
+
+    test('levels of the dependency tree', () => {
+      const id = (name: string) => path.join(root, `${name}.som`);
+      const registry = new ModuleRegistry();
+      for (const [name, deps] of [
+        ['main', ['c', 'b']],
+        ['c', ['d']],
+        ['d', []],
+        ['b', ['c']],
+      ] as const) {
+        registry.register({
+          id: id(name),
+          resolvedPath: id(name),
+          source: '',
+          ast: { type: 'Program', body: [], line: 1, column: 1 },
+          dependencies: deps.map(dep => `./${dep}`),
+          resolvedDependencies: deps.map(id),
+          exports: { named: {} },
+          isLoaded: true,
+          isLoading: false,
+          lastAccessed: 0,
+        });
+      }
+      const levelOf = (name: string) => registry.getDependencyGraph().get(id(name))?.level;
+      expect(['main', 'b', 'c', 'd'].map(levelOf)).toEqual([3, 2, 1, 0]);
+      expect(registry.getDependencyTree(id('main'))).toMatchObject({
+        level: 3,
+        dependencies: [
+          { id: id('c'), level: 1 },
+          { id: id('b'), level: 2 },
+        ],
+      });
     });
   });
 
