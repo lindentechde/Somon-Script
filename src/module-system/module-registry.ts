@@ -242,8 +242,8 @@ export class ModuleRegistry {
     if (resolvedDependencies) {
       resolvedDeps = [...resolvedDependencies];
     } else {
-      const module = this.modules.get(moduleId);
-      const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+      // register() stores the module before its dependencies
+      const moduleDir = path.dirname(this.modules.get(moduleId)!.resolvedPath);
       resolvedDeps = [];
       for (const dep of dependencies) {
         const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
@@ -334,7 +334,7 @@ export class ModuleRegistry {
         const importDecl = statement as ImportDeclaration;
         const source = String(importDecl.source.value);
 
-        this.processImportSpecifiers(importDecl.specifiers || [], source, imports);
+        this.processImportSpecifiers(importDecl.specifiers, source, imports);
       }
     }
 
@@ -383,29 +383,29 @@ export class ModuleRegistry {
   }
 
   private processImportSpecifiers(
-    specifiers: Array<{ type: string; imported?: { name?: string } }>,
+    specifiers: ImportDeclaration['specifiers'],
     source: string,
     imports: ModuleImports
   ): void {
     for (const specifier of specifiers) {
       if (specifier.type === 'ImportDefaultSpecifier') {
-        // Initialize default import list lazily
-        imports.default ??= [];
-        imports.default.push(source);
+        (imports.default ??= []).push(source);
       } else if (specifier.type === 'ImportSpecifier') {
-        if (!imports.named[source]) imports.named[source] = [];
-        imports.named[source].push(specifier.imported?.name || '');
-      } else if (specifier.type === 'ImportNamespaceSpecifier') {
-        imports.namespace ??= [];
-        imports.namespace.push(source);
+        (imports.named[source] ??= []).push(specifier.imported.name);
+      } else {
+        (imports.namespace ??= []).push(source);
       }
     }
   }
 
-  // Get resolved dependencies for a given module ID
+  /**
+   * The dependencies of a node of the graph that are nodes too. A dependency that is a
+   * raw specifier (from a hand-built module's `resolvedDependencies`) is matched with
+   * the registered modules.
+   */
   private getResolvedDependencies(moduleId: string): string[] {
-    const node = this.dependencyGraph.get(moduleId);
-    if (!node) return [];
+    // Called for nodes of the graph only
+    const node = this.dependencyGraph.get(moduleId)!;
 
     const module = this.modules.get(moduleId);
     const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);

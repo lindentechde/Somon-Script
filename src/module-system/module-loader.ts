@@ -255,10 +255,11 @@ export class ModuleLoader {
     } catch (error) {
       // Keep module in cache with error state so callers can inspect broken dependencies
       module.isLoading = false;
+      // Reading the file (fs) fails with an Error
       const loadError =
         error instanceof ModuleLoadError
           ? error
-          : new ModuleLoadError(error instanceof Error ? error.message : String(error), {
+          : new ModuleLoadError((error as Error).message, {
               filePath: resolved.resolvedPath,
               cause: error,
             });
@@ -283,7 +284,8 @@ export class ModuleLoader {
         parser = new Parser(new Lexer(module.source).tokenize());
         module.ast = parser.parse();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        // The lexer throws an Error for what it cannot read (an unterminated string, …)
+        const message = (error as Error).message;
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${message}`, {
           filePath,
           ...locationOf(message),
@@ -306,10 +308,10 @@ export class ModuleLoader {
       try {
         JSON.parse(module.source);
       } catch (error) {
-        throw new ModuleLoadError(
-          `Invalid JSON in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
-          { filePath, cause: error }
-        );
+        throw new ModuleLoadError(`Invalid JSON in ${filePath}: ${(error as Error).message}`, {
+          filePath,
+          cause: error,
+        });
       }
       return [];
     }
@@ -332,17 +334,18 @@ export class ModuleLoader {
     importer: string
   ): ModuleLoadError {
     if (error instanceof ModuleLoadError) {
+      // The error of a dependency, which is another file (an import of the importer
+      // itself is a cycle, met in the cache)
       if (error.importer === undefined) {
         error.importer = importer;
         error.specifier = ref.specifier;
-        if (error.filePath !== importer) {
-          error.message += ` (imported as '${ref.specifier}' from ${importer})`;
-        }
+        error.message += ` (imported as '${ref.specifier}' from ${importer})`;
       }
       return error;
     }
 
-    const reason = error instanceof Error ? error.message : String(error);
+    // The resolver and the cycle check throw Error objects
+    const reason = (error as Error).message;
     return new ModuleLoadError(`Cannot import '${ref.specifier}' in ${importer}: ${reason}`, {
       filePath: importer,
       importer,
@@ -398,39 +401,37 @@ export class ModuleLoader {
   private extractDependencies(ast: Program, filePath: string): DependencyReference[] {
     const references: DependencyReference[] = [];
 
-    if (!ast?.body || !Array.isArray(ast.body)) {
-      return references;
-    }
-
     for (const statement of ast.body) {
       if (
-        statement?.type !== 'ImportDeclaration' &&
-        statement?.type !== 'ExportDeclaration' &&
-        statement?.type !== 'ImportEqualsDeclaration'
+        statement.type !== 'ImportDeclaration' &&
+        statement.type !== 'ExportDeclaration' &&
+        statement.type !== 'ImportEqualsDeclaration'
       ) {
         continue;
       }
       const source = (statement as ImportDeclaration | ExportDeclaration | ImportEqualsDeclaration)
         .source;
-      // `ворид навъ { Т } аз …` and `содир навъ { Т } аз …` load nothing at run time
+      // `содир { х };` and `ворид х = Н.а;` import nothing; `ворид навъ { Т } аз …` and
+      // `содир навъ { Т } аз …` load nothing at run time
       if (!source || ModuleLoader.isTypeOnly(statement)) {
         continue;
       }
 
-      const specifier = source.value;
+      // The parser takes the module of an import from a string literal
+      const specifier = source.value as string;
       const location = { line: statement.line, column: statement.column };
       const reject = (reason: string): never => {
         throw new ModuleLoadError(`Invalid import specifier in ${filePath}: ${reason}`, {
           filePath,
-          specifier: typeof specifier === 'string' ? specifier : undefined,
+          specifier,
           ...location,
         });
       };
 
-      if (typeof specifier !== 'string' || specifier.trim().length === 0) {
+      const normalizedSpec = specifier.trim();
+      if (normalizedSpec.length === 0) {
         reject('the module specifier must be a non-empty string');
       }
-      const normalizedSpec = (specifier as string).trim();
       if (normalizedSpec.length > MAX_SPECIFIER_LENGTH) {
         reject(
           `'${normalizedSpec.slice(0, 40)}…' is longer than ${MAX_SPECIFIER_LENGTH} characters`

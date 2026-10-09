@@ -1,6 +1,7 @@
 jest.mock('chokidar', () => {
   const watchMock = jest.fn(() => {
     const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    const closeMock = jest.fn().mockResolvedValue(undefined);
     const watcher = {
       on: jest.fn(function (this: any, event: string, handler: (...args: any[]) => void) {
         const handlers = listeners.get(event) ?? [];
@@ -8,7 +9,9 @@ jest.mock('chokidar', () => {
         listeners.set(event, handlers);
         return this;
       }),
-      close: jest.fn().mockResolvedValue(undefined),
+      close: closeMock,
+      // ModuleSystem.watch() wraps close(); the mock stays here for assertions
+      closeMock,
       emit(event: string, ...args: any[]) {
         const handlers = listeners.get(event) ?? [];
         for (const handler of handlers) {
@@ -685,7 +688,7 @@ describe('Module System', () => {
       });
 
       await moduleSystem.shutdown();
-      expect(watcher.close).toHaveBeenCalled();
+      expect((watcher as any).closeMock).toHaveBeenCalled();
     });
 
     test('should evict changed modules and their dependents on watch events', async () => {
@@ -718,7 +721,7 @@ describe('Module System', () => {
       const onChange = jest.fn();
       moduleSystem.watch(mainFile, { onChange });
       const watcherInstance = watchMock.mock.results[0].value;
-      const close = watcherInstance.close;
+      const close = watcherInstance.closeMock;
 
       fs.writeFileSync(mainFile, 'ворид { Нест } аз "./нест";\n');
       watcherInstance.emit('change', mainFile);

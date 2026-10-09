@@ -22,6 +22,7 @@ import {
   shiftSourceMap,
 } from './bundle-formats';
 import { findRequireCalls } from './require-calls';
+import { withTimeout } from './async-timeout';
 import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
@@ -165,7 +166,7 @@ export class ModuleSystem {
   /**
    * Provide helpful suggestions for common compilation errors.
    */
-  private getSuggestionForError(errorMessage: string, _filePath: string): string | undefined {
+  private getSuggestionForError(errorMessage: string): string | undefined {
     const lowerMessage = errorMessage.toLowerCase();
 
     // Common syntax errors
@@ -218,7 +219,7 @@ export class ModuleSystem {
         column: originalError.column,
         importer: originalError.importer,
         specifier: originalError.specifier,
-        suggestion: this.getSuggestionForError(message, originalError.filePath),
+        suggestion: this.getSuggestionForError(message),
         originalError,
       };
     }
@@ -231,7 +232,7 @@ export class ModuleSystem {
       filePath,
       line,
       column,
-      suggestion: this.getSuggestionForError(message, filePath),
+      suggestion: this.getSuggestionForError(message),
       originalError,
     };
   }
@@ -575,14 +576,14 @@ export class ModuleSystem {
     entryPoint: string,
     errors: CompilationError[]
   ): void {
-    // Errors inside the module graph already name the failing file and import
+    // The loader, the resolver and the registry throw Error objects only. Errors inside
+    // the module graph already name the failing file and import.
+    const failure = error as Error;
     const message =
-      error instanceof ModuleLoadError
-        ? error.message
-        : `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`;
-    errors.push(
-      this.createCompilationError(message, entryPoint, error instanceof Error ? error : undefined)
-    );
+      failure instanceof ModuleLoadError
+        ? failure.message
+        : `Failed to load entry point: ${failure.message}`;
+    errors.push(this.createCompilationError(message, entryPoint, failure));
   }
 
   /**
@@ -681,14 +682,11 @@ export class ModuleSystem {
     if (compilationResult.errors.length > 0) {
       const errorDetails = compilationResult.errors
         .map((error, index) => {
-          let detail = `  ${index + 1}. ${error.filePath}`;
-          if (error.line !== undefined) {
-            detail += `:${error.line}`;
-            if (error.column !== undefined) {
-              detail += `:${error.column}`;
-            }
-          }
-          detail += `\n     ${error.message}`;
+          // file, file:line or file:line:column (an error with a column has a line)
+          const location = [error.filePath, error.line, error.column]
+            .filter(part => part !== undefined)
+            .join(':');
+          let detail = `  ${index + 1}. ${location}\n     ${error.message}`;
           if (error.suggestion) {
             detail += `\n     💡 Suggestion: ${error.suggestion}`;
           }
@@ -708,7 +706,7 @@ export class ModuleSystem {
     }
 
     // Log warnings even if compilation succeeded
-    if (compilationResult.warnings.length > 0 && this.logger) {
+    if (compilationResult.warnings.length > 0) {
       this.logger.warn('Bundle compilation succeeded with warnings', {
         warningCount: compilationResult.warnings.length,
         warnings: compilationResult.warnings,
@@ -719,10 +717,8 @@ export class ModuleSystem {
     try {
       return await this.generateBundle(compilationResult, { ...options, format, minify });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      // Fail fast on bundle generation errors
-      throw new Error(`Failed to generate bundle: ${message}`);
+      // Fail fast on bundle generation errors (all of them Error objects)
+      throw new Error(`Failed to generate bundle: ${(error as Error).message}`);
     }
   }
 
@@ -816,21 +812,18 @@ export class ModuleSystem {
   }
 
   /**
-   * Gracefully shutdown: stop watchers, clear caches.
+   * Gracefully shutdown: stop the watchers of watch().
    */
   async shutdown(): Promise<void> {
-    try {
-      await this.stopWatching();
-    } catch (error) {
-      logger.warn('Error stopping watchers during shutdown', { error });
-    }
+    await this.stopWatching();
   }
 
   watch(entryPoint: string, options: ModuleSystemWatchOptions = {}): FSWatcher {
     const resolvedEntry = path.resolve(entryPoint);
     const watchRoots = new Set<string>();
+    // Files and their directories; external modules have no path ('lodash', 'fs')
     const addWatchTarget = (target: string): void => {
-      if (target && path.isAbsolute(target)) {
+      if (path.isAbsolute(target)) {
         watchRoots.add(target);
       }
     };
@@ -840,9 +833,7 @@ export class ModuleSystem {
 
     for (const moduleMeta of this.registry.getAll()) {
       addWatchTarget(moduleMeta.resolvedPath);
-      if (path.isAbsolute(moduleMeta.resolvedPath)) {
-        addWatchTarget(path.dirname(moduleMeta.resolvedPath));
-      }
+      addWatchTarget(path.dirname(moduleMeta.resolvedPath));
     }
 
     for (const additional of options.additionalPaths ?? []) {
@@ -862,19 +853,8 @@ export class ModuleSystem {
 
     const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
 
-    const supportedEvents: ModuleWatchEventType[] = [
-      'add',
-      'change',
-      'unlink',
-      'addDir',
-      'unlinkDir',
-    ];
-
-    watcher.on('all', (event: string, changedPath: string) => {
-      if (!supportedEvents.includes(event as ModuleWatchEventType)) {
-        return;
-      }
-
+    // chokidar's 'all' event is one of add, addDir, change, unlink and unlinkDir
+    watcher.on('all', (event: ModuleWatchEventType, changedPath: string) => {
       const filePath = path.resolve(changedPath);
       if (event === 'change' || event === 'unlink') {
         this.invalidate(filePath);
@@ -883,63 +863,29 @@ export class ModuleSystem {
         this.clearCache();
       }
 
-      options.onChange?.({
-        type: event as ModuleWatchEventType,
-        filePath,
-      });
+      options.onChange?.({ type: event, filePath });
     });
 
-    watcher.on('error', (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (this.logger) {
-        this.logger.error('ModuleSystem watch error', { error: message });
-      } else {
-        console.error('ModuleSystem watch error:', message);
-      }
+    watcher.on('error', (error: Error) => {
+      this.logger.error('ModuleSystem watch error', { error: error.message });
 
       // Close watcher on error - the wrapped close() will handle removal from tracking
       // Handle the promise explicitly to avoid unhandled rejections
-      watcher.close().catch(closeError => {
-        const closeMessage = closeError instanceof Error ? closeError.message : String(closeError);
-        if (this.logger) {
-          this.logger.warn('Failed to close errored watcher', { error: closeMessage });
-        }
+      watcher.close().catch((closeError: Error) => {
+        this.logger.warn('Failed to close errored watcher', { error: closeError.message });
       });
     });
 
-    // Wrap the close method to ensure removal from tracking after close completes
-    // The 'close' event is not reliable in chokidar, so we intercept the call
-    // Following chokidar best practices: close() returns a Promise that resolves when fully closed
-
-    // Check if close is a Jest mock to preserve spy functionality in tests
-    const isMock =
-      typeof (watcher.close as unknown as { mockImplementation?: unknown }).mockImplementation ===
-      'function';
-
-    if (isMock) {
-      // For Jest mocks, get the original mock's current implementation before wrapping
-      const mockFn = watcher.close as unknown as jest.Mock;
-      const originalImpl = mockFn.getMockImplementation?.() || (() => Promise.resolve());
-
-      // Preserve Jest spy by using mockImplementation with cleanup logic
-      mockFn.mockImplementation(async () => {
-        try {
-          await originalImpl();
-        } finally {
-          this.activeWatchers.delete(watcher);
-        }
-      });
-    } else {
-      // Production: replace the method directly
-      const originalClose = watcher.close.bind(watcher);
-      watcher.close = async () => {
-        try {
-          await originalClose();
-        } finally {
-          this.activeWatchers.delete(watcher);
-        }
-      };
-    }
+    // A watcher closed by its owner is no longer one to stop. chokidar's 'close'
+    // event is not reliable, so close() itself is wrapped.
+    const originalClose = watcher.close.bind(watcher);
+    watcher.close = async () => {
+      try {
+        await originalClose();
+      } finally {
+        this.activeWatchers.delete(watcher);
+      }
+    };
 
     this.activeWatchers.add(watcher);
     return watcher;
@@ -950,44 +896,23 @@ export class ModuleSystem {
       return;
     }
 
-    if (this.logger) {
-      this.logger.info('Stopping all watchers', { count: this.activeWatchers.size });
-    }
+    this.logger.info('Stopping all watchers', { count: this.activeWatchers.size });
 
     const watchers = Array.from(this.activeWatchers);
     this.activeWatchers.clear();
 
-    // Create promises with timeout to prevent hanging
-    const closePromises = watchers.map(async watcher => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Watcher close timeout after 5s')), 5000);
-      });
-
-      const closePromise = watcher.close();
-
-      try {
-        await Promise.race([closePromise, timeoutPromise]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (this.logger) {
-          this.logger.warn('Failed to close module watcher', { error: message });
-        } else {
-          console.warn('Failed to close module watcher:', message);
+    // A watcher that fails to close, or takes longer than 5 s, is reported, not awaited
+    await Promise.all(
+      watchers.map(async watcher => {
+        try {
+          await withTimeout(watcher.close(), { timeout: 5000, operation: 'close module watcher' });
+        } catch (error) {
+          this.logger.warn('Failed to close module watcher', { error: (error as Error).message });
         }
-      } finally {
-        // Always clear the timeout to prevent resource leaks
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    });
+      })
+    );
 
-    await Promise.allSettled(closePromises);
-
-    if (this.logger) {
-      this.logger.info('All watchers stopped');
-    }
+    this.logger.info('All watchers stopped');
   }
 
   private registerAllLoadedModules(): void {
@@ -1000,10 +925,6 @@ export class ModuleSystem {
   private resolveCompilationOptions(
     overrides?: Partial<ModuleCompilationOptions>
   ): ModuleCompilationOptions {
-    if (!overrides || Object.keys(overrides).length === 0) {
-      return { ...this.defaultCompilation };
-    }
-
     return { ...this.defaultCompilation, ...overrides };
   }
 
@@ -1069,19 +990,9 @@ export class ModuleSystem {
     );
     const externalModuleIds = new Set<string>();
 
-    const normalizeKey = (absolutePath: string): string => {
-      const relativePath = path.relative(entryDir, absolutePath);
-      const normalized = relativePath.split(path.sep).join('/');
-      return normalized.length === 0 ? path.basename(absolutePath) : normalized;
-    };
-
-    for (const [moduleId] of result.modules) {
-      if (!path.isAbsolute(moduleId)) {
-        throw new Error(`Module ID should be absolute path, got: ${moduleId}`);
-      }
-      if (!moduleIdMapping.has(moduleId)) {
-        moduleIdMapping.set(moduleId, normalizeKey(moduleId));
-      }
+    // Keys are paths relative to the entry's directory, so the bundle holds no build path
+    for (const moduleId of result.modules.keys()) {
+      moduleIdMapping.set(moduleId, path.relative(entryDir, moduleId).split(path.sep).join('/'));
     }
 
     for (const ext of externals) {
@@ -1155,7 +1066,7 @@ export class ModuleSystem {
       if (generator && module.map) {
         await this.addModuleSourceMappings(
           generator,
-          module,
+          { key: module.key, map: module.map },
           moduleStartLine,
           inlinedSources,
           options
@@ -1171,15 +1082,11 @@ export class ModuleSystem {
 
   private async addModuleSourceMappings(
     generator: SourceMapGenerator,
-    module: { key: string; map?: RawSourceMap },
+    module: { key: string; map: RawSourceMap },
     moduleStartLine: number,
     inlinedSources: Set<string>,
     options: BundleOptions
   ): Promise<void> {
-    if (!module.map) {
-      return;
-    }
-
     const moduleMap = module.map;
     await SourceMapConsumer.with(moduleMap, null, consumer => {
       consumer.eachMapping(mapping => {
@@ -1271,18 +1178,7 @@ export class ModuleSystem {
   }
 
   private generateBundleSourceMap(generator: SourceMapGenerator | null): RawSourceMap | undefined {
-    if (!generator) {
-      return undefined;
-    }
-
-    try {
-      const rawMap = JSON.parse(generator.toString()) as RawSourceMap;
-      this.validateSourceMap(rawMap, 'bundle generation');
-      return rawMap;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Source map generation failed: ${message}`);
-    }
+    return generator?.toJSON();
   }
 
   private async applyMinification(
@@ -1297,29 +1193,9 @@ export class ModuleSystem {
     try {
       const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
       bundleBuilder.code = minified.code;
-      const minifiedMap = minified.map;
-
-      if (minifiedMap && options.sourceMaps) {
-        this.validateSourceMap(minifiedMap, 'minification');
-      }
-
-      return minifiedMap;
+      return minified.map;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Minification failed: ${message}`);
-    }
-  }
-
-  private serializeBundleSourceMap(rawMap: RawSourceMap | undefined): string | undefined {
-    if (!rawMap) {
-      return undefined;
-    }
-
-    try {
-      return JSON.stringify(rawMap);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to serialize source map: ${message}`);
+      throw new Error(`Minification failed: ${(error as Error).message}`);
     }
   }
 
@@ -1392,11 +1268,9 @@ export class ModuleSystem {
         path.relative(mapDir, path.resolve(entryDir, source)).split(path.sep).join('/')
       );
     }
-    const serializedMap = this.serializeBundleSourceMap(rawMap);
-
     return {
       code: bundleBuilder.code,
-      map: serializedMap,
+      map: rawMap && JSON.stringify(rawMap),
     };
   }
 
@@ -1426,13 +1300,12 @@ export class ModuleSystem {
     });
     if (lowered.diagnostics.length > 0) {
       const details = lowered.diagnostics.map(diagnostic => {
+        // The runtime around the modules is ES5: what a target cannot run is in a module
         const module = moduleLines.find(
           lines => diagnostic.line >= lines.start && diagnostic.line <= lines.end
-        );
-        const where = module
-          ? `${module.key}:${diagnostic.line - module.start + 1}:${diagnostic.column + 1}`
-          : `bundle:${diagnostic.line}:${diagnostic.column + 1}`;
-        return `  ${where}: ${diagnostic.message}`;
+        )!;
+        const line = diagnostic.line - module.start + 1;
+        return `  ${module.key}:${line}:${diagnostic.column + 1}: ${diagnostic.message}`;
       });
       throw new Error(`The bundle cannot run on ${target}:\n${details.join('\n')}`);
     }
@@ -1638,27 +1511,6 @@ export class ModuleSystem {
     return undefined;
   }
 
-  /**
-   * Validate source map structure and required fields.
-   * Fails fast with clear error messages for invalid maps.
-   */
-  private validateSourceMap(map: RawSourceMap, context: string): void {
-    if (!map.version) {
-      throw new Error(`Invalid source map in ${context}: missing 'version' field`);
-    }
-    if (map.version !== 3) {
-      throw new Error(
-        `Invalid source map in ${context}: unsupported version ${map.version} (only version 3 is supported)`
-      );
-    }
-    if (!Array.isArray(map.sources)) {
-      throw new Error(`Invalid source map in ${context}: 'sources' must be an array`);
-    }
-    if (typeof map.mappings !== 'string') {
-      throw new Error(`Invalid source map in ${context}: 'mappings' must be a string`);
-    }
-  }
-
   private compileModule(params: {
     module: LoadedModule;
     moduleId: string;
@@ -1666,7 +1518,7 @@ export class ModuleSystem {
     modules: Map<string, { code: string; map?: RawSourceMap }>;
     errors: CompilationError[];
     warnings: string[];
-  }): { success: boolean } {
+  }): void {
     const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
     try {
       const compileResult = compileSource(module.source, {
@@ -1675,78 +1527,51 @@ export class ModuleSystem {
         filePath: module.resolvedPath,
       });
 
-      // Handle compilation errors
       if (compileResult.errors.length > 0) {
-        this.collectCompilationErrors(compileResult.errors, module.resolvedPath, errors);
-        return { success: false };
+        for (const message of compileResult.errors) {
+          errors.push(this.createCompilationError(message, module.resolvedPath));
+        }
+        return;
       }
 
-      // Parse source map
-      const parsedMap = this.parseModuleSourceMap(module, compileResult.sourceMap, warnings);
-      modules.set(moduleId, { code: compileResult.code, map: parsedMap });
-
-      // Collect warnings
-      if (compileResult.warnings.length > 0) {
-        warnings.push(
-          ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
-        );
-      }
-
-      return { success: true };
-    } catch (error) {
-      // Handle unexpected compilation errors
-      const compilationError = this.createCompilationError(
-        `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
-        module.resolvedPath,
-        error instanceof Error ? error : undefined
+      const map = this.parseModuleSourceMap(module, compileResult.sourceMap);
+      modules.set(moduleId, { code: compileResult.code, map });
+      warnings.push(
+        ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
       );
-      errors.push(compilationError);
-      return { success: false };
+    } catch (error) {
+      // A crash of the compiler (it reports problems in `errors`), always an Error
+      const failure = error as Error;
+      errors.push(
+        this.createCompilationError(
+          `Unexpected error: ${failure.message}`,
+          module.resolvedPath,
+          failure
+        )
+      );
     }
   }
 
-  private collectCompilationErrors(
-    errorMessages: string[],
-    filePath: string,
-    errors: CompilationError[]
-  ): void {
-    for (const errorMsg of errorMessages) {
-      errors.push(this.createCompilationError(errorMsg, filePath));
-    }
-  }
-
+  /** The compiler's source map of a module (a JSON string), named after its file. */
   private parseModuleSourceMap(
     module: LoadedModule,
-    rawMap: string | undefined,
-    warnings: string[]
+    rawMap: string | undefined
   ): RawSourceMap | undefined {
     if (!rawMap) {
       return undefined;
     }
 
-    try {
-      const parsed = JSON.parse(rawMap) as RawSourceMap;
-
-      // Validate source map structure before using it
-      this.validateSourceMap(parsed, module.resolvedPath);
-
-      parsed.file = module.resolvedPath;
-      parsed.sources =
-        parsed.sources && parsed.sources.length > 0
-          ? parsed.sources.map(() => module.resolvedPath)
-          : [module.resolvedPath];
-      if (!parsed.sourcesContent || parsed.sourcesContent.length === 0) {
-        parsed.sourcesContent = [module.source];
-      }
-      return parsed;
-    } catch (mapError) {
-      const message = mapError instanceof Error ? mapError.message : String(mapError);
-
-      // Add to warnings for now - compilation can continue without source maps
-      // In strict production mode, this could be upgraded to fail-fast
-      warnings.push(`Warning in ${module.resolvedPath}: Failed to parse source map: ${message}`);
-      return undefined;
+    const parsed = JSON.parse(rawMap) as RawSourceMap;
+    parsed.file = module.resolvedPath;
+    // A module without statements has no mappings, and no sources
+    parsed.sources =
+      parsed.sources.length > 0
+        ? parsed.sources.map(() => module.resolvedPath)
+        : [module.resolvedPath];
+    if (!parsed.sourcesContent || parsed.sourcesContent.length === 0) {
+      parsed.sourcesContent = [module.source];
     }
+    return parsed;
   }
 
   private deriveBundleFilename(entryPoint: string): string {
@@ -1761,35 +1586,30 @@ export class ModuleSystem {
     map: RawSourceMap | undefined,
     sourceMaps: boolean
   ): { code: string; map?: RawSourceMap } {
-    // Lazy-load preset to avoid runtime hard dependency
-    let presetModule: unknown = null;
+    // Loaded on first use, so that bundles without minification do not load it
+    let preset: PluginItem;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      presetModule = require('babel-preset-minify');
+      preset = require('babel-preset-minify') as PluginItem;
     } catch {
       throw new Error(
         "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable minified bundles."
       );
     }
-    const presetItems: PluginItem[] = [];
-    if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
-      presetItems.push(presetModule as PluginItem);
-    }
+    // Without configuration files Babel never ignores the code: there is always a result
     const out = transformSync(code, {
       // The bundle is minified the same way in every project: no babel.config.* or .babelrc
       configFile: false,
       babelrc: false,
       sourceMaps,
-      inputSourceMap: map ? { ...map, file: map.file ?? '' } : undefined,
-      presets: presetItems,
+      inputSourceMap: map,
+      presets: [preset],
       comments: false,
       compact: true,
-    });
+    })!;
 
-    const nextCode = out?.code && out.code.length > 0 ? out.code : code;
-    const nextMap = sourceMaps && out?.map ? (out.map as RawSourceMap) : map;
-
-    return { code: nextCode, map: nextMap };
+    // With `sourceMaps` (and only then) there is an input map and Babel returns a map
+    return { code: out.code!, map: sourceMaps ? (out.map as RawSourceMap) : undefined };
   }
 
   /**

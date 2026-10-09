@@ -69,16 +69,13 @@ export class ModuleResolver {
     fromFile = path.resolve(fromFile);
 
     // Determine a correct base directory whether 'fromFile' is a file path or a directory path
-    let fromDir: string;
+    let fromDir = path.dirname(fromFile);
     try {
-      if (fs.existsSync(fromFile) && fs.statSync(fromFile).isDirectory()) {
+      if (fs.statSync(fromFile).isDirectory()) {
         fromDir = fromFile;
-      } else {
-        fromDir = path.dirname(fromFile);
       }
     } catch {
-      // Fallback: treat input as a file path
-      fromDir = path.dirname(fromFile);
+      // Not on disk: a file path
     }
 
     // Handle already absolute file paths
