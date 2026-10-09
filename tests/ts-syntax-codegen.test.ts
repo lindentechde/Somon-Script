@@ -42,12 +42,15 @@ describe('erased declarations', () => {
   test('a mixed import keeps its values', () => {
     expect(generate('ворид Д, { навъ Т, х, навъ У чун Ф, у } аз "./м";')).toBe(
       [
+        '"use strict";',
         'const __somon_import_0 = require("./м.js");',
         'const Д = __somon_import_0.default ?? __somon_import_0;',
         'const { х, у } = __somon_import_0;',
       ].join('\n')
     );
-    expect(generate('тағ х = 1;\nсодир { навъ Т, х };')).toBe('let х = 1;\nmodule.exports.х = х;');
+    expect(generate('тағ х = 1;\nсодир { навъ Т, х };')).toBe(
+      '"use strict";\nlet х = 1;\nmodule.exports.х = х;'
+    );
     expect(generate('содир { навъ Т } аз "./м";')).toBe('');
   });
 
@@ -56,7 +59,7 @@ describe('erased declarations', () => {
       generate(
         'эълон собит ВЕРСИЯ: сатр;\nэълон тағ а: рақам, б: рақам;\nэълон функсия ф(): беджавоб;\nэълон синф К { м(): беджавоб; }\nэълон шумориш Э { А }\nэълон собит шумориш С { Б }\nэълон номфазо Н { функсия г(): беджавоб; }\nэълон модул "м" { содир функсия х(): беджавоб; }\nэълон глобалӣ { собит Г: рақам; }\nсодир эълон собит Д: рақам;\nчоп.сабт(ВЕРСИЯ);'
       )
-    ).toBe('console.log(ВЕРСИЯ);');
+    ).toBe('"use strict";\nconsole.log(ВЕРСИЯ);');
   });
 
   test('`эълон` inside a namespace adds no member', () => {
@@ -168,7 +171,9 @@ describe('emitted syntax', () => {
 
   test('decorated class expressions and exported classes', () => {
     expect(generate('собит К = @д синф {};\n@д содир синф А {}')).toBe(
-      ['const К = @д class {};', '@д class А {}', 'module.exports.А = А;'].join('\n')
+      ['"use strict";', 'const К = @д class {};', '@д class А {}', 'module.exports.А = А;'].join(
+        '\n'
+      )
     );
   });
 
@@ -218,6 +223,7 @@ describe('emitted syntax', () => {
       )
     ).toBe(
       [
+        '"use strict";',
         'const путь = require("path");',
         'const м = require("./м.js");',
         'const ф = Н.Д.ф;',
@@ -356,6 +362,7 @@ describe('declaration merging', () => {
       generate('содир номфазо Н { содир собит а = 1; }\nсодир номфазо Н { содир собит б = 2; }')
     ).toBe(
       [
+        '"use strict";',
         'var Н;',
         '(function (Н) {',
         '  const а = 1;',
@@ -369,6 +376,39 @@ describe('declaration merging', () => {
         'module.exports.Н = Н;',
       ].join('\n')
     );
+  });
+
+  test('ES modules export a merged declaration once, by name after a block', () => {
+    // Found by tests/differential.test.ts: a later block was `export (function (Н) {…})(…);`
+    const esm = (source: string): string => compiled(source, { module: 'esm', typeCheck: false });
+    const iife = (name: string, member: string, value: number): string[] => [
+      `(function (${name}) {`,
+      `  const ${member} = ${value};`,
+      `  ${name}.${member} = ${member};`,
+      `})(${name} || (${name} = {}));`,
+    ];
+    expect(
+      esm('содир номфазо Н { содир собит а = 1; }\nсодир номфазо Н { содир собит б = 2; }')
+    ).toBe(['export var Н;', ...iife('Н', 'а', 1), '', ...iife('Н', 'б', 2), ''].join('\n'));
+    expect(
+      esm(
+        'номфазо Н { содир собит а = 1; }\nсодир номфазо Н { содир собит б = 2; }\nсодир номфазо Н { содир собит в = 3; }'
+      )
+    ).toBe(
+      [
+        'var Н;',
+        ...iife('Н', 'а', 1),
+        '',
+        ...iife('Н', 'б', 2),
+        'export { Н };',
+        ...iife('Н', 'в', 3),
+        '',
+      ].join('\n')
+    );
+    expect(esm('содир функсия ф() {}\nсодир номфазо ф { содир собит а = 1; }')).toBe(
+      ['export function ф() {}', ...iife('ф', 'а', 1), ''].join('\n')
+    );
+    expect(esm('содир шумориш Э { А }\nсодир шумориш Э { Б = 2 }')).not.toContain('export (');
   });
 
   test('nested merged namespaces', () => {

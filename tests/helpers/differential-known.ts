@@ -44,10 +44,6 @@ export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: st
       '`содир { навъ Т, х }` exports the undeclared `х` (TS2304): SomonScript reads it, ' +
       'TypeScript drops an export it cannot resolve to a value',
   },
-  'ts-syntax-codegen.test.ts › содир номфазо Н { содир собит а = 1; }': {
-    cells: ['es2015/esm', 'es2017/esm', 'es2020/esm', 'es2022/esm', 'esnext/esm'],
-    reason: 'BUG: the second declaration of a merged exported namespace is `export (function …)`',
-  },
   'migrate/38-errors.ts': {
     cells: ['es5/cjs', 'es5/esm'],
     reason:

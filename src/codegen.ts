@@ -305,6 +305,8 @@ export class CodeGenerator {
    */
   private valueNames?: ReadonlySet<string>;
   private typeOnlyNames?: ReadonlySet<string>;
+  /** ES module output: local names exported so far (an ES module exports a name once). */
+  private esmExportedNames = new Set<string>();
   /** Labels around the current statement in the current function, innermost last. */
   private labels: Array<{ name: string; isLoop: boolean }> = [];
   /** Whether the current function is `ҳамзамон` (allows `барои интизор`). */
@@ -493,6 +495,7 @@ export class CodeGenerator {
 
   private generateProgram(node: Program): string {
     this.lowering = CodeGenerator.noLowering();
+    this.esmExportedNames = new Set();
     if (this.module === 'esm' && this.elidesTypes()) {
       this.valueNames = CodeGenerator.collectValueNames(node);
       this.typeOnlyNames = this.collectTypeOnlyNames(node.body ?? []);
@@ -501,10 +504,33 @@ export class CodeGenerator {
     const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
+    // A module is strict mode code; in CommonJS (as in TypeScript's output) only by the directive
+    if (
+      this.module === 'commonjs' &&
+      statements.length > 0 &&
+      CodeGenerator.isModule(node.body ?? [])
+    ) {
+      statements.unshift('"use strict";');
+    }
     // `#!/usr/bin/env node` stays the first line
     if (node.shebang !== undefined) statements.unshift(node.shebang);
 
     return statements.join('\n');
+  }
+
+  /**
+   * Whether a program is a module: it imports or exports (also `ворид х =
+   * require(…)` and `содир = …`), as TypeScript decides it.
+   */
+  private static isModule(body: Statement[]): boolean {
+    return body.some(
+      stmt =>
+        stmt.type === 'ImportDeclaration' ||
+        stmt.type === 'ExportDeclaration' ||
+        stmt.type === 'ExportAssignment' ||
+        (stmt.type === 'ImportEqualsDeclaration' &&
+          (stmt as ImportEqualsDeclaration).source !== undefined)
+    );
   }
 
   /**
@@ -1701,6 +1727,7 @@ export class CodeGenerator {
     );
     if (specifiers.length === 0) return '';
     const names = specifiers.map(spec => {
+      if (spec.exported.name === spec.local.name) this.esmExportedNames.add(spec.local.name);
       const local = this.generateIdentifier(spec.local);
       const exported = translateMemberName(spec.exported.name);
       const typeName = spec.exportKind === 'type' ? 'type ' : '';
@@ -1724,6 +1751,10 @@ export class CodeGenerator {
     if (names.length === 0) {
       return this.exportTypeDeclaration(code, declaration, Boolean(node.default));
     }
+    if (!node.default && CodeGenerator.extendsEarlierDeclaration(code)) {
+      return this.exportExistingBindings(code, names);
+    }
+    names.forEach(name => this.esmExportedNames.add(name));
     if (node.default) {
       if (declaration.type === 'FunctionDeclaration' || declaration.type === 'ClassDeclaration') {
         return CodeGenerator.prefixDeclaration(code, 'export default ');
@@ -1738,6 +1769,32 @@ export class CodeGenerator {
       return CodeGenerator.prefixDeclaration(code, 'export ');
     }
     const list = names.map(name => {
+      const exported = translateMemberName(name);
+      return exported === name ? name : `${name} as ${exported}`;
+    });
+    return [withoutTrailingNewlines(code), this.indent(`export { ${list.join(', ')} };`)].join(
+      '\n'
+    );
+  }
+
+  /**
+   * Whether a generated declaration only extends a binding an earlier one
+   * created: a later block of a merged `номфазо`/`шумориш` (also merged into
+   * a class or function) is just its `(function (Н) { … })(Н || (Н = {}));`.
+   */
+  private static extendsEarlierDeclaration(code: string): boolean {
+    return /^ *(?:\0[^\0]*\0)?\(/.test(code);
+  }
+
+  /**
+   * `содир` on a declaration that extends an earlier binding: `export` cannot
+   * prefix the expression, so the binding is exported by name, once.
+   */
+  private exportExistingBindings(code: string, names: string[]): string {
+    const pending = names.filter(name => !this.esmExportedNames.has(name));
+    if (pending.length === 0) return code;
+    pending.forEach(name => this.esmExportedNames.add(name));
+    const list = pending.map(name => {
       const exported = translateMemberName(name);
       return exported === name ? name : `${name} as ${exported}`;
     });

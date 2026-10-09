@@ -635,6 +635,7 @@ describe('CodeGenerator - statements and generators', () => {
     ]);
     expect(code).toBe(
       [
+        '"use strict";',
         'var Ранг;',
         '(function (Ранг) {',
         '  Ранг[Ранг["Сурх"] = 0] = "Сурх";',
@@ -1138,7 +1139,9 @@ describe('CodeGenerator - several declarators', () => {
 
   test('exports every name of a declaration', () => {
     expect(emitted(['содир тағ а = 1, б = 2;'])).toBe(
-      ['let а = 1, б = 2;', 'module.exports.а = а;', 'module.exports.б = б;'].join('\n')
+      ['"use strict";', 'let а = 1, б = 2;', 'module.exports.а = а;', 'module.exports.б = б;'].join(
+        '\n'
+      )
     );
   });
 });

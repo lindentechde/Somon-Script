@@ -145,13 +145,29 @@ describe('module-only syntax', () => {
 
 describe('CommonJS output of the new module syntax', () => {
   test('side-effect import', () => {
-    expect(commonjs('ворид "./м";')).toBe('require("./м.js");');
+    expect(commonjs('ворид "./м";')).toBe('"use strict";\nrequire("./м.js");');
+  });
+
+  test('a module is strict mode code, as in TypeScript and ES modules', () => {
+    // Found by tests/differential.test.ts: `ин` in a plain call was the global object
+    const source = 'содир собит а = 1;\nфунксия ф() { бозгашт ин; }\nчоп.сабт(навъи ф());';
+    const lines: unknown[] = [];
+    vm.runInNewContext(commonjs(source), {
+      module: { exports: {} },
+      console: { log: (value: unknown) => lines.push(value) },
+    });
+    expect(lines).toEqual(['undefined']);
+    // A script stays a script
+    expect(commonjs('чоп.сабт(1);')).toBe('console.log(1);');
+    expect(commonjs('#!/usr/bin/env node\nсодир собит а = 1;')).toMatch(
+      /^#!\/usr\/bin\/env node\n"use strict";\n/
+    );
   });
 
   test('export * as', () => {
     const code = commonjs('содир * чун Н аз "./м";');
     expect(code).toBe(
-      'const __somon_reexport_0 = require("./м.js");\nmodule.exports.Н = __somon_reexport_0;'
+      '"use strict";\nconst __somon_reexport_0 = require("./м.js");\nmodule.exports.Н = __somon_reexport_0;'
     );
     const module = { exports: {} as Record<string, unknown> };
     vm.runInNewContext(code, { module, require: () => ({ а: 1 }) });
@@ -160,7 +176,7 @@ describe('CommonJS output of the new module syntax', () => {
 
   test('default and namespace import together', () => {
     expect(commonjs('ворид а, * чун Н аз "./м";')).toBe(
-      'const __somon_import_0 = require("./м.js");\nconst а = __somon_import_0.default ?? __somon_import_0;\nconst Н = __somon_import_0;'
+      '"use strict";\nconst __somon_import_0 = require("./м.js");\nconst а = __somon_import_0.default ?? __somon_import_0;\nconst Н = __somon_import_0;'
     );
   });
 });
@@ -211,7 +227,9 @@ describe('TypeScript module forms in ES module output', () => {
       'import * as Н from "./н.js";\nconst Ҷ = Н.Ҷ;'
     );
     expect(esm('синф К {}\nсодир = К;')).toBe('class К {}\nexport default К;');
-    expect(commonjs('синф К {}\nсодир = К;')).toBe('class К {}\nmodule.exports = К;');
+    expect(commonjs('синф К {}\nсодир = К;')).toBe(
+      '"use strict";\nclass К {}\nmodule.exports = К;'
+    );
   });
 
   test('`интизор истифода` at the top level of an ES module', () => {
