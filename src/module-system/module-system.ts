@@ -1289,6 +1289,14 @@ export class ModuleSystem {
 
     let rawMap = this.generateBundleSourceMap(generator);
     rawMap = await this.applyMinification(bundleBuilder, rawMap, options);
+    if (rawMap && options.outputPath) {
+      // Sources are keyed relative to the entry; tools resolve them from the map file.
+      const entryDir = path.dirname(result.entryPoint);
+      const mapDir = path.dirname(path.resolve(options.outputPath));
+      rawMap.sources = rawMap.sources.map(source =>
+        path.relative(mapDir, path.resolve(entryDir, source)).split(path.sep).join('/')
+      );
+    }
     const serializedMap = this.serializeBundleSourceMap(rawMap);
 
     return {
