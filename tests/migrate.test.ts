@@ -144,6 +144,15 @@ describe('migrate: keywords and types', () => {
     expect(code('const x: void = void 0;')).toBe('собит x: беджавоб = void 0;\n');
   });
 
+  test('typeof before a sign stays typeof: навъи -х would subtract', () => {
+    // Found by tests/fuzz.test.ts: `typeof +x` became `навъи +x`, the sum of a name and x
+    const result = code('let x = 1;\nconsole.log(typeof -x, typeof +"1", typeof x);');
+    expect(result).toBe('тағ x = 1;\nчоп.сабт(typeof -x, typeof +"1", навъи x);\n');
+    const compiled = compile(result, { typeCheck: false });
+    expect(compiled.errors).toEqual([]);
+    expect(compiled.code).toContain('console.log(typeof -x, typeof +"1", typeof x);');
+  });
+
   test('instanceof, in, delete, get and set keep their spelling or become Tajik', () => {
     const result = code(
       'const o = { get a() { return 1; }, set a(v) {} };\ndelete o.a;\n"a" in o;\no instanceof Object;'

@@ -408,11 +408,8 @@ class Converter {
 
   private keyword(node: ts.Node, name: string): void {
     const parent = node.parent;
+    if (this.keepsSpelling(node, parent)) return;
     switch (node.kind) {
-      case ts.SyntaxKind.VoidKeyword:
-        // `void 0` stays; `void` the type is `беджавоб`
-        if (ts.isVoidExpression(parent)) return;
-        break;
       case ts.SyntaxKind.VarKeyword:
         this.warn(node, "'var' became 'тағ' (let): check code that relies on function scope");
         break;
@@ -436,6 +433,20 @@ class Converter {
         break;
     }
     this.replace(node, name);
+  }
+
+  /**
+   * Operators that keep their English spelling: `void 0` (`void` the type is
+   * `беджавоб`), and `typeof` before a sign, since `навъи` is also a name and
+   * `навъи -х` subtracts.
+   */
+  private keepsSpelling(node: ts.Node, parent: ts.Node): boolean {
+    if (node.kind === ts.SyntaxKind.VoidKeyword) return ts.isVoidExpression(parent);
+    return (
+      node.kind === ts.SyntaxKind.TypeOfKeyword &&
+      ts.isTypeOfExpression(parent) &&
+      /^[-+]/.test(parent.expression.getText(this.file))
+    );
   }
 
   /** `import(…)` and `import.meta`. */
