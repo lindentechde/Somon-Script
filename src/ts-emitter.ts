@@ -237,7 +237,6 @@ export class TsEmitter extends CodeGenerator {
     if (!this.trackPositions || !node || typeof node.line !== 'number' || !node.line) {
       return code;
     }
-    if (typeof node.column !== 'number') return code;
     return this.positionMarker(node) + code;
   }
 
@@ -600,7 +599,7 @@ export class TsEmitter extends CodeGenerator {
   /** `namespace Н { export … }`; TypeScript merges namespaces itself. */
   protected generateNamespaceDeclaration(node: NamespaceDeclaration): string {
     const name = this.generateIdentifier(node.name, true);
-    const statements = node.body?.statements ?? [];
+    const statements = node.body.statements;
     this.checkRedeclarations(statements);
     this.indentLevel++;
     const aliased = new Set<string>();
@@ -703,10 +702,9 @@ export class TsEmitter extends CodeGenerator {
   // eslint-disable-next-line complexity
   private typeNodeText(node: TypeNode): string {
     switch (node.type) {
-      case 'PrimitiveType': {
-        const name = (node as PrimitiveType).name;
-        return TYPE_NAMES.get(name) ?? name;
-      }
+      case 'PrimitiveType':
+        // The parser names primitive types with their Tajik keywords, which all have a TypeScript name
+        return TYPE_NAMES.get((node as PrimitiveType).name)!;
       case 'LiteralType': {
         const literal = node as LiteralType;
         return `${TsEmitter.literalTypeText(literal.value)}${literal.bigint ? 'n' : ''}`;
@@ -718,8 +716,6 @@ export class TsEmitter extends CodeGenerator {
           this.typeArgumentsText(generic.typeParameters)
         );
       }
-      case 'Identifier':
-        return this.typeNameText((node as unknown as Identifier).name);
       case 'ArrayType':
         return `${this.typeText((node as ArrayType).elementType, TYPE_PREC.PRIMARY)}[]`;
       case 'UnionType':
@@ -881,7 +877,8 @@ export class TsEmitter extends CodeGenerator {
     let optional = mapped.optional ? '?' : '';
     if (mapped.optionalModifier) optional = `${mapped.optionalModifier}?`;
     const parameter = mapped.typeParameter;
-    const constraint = parameter.constraint ? this.typeText(parameter.constraint) : 'any';
+    // `[К дар …]`: a mapped type's parameter always has its constraint
+    const constraint = this.typeText(parameter.constraint!);
     const nameType = mapped.nameType ? ` as ${this.typeText(mapped.nameType)}` : '';
     const key = this.markPosition(parameter.name, parameter.name.name);
     const value = this.typeText(mapped.typeAnnotation.typeAnnotation);
