@@ -146,13 +146,16 @@ function runNode(run: Run, preload: string): Promise<string> {
 
 /** Output without what differs between the two builds: paths, stacks, import helper names. */
 function normalize(output: string): string {
-  return output
-    .split('\n')
-    .filter(line => !/^\s+at /.test(line))
-    .join('\n')
-    .replace(/\/[^\s'"]*\/(js|ts)\//g, '<dir>/')
-    .replace(/[\p{L}\p{N}_$]+_js_\d+\.(?:default\.)?/gu, '')
-    .replace(/requireStack: \[[^\]]*\]/g, 'requireStack: []');
+  return (
+    output
+      .split('\n')
+      .filter(line => !/^\s+at /.test(line))
+      .join('\n')
+      // The run's own directory, with either separator (Windows prints `C:\…\js\main.js`)
+      .replace(/(?:[A-Za-z]:)?[\\/][^\s'"]*[\\/](js|ts)[\\/]/g, '<dir>/')
+      .replace(/[\p{L}\p{N}_$]+_js_\d+\.(?:default\.)?/gu, '')
+      .replace(/requireStack: \[[^\]]*\]/g, 'requireStack: []')
+  );
 }
 
 /**

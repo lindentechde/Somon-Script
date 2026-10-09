@@ -163,7 +163,10 @@ describe('LSP server', () => {
     });
     expect(diagnostics('untitled:Untitled-1')[0].diagnostics).toHaveLength(1);
     expect(uriToPath('untitled:Untitled-1')).toBeUndefined();
-    expect(uriToPath('file://remote-host/share/а.som')).toBeUndefined();
+    // A file URI with a host is a UNC path on Windows and has no local path elsewhere
+    expect(uriToPath('file://remote-host/share/а.som')).toBe(
+      process.platform === 'win32' ? '\\\\remote-host\\share\\а.som' : undefined
+    );
   });
 
   test('serves hover, completion, definition, symbols and semantic tokens', () => {
