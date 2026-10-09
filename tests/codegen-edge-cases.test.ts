@@ -78,3 +78,21 @@ describe('codegen: imports of directories', () => {
     ]);
   });
 });
+
+describe('codegen: exported namespace members', () => {
+  test('a destructuring declaration exports each name it binds', () => {
+    const source = [
+      'номфазо Н {',
+      '  содир собит { а, б: [в, ...г] } = { а: 1, б: [2, 3] }, д = 4;',
+      '  содир собит [е = 5] = [];',
+      '}',
+      'номфазо М { содир собит { ж } = { ж: 6 }; }',
+      'номфазо М { содир функсия ф() { бозгашт ж; } }',
+      'чоп.сабт(Н.а, Н.в, Н.г, Н.д, Н.е, М.ф());',
+    ].join('\n');
+    expect(run(source)).toEqual(['1 2 3 4 5 6']);
+    expect(run(source, { module: 'esm' })).toEqual(['1 2 3 4 5 6']);
+    // TypeScript agrees
+    expect(compile(source, { checker: 'typescript', strict: true }).errors).toEqual([]);
+  });
+});

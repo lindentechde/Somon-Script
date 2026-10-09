@@ -2968,15 +2968,14 @@ export class CodeGenerator {
     return result;
   }
 
-  /** Names an exported namespace member binds: one, or each of `содир тағ а = 1, б = 2`. */
+  /**
+   * Names an exported namespace member binds: one, each of `содир тағ а = 1,
+   * б = 2`, or each name of a pattern (`содир собит { а, б: [в] } = о`).
+   */
   private getMemberNames(stmt: Statement): string[] {
-    const statements =
-      stmt.type === 'VariableDeclarationList'
-        ? (stmt as VariableDeclarationList).declarations
-        : [stmt];
-    return statements
-      .map(statement => this.getMemberName(statement))
-      .filter((name): name is string => name !== null);
+    const names: string[] = [];
+    this.collectDeclaredNames(stmt, names);
+    return names;
   }
 
   private generateNestedNamespaceExport(
@@ -2999,29 +2998,6 @@ export class CodeGenerator {
         : nestedCode;
 
     return this.indent(`${parentName}.${translateMemberName(memberName)} = ${nestedIIFE}`);
-  }
-
-  private getMemberName(stmt: Statement): string | null {
-    switch (stmt.type) {
-      case 'FunctionDeclaration':
-        return (stmt as FunctionDeclaration).name.name;
-      case 'VariableDeclaration': {
-        const varDecl = stmt as VariableDeclaration;
-        if (varDecl.identifier && varDecl.identifier.type === 'Identifier') {
-          return varDecl.identifier.name;
-        }
-        break;
-      }
-      case 'ClassDeclaration':
-        return (stmt as ClassDeclaration).name.name;
-      case 'NamespaceDeclaration':
-        return (stmt as NamespaceDeclaration).name.name;
-      case 'EnumDeclaration':
-        return (stmt as EnumDeclaration).name.name;
-      case 'ImportEqualsDeclaration':
-        return (stmt as ImportEqualsDeclaration).id.name;
-    }
-    return null;
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {

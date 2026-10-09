@@ -127,6 +127,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `compile({ minify: true })` (`somon compile --minify`) applied the Babel configuration of the current directory (`babel.config.json`, `.babelrc`), which could break or change the output; it uses only its own options, as bundles do.
 * An import of a directory (`ворид { И } аз "./lib"` of `lib/index.som`) compiled to `require("./lib.js")`, which Node.js cannot find when modules are compiled one by one (`somon compile`, `ModuleSystem.compile`); it is `./lib/index.js` when the compiler knows the file (`filePath`), and always for `./lib/`.
 * A default import named like a built-in or one of its members (`ворид маълумот аз "./д.json"`, `рӯйхат`, `навъ`) was a parse error; it binds any name a variable may have.
+* An exported destructuring declaration in a namespace (`номфазо Н { содир собит { а } = о; }`) compiled to nothing: the declaration was left out and `Н.а` was `undefined`. Each name the pattern binds is a member of the namespace.
 
 ## 0.4.0 (2026-10-09)
 
