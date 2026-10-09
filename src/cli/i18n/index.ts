@@ -223,6 +223,13 @@ export interface Translations {
         summary: (_files: number, _warnings: number) => string;
       };
     };
+    lsp: {
+      name: string;
+      description: string;
+      options: {
+        stdio: string;
+      };
+    };
   };
   common: {
     version: string;

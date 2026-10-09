@@ -233,6 +233,13 @@ const translations: Translations = {
           `${files} file(s) migrated, ${warnings} warning(s)`,
       },
     },
+    lsp: {
+      name: 'lsp',
+      description: 'Start the SomonScript language server (Language Server Protocol over stdio)',
+      options: {
+        stdio: 'Communicate over stdin/stdout (the default; accepted for editor clients)',
+      },
+    },
   },
   common: {
     version: 'output the version number',

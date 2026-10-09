@@ -233,6 +233,14 @@ const translations: Translations = {
           `${files} файл интиқол ёфт, ${warnings} огоҳӣ`,
       },
     },
+    lsp: {
+      name: 'lsp',
+      description:
+        'Сервери забони SomonScript-ро оғоз кардан (Language Server Protocol тавассути stdio)',
+      options: {
+        stdio: 'Мубодила тавассути stdin/stdout (пешфарз; барои муҳаррирҳо қабул мешавад)',
+      },
+    },
   },
   common: {
     version: 'рақами версияро баровардан',

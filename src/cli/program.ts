@@ -35,6 +35,7 @@ import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import { checkWithTypeScript, type TsCheckInput } from '../tsc-checker';
 import { i18n, LANGUAGES, t, type Translations } from './i18n';
+import { registerLspCommand } from './lsp-command';
 import { registerToolCommands } from './tool-commands';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -1162,6 +1163,8 @@ export function createProgram(): Command {
 
   // Developer tools: fmt, repl, migrate
   registerToolCommands((name, key, alias) => defineCommand(program, name, key, alias), pkg.version);
+  // Language server for editors: LSP over stdin/stdout
+  registerLspCommand((name, key) => defineCommand(program, name, key), pkg.version);
 
   return program;
 }

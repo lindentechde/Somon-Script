@@ -233,6 +233,13 @@ const translations: Translations = {
           `Преобразовано файлов: ${files}, предупреждений: ${warnings}`,
       },
     },
+    lsp: {
+      name: 'lsp',
+      description: 'Запустить языковой сервер SomonScript (Language Server Protocol через stdio)',
+      options: {
+        stdio: 'Обмен через stdin/stdout (по умолчанию; принимается для редакторов)',
+      },
+    },
   },
   common: {
     version: 'вывести номер версии',
