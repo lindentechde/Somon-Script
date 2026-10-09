@@ -354,9 +354,7 @@ export class Lexer {
       return this.readIdentifier(startLine, startColumn);
     }
 
-    throw new Error(
-      `Unexpected character '${codePoint}' at line ${this.line}, column ${this.column}`
-    );
+    return this.readPrivateName(startLine, startColumn);
   }
 
   private singleCharToken(type: TokenType): Token {
@@ -681,6 +679,29 @@ export class Lexer {
 
     const tokenType = this.keywords.get(value) || TokenType.IDENTIFIER;
     return this.createToken(tokenType, value, startLine, startColumn);
+  }
+
+  /**
+   * `#ном`, the name of a private class member; the token value keeps the '#'.
+   * Any other character that starts no token is an error.
+   */
+  private readPrivateName(startLine: number, startColumn: number): Token {
+    const isPrivateName =
+      this.currentChar() === '#' && this.isIdentifierStart(this.peekCodePoint());
+    if (!isPrivateName) {
+      throw new Error(
+        `Unexpected character '${this.currentCodePoint()}' at line ${startLine}, column ${startColumn}`
+      );
+    }
+    this.advance(); // Skip '#'
+    const name = this.readIdentifier(startLine, startColumn).value;
+    return this.createToken(TokenType.PRIVATE_NAME, `#${name}`, startLine, startColumn);
+  }
+
+  /** The code point after the current character. */
+  private peekCodePoint(): string {
+    const code = this.input.codePointAt(this.position + 1);
+    return code === undefined ? '' : String.fromCodePoint(code);
   }
 
   private skipWhitespace(): void {

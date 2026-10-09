@@ -31,6 +31,12 @@ import {
   VariableDeclaration,
   TypeAnnotation,
   UniqueType,
+  ConstructorType,
+  OptionalType,
+  ReadonlyType,
+  RestType,
+  TypeParameter,
+  TypePredicate,
 } from './types';
 import {
   AsExpression,
@@ -51,6 +57,7 @@ import {
   MethodDefinition,
   NonNullExpression,
   Parameter,
+  PrivateIdentifier,
   PropertyDefinition,
   RestElement,
   ReturnStatement,
@@ -58,6 +65,7 @@ import {
   SequenceExpression,
   SpreadElement,
   SwitchStatement,
+  TaggedTemplateExpression,
   TemplateLiteral,
   ThrowStatement,
   TryStatement,
@@ -98,6 +106,7 @@ export const TypeCheckErrorCode = {
   ArgumentTypeMismatch: 'ARGUMENT_TYPE_MISMATCH',
   PropertyNotFound: 'PROPERTY_NOT_FOUND',
   PossiblyNull: 'POSSIBLY_NULL',
+  ReadonlyAssignment: 'READONLY_ASSIGNMENT',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -148,6 +157,20 @@ export interface Type {
   implicitMembers?: Set<string>; // Undeclared class members assigned through `ин.ном = …`
   constant?: boolean; // Type of a `чун собит` expression: never widened
   enumType?: Type; // For an enum object: the type its name stands for in annotations
+  readonly?: boolean; // `танҳохонӣ Т[]`, `танҳохонӣ [Т, У]`
+  minLength?: number; // Tuples: elements before the first optional one (`[рақам, сатр?]` → 1)
+  restType?: Type; // Tuples: element type of a trailing rest element (`[рақам, ...сатр[]]`)
+  predicate?: PredicateInfo; // Functions returning `х аст Т` or asserting `тасдиқ х [аст Т]`
+}
+
+/**
+ * A type predicate (`х аст Т`) or assertion signature (`тасдиқ х [аст Т]`):
+ * the index of the parameter it is about, or 'this' for `ин аст Т`.
+ */
+export interface PredicateInfo {
+  parameter: number | 'this';
+  type?: Type;
+  asserts: boolean;
 }
 
 /**
@@ -156,6 +179,7 @@ export interface Type {
 export interface PropertyType {
   type: Type;
   optional: boolean;
+  readonly?: boolean; // `танҳохонӣ ном: Т`
 }
 
 /**
@@ -168,6 +192,7 @@ interface FunctionContext {
 }
 
 type FunctionLike = {
+  typeParameters?: TypeParameter[];
   params: Parameter[];
   body: BlockStatement | Expression;
   returnType?: TypeAnnotation;
@@ -181,6 +206,23 @@ const NULL_TYPE: Type = { kind: 'primitive', name: 'null' };
 const UNDEFINED_TYPE: Type = { kind: 'primitive', name: 'undefined' };
 const NUMBER_TYPE: Type = { kind: 'primitive', name: 'number' };
 const STRING_TYPE: Type = { kind: 'primitive', name: 'string' };
+const BOOLEAN_TYPE: Type = { kind: 'primitive', name: 'boolean' };
+const VOID_TYPE: Type = { kind: 'primitive', name: 'void' };
+/** `ин` as a type; bound to the receiver's type where a member is used. */
+const THIS_TYPE: Type = { kind: 'this' };
+
+/** Array methods a `танҳохонӣ` (readonly) array doesn't have. */
+const MUTATING_ARRAY_METHODS: ReadonlySet<string> = new Set([
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+  'fill',
+  'copyWithin',
+]);
 
 /** Narrowed types of references (`х`, `ин.сар.пас`) at the current point of the flow. */
 type Facts = Map<string, Type>;
@@ -360,6 +402,14 @@ export class TypeChecker {
   private interfaceTable: Map<string, Type> = new Map();
   private typeAliasTable: Map<string, Type> = new Map();
   private functionStack: FunctionContext[] = [];
+  /** Type parameter names in scope (`<Т>` of functions, classes, …), innermost last. */
+  private typeParameterScopes: Set<string>[] = [];
+  /** Classes whose body is being checked, innermost last (the owners of `#ном` names). */
+  private classStack: Type[] = [];
+  /** Types `initializePrimitiveTypes` gives the names `сатр`, `рақам`, … as values. */
+  private primitiveValues: Set<Type> = new Set();
+  /** Callee type of each call when last inferred, for type predicates (`х аст Т`). */
+  private calleeTypes = new WeakMap<CallExpression, Type>();
   /** (source, target) pairs being compared, to stop recursion on recursive types. */
   private assignabilityStack: Array<[Type, Type]> = [];
 
@@ -369,7 +419,7 @@ export class TypeChecker {
     VariableDeclaration: s => this.checkVariableDeclaration(s as VariableDeclaration),
     FunctionDeclaration: s => this.checkFunctionDeclaration(s as FunctionDeclaration),
     ClassDeclaration: s => this.checkClassDeclaration(s as ClassDeclaration),
-    ExpressionStatement: s => this.inferExpressionType((s as ExpressionStatement).expression),
+    ExpressionStatement: s => this.checkExpressionStatement(s as ExpressionStatement),
     ExportDeclaration: s => {
       const inner = (s as ExportDeclaration).declaration;
       if (inner) this.checkStatement(inner);
@@ -406,7 +456,11 @@ export class TypeChecker {
     AssignmentExpression: e => this.inferAssignmentType(e as AssignmentExpression),
     BinaryExpression: e => this.inferBinaryType(e as BinaryExpression),
     UnaryExpression: e => this.inferUnaryType(e as UnaryExpression),
-    UpdateExpression: e => this.inferNumericOperand((e as UpdateExpression).argument, true),
+    UpdateExpression: e => {
+      this.checkReadonlyTarget((e as UpdateExpression).argument);
+      return this.inferNumericOperand((e as UpdateExpression).argument, true);
+    },
+    TaggedTemplateExpression: e => this.inferTaggedTemplateType(e as TaggedTemplateExpression),
     TemplateLiteral: e => {
       (e as TemplateLiteral).expressions.forEach(part => this.inferExpressionType(part));
       return { kind: 'primitive', name: 'string' };
@@ -453,10 +507,17 @@ export class TypeChecker {
    * Initialize primitive types in the symbol table
    */
   private initializePrimitiveTypes(): void {
-    this.declare('сатр', { kind: 'primitive', name: 'string' });
-    this.declare('рақам', { kind: 'primitive', name: 'number' });
-    this.declare('мантиқӣ', { kind: 'primitive', name: 'boolean' });
-    this.declare('холӣ', { kind: 'primitive', name: 'null' });
+    this.primitiveValues = new Set();
+    for (const [name, primitive] of [
+      ['сатр', 'string'],
+      ['рақам', 'number'],
+      ['мантиқӣ', 'boolean'],
+      ['холӣ', 'null'],
+    ]) {
+      const type: Type = { kind: 'primitive', name: primitive };
+      this.primitiveValues.add(type);
+      this.declare(name, type);
+    }
   }
 
   private getSnippet(line: number): string {
@@ -479,6 +540,9 @@ export class TypeChecker {
     this.interfaceTable = new Map();
     this.typeAliasTable = new Map();
     this.functionStack = [];
+    this.typeParameterScopes = [];
+    this.classStack = [];
+    this.calleeTypes = new WeakMap();
     this.initializePrimitiveTypes();
 
     // First pass: collect type definitions and hoist top-level bindings
@@ -652,26 +716,61 @@ export class TypeChecker {
   }
 
   private buildFunctionType(name: string | undefined, fn: Omit<FunctionLike, 'body'>): Type {
-    const paramTypes: Type[] = [];
-    const paramNames: string[] = [];
-    const paramOptional: boolean[] = [];
-    for (const param of fn.params) {
-      paramTypes.push(this.resolveParameterType(param));
-      paramNames.push(param.name?.name ?? '');
-      paramOptional.push(Boolean(param.optional) || param.defaultValue !== undefined);
-    }
-    const returnType: Type = fn.returnType
-      ? this.resolveTypeNode(fn.returnType.typeAnnotation)
-      : UNKNOWN;
+    return this.withTypeParameters(fn.typeParameters, () => {
+      const paramTypes: Type[] = [];
+      const paramNames: string[] = [];
+      const paramOptional: boolean[] = [];
+      for (const param of fn.params) {
+        paramTypes.push(this.resolveParameterType(param));
+        paramNames.push(param.name?.name ?? '');
+        paramOptional.push(Boolean(param.optional) || param.defaultValue !== undefined);
+      }
+      const returnAnnotation = fn.returnType?.typeAnnotation;
+      const returnType: Type = returnAnnotation ? this.resolveTypeNode(returnAnnotation) : UNKNOWN;
+      const predicate =
+        returnAnnotation?.type === 'TypePredicate'
+          ? this.resolvePredicate(returnAnnotation as TypePredicate, fn.params)
+          : undefined;
+      return {
+        kind: 'function',
+        name,
+        returnType,
+        paramTypes,
+        paramNames,
+        paramOptional,
+        hasRestParam: fn.params.length > 0 && Boolean(fn.params[fn.params.length - 1].rest),
+        ...(predicate && { predicate }),
+      };
+    });
+  }
+
+  /** What a `х аст Т` / `тасдиқ х` return type says, or undefined when `х` is no parameter. */
+  private resolvePredicate(
+    predicate: TypePredicate,
+    params: Parameter[]
+  ): PredicateInfo | undefined {
+    const subject = predicate.parameterName;
+    const parameter =
+      subject.type === 'ThisType'
+        ? 'this'
+        : params.findIndex(p => !p.pattern && p.name?.name === (subject as Identifier).name);
+    if (parameter === -1) return undefined;
     return {
-      kind: 'function',
-      name,
-      returnType,
-      paramTypes,
-      paramNames,
-      paramOptional,
-      hasRestParam: fn.params.length > 0 && Boolean(fn.params[fn.params.length - 1].rest),
+      parameter,
+      asserts: predicate.asserts,
+      ...(predicate.typeAnnotation && { type: this.resolveTypeNode(predicate.typeAnnotation) }),
     };
+  }
+
+  /** Runs `body` with the names of `typeParameters` shadowing other types (they are unknown). */
+  private withTypeParameters<T>(typeParameters: TypeParameter[] | undefined, body: () => T): T {
+    if (!typeParameters || typeParameters.length === 0) return body();
+    this.typeParameterScopes.push(new Set(typeParameters.map(param => param.name.name)));
+    try {
+      return body();
+    } finally {
+      this.typeParameterScopes.pop();
+    }
   }
 
   private resolveParameterType(param: Parameter): Type {
@@ -686,6 +785,16 @@ export class TypeChecker {
   ): void {
     if (filled.has(interfaceDecl)) return;
     filled.add(interfaceDecl);
+    this.withTypeParameters(interfaceDecl.typeParameters, () =>
+      this.collectInterfaceMembers(interfaceDecl, allDecls, filled)
+    );
+  }
+
+  private collectInterfaceMembers(
+    interfaceDecl: InterfaceDeclaration,
+    allDecls: InterfaceDeclaration[],
+    filled: Set<InterfaceDeclaration>
+  ): void {
     const interfaceType = this.interfaceTable.get(interfaceDecl.name.name)!;
     const properties = interfaceType.properties!;
 
@@ -714,13 +823,19 @@ export class TypeChecker {
       if (prop.key.name === INDEX_SIGNATURE_KEY) {
         target.indexType = type;
       } else {
-        target.properties!.set(prop.key.name, { type, optional: prop.optional });
+        target.properties!.set(prop.key.name, {
+          type,
+          optional: prop.optional,
+          ...(prop.readonly && { readonly: true }),
+        });
       }
     }
   }
 
   private collectTypeAlias(typeAlias: TypeAlias): void {
-    const aliasType = this.resolveTypeNode(typeAlias.typeAnnotation.typeAnnotation);
+    const aliasType = this.withTypeParameters(typeAlias.typeParameters, () =>
+      this.resolveTypeNode(typeAlias.typeAnnotation.typeAnnotation)
+    );
     this.typeAliasTable.set(typeAlias.name.name, aliasType);
   }
 
@@ -730,25 +845,10 @@ export class TypeChecker {
    */
   private collectClass(classDecl: ClassDeclaration): void {
     const classType = this.lookup(classDecl.name.name)!;
-    const properties = classType.properties!;
     classType.staticMembers = new Set();
-
-    for (const member of classDecl.body.body) {
-      if (member.static) {
-        const key = (member as PropertyDefinition | MethodDefinition).key;
-        if (key?.name) classType.staticMembers.add(key.name);
-        continue;
-      }
-      if (member.type === 'PropertyDefinition') {
-        const prop = member as PropertyDefinition;
-        const propType = prop.typeAnnotation
-          ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
-          : UNKNOWN;
-        properties.set(prop.key.name, { type: propType, optional: Boolean(prop.optional) });
-      } else if (member.type === 'MethodDefinition') {
-        this.collectMethod(member as MethodDefinition, properties);
-      }
-    }
+    this.withTypeParameters(classDecl.typeParameters, () =>
+      this.collectClassMembers(classDecl, classType)
+    );
 
     classType.implicitMembers = this.collectImplicitMembers(classDecl);
 
@@ -761,6 +861,35 @@ export class TypeChecker {
         classType.open = true;
       }
     }
+  }
+
+  private collectClassMembers(classDecl: ClassDeclaration, classType: Type): void {
+    const properties = classType.properties!;
+    for (const member of classDecl.body.body) {
+      if (member.static) {
+        const key = (member as PropertyDefinition | MethodDefinition).key;
+        if (key?.name) classType.staticMembers!.add(this.memberKeyName(key));
+        continue;
+      }
+      if (member.type === 'PropertyDefinition') {
+        const prop = member as PropertyDefinition;
+        const propType = prop.typeAnnotation
+          ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
+          : UNKNOWN;
+        properties.set(this.memberKeyName(prop.key), {
+          type: propType,
+          optional: Boolean(prop.optional),
+          ...(prop.readonly && { readonly: true }),
+        });
+      } else if (member.type === 'MethodDefinition') {
+        this.collectMethod(member as MethodDefinition, properties);
+      }
+    }
+  }
+
+  /** The name a class member is known by: `#ном` for private names. */
+  private memberKeyName(key: Identifier | PrivateIdentifier): string {
+    return key.type === 'PrivateIdentifier' ? `#${key.name}` : key.name;
   }
 
   /**
@@ -806,17 +935,30 @@ export class TypeChecker {
 
   private collectMethod(method: MethodDefinition, properties: Map<string, PropertyType>): void {
     if (method.kind === 'constructor') return;
-    const name = method.key.name;
+    const name = this.memberKeyName(method.key);
     const methodType = this.buildFunctionType(name, method.value);
-    if (method.kind === 'get') {
-      properties.set(name, { type: methodType.returnType ?? UNKNOWN, optional: false });
-    } else if (method.kind === 'set') {
-      if (!properties.has(name)) {
-        properties.set(name, { type: methodType.paramTypes?.[0] ?? UNKNOWN, optional: false });
-      }
-    } else {
-      properties.set(name, { type: methodType, optional: false });
+    const kind = method.kind === 'method' ? undefined : method.kind;
+    properties.set(name, this.methodProperty(kind, methodType, properties.get(name)));
+  }
+
+  /**
+   * The property a method defines: the method itself, or for an accessor the
+   * getter's return type (else the setter's parameter type). A getter
+   * without a setter is read-only.
+   */
+  private methodProperty(
+    kind: 'get' | 'set' | undefined,
+    methodType: Type,
+    existing: PropertyType | undefined
+  ): PropertyType {
+    if (kind === 'get') {
+      const type = methodType.returnType ?? UNKNOWN;
+      return { type, optional: false, ...(!existing && { readonly: true }) };
     }
+    if (kind === 'set') {
+      return { type: existing?.type ?? methodType.paramTypes?.[0] ?? UNKNOWN, optional: false };
+    }
+    return { type: methodType, optional: false };
   }
 
   /** Declares each enum of a statement list (once per scope) as a value and a type. */
@@ -927,6 +1069,15 @@ export class TypeChecker {
 
   private checkStatement(statement: Statement): void {
     this.statementHandlers[statement.type]?.(statement);
+  }
+
+  /** An expression statement; a call to an assertion function (`тасдиқ х`) narrows what follows. */
+  private checkExpressionStatement(statement: ExpressionStatement): void {
+    const expression = statement.expression;
+    this.inferExpressionType(expression);
+    if (expression.type === 'CallExpression') {
+      this.applyFacts(this.assertionFacts(expression as CallExpression));
+    }
   }
 
   /** Checks a statement used as a body (`агар (…) х = 1;`) in its own scope. */
@@ -1294,13 +1445,26 @@ export class TypeChecker {
     thisType?: Type,
     closure = false
   ): void {
+    this.withTypeParameters(fn.typeParameters, () =>
+      this.checkFunctionBodyIn(fn, functionType, thisType, closure)
+    );
+  }
+
+  private checkFunctionBodyIn(
+    fn: FunctionLike,
+    functionType: Type,
+    thisType: Type | undefined,
+    closure: boolean
+  ): void {
     const isAsync = Boolean(fn.async ?? fn.isAsync);
+    this.checkPredicateParameter(fn);
     this.functionStack.push({
       // A generator's declared type (`Generator<рақам>`, `Iterable<рақам>`) describes
-      // what it yields, not what `бозгашт` returns
+      // what it yields, not what `бозгашт` returns; `илова(): ин` returns the
+      // receiver: here, the class being checked
       returnType: fn.generator
         ? undefined
-        : this.expectedReturnType(functionType.returnType, isAsync),
+        : this.expectedReturnType(this.bindThis(functionType.returnType, thisType), isAsync),
       thisType,
     });
     // The body may run at any later time: a closure only keeps what is known
@@ -1326,6 +1490,22 @@ export class TypeChecker {
     });
     this.narrowed = outer;
     this.functionStack.pop();
+  }
+
+  /** `х аст Т` / `тасдиқ х` must name a parameter of the function. */
+  private checkPredicateParameter(fn: FunctionLike): void {
+    const annotation = fn.returnType?.typeAnnotation;
+    if (annotation?.type !== 'TypePredicate') return;
+    const subject = (annotation as TypePredicate).parameterName;
+    if (subject.type !== 'Identifier') return;
+    const name = (subject as Identifier).name;
+    if (fn.params.some(param => !param.pattern && param.name?.name === name)) return;
+    this.addError(
+      TypeCheckErrorCode.UndefinedIdentifier,
+      `Cannot find parameter '${name}'`,
+      subject.line,
+      subject.column
+    );
   }
 
   private bindParameter(param: Parameter, paramType: Type): void {
@@ -1366,7 +1546,20 @@ export class TypeChecker {
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
     // Phase 2: Validate class relationships, property types and method bodies
     this.validateSuperClass(classDecl);
+    this.withTypeParameters(classDecl.typeParameters, () => this.checkClassMembers(classDecl));
+  }
+
+  private checkClassMembers(classDecl: ClassDeclaration): void {
     const classType = this.lookup(classDecl.name.name);
+    if (classType) this.classStack.push(classType);
+    try {
+      this.checkClassMemberBodies(classDecl, classType);
+    } finally {
+      if (classType) this.classStack.pop();
+    }
+  }
+
+  private checkClassMemberBodies(classDecl: ClassDeclaration, classType: Type | undefined): void {
     for (const member of classDecl.body.body) {
       const thisType = member.static ? undefined : classType;
       if (member.type === 'PropertyDefinition') {
@@ -1375,7 +1568,7 @@ export class TypeChecker {
         this.functionStack.pop();
       } else if (member.type === 'MethodDefinition') {
         const method = member as MethodDefinition;
-        const methodType = this.buildFunctionType(method.key.name, method.value);
+        const methodType = this.buildFunctionType(this.memberKeyName(method.key), method.value);
         this.checkFunctionBody(method.value, methodType, thisType);
       }
     }
@@ -1450,7 +1643,7 @@ export class TypeChecker {
     this.checkAssignable(value, inferredType, declaredType, (source, target) =>
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Type '${source}' is not assignable to type '${target}' for property '${prop.key.name}'`,
+        `Type '${source}' is not assignable to type '${target}' for property '${this.memberKeyName(prop.key)}'`,
         prop.line,
         prop.column
       )
@@ -1521,6 +1714,41 @@ export class TypeChecker {
         });
       }
       default:
+        return this.resolveTypeOperator(typeNode);
+    }
+  }
+
+  /** `танҳохонӣ Т[]`, `ин`, `нав () => Т`, and a type predicate as a return type (a мантиқӣ). */
+  private resolveTypeOperator(typeNode: TypeNode): Type {
+    switch (typeNode.type) {
+      case 'ReadonlyType': {
+        const operand = this.resolveTypeNode((typeNode as ReadonlyType).typeAnnotation);
+        const isList = operand.kind === 'array' || operand.kind === 'tuple';
+        return isList ? { ...operand, readonly: true } : operand;
+      }
+      case 'ThisType':
+        return THIS_TYPE;
+      case 'TypePredicate':
+        return (typeNode as TypePredicate).asserts ? VOID_TYPE : BOOLEAN_TYPE;
+      case 'ConstructorType': {
+        const constructorType = typeNode as ConstructorType;
+        return {
+          ...this.buildFunctionType(undefined, {
+            params: constructorType.parameters,
+            returnType: {
+              type: 'TypeAnnotation',
+              typeAnnotation: constructorType.returnType,
+              line: 0,
+              column: 0,
+            },
+          }),
+          kind: 'constructor',
+        };
+      }
+      case 'OptionalType':
+      case 'RestType':
+        return this.resolveTypeNode((typeNode as OptionalType | RestType).typeAnnotation);
+      default:
         return UNKNOWN;
     }
   }
@@ -1554,11 +1782,40 @@ export class TypeChecker {
     };
   }
 
+  /** `[рақам, сатр?, ...мантиқӣ[]]`: optional elements set `minLength`, a rest element `restType`. */
   private resolveTupleType(tupleType: TupleType): Type {
-    return {
-      kind: 'tuple',
-      types: tupleType.elementTypes.map(t => this.resolveTypeNode(t)),
-    };
+    const elements = tupleType.elementTypes;
+    const restIndex = elements.findIndex(element => element.type === 'RestType');
+    if (restIndex !== -1 && restIndex !== elements.length - 1) {
+      // `[...Т[], У]`: elements after a rest element are not tracked
+      return { kind: 'array', elementType: UNKNOWN };
+    }
+    const fixed = restIndex === -1 ? elements : elements.slice(0, restIndex);
+    const tuple: Type = { kind: 'tuple', types: fixed.map(t => this.resolveTypeNode(t)) };
+    const optionalIndex = fixed.findIndex(element => element.type === 'OptionalType');
+    if (optionalIndex !== -1) tuple.minLength = optionalIndex;
+    if (restIndex !== -1) {
+      const rest = this.resolveTypeNode(elements[restIndex]);
+      tuple.restType = rest.kind === 'array' ? (rest.elementType ?? UNKNOWN) : UNKNOWN;
+    }
+    return tuple;
+  }
+
+  /** Type a tuple has at `index`: the element (with `беқимат` when optional) or the rest element. */
+  private tupleElementAt(tuple: Type, index: number): Type | undefined {
+    const types = tuple.types ?? [];
+    if (index >= types.length) return tuple.restType;
+    const optional = index >= (tuple.minLength ?? types.length);
+    return optional ? this.optionalType(types[index]) : types[index];
+  }
+
+  /** Whether a tuple type has room for exactly `length` elements. */
+  private tupleAccepts(tuple: Type, length: number): boolean {
+    const types = tuple.types ?? [];
+    return (
+      length >= (tuple.minLength ?? types.length) &&
+      (tuple.restType !== undefined || length <= types.length)
+    );
   }
 
   private resolveObjectType(objectType: ObjectType): Type {
@@ -1609,6 +1866,11 @@ export class TypeChecker {
   }
 
   private resolveNamedType(typeName: string): Type {
+    // A type parameter (`<Т>`) shadows types of the same name
+    if (this.typeParameterScopes.some(scope => scope.has(typeName))) {
+      return { kind: 'unknown', name: typeName };
+    }
+
     // Check if it's a known interface or type alias
     const interfaceType = this.interfaceTable.get(typeName);
     if (interfaceType) {
@@ -1656,6 +1918,8 @@ export class TypeChecker {
         return 'void';
       case 'объект':
         return 'object';
+      case 'рамз':
+        return 'symbol';
       default:
         return 'unknown';
     }
@@ -1712,11 +1976,11 @@ export class TypeChecker {
     return UNKNOWN;
   }
 
-  private inferTupleTypeFromTarget(arrayExpr: ArrayExpression, targetTypes: Type[]): Type {
+  private inferTupleTypeFromTarget(arrayExpr: ArrayExpression, targetType: Type): Type {
     const inferredTypes: Type[] = [];
     for (let i = 0; i < arrayExpr.elements.length; i++) {
       const element = arrayExpr.elements[i];
-      const targetElementType = targetTypes[i] || UNKNOWN;
+      const targetElementType = this.tupleElementAt(targetType, i) ?? UNKNOWN;
       const inferredType = this.inferExpressionType(element, targetElementType);
       inferredTypes.push(inferredType);
     }
@@ -1748,7 +2012,7 @@ export class TypeChecker {
 
     // If target type is a tuple, use bidirectional inference
     if (targetType && targetType.kind === 'tuple' && targetType.types && !hasSpread) {
-      return this.inferTupleTypeFromTarget(arrayExpr, targetType.types);
+      return this.inferTupleTypeFromTarget(arrayExpr, targetType);
     }
 
     const elementTarget = targetType?.kind === 'array' ? targetType.elementType : undefined;
@@ -1779,7 +2043,7 @@ export class TypeChecker {
   private arrayContextType(targetType: Type | undefined, length: number): Type | undefined {
     if (targetType?.kind !== 'union' || !targetType.types) return targetType;
     return (
-      targetType.types.find(t => t.kind === 'tuple' && t.types?.length === length) ??
+      targetType.types.find(t => t.kind === 'tuple' && this.tupleAccepts(t, length)) ??
       targetType.types.find(t => t.kind === 'array')
     );
   }
@@ -1816,25 +2080,33 @@ export class TypeChecker {
       case 'primitive':
         return type.name === 'null' || type.name === 'undefined' ? UNKNOWN : type;
       case 'array':
-        return { kind: 'array', elementType: this.widenType(type.elementType ?? UNKNOWN) };
+        return {
+          kind: 'array',
+          elementType: this.widenType(type.elementType ?? UNKNOWN),
+          ...(type.readonly && { readonly: true }),
+        };
       case 'union':
         // `Г | холӣ` stays nullable: only a binding of plain `холӣ` is widened
         return this.unionOf(type.types!.map(t => (this.isNullishType(t) ? t : this.widenType(t))));
-      case 'object': {
-        const properties = new Map<string, PropertyType>();
-        for (const [key, prop] of type.properties ?? []) {
-          properties.set(key, { type: this.widenType(prop.type), optional: prop.optional });
-        }
-        return {
-          kind: 'object',
-          properties,
-          ...(type.open && { open: true }),
-          ...(type.fromLiteral && { fromLiteral: true }),
-        };
-      }
+      case 'object':
+        return this.widenObjectType(type);
       default:
         return type;
     }
+  }
+
+  /** An object type with its members widened (they stay mutable). */
+  private widenObjectType(type: Type): Type {
+    const properties = new Map<string, PropertyType>();
+    for (const [key, prop] of type.properties ?? []) {
+      properties.set(key, { type: this.widenType(prop.type), optional: prop.optional });
+    }
+    return {
+      kind: 'object',
+      properties,
+      ...(type.open && { open: true }),
+      ...(type.fromLiteral && { fromLiteral: true }),
+    };
   }
 
   private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
@@ -1856,9 +2128,10 @@ export class TypeChecker {
       const value = prop.value ?? (prop.key.type === 'Identifier' ? prop.key : undefined);
       if (!value) continue;
       const keyName = this.propertyKeyName(prop.key);
-      const valueType = this.inferExpressionType(value, targetProperties.get(keyName)?.type);
+      const contextType = prop.kind ? undefined : targetProperties.get(keyName)?.type;
+      const valueType = this.inferExpressionType(value, contextType);
       if (!prop.computed) {
-        properties.set(keyName, { type: valueType, optional: false });
+        properties.set(keyName, this.methodProperty(prop.kind, valueType, properties.get(keyName)));
       }
     }
 
@@ -1908,11 +2181,37 @@ export class TypeChecker {
       if (inOptionalChain) return UNKNOWN;
       return this.indexedAccessType(objectType, indexType);
     }
-    if (member.property.type !== 'Identifier') return UNKNOWN;
-    const memberType = this.namedMemberType(member, objectType, member.property as Identifier);
+    const property = this.memberPropertyName(member);
+    if (!property) return UNKNOWN;
+    // `илова(): ин` called on `о` returns the type of `о`
+    const memberType = this.bindThis(
+      this.namedMemberType(member, objectType, property),
+      objectType
+    )!;
     if (inOptionalChain) return UNKNOWN;
     const key = ignoreNarrowing ? undefined : this.referenceKey(member);
     return (key ? this.narrowed.get(key) : undefined) ?? memberType;
+  }
+
+  /** The property of `о.ном` / `о.#ном` as an identifier named like the member (`#ном`). */
+  private memberPropertyName(member: MemberExpression): Identifier | undefined {
+    const property = member.property;
+    if (property.type === 'Identifier') return property as Identifier;
+    if (property.type !== 'PrivateIdentifier') return undefined;
+    const name = `#${(property as PrivateIdentifier).name}`;
+    return { type: 'Identifier', name, line: property.line, column: property.column };
+  }
+
+  /** `type` with `ин` (the `this` type) replaced by `receiver`, also in a method's return type. */
+  private bindThis(type: Type | undefined, receiver: Type | undefined): Type | undefined {
+    if (type?.kind === 'this') return receiver ?? UNKNOWN;
+    if (type?.kind === 'function' && type.returnType?.kind === 'this') {
+      return { ...type, returnType: receiver ?? UNKNOWN };
+    }
+    if (type?.kind === 'union' && type.types?.some(t => t.kind === 'this')) {
+      return { ...type, types: type.types.map(t => this.bindThis(t, receiver)!) };
+    }
+    return type;
   }
 
   /**
@@ -1933,6 +2232,12 @@ export class TypeChecker {
       }
       return UNKNOWN;
     }
+    // `сатр.хоми`: `сатр` as a value is the String constructor, whose members aren't listed
+    if (this.primitiveValues.has(objectType)) return UNKNOWN;
+    if (name.startsWith('#') && !this.hasPrivateName(objectType, name)) {
+      this.reportMissingMember(property, name, jsName, objectType, false);
+      return UNKNOWN;
+    }
 
     const members = this.unionMembers(objectType);
     const lookups = members.map(t => this.lookupMember(t, name, jsName));
@@ -1943,6 +2248,26 @@ export class TypeChecker {
       return UNKNOWN;
     }
     return lookups.length === 1 ? lookups[0].type : UNKNOWN;
+  }
+
+  /**
+   * `о.#ном` names the `#ном` of the innermost enclosing class declaring it;
+   * only instances of that class (and its subclasses) have it.
+   */
+  private hasPrivateName(objectType: Type, name: string): boolean {
+    const owner = [...this.classStack]
+      .reverse()
+      .find(c => c.properties?.has(name) || c.staticMembers?.has(name));
+    if (!owner) return true;
+    return this.unionMembers(objectType).every(type => {
+      if (type.kind !== 'class') return true;
+      const visited = new Set<Type>();
+      for (let t: Type | undefined = type; t && !visited.has(t); t = t.baseType) {
+        if (t === owner) return true;
+        visited.add(t);
+      }
+      return false;
+    });
   }
 
   /**
@@ -1957,9 +2282,11 @@ export class TypeChecker {
   ): { known: boolean; exists: boolean; type: Type } {
     const builtin = this.builtinMembersOf(type);
     if (builtin) {
+      // A `танҳохонӣ` array has no methods that change it
+      const removed = type.readonly && MUTATING_ARRAY_METHODS.has(jsName);
       return {
         known: true,
-        exists: builtin.has(jsName),
+        exists: builtin.has(jsName) && !removed,
         type: this.builtinMemberType(type, jsName),
       };
     }
@@ -2086,7 +2413,9 @@ export class TypeChecker {
     if (isMapOrSet && jsName === 'includes') {
       message += `; use 'дорадКалид' (has) to test membership`;
     }
-    const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
+    // Reading `о.#ном` from an object whose class doesn't declare `#ном` always throws
+    const report =
+      this.strict || name.startsWith('#') ? this.addError.bind(this) : this.addWarning.bind(this);
     report(TypeCheckErrorCode.PropertyNotFound, message, property.line, property.column);
   }
 
@@ -2094,7 +2423,7 @@ export class TypeChecker {
     if (!this.isNumericType(indexType)) return UNKNOWN;
     if (objectType.kind === 'array') return objectType.elementType ?? UNKNOWN;
     if (objectType.kind === 'tuple' && indexType.kind === 'literal') {
-      return objectType.types?.[indexType.value as number] ?? UNKNOWN;
+      return this.tupleElementAt(objectType, indexType.value as number) ?? UNKNOWN;
     }
     return UNKNOWN;
   }
@@ -2107,6 +2436,7 @@ export class TypeChecker {
     const isPlain = assignment.operator === '=';
     // The target accepts its declared type, not what an earlier check narrowed it to
     const leftType = this.inferAssignmentTargetType(left);
+    this.checkReadonlyTarget(left);
     if (this.isArithmeticAssignment(assignment.operator, leftType)) {
       this.checkNotNullish(left, leftType);
     }
@@ -2157,6 +2487,43 @@ export class TypeChecker {
       if (declared) return declared;
     }
     return this.inferExpressionType(target);
+  }
+
+  /**
+   * `р[0] = 1` / `р[0]++` on a `танҳохонӣ` array or tuple, `о.х = 1` on a
+   * `танҳохонӣ х` property: an error in strict mode, a warning otherwise.
+   */
+  private checkReadonlyTarget(target: Expression): void {
+    if (target.type !== 'MemberExpression') return;
+    const member = target as MemberExpression;
+    const objectType = this.removeNullish(this.quietType(member.object));
+    const message = this.readonlyMemberMessage(member, objectType);
+    if (!message) return;
+    const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
+    report(TypeCheckErrorCode.ReadonlyAssignment, message, member.line, member.column);
+  }
+
+  private readonlyMemberMessage(member: MemberExpression, objectType: Type): string | undefined {
+    const list = this.unionMembers(objectType).find(t => t.readonly);
+    if (list) {
+      return `Cannot assign to an element of ${this.describeReference(member.object)}: '${this.typeToString(list)}' is read-only`;
+    }
+    const property = member.computed ? undefined : this.memberPropertyName(member);
+    // `ин.ном = …` initialises the property in the constructor; `Синф.ном` is a static
+    const isClassItself =
+      member.object.type === 'Identifier' &&
+      objectType.kind === 'class' &&
+      objectType.name === (member.object as Identifier).name;
+    if (!property || member.object.type === 'ThisExpression' || isClassItself) return undefined;
+    const name = property.name;
+    const declared = this.findProperty(
+      this.getAllProperties(objectType),
+      name,
+      translateMemberName(name)
+    );
+    return declared?.readonly
+      ? `Cannot assign to '${name}' because it is a read-only property`
+      : undefined;
   }
 
   /** `х -= 1`, `х += 1` on a non-string, … — operators that compute with the old value. */
@@ -2398,6 +2765,7 @@ export class TypeChecker {
           kind: 'tuple',
           types: elements.map(element => this.constType(element)),
           constant: true,
+          readonly: true,
         };
       }
       case 'ObjectExpression': {
@@ -2484,6 +2852,7 @@ export class TypeChecker {
     // Route identifiers through inferIdentifierType so undefined callees
     // produce a single UndefinedIdentifier diagnostic.
     const functionType = callee ? this.inferExpressionType(callee) : UNKNOWN;
+    this.calleeTypes.set(callExpr, functionType);
     if (functionType.kind === 'function' && !this.isOptionalChain(callExpr)) {
       this.validateCallArguments(callExpr, functionType);
       return functionType.returnType ?? UNKNOWN;
@@ -2553,6 +2922,13 @@ export class TypeChecker {
     });
   }
 
+  /** `тег\`…\``: the tag is called, so the result is what it returns. */
+  private inferTaggedTemplateType(tagged: TaggedTemplateExpression): Type {
+    const tagType = this.checkNotNullish(tagged.tag, this.inferExpressionType(tagged.tag));
+    tagged.quasi.expressions.forEach(part => this.inferExpressionType(part));
+    return tagType.kind === 'function' ? (tagType.returnType ?? UNKNOWN) : UNKNOWN;
+  }
+
   private inferNewExpressionType(newExpr: NewExpression): Type {
     // Walk args so nested undefined identifiers are flagged
     newExpr.arguments.forEach(arg => this.inferExpressionType(arg));
@@ -2582,6 +2958,8 @@ export class TypeChecker {
         // Return the actual class type with all its properties and baseType
         return classType;
       }
+      // A value of a constructor type: `нав (а: рақам) => Т`
+      if (classType?.kind === 'constructor') return classType.returnType ?? UNKNOWN;
     } else if (newExpr.callee) {
       this.inferExpressionType(newExpr.callee);
     }
@@ -2616,9 +2994,10 @@ export class TypeChecker {
         return this.referenceKey((expression as NonNullExpression).expression);
       case 'MemberExpression': {
         const member = expression as MemberExpression;
-        if (member.computed || member.property.type !== 'Identifier') return undefined;
+        const property = member.computed ? undefined : this.memberPropertyName(member);
+        if (!property) return undefined;
         const objectKey = this.referenceKey(member.object);
-        return objectKey && `${objectKey}.${(member.property as Identifier).name}`;
+        return objectKey && `${objectKey}.${property.name}`;
       }
       default:
         return undefined;
@@ -2724,11 +3103,78 @@ export class TypeChecker {
   }
 
   private truthinessFacts(expression: Expression, assumeTrue: boolean): Facts {
+    // A call is no reference, but a call of a type predicate narrows its argument
+    if (expression.type === 'CallExpression') {
+      return this.predicateFacts(expression as CallExpression, assumeTrue);
+    }
     const key = this.referenceKey(expression);
     if (!key || !assumeTrue) return new Map();
     const current = this.quietType(expression);
     if (this.isAnyLike(current) || this.nullishNames(current).length === 0) return new Map();
     return new Map([[key, this.removeNullish(current)]]);
+  }
+
+  /** `агар (сатрАст(х))` with `сатрАст(х: ношинос): х аст сатр`: `х` is a сатр when it returns true. */
+  private predicateFacts(call: CallExpression, assumeTrue: boolean): Facts {
+    const predicate = this.calleePredicate(call);
+    if (!predicate || predicate.asserts) return new Map();
+    return this.predicateSubjectFacts(call, predicate, assumeTrue);
+  }
+
+  /** After the statement `тасдиқКун(х);` with `тасдиқКун(ш: ҳар): тасдиқ ш [аст Т]`. */
+  private assertionFacts(call: CallExpression): Facts {
+    const predicate = this.calleePredicate(call);
+    if (!predicate?.asserts) return new Map();
+    if (predicate.type) return this.predicateSubjectFacts(call, predicate, true);
+    // `тасдиқ ш`: the argument is truthy, so it narrows like a condition
+    const subject = this.predicateSubject(call, predicate);
+    return subject ? this.narrowingsFor(subject, true) : new Map();
+  }
+
+  private calleePredicate(call: CallExpression): PredicateInfo | undefined {
+    if (this.isOptionalChain(call)) return undefined;
+    const calleeType = this.calleeTypes.get(call) ?? this.quietType(call.callee);
+    return calleeType.kind === 'function' ? calleeType.predicate : undefined;
+  }
+
+  /** The argument a predicate is about, or the receiver for `ин аст Т`. */
+  private predicateSubject(call: CallExpression, predicate: PredicateInfo): Expression | undefined {
+    if (predicate.parameter === 'this') {
+      const callee = call.callee;
+      return callee.type === 'MemberExpression' ? (callee as MemberExpression).object : undefined;
+    }
+    const argument = call.arguments[predicate.parameter];
+    return argument?.type === 'SpreadElement' ? undefined : argument;
+  }
+
+  private predicateSubjectFacts(
+    call: CallExpression,
+    predicate: PredicateInfo,
+    assumeTrue: boolean
+  ): Facts {
+    const subject = this.predicateSubject(call, predicate);
+    const key = subject && this.referenceKey(subject);
+    if (!subject || !key || !predicate.type) return new Map();
+    const current = this.quietType(subject);
+    const narrowed = assumeTrue
+      ? this.narrowTo(current, predicate.type)
+      : this.narrowExcluding(current, predicate.type);
+    return narrowed ? new Map([[key, narrowed]]) : new Map();
+  }
+
+  /** `current` where a predicate says it is a `target`: the union members that are, else `target`. */
+  private narrowTo(current: Type, target: Type): Type {
+    if (this.isAnyLike(current)) return target;
+    const kept = this.unionMembers(current).filter(t => this.isAssignable(t, target));
+    return kept.length > 0 ? this.unionOf(kept) : target;
+  }
+
+  /** `current` where a predicate says it is no `target`: the other union members. */
+  private narrowExcluding(current: Type, target: Type): Type | undefined {
+    if (this.isAnyLike(current)) return undefined;
+    const members = this.unionMembers(current);
+    const rest = members.filter(t => !this.isAssignable(t, target));
+    return rest.length > 0 && rest.length < members.length ? this.unionOf(rest) : undefined;
   }
 
   private equalityFacts(binary: BinaryExpression, assumeTrue: boolean): Facts {
@@ -2790,14 +3236,14 @@ export class TypeChecker {
 
   /** The `typeof` result of values of a type, when one is determined. */
   private typeofName(type: Type): string | undefined {
-    const base = this.getBaseType(type);
+    const base = this.getBaseType(type.kind === 'unique' ? type.baseType! : type);
     if (base.kind === 'primitive') {
       if (base.name === 'null') return 'object';
-      return ['string', 'number', 'boolean', 'undefined'].includes(base.name!)
+      return ['string', 'number', 'boolean', 'undefined', 'symbol'].includes(base.name!)
         ? base.name
         : undefined;
     }
-    if (type.kind === 'function') return 'function';
+    if (type.kind === 'function' || type.kind === 'constructor') return 'function';
     return ['object', 'interface', 'array', 'tuple', 'generic'].includes(type.kind)
       ? 'object'
       : undefined;
@@ -2907,7 +3353,9 @@ export class TypeChecker {
     const record = node as Record<string, unknown>;
     if (typeof record.type === 'string') visit(record as { type: string });
     for (const [key, value] of Object.entries(record)) {
-      if (key === 'typeAnnotation' || key === 'returnType' || key === 'typeArguments') continue;
+      if (['typeAnnotation', 'returnType', 'typeArguments', 'typeParameters'].includes(key)) {
+        continue;
+      }
       if (value && typeof value === 'object') this.forEachNode(value, visit);
     }
   }
@@ -3078,7 +3526,7 @@ export class TypeChecker {
       if (e.type === 'MemberExpression' && !(e as MemberExpression).computed) {
         const member = e as MemberExpression;
         const objectPath = path(member.object);
-        const property = member.property as Identifier;
+        const property = this.memberPropertyName(member) ?? (member.property as Identifier);
         return objectPath && property.name ? `${objectPath}.${property.name}` : undefined;
       }
       return undefined;
@@ -3198,7 +3646,9 @@ export class TypeChecker {
     return (
       this.isInterfaceAssignable(source, target) ||
       this.isClassAssignable(source, target) ||
-      this.isUniqueAssignable(source, target)
+      this.isUniqueAssignable(source, target) ||
+      // A class (or a function) is a value of a constructor type
+      (target.kind === 'constructor' && ['class', 'constructor', 'function'].includes(source.kind))
     );
   }
 
@@ -3233,6 +3683,11 @@ export class TypeChecker {
 
   private isAssignable(source: Type, target: Type): boolean {
     if (this.isTopTypeAssignable(source, target)) {
+      return true;
+    }
+
+    // `ин` not bound to a receiver is not checked
+    if (source.kind === 'this' || target.kind === 'this') {
       return true;
     }
 
@@ -3292,21 +3747,30 @@ export class TypeChecker {
     if (source.kind !== 'array' || target.kind !== 'array') {
       return false;
     }
+    // A `танҳохонӣ` array can't be used where it could be changed
+    if (source.readonly && !target.readonly) return false;
     return source.elementType && target.elementType
       ? this.isAssignable(source.elementType, target.elementType)
       : false;
   }
 
   private isTupleAssignable(source: Type, target: Type): boolean {
-    if (source.kind !== 'tuple' || target.kind !== 'tuple') {
+    if (source.kind !== 'tuple' || target.kind !== 'tuple' || !source.types || !target.types) {
       return false;
     }
-    if (!source.types || !target.types || source.types.length !== target.types.length) {
-      return false;
-    }
-    return source.types.every((sourceType, index) =>
-      this.isAssignable(sourceType, target.types![index])
-    );
+    if (source.readonly && !target.readonly) return false;
+    // Lengths: `[рақам]` fits `[рақам, сатр?]`, `[рақам, ...сатр[]]` needs a rest element too
+    const sourceMin = source.minLength ?? source.types.length;
+    if (sourceMin < (target.minLength ?? target.types.length)) return false;
+    const fits = source.restType
+      ? target.restType !== undefined && this.isAssignable(source.restType, target.restType)
+      : target.restType !== undefined || source.types.length <= target.types.length;
+    if (!fits) return false;
+    return source.types.every((sourceType, index) => {
+      const targetType = this.tupleElementAt(target, index);
+      const type = index >= sourceMin ? this.optionalType(sourceType) : sourceType;
+      return targetType !== undefined && this.isAssignable(type, targetType);
+    });
   }
 
   /** `[1, 2] чун собит` or a `[рақам, сатр]` value where an array is expected. */
@@ -3380,11 +3844,13 @@ export class TypeChecker {
     return false;
   }
 
+  /** `беназир рамз` is a `рамз`. */
   private isUniqueAssignable(source: Type, target: Type): boolean {
-    if (source.kind === 'unique' && target.kind === 'unique') {
-      return this.isAssignable(source.baseType!, target.baseType!);
-    }
-    return false;
+    if (source.kind !== 'unique') return false;
+    return this.isAssignable(
+      source.baseType!,
+      target.kind === 'unique' ? target.baseType! : target
+    );
   }
 
   /**
@@ -3417,13 +3883,18 @@ export class TypeChecker {
     primitive: t => this.mapPrimitiveToTajik(t.name ?? 'unknown'),
     array: t => {
       const element = this.typeToString(t.elementType ?? UNKNOWN);
-      return ['union', 'intersection', 'function'].includes(t.elementType?.kind ?? '')
+      const list = ['union', 'intersection', 'function', 'constructor'].includes(
+        t.elementType?.kind ?? ''
+      )
         ? `(${element})[]`
         : `${element}[]`;
+      return t.readonly ? `танҳохонӣ ${list}` : list;
     },
     union: t => this.typeListToString(t),
     intersection: t => this.typeListToString(t),
-    tuple: t => `${t.constant ? 'танҳохонӣ ' : ''}${this.typeListToString(t)}`,
+    tuple: t => this.tupleToString(t),
+    this: () => 'ин',
+    constructor: (t: Type) => `нав ${this.functionTypeToString(t)}`,
     literal: t => (typeof t.value === 'string' ? `"${t.value}"` : String(t.value)),
     unique: t => `беназир ${this.typeToString(t.baseType!)}`,
     object: t => this.objectTypeToString(t),
@@ -3436,6 +3907,17 @@ export class TypeChecker {
     const printer = this.typePrinters[type.kind];
     // Interfaces and classes print by name
     return printer ? printer(type) : (type.name ?? type.kind);
+  }
+
+  /** `[рақам, сатр?, ...мантиқӣ[]]` */
+  private tupleToString(type: Type): string {
+    const types = type.types ?? [];
+    const minLength = type.minLength ?? types.length;
+    const parts = types.map((t, i) => `${this.typeToString(t)}${i >= minLength ? '?' : ''}`);
+    if (type.restType) {
+      parts.push(`...${this.typeToString({ kind: 'array', elementType: type.restType })}`);
+    }
+    return `${type.readonly ? 'танҳохонӣ ' : ''}[${parts.join(', ')}]`;
   }
 
   private genericTypeToString(type: Type): string {
@@ -3535,6 +4017,8 @@ export class TypeChecker {
         return 'беджавоб';
       case 'object':
         return 'объект';
+      case 'symbol':
+        return 'рамз';
       default:
         return primitiveType;
     }

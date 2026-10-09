@@ -624,16 +624,20 @@ describe('TypeChecker: type assertions', () => {
     expect(
       errors(`
 собит р = [1, 2] чун собит;
-собит т: [1, 2] = р;
+собит т: танҳохонӣ [1, 2] = р;
 собит о = { н: "а", м: { к: дуруст } } чун собит;
 собит н: "а" = о.н;
 собит к: дуруст = о.м.к;
 тағ с = "а" чун собит;
 собит ҷ: "а" = с;
 собит у = <собит>[3];
-собит д: [3] = у;
+собит д: танҳохонӣ [3] = у;
 `)
     ).toEqual([]);
+    // As in TypeScript, a `чун собит` array is a readonly tuple
+    expect(errors('собит р = [1, 2] чун собит; собит т: [1, 2] = р;')).toEqual([
+      "TYPE_NOT_ASSIGNABLE: Type 'танҳохонӣ [1, 2]' is not assignable to type '[1, 2]'",
+    ]);
     expect(errors('собит р = [1, 2] чун собит; собит т: [1, 3] = р;')).toEqual([
       "TYPE_NOT_ASSIGNABLE: Type 'танҳохонӣ [1, 2]' is not assignable to type '[1, 3]'",
     ]);
@@ -960,5 +964,45 @@ describe('TypeChecker: AST contract nodes', () => {
       expect(check([asyncFn(name, str('а'))])).toEqual([]);
       expect(check([asyncFn(name, num(1))])).toEqual(['TYPE_NOT_ASSIGNABLE']);
     }
+  });
+});
+
+describe('TypeChecker regressions: accessors, private members and type operators', () => {
+  // `get х()` used to parse as a field `get` plus a method `х`, so `к.х` had
+  // the setter's function type
+  test('assigning through a setter is checked against the property type', () => {
+    expect(
+      errorsOf(
+        'синф К { _х = 1; get х(): рақам { бозгашт ин._х; } set х(қ: рақам) { ин._х = қ; } }\n' +
+          'собит к = нав К(); к.х = 5; собит н: рақам = к.х;'
+      )
+    ).toEqual([]);
+    expect(
+      codesOf('синф К { set х(қ: рақам) { } get х(): рақам { бозгашт 1; } } нав К().х = "а";')
+    ).toEqual(['TYPE_NOT_ASSIGNABLE']);
+  });
+
+  test('private members need no declaration of their own name as a public member', () => {
+    expect(
+      errorsOf(
+        'синф К { #х = 1; #м(): рақам { бозгашт ин.#х; } статикӣ #с = 2;\n' +
+          '  м(): рақам { бозгашт ин.#м() + К.#с; } статикӣ аст(о: ҳар): мантиқӣ { бозгашт #х in о; } }'
+      )
+    ).toEqual([]);
+    expect(errorsOf('синф К { #х = 1; м(): рақам { бозгашт ин.#у; } }')).toEqual([
+      "PROPERTY_NOT_FOUND: Property '#у' does not exist on type 'К'",
+    ]);
+  });
+
+  test('new syntax adds no undefined-identifier errors', () => {
+    expect(
+      errorsOf(
+        'функсия Ф() { бозгашт нав.target; }\n' +
+          'функсия т(қ: ҳар): ҳар { бозгашт қ; } т`а${Ф}б`;\n' +
+          'функсия ф<Т мерос { а: рақам }>(х: Т): х аст Т { бозгашт дуруст; }\n' +
+          'собит р: танҳохонӣ [рақам, сатр?, ...беназир рамз[]] = [1];\n' +
+          'собит С: мавҳум нав (а: рақам) => ин = Ф;'
+      )
+    ).toEqual([]);
   });
 });

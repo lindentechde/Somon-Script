@@ -12,7 +12,7 @@ export interface TypeNode extends ASTNode {
 
 export interface PrimitiveType extends TypeNode {
   type: 'PrimitiveType';
-  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат' | 'рамз';
 }
 
 export interface ArrayType extends TypeNode {
@@ -124,8 +124,53 @@ export interface UniqueType extends TypeNode {
   baseType: TypeNode;
 }
 
+/** `танҳохонӣ рақам[]`, `танҳохонӣ [рақам, сатр]`: a readonly array or tuple type. */
+export interface ReadonlyType extends TypeNode {
+  type: 'ReadonlyType';
+  typeAnnotation: TypeNode;
+}
+
+/** An optional tuple element: `сатр?` in `[рақам, сатр?]`. */
+export interface OptionalType extends TypeNode {
+  type: 'OptionalType';
+  typeAnnotation: TypeNode;
+}
+
+/** A rest tuple element: `...мантиқӣ[]` in `[рақам, ...мантиқӣ[]]`. */
+export interface RestType extends TypeNode {
+  type: 'RestType';
+  typeAnnotation: TypeNode;
+}
+
+/** `ин` as a type: the type of the receiver (`илова(): ин`). */
+export interface ThisType extends TypeNode {
+  type: 'ThisType';
+}
+
+/**
+ * A return type that is a type predicate, `х аст сатр` / `ин аст Т`
+ * (`x is T`), or an assertion signature, `тасдиқ х` / `тасдиқ х аст Т`
+ * (`asserts x`, `asserts x is T`).
+ */
+export interface TypePredicate extends TypeNode {
+  type: 'TypePredicate';
+  parameterName: Identifier | ThisType;
+  /** Absent for `тасдиқ х`. */
+  typeAnnotation?: TypeNode;
+  asserts: boolean;
+}
+
+/** `нав (а: рақам) => Т`, `мавҳум нав () => Т` */
+export interface ConstructorType extends TypeNode {
+  type: 'ConstructorType';
+  parameters: Parameter[];
+  returnType: TypeNode;
+  abstract?: boolean;
+}
+
 export interface TupleType extends TypeNode {
   type: 'TupleType';
+  /** Element types; optional and rest elements are `OptionalType` / `RestType` nodes. */
   elementTypes: TypeNode[];
 }
 

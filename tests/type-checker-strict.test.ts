@@ -478,3 +478,268 @@ describe('generators and for await', () => {
     );
   });
 });
+
+const PREDICATES = `
+функсия сатрАст(х: ношинос): х аст сатр { бозгашт навъи х === "string"; }
+функсия тасдиқКун(ш: ҳар): тасдиқ ш { агар (!ш) партофтан нав Хато("х"); }
+функсия сатрБошад(х: ношинос): тасдиқ х аст сатр { агар (!сатрАст(х)) партофтан нав Хато("х"); }
+`;
+
+describe('type predicates and assertion signatures', () => {
+  test.each([
+    [
+      'in the true branch',
+      'функсия ф(а: сатр | холӣ): рақам { агар (сатрАст(а)) { бозгашт а.дарозӣ; } бозгашт 0; }',
+    ],
+    [
+      'after an early return on !',
+      'функсия ф(а: сатр | холӣ): рақам { агар (!сатрАст(а)) бозгашт 0; бозгашт а.дарозӣ; }',
+    ],
+    [
+      'on the right of &&',
+      'функсия ф(а: сатр | холӣ): мантиқӣ { бозгашт сатрАст(а) && а.дарозӣ > 1; }',
+    ],
+    [
+      'in a conditional expression',
+      'функсия ф(а: сатр | холӣ): рақам { бозгашт сатрАст(а) ? а.дарозӣ : 0; }',
+    ],
+    [
+      'in the false branch, without the type',
+      'функсия ф(а: сатр | Г | холӣ): рақам { агар (сатрАст(а)) бозгашт 0; агар (а === холӣ) бозгашт 1; бозгашт а.қ; }',
+    ],
+    [
+      'from ношинос',
+      'функсия ф(а: ношинос): рақам { агар (сатрАст(а)) бозгашт а.дарозӣ; бозгашт 0; }',
+    ],
+    [
+      'with an arrow predicate',
+      'собит гАст = (х: ҳар): х аст Г => х instanceof Г; функсия ф(а: Г | холӣ): рақам { агар (гАст(а)) бозгашт а.қ; бозгашт 0; }',
+    ],
+    [
+      'after an assertion of truthiness',
+      'функсия ф(а: Г | холӣ): рақам { тасдиқКун(а); бозгашт а.қ; }',
+    ],
+    [
+      'after an assertion of a condition',
+      'функсия ф(а: Г | холӣ): рақам { тасдиқКун(а !== холӣ); бозгашт а.қ; }',
+    ],
+    [
+      'after an assertion of a type',
+      'функсия ф(а: ношинос): рақам { сатрБошад(а); бозгашт а.дарозӣ; }',
+    ],
+    [
+      'by a method predicate on ин',
+      'синф Ҳ { сагАст(): ин аст С { бозгашт ин instanceof С; } } синф С мерос Ҳ { аккос(): сатр { бозгашт "в"; } }\n' +
+        'функсия ф(ҳ: Ҳ): сатр { агар (ҳ.сагАст()) бозгашт ҳ.аккос(); бозгашт ""; }',
+    ],
+  ])('narrow %s', (_name, source) => {
+    expectClean(PREDICATES + source);
+  });
+
+  test.each([
+    [
+      'outside the checked branch',
+      'функсия ф(а: сатр | холӣ): рақам { агар (сатрАст(а)) бозгашт 0; бозгашт а.дарозӣ; }',
+      /'а' is possibly 'холӣ'/,
+    ],
+    [
+      'before the assertion',
+      'функсия ф(а: Г | холӣ): рақам { собит қ = а.қ; тасдиқКун(а); бозгашт қ; }',
+      /'а' is possibly 'холӣ'/,
+    ],
+    [
+      'after a reassignment',
+      'функсия ф(а: Г | холӣ, б: Г | холӣ): рақам { тасдиқКун(а); а = б; бозгашт а.қ; }',
+      /'а' is possibly 'холӣ'/,
+    ],
+    [
+      'a member the narrowed type lacks',
+      'функсия ф(а: ношинос): рақам { сатрБошад(а); бозгашт а.нест; }',
+      /Property 'нест' does not exist on type 'сатр'/,
+    ],
+  ])('report a nullable value %s', (_name, source, pattern) => {
+    expectError(PREDICATES + source, pattern);
+  });
+
+  test('a predicate returns мантиқӣ and must name a parameter', () => {
+    expectError(
+      'функсия ф(х: ношинос): х аст сатр { бозгашт 1; }',
+      /not assignable to return type 'мантиқӣ'/
+    );
+    expectError(
+      'функсия ф(х: ношинос): у аст сатр { бозгашт дуруст; }',
+      /UNDEFINED_IDENTIFIER.*Cannot find parameter 'у'/
+    );
+    expectError('функсия ф(х: ҳар): тасдиқ у { }', /Cannot find parameter 'у'/);
+    expectClean(PREDICATES + 'собит б: мантиқӣ = сатрАст(1); собит в: беджавоб = тасдиқКун(1);');
+  });
+});
+
+describe('readonly arrays, tuples and properties', () => {
+  test('reading and passing them is fine', () => {
+    expectClean(
+      'функсия ҷамъ(р: танҳохонӣ рақам[]): рақам { тағ с = 0; барои (собит х аз р) с += х; бозгашт с + р[0] + р.дарозӣ; }\n' +
+        'тағ м: рақам[] = [1]; ҷамъ(м); ҷамъ([1, 2]); собит р: танҳохонӣ рақам[] = м; р.map(х => х); р.slice();\n' +
+        'собит т: танҳохонӣ [рақам, сатр] = [1, "а"]; собит с: сатр = т[1];\n' +
+        'синф Н { танҳохонӣ х: рақам; конструктор(х: рақам) { ин.х = х; } }'
+    );
+  });
+
+  test.each([
+    [
+      'a mutating method',
+      'собит р: танҳохонӣ рақам[] = [1]; р.илова(2);',
+      /Property 'илова' \(push\) does not exist on type 'танҳохонӣ рақам\[\]'/,
+    ],
+    [
+      'an element assignment',
+      'собит р: танҳохонӣ рақам[] = [1]; р[0] = 2;',
+      /READONLY_ASSIGNMENT.*'танҳохонӣ рақам\[\]' is read-only/,
+    ],
+    [
+      'a tuple element update',
+      'собит т: танҳохонӣ [рақам] = [1]; т[0]++;',
+      /READONLY_ASSIGNMENT.*'танҳохонӣ \[рақам\]' is read-only/,
+    ],
+    [
+      'passing it where it could change',
+      'собит р: танҳохонӣ рақам[] = [1]; собит м: рақам[] = р;',
+      /'танҳохонӣ рақам\[\]' is not assignable to type 'рақам\[\]'/,
+    ],
+    [
+      'assigning a readonly class property',
+      'синф Н { танҳохонӣ х = 1; } собит н = нав Н(); н.х = 2;',
+      /READONLY_ASSIGNMENT.*Cannot assign to 'х' because it is a read-only property/,
+    ],
+    [
+      'assigning a readonly interface property',
+      'интерфейс И { танҳохонӣ а: рақам; } собит и: И = { а: 1 }; и.а = 2;',
+      /Cannot assign to 'а'/,
+    ],
+    [
+      'assigning a getter without a setter',
+      'синф К { get х(): рақам { бозгашт 1; } } нав К().х = 2;',
+      /Cannot assign to 'х' because it is a read-only property/,
+    ],
+  ])('report %s', (_name, source, pattern) => {
+    expectError(source, pattern);
+  });
+
+  test('are warnings without --strict', () => {
+    const result = compile('собит р: танҳохонӣ рақам[] = [1]; р[0] = 2; р.илова(3);');
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/READONLY_ASSIGNMENT/),
+      expect.stringMatching(/PROPERTY_NOT_FOUND/),
+    ]);
+  });
+});
+
+describe('private members, accessors and the ин type', () => {
+  test('declared private members and accessors are members of the class', () => {
+    expectClean(
+      'синф К {\n' +
+        '  #х: рақам | холӣ = холӣ;\n' +
+        '  статикӣ #с = 1;\n' +
+        '  #м(): рақам { бозгашт 1; }\n' +
+        '  get у(): рақам { бозгашт ин.#м() + К.#с; }\n' +
+        '  set у(қ: рақам) { ин.#х = қ; }\n' +
+        '  гир(дигар: К): рақам { агар (ин.#х !== холӣ) бозгашт ин.#х + дигар.у; бозгашт 0; }\n' +
+        '}\n' +
+        'собит к = нав К(); к.у = 5; собит н: рақам = к.у + к.гир(к);'
+    );
+  });
+
+  test('an undeclared private member, or one of another class, is an error even without --strict', () => {
+    for (const source of [
+      'синф К { #х = 1; м(): рақам { бозгашт ин.#у; } }',
+      'синф А { #х = 1; } синф Б { #х = 2; м(а: А): рақам { бозгашт а.#х; } }',
+    ]) {
+      const result = compile(source);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/PROPERTY_NOT_FOUND.*Property '#(у|х)' does not exist/),
+        ])
+      );
+    }
+  });
+
+  test('a setter value of the wrong type is reported', () => {
+    expectError(
+      'синф К { get х(): рақам { бозгашт 1; } set х(қ: рақам) { } } нав К().х = "а";',
+      /Type '"а"' is not assignable to type 'рақам'/
+    );
+    expectError(
+      'собит о = { get х(): рақам { бозгашт 1; }, set х(қ: рақам) { } }; о.х = "а";',
+      /Type '"а"' is not assignable to type 'рақам'/
+    );
+  });
+
+  test('a method returning ин returns its receiver', () => {
+    expectClean(
+      'синф З { н = 0; илова(): ин { бозгашт ин; } } синф Б мерос З { б(): ин { бозгашт ин; } }\n' +
+        'собит б: Б = нав Б().илова().б().илова();'
+    );
+    expectError(
+      'синф З { илова(): ин { бозгашт ин; } } нав З().илова().нест();',
+      /Property 'нест' does not exist on type 'З'/
+    );
+  });
+});
+
+describe('symbol, tuple, constructor and generic types', () => {
+  test('беназир рамз is a рамз', () => {
+    expectClean('собит р: беназир рамз = Symbol(); собит с: рамз = р; собит т: рамз | сатр = "а";');
+    expectError('собит р: рамз = 1;', /Type '1' is not assignable to type 'рамз'/);
+  });
+
+  test('optional and rest tuple elements', () => {
+    expectClean(
+      'собит т: [рақам, сатр?, ...мантиқӣ[]] = [1]; собит у: [рақам, сатр?] = [1, "а"];\n' +
+        'собит в: [рақам, ...мантиқӣ[]] = [1, дуруст, нодуруст]; собит г: [рақам, сатр] = [1, "а"];\n' +
+        'собит д: [рақам, сатр?] = г; собит с: сатр | беқимат = у[1];'
+    );
+    expectError(
+      'собит т: [рақам, сатр?] = [1, 2];',
+      /'\[1, 2\]' is not assignable to type '\[рақам, сатр\?\]'/
+    );
+    expectError('собит т: [рақам, сатр?] = [];', /not assignable/);
+    expectError('собит т: [рақам, сатр?] = [1, "а", 3];', /not assignable/);
+    expectError('собит т: [рақам, ...сатр[]] = [1, "а", 2];', /'\[рақам, ...сатр\[\]\]'/);
+    expectError(
+      'собит т: [рақам, сатр?] = [1]; собит с: сатр = т[1];',
+      /'сатр \| беқимат' is not assignable/
+    );
+    expectError('собит т: [рақам, сатр?] = [1]; собит у: [рақам, сатр] = т;', /not assignable/);
+  });
+
+  test('constructor types accept classes', () => {
+    expectClean(
+      'синф К { а: рақам; конструктор(а: рақам) { ин.а = а; } }\n' +
+        'функсия соз(С: нав (а: рақам) => К): К { бозгашт нав С(1); }\n' +
+        'собит к: К = соз(К); собит а: мавҳум нав () => объект = К;'
+    );
+    expectError(
+      'собит С: нав () => объект = 5;',
+      /'5' is not assignable to type 'нав \(\) => объект'/
+    );
+  });
+
+  test('type parameters are unknown inside their declaration, even when a type has their name', () => {
+    expectClean(
+      'синф Т { т = 1; }\n' +
+        'функсия ф<Т мерос { дарозӣ: рақам } = сатр>(х: Т): рақам { бозгашт х.дарозӣ; }\n' +
+        'ф("абв"); ф([1]);\n' +
+        'синф Қ<Т> { қ: Т; конструктор(қ: Т) { ин.қ = қ; } м<У мерос { а: Т }>(у: У): Т { бозгашт у.а; } }\n' +
+        'интерфейс И<Т = рақам> { т: Т; } собит и: И = { т: "а" };'
+    );
+  });
+
+  test('a tagged template has the return type of its tag', () => {
+    expectError(
+      'функсия т(қ: ҳар): рақам { бозгашт 1; } собит с: сатр = т`а`;',
+      /Type 'рақам' is not assignable to type 'сатр'/
+    );
+    expectClean('собит с: сатр = сатр.хоми`а${1}`;');
+  });
+});

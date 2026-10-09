@@ -134,3 +134,24 @@ describe('Lexer', () => {
     expect(tokens[2].type).toBe('ДАРОЗИИСАТР');
   });
 });
+
+describe('Lexer: private names', () => {
+  test('`#ном` is one PRIVATE_NAME token that keeps the #', () => {
+    const tokens = tokenize('ин.#ҳисоб #х дар о');
+    expect(tokens.map(t => [t.type, t.value])).toEqual([
+      [TokenType.ИН, 'ин'],
+      [TokenType.DOT, '.'],
+      [TokenType.PRIVATE_NAME, '#ҳисоб'],
+      [TokenType.PRIVATE_NAME, '#х'],
+      [TokenType.ДАР, 'дар'],
+      [TokenType.IDENTIFIER, 'о'],
+      [TokenType.EOF, ''],
+    ]);
+    expect(tokens[2]).toMatchObject({ line: 1, column: 4 });
+  });
+
+  test('a # without a name is still an unexpected character', () => {
+    expect(() => tokenize('а # б')).toThrow("Unexpected character '#' at line 1, column 3");
+    expect(() => tokenize('#1')).toThrow("Unexpected character '#' at line 1, column 1");
+  });
+});

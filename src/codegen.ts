@@ -60,6 +60,9 @@ import {
   ContinueStatement,
   EnumDeclaration,
   YieldExpression,
+  MetaProperty,
+  PrivateIdentifier,
+  TaggedTemplateExpression,
 } from './types';
 import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
 
@@ -175,6 +178,7 @@ const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   AwaitExpression: PREC.UNARY,
   CallExpression: PREC.CALL,
   MemberExpression: PREC.CALL,
+  TaggedTemplateExpression: PREC.CALL,
   NewExpression: PREC.CALL,
   ImportExpression: PREC.CALL,
   YieldExpression: PREC.ASSIGNMENT,
@@ -206,6 +210,10 @@ export class CodeGenerator {
   private inAsyncFunction = false;
   /** While generating an enum member initializer: how to read each earlier member. */
   private enumMembers?: ReadonlyMap<string, string>;
+  /** Enclosing non-arrow functions and class bodies, where `нав.target` is allowed. */
+  private newTargetScopes = 0;
+  /** Private names (`#ном`, without '#') declared by each enclosing class, innermost last. */
+  private readonly privateNames: Set<string>[] = [];
 
   /**
    * Return diagnostics collected during generation. Codegen follows the same
@@ -489,7 +497,9 @@ export class CodeGenerator {
     const async = node.async ? 'async ' : '';
     const star = node.generator ? '*' : '';
     const name = this.generateIdentifier(node.name, true);
-    const { params, body } = this.generateFunctionParts(node.params, node.body, node.async);
+    const { params, body } = this.withNewTarget(() =>
+      this.generateFunctionParts(node.params, node.body, node.async)
+    );
 
     return this.indent(`${async}function${star} ${name}(${params}) ${body}`);
   }
@@ -734,6 +744,8 @@ export class CodeGenerator {
       'TemplateLiteral',
       'ThisExpression',
       'Super',
+      'MetaProperty',
+      'PrivateIdentifier',
     ];
     if (simpleExpressions.includes(node.type)) {
       return this.generateSimpleExpression(node);
@@ -755,6 +767,7 @@ export class CodeGenerator {
       'AssignmentExpression',
       'MemberExpression',
       'ChainExpression',
+      'TaggedTemplateExpression',
     ];
     if (callExpressions.includes(node.type)) {
       return this.generateCallAssignmentExpression(node);
@@ -792,8 +805,41 @@ export class CodeGenerator {
         return 'this';
       case 'Super':
         return 'super';
+      case 'MetaProperty':
+        return this.generateNewTarget(node as MetaProperty);
+      case 'PrivateIdentifier':
+        return this.generatePrivateIdentifier(node as PrivateIdentifier);
       default:
         return this.handleUnknownExpression(node);
+    }
+  }
+
+  private generateNewTarget(node: MetaProperty): string {
+    if (this.newTargetScopes === 0) {
+      this.errors.push(
+        `new.target expression is not allowed here at line ${node.line}, column ${node.column}: 'нав.target' must be inside a function or class`
+      );
+    }
+    return 'new.target';
+  }
+
+  /** `#ном`: it must be declared by an enclosing class, an early error in JavaScript. */
+  private generatePrivateIdentifier(node: PrivateIdentifier): string {
+    if (!this.privateNames.some(names => names.has(node.name))) {
+      this.errors.push(
+        `Private field '#${node.name}' must be declared in an enclosing class at line ${node.line}, column ${node.column}`
+      );
+    }
+    return `#${node.name}`;
+  }
+
+  /** Run `generate` inside a function or class body, where `нав.target` is allowed. */
+  private withNewTarget<T>(generate: () => T): T {
+    this.newTargetScopes++;
+    try {
+      return generate();
+    } finally {
+      this.newTargetScopes--;
     }
   }
 
@@ -827,6 +873,8 @@ export class CodeGenerator {
       case 'ChainExpression':
         // The parentheses end the optional chain: `(о?.а).б`, `(о?.ф)()`
         return `(${this.generateExpression((node as ChainExpression).expression)})`;
+      case 'TaggedTemplateExpression':
+        return this.generateTaggedTemplate(node as TaggedTemplateExpression);
       default:
         return this.handleUnknownExpression(node);
     }
@@ -869,7 +917,9 @@ export class CodeGenerator {
     const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
     // `function* (…)`, `function* ном(…)`
     const head = node.generator ? `function*${name || ' '}` : `function${name}`;
-    const { params, body } = this.generateFunctionParts(node.params, node.body, node.async);
+    const { params, body } = this.withNewTarget(() =>
+      this.generateFunctionParts(node.params, node.body, node.async)
+    );
     return `${async}${head}(${params}) ${body}`;
   }
 
@@ -1334,6 +1384,24 @@ export class CodeGenerator {
     return result;
   }
 
+  /**
+   * `тег\`…\``: the tag receives the text as written (`String.raw`), so the
+   * quasis are emitted raw rather than re-escaped from their cooked value.
+   */
+  private generateTaggedTemplate(node: TaggedTemplateExpression): string {
+    const tag = this.generateExpression(node.tag, PREC.CALL);
+    const { quasis, expressions } = node.quasi;
+    let template = '';
+    quasis.forEach((quasi, i) => {
+      // Line terminators are LF in raw text too; NUL is the position marker
+      template += quasi.value.raw.replace(/\r\n?/g, '\n').replaceAll('\0', '\\x00');
+      if (i < expressions.length) {
+        template += `\${${this.generateExpression(expressions[i])}}`;
+      }
+    });
+    return `${tag}\`${template}\``;
+  }
+
   private generateBinaryExpression(node: BinaryExpression): string {
     const precedence = this.operatorPrecedence.get(node.operator) ?? 0;
     // `**` is right-associative, and `-а ** б` is a SyntaxError, so its left
@@ -1365,6 +1433,12 @@ export class CodeGenerator {
   }
 
   private generateUnaryExpression(node: UnaryExpression): string {
+    const target = node.argument as MemberExpression;
+    if (node.operator === 'delete' && target.property?.type === 'PrivateIdentifier') {
+      this.errors.push(
+        `Private fields can not be deleted at line ${node.line}, column ${node.column}`
+      );
+    }
     const argument = this.generateExpression(node.argument, PREC.UNARY);
     // Word operators (`typeof`, `void`, `delete`) need a space, and so does
     // `- -а` / `+ +а`, which would otherwise read as `--а` / `++а`.
@@ -1472,6 +1546,11 @@ export class CodeGenerator {
   }
 
   private generateMemberExpression(node: MemberExpression): string {
+    if (node.object.type === 'Super' && node.property.type === 'PrivateIdentifier') {
+      this.errors.push(
+        `Unexpected private field '#${(node.property as PrivateIdentifier).name}' after 'супер' at line ${node.property.line}, column ${node.property.column}`
+      );
+    }
     let object = this.generateExpression(node.object, PREC.CALL);
     // `5.toFixed()` would read the dot as a decimal point
     if (skipAssertions(node.object).type === 'Literal' && /^\d+$/.test(object)) {
@@ -1523,9 +1602,11 @@ export class CodeGenerator {
       : this.generatePropertyKey(prop.key);
     if (prop.method && prop.value.type === 'FunctionExpression') {
       const fn = prop.value as FunctionExpression;
-      const asyncPrefix = fn.async ? 'async ' : '';
+      const asyncPrefix = prop.kind ? `${prop.kind} ` : fn.async ? 'async ' : '';
       const star = fn.generator ? '*' : '';
-      const { params, body } = this.generateFunctionParts(fn.params, fn.body, fn.async);
+      const { params, body } = this.withNewTarget(() =>
+        this.generateFunctionParts(fn.params, fn.body, fn.async)
+      );
       return `${asyncPrefix}${star}${key}(${params}) ${body}`;
     }
     const value = this.generateExpression(prop.value, PREC.ASSIGNMENT);
@@ -1587,7 +1668,11 @@ export class CodeGenerator {
 
   private chainContainsCall(node: Expression): boolean {
     let current = skipAssertions(node);
-    while (current.type === 'MemberExpression') {
+    while (current.type === 'MemberExpression' || current.type === 'TaggedTemplateExpression') {
+      if (current.type === 'TaggedTemplateExpression') {
+        current = skipAssertions((current as TaggedTemplateExpression).tag);
+        continue;
+      }
       const memberExpr = current as MemberExpression;
       if (memberExpr.optional) {
         return true;
@@ -1941,6 +2026,7 @@ export class CodeGenerator {
 
     // Generate class members, one level deeper than the class
     if (node.body && node.body.body) {
+      this.privateNames.push(this.declaredPrivateNames(node));
       this.indentLevel++;
       const members = node.body.body
         .map(member => {
@@ -1955,6 +2041,7 @@ export class CodeGenerator {
         })
         .filter((member: string) => member.length > 0);
       this.indentLevel--;
+      this.privateNames.pop();
 
       if (members.length > 0) {
         classBody = '\n' + members.join('\n') + '\n' + this.getIndent();
@@ -1964,11 +2051,42 @@ export class CodeGenerator {
     return this.indent(`class ${className}${extendsClause} {${classBody}}`);
   }
 
+  /**
+   * Private names a class declares. Declaring one twice is an early error,
+   * except for a getter and a setter of the same name.
+   */
+  private declaredPrivateNames(node: ClassDeclaration): Set<string> {
+    const declared = new Map<string, string>();
+    for (const member of node.body.body) {
+      if (member.key?.type !== 'PrivateIdentifier') continue;
+      const name = member.key.name;
+      const kind = member.type === 'MethodDefinition' ? member.kind : 'field';
+      const previous = declared.get(name);
+      const accessorPair =
+        (previous === 'get' && kind === 'set') || (previous === 'set' && kind === 'get');
+      if (previous !== undefined && !accessorPair) {
+        this.errors.push(
+          `Identifier '#${name}' has already been declared at line ${member.key.line}, column ${member.key.column}`
+        );
+      }
+      declared.set(name, accessorPair ? 'pair' : kind);
+    }
+    return new Set(declared.keys());
+  }
+
+  /** A class member name: `#ном` as written, other names through the member-name mapping. */
+  private generateMemberKey(key: Identifier | PrivateIdentifier): string {
+    return key.type === 'PrivateIdentifier'
+      ? this.generatePrivateIdentifier(key as PrivateIdentifier)
+      : translateMemberName(key.name);
+  }
+
   private generateMethodDefinition(node: MethodDefinition): string {
     // Method names follow the same member-name mapping as `obj.маълумот()`
     // call sites (`translateMemberName`), so declaration and use agree.
-    const methodName =
-      node.kind === 'constructor' ? 'constructor' : translateMemberName(node.key.name);
+    const name = node.kind === 'constructor' ? 'constructor' : this.generateMemberKey(node.key);
+    const accessor = node.kind === 'get' || node.kind === 'set' ? `${node.kind} ` : '';
+    const methodName = `${accessor}${name}`;
     const isStatic = node.static ? 'static ' : '';
     const isAsync = node.value?.async ? 'async ' : '';
     const star = node.value?.generator ? '*' : '';
@@ -1985,19 +2103,19 @@ export class CodeGenerator {
       );
       return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) {}`);
     }
-    const { params, body } = this.generateFunctionParts(
-      node.value.params,
-      node.value.body,
-      node.value.async
+    const { params, body } = this.withNewTarget(() =>
+      this.generateFunctionParts(node.value.params, node.value.body, node.value.async)
     );
     return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) ${body}`);
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
-    const propertyName = translateMemberName(node.key.name);
+    const propertyName = this.generateMemberKey(node.key);
     const isStatic = node.static ? 'static ' : '';
-    const initializer = node.value
-      ? ` = ${this.generateExpression(node.value, PREC.ASSIGNMENT)}`
+    // A field initializer may use `нав.target` (it is `беқимат` there)
+    const value = node.value;
+    const initializer = value
+      ? ` = ${this.withNewTarget(() => this.generateExpression(value, PREC.ASSIGNMENT))}`
       : '';
 
     return this.indent(`${isStatic}${propertyName}${initializer};`);

@@ -91,6 +91,15 @@ import {
   EnumDeclaration,
   EnumMember,
   YieldExpression,
+  MetaProperty,
+  PrivateIdentifier,
+  TaggedTemplateExpression,
+  ReadonlyType,
+  OptionalType,
+  RestType,
+  ThisType,
+  TypePredicate,
+  ConstructorType,
 } from './types';
 import { Lexer } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
@@ -314,8 +323,8 @@ export class Parser {
       );
     }
 
-    // Skip generic type parameters if present (e.g., <T>, <T, U>)
-    this.skipGenericTypeArguments();
+    // Generic type parameters: `<Т>`, `<Т мерос { дарозӣ: рақам } = сатр>`
+    const typeParameters = this.parseTypeParametersOrSkip();
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after function name");
     const params = this.withGenerator(false, () =>
@@ -325,7 +334,7 @@ export class Parser {
     // Parse optional return type
     let returnType: TypeAnnotation | undefined;
     if (this.match(TokenType.COLON)) {
-      returnType = this.typeAnnotation();
+      returnType = this.returnTypeAnnotation();
     }
 
     this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
@@ -340,6 +349,7 @@ export class Parser {
         line: name.line,
         column: name.column,
       },
+      ...(typeParameters && { typeParameters }),
       params,
       returnType,
       body,
@@ -1038,7 +1048,7 @@ export class Parser {
             this.parseParameterList("Expected ')' after arrow function parameters")
           );
           this.consume(TokenType.COLON, "Expected ':' before return type");
-          const type = this.typeAnnotation();
+          const type = this.returnTypeAnnotation();
           this.consume(TokenType.ARROW, "Expected '=>' after return type");
           return { list, type };
         });
@@ -1311,7 +1321,7 @@ export class Parser {
   }
 
   private comparison(): Expression {
-    let expr = this.shift();
+    let expr = this.privateNameInOperand() ?? this.shift();
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -1418,6 +1428,15 @@ export class Parser {
       line: open.line,
       column: open.column,
     } as TypeAssertion;
+  }
+
+  /** `#ном` directly before `in`/`дар` (the brand check `#ном in о`); anywhere else it is an error. */
+  private privateNameInOperand(): PrivateIdentifier | undefined {
+    const next = this.peekNext();
+    const beforeIn =
+      next?.type === TokenType.ДАР || (next?.type === TokenType.IDENTIFIER && next.value === 'in');
+    if (!this.check(TokenType.PRIVATE_NAME) || !beforeIn) return undefined;
+    return this.createMemberKey(this.advance()) as PrivateIdentifier;
   }
 
   private shift(): Expression {
@@ -1671,6 +1690,8 @@ export class Parser {
         expr = this.createMemberExpression(expr, property, true);
       } else if (this.checkNonNullAssertion()) {
         expr = this.createNonNullExpression(expr);
+      } else if (this.check(TokenType.TEMPLATE_LITERAL)) {
+        expr = this.parseTaggedTemplate(expr);
       } else if (this.match(TokenType.INCREMENT, TokenType.DECREMENT)) {
         // Postfix increment/decrement
         const operator = this.previous();
@@ -1724,12 +1745,47 @@ export class Parser {
     } as MemberExpression;
   }
 
-  /** Property name after '.' or '?.': any identifier or keyword. */
-  private parsePropertyName(message: string): Identifier {
+  /**
+   * A template literal right after a member/call expression tags it, as in
+   * JavaScript (also across a line break): `тег\`…\``, `о.метод\`…\``.
+   */
+  private parseTaggedTemplate(tag: Expression): TaggedTemplateExpression {
+    const template = this.peek();
+    if (this.containsOptionalLink(tag)) {
+      throw new Error(
+        `Invalid tagged template on optional chain at line ${template.line}, column ${template.column}`
+      );
+    }
+    this.advance();
+    return {
+      type: 'TaggedTemplateExpression',
+      tag,
+      quasi: this.parseTemplateLiteral(true),
+      line: tag.line,
+      column: tag.column,
+    } as TaggedTemplateExpression;
+  }
+
+  /** Property name after '.' or '?.': any identifier or keyword, or a private name (`ин.#х`). */
+  private parsePropertyName(message: string): Identifier | PrivateIdentifier {
+    if (this.check(TokenType.PRIVATE_NAME)) {
+      return this.createMemberKey(this.advance());
+    }
     if (!this.isIdentifierNameToken(this.peek())) {
       throw new Error(this.unexpectedTokenMessage(message));
     }
     return this.createIdentifier(this.advance());
+  }
+
+  /** Name of a class member: an identifier, or a `PrivateIdentifier` for `#ном`. */
+  private createMemberKey(token: Token): Identifier | PrivateIdentifier {
+    if (token.type !== TokenType.PRIVATE_NAME) return this.createIdentifier(token);
+    return {
+      type: 'PrivateIdentifier',
+      name: token.value.slice(1),
+      line: token.line,
+      column: token.column,
+    } as PrivateIdentifier;
   }
 
   /** Identifiers and keywords: every token whose text is a word. */
@@ -1925,6 +1981,9 @@ export class Parser {
       } else if (this.checkNonNullAssertion()) {
         // `нав а!.Б()` constructs `а!.Б`
         callee = this.createNonNullExpression(callee);
+      } else if (this.check(TokenType.TEMPLATE_LITERAL)) {
+        // `нав К\`…\`()` constructs the result of the tagged template, as in JavaScript
+        callee = this.parseTaggedTemplate(callee);
       } else {
         break;
       }
@@ -1986,6 +2045,7 @@ export class Parser {
 
   private parseFunctionExpression(funcToken: Token): FunctionExpression {
     const generator = this.match(TokenType.MULTIPLY);
+    const typeParameters = this.parseTypeParametersOrSkip();
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
     const params = this.withGenerator(false, () =>
       this.parseParameterList("Expected ')' after parameters")
@@ -1993,13 +2053,14 @@ export class Parser {
     let returnType: TypeAnnotation | undefined;
 
     if (this.match(TokenType.COLON)) {
-      returnType = this.typeAnnotation();
+      returnType = this.returnTypeAnnotation();
     }
 
     this.consume(TokenType.LEFT_BRACE, "Expected '{' before function body");
     const body = this.withGenerator(generator, () => this.blockStatement());
     return {
       type: 'FunctionExpression',
+      ...(typeParameters && { typeParameters }),
       params,
       body,
       returnType,
@@ -2121,6 +2182,10 @@ export class Parser {
     const thisOrSuper = this.parseThisOrSuperExpression();
     if (thisOrSuper) return thisOrSuper;
 
+    if (this.check(TokenType.НАВ) && this.peekNext()?.type === TokenType.DOT) {
+      return this.parseNewTarget();
+    }
+
     if (this.match(TokenType.НАВ)) {
       return this.parseNewExpression(this.previous());
     }
@@ -2162,7 +2227,31 @@ export class Parser {
     );
   }
 
-  private parseTemplateLiteral(): TemplateLiteral {
+  /** `нав.target` (`new.target`); the only meta property of `нав`. */
+  private parseNewTarget(): MetaProperty {
+    const newToken = this.advance();
+    this.advance(); // '.'
+    const property = this.peek();
+    if (property.type !== TokenType.IDENTIFIER || property.value !== 'target') {
+      throw new Error(
+        `The only valid meta property for 'нав' is 'нав.target' at line ${property.line}, column ${property.column}`
+      );
+    }
+    this.advance();
+    return {
+      type: 'MetaProperty',
+      meta: { type: 'Identifier', name: 'new', line: newToken.line, column: newToken.column },
+      property: this.createIdentifier(property),
+      line: newToken.line,
+      column: newToken.column,
+    };
+  }
+
+  /**
+   * The template literal just consumed. In a tagged template (`tagged`) an
+   * invalid escape is allowed and leaves the text's `cooked` value null.
+   */
+  private parseTemplateLiteral(tagged = false): TemplateLiteral {
     const token = this.previous();
     const quasis: TemplateElement[] = [];
     const expressions: Expression[] = [];
@@ -2171,7 +2260,7 @@ export class Parser {
       if (part.type === 'text') {
         quasis.push({
           type: 'TemplateElement',
-          value: { raw: part.value, cooked: this.cookTemplateText(part.value, token) },
+          value: { raw: part.value, cooked: this.cookTemplatePart(part.value, token, tagged) },
           tail: false,
           line: token.line,
           column: token.column,
@@ -2283,6 +2372,15 @@ export class Parser {
     return breaks === 0
       ? { line: token.line, column: token.column + 1 + offset }
       : { line: token.line + breaks, column: offset - lastBreak };
+  }
+
+  private cookTemplatePart(raw: string, token: Token, tagged: boolean): string | null {
+    if (!tagged) return this.cookTemplateText(raw, token);
+    try {
+      return this.cookTemplateText(raw, token);
+    } catch {
+      return null;
+    }
   }
 
   /** Decodes the escape sequences of raw template text. */
@@ -2796,6 +2894,7 @@ export class Parser {
     TokenType.НОШИНОС, // Contextual: unknown type
     TokenType.АБАДАН, // Contextual: never type
     TokenType.БЕДЖАВОБ, // Contextual: void type
+    TokenType.РАМЗ, // Contextual: symbol type
 
     // Contextual Keywords: Type operators and utilities
     TokenType.НАВЪ, // Contextual: type keyword
@@ -2928,7 +3027,7 @@ export class Parser {
     );
     let returnType: TypeAnnotation | undefined;
     if (this.match(TokenType.COLON)) {
-      returnType = this.typeAnnotation();
+      returnType = this.returnTypeAnnotation();
     }
     this.consume(TokenType.LEFT_BRACE, "Expected '{' before method body");
     const body = this.withGenerator(modifiers.generator, () => this.blockStatement());
@@ -2946,6 +3045,8 @@ export class Parser {
 
   private parseProperty(): Property {
     const startToken = this.peek();
+    // `{ get ном() { … }, set ном(қ) { … } }`
+    const accessor = this.parseAccessorKind();
     let key: Identifier | Literal;
     let computed = false;
     const modifiers = this.parseObjectMethodModifiers();
@@ -2977,10 +3078,7 @@ export class Parser {
     };
 
     if (this.match(TokenType.LEFT_PAREN)) {
-      // Method shorthand: { ном() { … } }
-      property.value = this.objectMethod(startToken, modifiers);
-      property.method = true;
-      return property;
+      return this.parseMethodShorthand(property, startToken, accessor, modifiers);
     }
 
     if (modifiers.isAsync || modifiers.generator) {
@@ -3005,6 +3103,23 @@ export class Parser {
     }
 
     throw new Error(this.unexpectedTokenMessage("Expected ':' after property key"));
+  }
+
+  /** Method shorthand `{ ном() { … } }` or accessor `{ get ном() { … } }`, after its '('. */
+  private parseMethodShorthand(
+    property: Property,
+    startToken: Token,
+    accessor: 'get' | 'set' | undefined,
+    modifiers: { isAsync: boolean; generator: boolean }
+  ): Property {
+    const method = this.objectMethod(startToken, modifiers);
+    property.value = method;
+    property.method = true;
+    if (accessor) {
+      property.kind = accessor;
+      this.checkAccessorParams(accessor, method.params, startToken);
+    }
+    return property;
   }
 
   private tryStatement(): TryStatement {
@@ -3161,6 +3276,81 @@ export class Parser {
     };
   }
 
+  /** A return type annotation: a type, a type predicate or an assertion signature. */
+  private returnTypeAnnotation(): TypeAnnotation {
+    const typeNode = this.parseReturnType();
+    return {
+      type: 'TypeAnnotation',
+      typeAnnotation: typeNode,
+      line: typeNode.line,
+      column: typeNode.column,
+    };
+  }
+
+  private parseReturnType(): TypeNode {
+    return this.parseTypePredicate() ?? this.parseType();
+  }
+
+  /**
+   * `х аст Т` / `ин аст Т` (`x is T`), `тасдиқ х` / `тасдиқ х аст Т`
+   * (`asserts x [is T]`). `аст`, `тасдиқ` and their English spellings `is`,
+   * `asserts` are keywords only here.
+   */
+  private parseTypePredicate(): TypePredicate | undefined {
+    const start = this.peek();
+    const asserts = this.isAssertsModifier();
+    const subjectIndex = this.current + (asserts ? 1 : 0);
+    const isPredicate =
+      this.isPredicateSubject(this.tokens[subjectIndex]) &&
+      this.isPredicateKeyword(this.tokens[subjectIndex + 1]);
+    if (!asserts && !isPredicate) return undefined;
+
+    if (asserts) this.advance();
+    const subject = this.advance();
+    const parameterName =
+      subject.type === TokenType.ИН
+        ? ({ type: 'ThisType', line: subject.line, column: subject.column } as ThisType)
+        : this.createIdentifier(subject);
+    let typeAnnotation: TypeNode | undefined;
+    if (isPredicate) {
+      this.advance(); // 'аст'
+      typeAnnotation = this.parseType();
+    }
+    return {
+      type: 'TypePredicate',
+      parameterName,
+      ...(typeAnnotation && { typeAnnotation }),
+      asserts,
+      line: start.line,
+      column: start.column,
+    } as TypePredicate;
+  }
+
+  /** `тасдиқ`/`asserts` followed, on the same line, by a parameter name or `ин`. */
+  private isAssertsModifier(): boolean {
+    const token = this.peek();
+    const next = this.peekNext();
+    const isWord =
+      token.type === TokenType.ТАСДИҚ ||
+      (token.type === TokenType.IDENTIFIER && token.value === 'asserts');
+    if (!isWord || !next || next.line !== token.line) return false;
+    // `тасдиқ аст Т` is a predicate on a parameter named `тасдиқ`
+    return this.isPredicateSubject(next) && !this.isPredicateKeyword(next);
+  }
+
+  private isPredicateSubject(token: Token | undefined): boolean {
+    return (
+      token !== undefined && (token.type === TokenType.ИН || this.isPlainIdentifierToken(token))
+    );
+  }
+
+  private isPredicateKeyword(token: Token | undefined): boolean {
+    return (
+      token?.type === TokenType.АСТ ||
+      (token?.type === TokenType.IDENTIFIER && token.value === 'is')
+    );
+  }
+
   private parseType(): TypeNode {
     return this.conditionalType();
   }
@@ -3247,6 +3437,9 @@ export class Parser {
   private primaryType(): TypeNode {
     let type =
       this.parseParenthesizedOrArrayType() ??
+      this.parseConstructorType() ??
+      this.parseReadonlyType() ??
+      this.parseThisType() ??
       this.parseUniqueType() ??
       this.parseKeyofType() ??
       this.parseLiteralType() ??
@@ -3322,10 +3515,74 @@ export class Parser {
     return {
       type: 'FunctionType',
       parameters,
-      returnType: this.parseType(),
+      returnType: this.parseReturnType(),
       line: openParen.line,
       column: openParen.column,
     };
+  }
+
+  /** `нав (а: рақам) => Т`, `мавҳум нав () => Т` */
+  private parseConstructorType(): ConstructorType | undefined {
+    const isAbstract = this.checkSequence(TokenType.МАВҲУМ, TokenType.НАВ);
+    if (!isAbstract && !this.check(TokenType.НАВ)) return undefined;
+    const start = this.advance();
+    if (isAbstract) this.advance(); // 'нав'
+    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'нав' in constructor type");
+    const parameters = this.parseParameterList("Expected ')' after constructor type parameters");
+    this.consume(TokenType.ARROW, "Expected '=>' in constructor type");
+    return {
+      type: 'ConstructorType',
+      parameters,
+      returnType: this.parseType(),
+      ...(isAbstract && { abstract: true }),
+      line: start.line,
+      column: start.column,
+    } as ConstructorType;
+  }
+
+  /** `танҳохонӣ рақам[]`, `танҳохонӣ [рақам, сатр]`; a bare `танҳохонӣ` stays a type name. */
+  private parseReadonlyType(): ReadonlyType | undefined {
+    const next = this.peekNext();
+    if (!this.check(TokenType.ТАНҲОХОНӢ) || !next || Parser.TYPE_FOLLOWERS.has(next.type)) {
+      return undefined;
+    }
+    const readonlyToken = this.advance();
+    return {
+      type: 'ReadonlyType',
+      typeAnnotation: this.primaryType(),
+      line: readonlyToken.line,
+      column: readonlyToken.column,
+    };
+  }
+
+  /** Tokens that may follow a complete type, so they cannot start the operand of `танҳохонӣ`. */
+  private static readonly TYPE_FOLLOWERS: ReadonlySet<TokenType> = new Set([
+    TokenType.ASSIGN,
+    TokenType.SEMICOLON,
+    TokenType.COMMA,
+    TokenType.COLON,
+    TokenType.QUESTION,
+    TokenType.GREATER_THAN,
+    TokenType.RIGHT_SHIFT,
+    TokenType.UNSIGNED_RIGHT_SHIFT,
+    TokenType.RIGHT_PAREN,
+    TokenType.RIGHT_BRACKET,
+    TokenType.RIGHT_BRACE,
+    TokenType.LEFT_BRACE,
+    TokenType.BITWISE_OR,
+    TokenType.BITWISE_AND,
+    TokenType.ARROW,
+    TokenType.DOT,
+    TokenType.LESS_THAN,
+    TokenType.МЕРОС,
+    TokenType.EOF,
+  ]);
+
+  /** `ин` as a type: `илова(): ин` */
+  private parseThisType(): ThisType | undefined {
+    if (!this.match(TokenType.ИН)) return undefined;
+    const token = this.previous();
+    return { type: 'ThisType', line: token.line, column: token.column };
   }
 
   private parseUniqueType(): TypeNode | undefined {
@@ -3397,7 +3654,8 @@ export class Parser {
         TokenType.НОШИНОС,
         TokenType.АБАДАН,
         TokenType.БЕДЖАВОБ,
-        TokenType.ОБЪЕКТ
+        TokenType.ОБЪЕКТ,
+        TokenType.РАМЗ
       )
     ) {
       return undefined;
@@ -3405,7 +3663,7 @@ export class Parser {
     const token = this.previous();
     const primitiveType: PrimitiveType = {
       type: 'PrimitiveType',
-      name: token.value as 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат',
+      name: token.value as PrimitiveType['name'],
       line: token.line,
       column: token.column,
     };
@@ -3466,15 +3724,40 @@ export class Parser {
     return genericType;
   }
 
-  /** Named tuple members (`[х: рақам, у: рақам]`): the label is documentation only. */
-  private skipTupleMemberLabel(): void {
-    if (
-      this.peekNext()?.type === TokenType.COLON &&
-      (this.check(TokenType.IDENTIFIER) || this.isBuiltinIdentifierType(this.peek().type))
-    ) {
-      this.advance();
-      this.advance(); // ':'
+  /**
+   * Named tuple members (`[х: рақам, у?: рақам]`): the label is documentation
+   * only. Returns true for an optional label (`у?:`).
+   */
+  private skipTupleMemberLabel(): boolean {
+    if (!this.check(TokenType.IDENTIFIER) && !this.isBuiltinIdentifierType(this.peek().type)) {
+      return false;
     }
+    const optional = this.peekNext()?.type === TokenType.QUESTION;
+    if (this.tokens[this.current + (optional ? 2 : 1)]?.type !== TokenType.COLON) return false;
+    this.current += optional ? 3 : 2;
+    return optional;
+  }
+
+  /** A tuple element: `Т`, optional `Т?` / `н?: Т`, or rest `...Т[]` / `...н: Т[]`. */
+  private parseTupleElement(): TypeNode {
+    const spread = this.match(TokenType.SPREAD) ? this.previous() : undefined;
+    const optionalLabel = this.skipTupleMemberLabel();
+    const elementType = this.unionType();
+    if (spread) {
+      return {
+        type: 'RestType',
+        typeAnnotation: elementType,
+        line: spread.line,
+        column: spread.column,
+      } as RestType;
+    }
+    if (!optionalLabel && !this.match(TokenType.QUESTION)) return elementType;
+    return {
+      type: 'OptionalType',
+      typeAnnotation: elementType,
+      line: elementType.line,
+      column: elementType.column,
+    } as OptionalType;
   }
 
   private parseTupleType(): TypeNode | undefined {
@@ -3482,8 +3765,7 @@ export class Parser {
     const types: TypeNode[] = [];
     if (!this.check(TokenType.RIGHT_BRACKET)) {
       do {
-        this.skipTupleMemberLabel();
-        types.push(this.unionType());
+        types.push(this.parseTupleElement());
       } while (this.match(TokenType.COMMA));
     }
     this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after tuple types");
@@ -3629,7 +3911,8 @@ export class Parser {
         line: paramName.line,
         column: paramName.column,
       };
-      if (this.match(TokenType.МЕРОС)) {
+      // `мерос` or, as in TypeScript, `extends`
+      if (this.match(TokenType.МЕРОС) || this.matchIdentifierValue('extends')) {
         typeParameter.constraint = this.parseType();
       }
       if (this.match(TokenType.ASSIGN)) {
@@ -3640,6 +3923,34 @@ export class Parser {
 
     this.consumeTypeArgumentsClose();
     return typeParameters;
+  }
+
+  private matchIdentifierValue(value: string): boolean {
+    if (!this.checkIdentifierValue(value)) return false;
+    this.advance();
+    return true;
+  }
+
+  /**
+   * Type parameters of a function, class or method. Lists that are not
+   * understood are skipped, the way all of them were before they were kept.
+   */
+  private parseTypeParametersOrSkip(): TypeParameter[] | undefined {
+    if (!this.check(TokenType.LESS_THAN)) return undefined;
+    const start = this.current;
+    const tokens = [...this.tokens];
+    const errorCount = this.errors.length;
+    try {
+      const typeParameters = this.parseTypeParameters();
+      if (this.errors.length === errorCount) return typeParameters;
+    } catch (error) {
+      if (this.isNestingError(error)) throw error;
+    }
+    this.tokens = tokens;
+    this.current = start;
+    this.errors.length = errorCount;
+    this.skipGenericTypeArguments();
+    return undefined;
   }
 
   /** `мерос А, Б<Т>` — the parent interfaces, or undefined without a clause. */
@@ -3758,7 +4069,7 @@ export class Parser {
     }
 
     this.consume(TokenType.COLON, "Expected ':' after method parameters");
-    const typeAnnotation = this.typeAnnotation();
+    const typeAnnotation = this.returnTypeAnnotation();
     this.consumeMemberSeparator("Expected ';' after method signature");
 
     return {
@@ -3807,6 +4118,8 @@ export class Parser {
     }
 
     const keyName = this.parsePropertyKeyName();
+    // A generic method signature: `метод<Т>(х: Т): Т;`
+    this.parseTypeParametersOrSkip();
 
     // Check if this is a method signature (has parentheses)
     if (this.check(TokenType.LEFT_PAREN)) {
@@ -3841,7 +4154,7 @@ export class Parser {
     }
 
     const superClassToken = this.parseImportOrExportName("Expected superclass name after 'мерос'");
-    this.skipGenericTypeArguments();
+    this.parseNewTypeArguments(); // `мерос Асос<{ а: рақам }>`: type arguments are erased
     return superClassToken;
   }
 
@@ -3856,7 +4169,7 @@ export class Parser {
         'Expected interface name in implements clause'
       );
       implementsTokens.push(interfaceToken);
-      this.skipGenericTypeArguments();
+      this.parseNewTypeArguments();
     } while (this.match(TokenType.COMMA));
 
     return implementsTokens;
@@ -3880,7 +4193,7 @@ export class Parser {
     const classToken = this.previous();
     const nameToken = this.parseImportOrExportName('Expected class name');
 
-    this.skipGenericTypeArguments();
+    const typeParameters = this.parseTypeParametersOrSkip();
 
     const superClassToken = this.parseClassExtendsClause();
     const implementsTokens = this.parseClassImplementsClause();
@@ -3894,6 +4207,7 @@ export class Parser {
         line: nameToken.line,
         column: nameToken.column,
       },
+      ...(typeParameters && { typeParameters }),
       superClass: superClassToken
         ? {
             type: 'Identifier',
@@ -4020,7 +4334,7 @@ export class Parser {
     // Check for regular method with 'функсия' keyword
     this.match(TokenType.ФУНКСИЯ);
 
-    if (this.check(TokenType.IDENTIFIER)) {
+    if (this.check(TokenType.IDENTIFIER) || this.check(TokenType.PRIVATE_NAME)) {
       return this.advance();
     }
 
@@ -4031,6 +4345,88 @@ export class Parser {
     throw new Error(
       `Expected class member at line ${this.peek().line}, column ${this.peek().column}`
     );
+  }
+
+  /**
+   * `get`/`set` before a member name (`ном`, `#ном`, `"ном"`, `[калид]`) and
+   * its '(' make an accessor; anywhere else they are ordinary names.
+   */
+  private parseAccessorKind(): 'get' | 'set' | undefined {
+    const token = this.peek();
+    const name = this.peekNext();
+    if (token.type !== TokenType.IDENTIFIER || !['get', 'set'].includes(token.value) || !name) {
+      return undefined;
+    }
+    let nameEnd = -1;
+    if (name.type === TokenType.LEFT_BRACKET) {
+      nameEnd = this.findMatchingBracket(this.current + 1);
+    } else if (Parser.ACCESSOR_NAME_TOKENS.has(name.type) || this.isIdentifierNameToken(name)) {
+      nameEnd = this.current + 1;
+    }
+    if (nameEnd === -1 || this.tokens[nameEnd + 1]?.type !== TokenType.LEFT_PAREN) return undefined;
+    this.advance();
+    return token.value as 'get' | 'set';
+  }
+
+  private static readonly ACCESSOR_NAME_TOKENS: ReadonlySet<TokenType> = new Set([
+    TokenType.PRIVATE_NAME,
+    TokenType.STRING,
+    TokenType.NUMBER,
+  ]);
+
+  /** Early errors of private names: no accessibility modifier, never `#constructor`. */
+  private checkPrivateMemberName(nameToken: Token, accessibility: AccessibilityModifier): void {
+    if (nameToken.type !== TokenType.PRIVATE_NAME) return;
+    const at = `at line ${nameToken.line}, column ${nameToken.column}`;
+    if (nameToken.value === '#constructor') {
+      this.errors.push(`Classes may not have a private field named '#constructor' ${at}`);
+    }
+    if (accessibility) {
+      this.errors.push(
+        `An accessibility modifier cannot be used with a private identifier '${nameToken.value}' ${at}`
+      );
+    }
+  }
+
+  /** Kind and type parameters of a parsed method. */
+  private finishClassMethod(
+    method: MethodDefinition,
+    accessor: 'get' | 'set' | undefined,
+    typeParameters: TypeParameter[] | undefined
+  ): MethodDefinition {
+    if (typeParameters) method.value.typeParameters = typeParameters;
+    if (accessor) {
+      method.kind = accessor;
+      this.checkAccessorParams(accessor, method.value.params, method);
+    }
+    return method;
+  }
+
+  /** A getter takes no parameter and a setter exactly one, as JavaScript requires. */
+  private checkAccessorParams(
+    accessor: 'get' | 'set',
+    params: Parameter[],
+    at: { line: number; column: number }
+  ): void {
+    const position = `at line ${at.line}, column ${at.column}`;
+    if (accessor === 'get' && params.length > 0) {
+      this.errors.push(`Getter must not have any formal parameters ${position}`);
+    } else if (accessor === 'set' && (params.length !== 1 || params[0].rest)) {
+      this.errors.push(`Setter must have exactly one formal parameter ${position}`);
+    }
+  }
+
+  /** `танҳохонӣ ном: Т` — unless `танҳохонӣ` is itself the member name. */
+  private parseReadonlyModifier(): boolean {
+    const token = this.peek();
+    const next = this.peekNext();
+    if (token.type !== TokenType.ТАНҲОХОНӢ || !next || next.line !== token.line) return false;
+    const isName =
+      next.type === TokenType.IDENTIFIER ||
+      next.type === TokenType.PRIVATE_NAME ||
+      this.isBuiltinIdentifierType(next.type);
+    if (isName) this.advance();
+    return isName;
   }
 
   private classMember(): MethodDefinition | PropertyDefinition | undefined {
@@ -4052,13 +4448,25 @@ export class Parser {
     // `*ном() {…}`: a generator method
     const isGenerator = this.match(TokenType.MULTIPLY);
 
+    const isReadonly = !isAsync && this.parseReadonlyModifier();
+    // `get ном() {…}`, `set ном(қимат) {…}`
+    const accessor = isAsync ? undefined : this.parseAccessorKind();
     const nameToken = this.parseMemberName();
+    this.checkPrivateMemberName(nameToken, accessibility);
+    // A generic method: `метод<Т>(х: Т)`
+    const typeParameters = this.parseTypeParametersOrSkip();
 
-    if (this.check(TokenType.LEFT_PAREN)) {
+    if (accessor || this.check(TokenType.LEFT_PAREN)) {
+      if (isReadonly) {
+        this.errors.push(
+          `'танҳохонӣ' can only be used on a property at line ${nameToken.line}, column ${nameToken.column}`
+        );
+      }
       // `classMethod` parses a generator body for `*ном() {…}`
-      return this.withGenerator(isGenerator, () =>
+      const method = this.withGenerator(isGenerator, () =>
         this.classMethod(nameToken, accessibility, isStatic, isAbstract, isAsync)
       );
+      return this.finishClassMethod(method, accessor, typeParameters);
     }
 
     if (isAsync || isGenerator) {
@@ -4066,7 +4474,9 @@ export class Parser {
         `Expected method after '${isGenerator ? '*' : 'ҳамзамон'}' at line ${nameToken.line}, column ${nameToken.column}`
       );
     }
-    return this.classProperty(nameToken, accessibility, isStatic);
+    const property = this.classProperty(nameToken, accessibility, isStatic);
+    if (isReadonly) property.readonly = true;
+    return property;
   }
 
   private constructorMethod(accessibility?: string, isStatic?: boolean): MethodDefinition {
@@ -4126,7 +4536,7 @@ export class Parser {
 
     let returnType: TypeAnnotation | undefined;
     if (this.match(TokenType.COLON)) {
-      returnType = this.typeAnnotation();
+      returnType = this.returnTypeAnnotation();
     }
 
     let body: BlockStatement;
@@ -4148,12 +4558,7 @@ export class Parser {
 
     return {
       type: 'MethodDefinition',
-      key: {
-        type: 'Identifier',
-        name: nameToken.value,
-        line: nameToken.line,
-        column: nameToken.column,
-      },
+      key: this.createMemberKey(nameToken),
       value: {
         type: 'FunctionExpression',
         params: params,
@@ -4214,12 +4619,7 @@ export class Parser {
 
     return {
       type: 'PropertyDefinition',
-      key: {
-        type: 'Identifier',
-        name: nameToken.value,
-        line: nameToken.line,
-        column: nameToken.column,
-      },
+      key: this.createMemberKey(nameToken),
       value: value,
       typeAnnotation: typeAnnotation,
       ...(optional && { optional }),

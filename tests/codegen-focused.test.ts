@@ -750,3 +750,197 @@ describe('CodeGenerator - statements and generators', () => {
     expect(result.code).toBe('');
   });
 });
+
+describe('CodeGenerator: new.target, tagged templates, private members and accessors', () => {
+  test('нав.target is new.target', () => {
+    expect(emitted(['функсия Ф() {', '  бозгашт нав.target === Ф;', '}'])).toBe(
+      ['function Ф() {', '  return new.target === Ф;', '}'].join('\n')
+    );
+  });
+
+  test('tagged templates keep their raw text and bind like member access', () => {
+    expect(
+      emitted(['чоп.сабт(сатр.хоми`а\\n${1 + 2}б`, т`а``б`(), нав т`К`(), (о?.т)`а`, о.т`\\u`.х);'])
+    ).toBe('console.log(String.raw`а\\n${1 + 2}б`, т`а``б`(), new т`К`(), (о?.т)`а`, о.т`\\u`.х);');
+  });
+
+  test('a tagged template across a line break is still one expression, as in JavaScript', () => {
+    expect(emitted(['собит а = т', '`б`;'])).toBe('const а = т`б`;');
+  });
+
+  test('private fields, methods, accessors and brand checks', () => {
+    expect(
+      emitted([
+        'синф К {',
+        '  #х = 1;',
+        '  статикӣ #с;',
+        '  #м(): рақам { бозгашт ин.#х; }',
+        '  get #г(): рақам { бозгашт ин?.#х; }',
+        '  set #г(қ: рақам) { ин.#х = қ; }',
+        '  статикӣ ҳаст(о: ҳар): мантиқӣ { бозгашт #х in о && К.#с === беқимат; }',
+        '}',
+      ])
+    ).toBe(
+      [
+        'class К {',
+        '  #х = 1;',
+        '  static #с;',
+        '  #м() {',
+        '    return this.#х;',
+        '  }',
+        '  get #г() {',
+        '    return this?.#х;',
+        '  }',
+        '  set #г(қ) {',
+        '    this.#х = қ;',
+        '  }',
+        '  static ҳаст(о) {',
+        '    return #х in о && К.#с === undefined;',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('getters and setters in classes and object literals', () => {
+    expect(
+      emitted([
+        'синф К {',
+        '  get х(): рақам { бозгашт 1; }',
+        '  set х(қ: рақам) { }',
+        '  статикӣ get с() { бозгашт 2; }',
+        '  get = 3;',
+        '}',
+        'собит о = { get а() { бозгашт 1; }, set а(қ) { }, get: 2 };',
+      ])
+    ).toBe(
+      [
+        'class К {',
+        '  get х() {',
+        '    return 1;',
+        '  }',
+        '  set х(қ) {}',
+        '  static get с() {',
+        '    return 2;',
+        '  }',
+        '  get = 3;',
+        '}',
+        'const о = {get а() {',
+        '  return 1;',
+        '}, set а(қ) {}, get: 2};',
+      ].join('\n')
+    );
+  });
+
+  test('type operators, predicates and type parameters are erased', () => {
+    expect(
+      emitted([
+        'функсия ф<Т мерос { а: рақам } = { а: 1 }>(х: Т, р: танҳохонӣ [рақам, сатр?]): х аст Т {',
+        '  бозгашт дуруст;',
+        '}',
+        'функсия г(ш: ҳар): тасдиқ ш { }',
+        'синф З<Т> { танҳохонӣ н: беназир рамз = Symbol(); илова(): ин { бозгашт ин; } }',
+      ])
+    ).toBe(
+      [
+        'function ф(х, р) {',
+        '  return true;',
+        '}',
+        'function г(ш) {}',
+        'class З {',
+        '  н = Symbol();',
+        '  push() {',
+        '    return this;',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test.each([
+    [
+      'нав.target at the top level',
+      'чоп.сабт(нав.target);',
+      /new\.target expression is not allowed here at line 1, column 10/,
+    ],
+    [
+      'нав.target in a top-level arrow',
+      'собит ф = () => нав.target;',
+      /new\.target expression is not allowed/,
+    ],
+    [
+      'an undeclared private name',
+      'синф К { м() { бозгашт ин.#у; } }',
+      /Private field '#у' must be declared in an enclosing class at line 1, column 27/,
+    ],
+    [
+      'a private name outside its class',
+      'синф К { #х = 1; } функсия ф(к: К) { бозгашт к.#х; }',
+      /Private field '#х' must be declared/,
+    ],
+    [
+      'a private name of the base class',
+      'синф А { #х = 1; } синф Б мерос А { м() { бозгашт ин.#х; } }',
+      /Private field '#х' must be declared/,
+    ],
+    [
+      'a brand check of an undeclared name',
+      'синф К { м(о) { бозгашт #у in о; } }',
+      /Private field '#у' must be declared/,
+    ],
+    [
+      'a private name declared twice',
+      'синф К { #х = 1; #х() { } }',
+      /Identifier '#х' has already been declared at line 1, column 18/,
+    ],
+    [
+      'two getters of one private name',
+      'синф К { get #х() { бозгашт 1; } get #х() { бозгашт 2; } }',
+      /Identifier '#х' has already been declared/,
+    ],
+    [
+      'deleting a private field',
+      'синф К { #х = 1; м() { delete ин.#х; } }',
+      /Private fields can not be deleted/,
+    ],
+    [
+      'a private name after супер',
+      'синф А { } синф Б мерос А { #х = 1; м() { бозгашт супер.#х; } }',
+      /Unexpected private field '#х'/,
+    ],
+  ])('%s is an early error', (_name, source, message) => {
+    for (const typeCheck of [true, false]) {
+      const result = compile(source, { typeCheck });
+      expect(result.errors).toEqual(expect.arrayContaining([expect.stringMatching(message)]));
+      expect(result.code).toBe('');
+    }
+  });
+
+  test('тасдиқ is still console.assert outside a return type', () => {
+    expect(emitted(['функсия ф(ш: ҳар): тасдиқ ш {', '  чоп.тасдиқ(ш, "паём");', '}'])).toBe(
+      ['function ф(ш) {', '  console.assert(ш, "паём");', '}'].join('\n')
+    );
+  });
+
+  test('legal uses of нав.target and private names compile', () => {
+    for (const source of [
+      'функсия ф() { собит г = () => нав.target; бозгашт г(); }',
+      'синф К { х = нав.target; конструктор() { чоп.сабт(нав.target); } }',
+      'собит о = { м() { бозгашт нав.target; } };',
+      'синф К { get #х() { бозгашт 1; } set #х(қ) { } м() { синф Д { м(к: К) { бозгашт к.#х; } } } }',
+    ]) {
+      expect(compile(source, { typeCheck: false }).errors).toEqual([]);
+    }
+  });
+
+  test('source maps cover programs with the new syntax', () => {
+    const result = compile(
+      'синф К {\n  #х = 1;\n  get х(): рақам { бозгашт ин.#х; }\n}\nчоп.сабт(сатр.хоми`а`, нав К().х);',
+      { sourceMap: true }
+    );
+    expect(result.errors).toEqual([]);
+    const map = JSON.parse(result.sourceMap!);
+    expect(map.sources).toEqual(['source.som']);
+    expect(map.mappings.split(';').length).toBeGreaterThan(4);
+  });
+});

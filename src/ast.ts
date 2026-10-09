@@ -28,6 +28,8 @@ export interface VariableDeclaration extends Statement {
 export interface FunctionDeclaration extends Statement {
   type: 'FunctionDeclaration';
   name: Identifier;
+  /** `функсия ф<Т мерос { дарозӣ: рақам } = сатр>(…)` */
+  typeParameters?: TypeParameter[];
   params: Parameter[];
   returnType?: TypeAnnotation;
   body: BlockStatement;
@@ -169,8 +171,11 @@ export interface TemplateElement extends ASTNode {
   value: {
     /** Source text between delimiters, escapes kept as written. */
     raw: string;
-    /** Text with escape sequences decoded. */
-    cooked: string;
+    /**
+     * Text with escape sequences decoded; null in a tagged template whose
+     * text has an invalid escape (`сатр.хоми\`\\u\``), as in JavaScript.
+     */
+    cooked: string | null;
   };
   tail: boolean;
 }
@@ -254,6 +259,8 @@ export interface Property extends ASTNode {
   shorthand: boolean;
   /** Method shorthand: `{ ф() { … } }` — `value` is a `FunctionExpression`. */
   method?: boolean;
+  /** Accessor: `{ get ном() { … } }`, `{ set ном(қ) { … } }` (also a `method`). */
+  kind?: 'get' | 'set';
 }
 
 export interface MemberExpression extends Expression {
@@ -392,6 +399,8 @@ export interface NewExpression extends Expression {
 export interface ClassDeclaration extends Statement {
   type: 'ClassDeclaration';
   name: Identifier;
+  /** `синф Қуттӣ<Т мерос { а: рақам }>` */
+  typeParameters?: TypeParameter[];
   superClass?: Identifier;
   implements?: Identifier[];
   body: ClassBody;
@@ -404,7 +413,7 @@ export interface ClassBody extends ASTNode {
 
 export interface MethodDefinition extends ASTNode {
   type: 'MethodDefinition';
-  key: Identifier;
+  key: Identifier | PrivateIdentifier;
   value: FunctionExpression;
   kind: 'constructor' | 'method' | 'get' | 'set';
   static: boolean;
@@ -414,13 +423,15 @@ export interface MethodDefinition extends ASTNode {
 
 export interface PropertyDefinition extends ASTNode {
   type: 'PropertyDefinition';
-  key: Identifier;
+  key: Identifier | PrivateIdentifier;
   value?: Expression;
   typeAnnotation?: TypeAnnotation;
   /** `ном?: сатр` */
   optional?: boolean;
   /** Definite assignment assertion `ном!: сатр` (erased in the output). */
   definite?: boolean;
+  /** `танҳохонӣ ном: сатр` */
+  readonly?: boolean;
   static: boolean;
   accessibility?: 'public' | 'private' | 'protected';
 }
@@ -428,6 +439,8 @@ export interface PropertyDefinition extends ASTNode {
 export interface FunctionExpression extends Expression {
   type: 'FunctionExpression';
   name?: Identifier;
+  /** `метод<Т>(х: Т)`, `функсия <Т>(х: Т)` */
+  typeParameters?: TypeParameter[];
   params: Parameter[];
   body: BlockStatement;
   async?: boolean;
@@ -515,9 +528,26 @@ export interface ImportExpression extends Expression {
   source: Expression;
 }
 
-// Meta Property for import.meta
+/** Meta property: `нав.target` (`new.target`, `meta.name` is 'new'). */
 export interface MetaProperty extends Expression {
   type: 'MetaProperty';
   meta: Identifier;
   property: Identifier;
+}
+
+/**
+ * `#ном`, the name of a private class member (ES2022): a class member key,
+ * the property of `ин.#ном`, or the left operand of `#ном in о`. `name`
+ * excludes the '#'.
+ */
+export interface PrivateIdentifier extends Expression {
+  type: 'PrivateIdentifier';
+  name: string;
+}
+
+/** Tagged template: `тег\`а${1}б\``, `сатр.хоми\`…\``. */
+export interface TaggedTemplateExpression extends Expression {
+  type: 'TaggedTemplateExpression';
+  tag: Expression;
+  quasi: TemplateLiteral;
 }

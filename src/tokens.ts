@@ -10,6 +10,7 @@ export enum TokenType {
   TEMPLATE_END = 'TEMPLATE_END',
   BOOLEAN = 'BOOLEAN',
   IDENTIFIER = 'IDENTIFIER',
+  PRIVATE_NAME = 'PRIVATE_NAME', // `#ном`: a private class member name
 
   // Keywords (in Tajik Cyrillic)
   ТАҒЙИРЁБАНДА = 'ТАҒЙИРЁБАНДА', // variable (let/var)
