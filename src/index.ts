@@ -34,3 +34,31 @@ export { migrate, MigrateError } from './tools/migrate';
 export type { MigrateOptions, MigrateResult, MigrateWarning } from './tools/migrate';
 export { Repl } from './tools/repl';
 export type { ReplOptions, ReplMessages } from './tools/repl';
+
+// Module system and bundler (docs/module-system.md)
+export {
+  ModuleSystem,
+  ModuleResolver,
+  ModuleLoader,
+  ModuleLoadError,
+  ModuleRegistry,
+  withTimeout,
+  createTimeoutWrapper,
+  allWithTimeout,
+  TimeoutError,
+  AggregateTimeoutError,
+} from './module-system';
+export type {
+  ModuleSystemOptions,
+  CompiledModule,
+  CompilationResult,
+  CompilationError,
+  BundleOptions,
+  BundleOutput,
+  ModuleResolutionOptions,
+  ResolvedModule,
+  LoadedModule,
+  ModuleLoadOptions,
+  ModuleMetadata,
+  TimeoutOptions,
+} from './module-system';

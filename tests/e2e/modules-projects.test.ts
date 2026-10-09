@@ -524,9 +524,8 @@ describe('reported: outside the module system', () => {
     expect(compile(source, { typeCheck: false }).errors).toEqual([]);
   });
 
-  // src/index.ts: docs/module-system.md imports ModuleSystem, ModuleResolver, … and
-  // the timeout helpers from the package, whose entry point does not export them.
-  test.failing('the package exports the module system', () => {
+  // docs/module-system.md imports ModuleSystem, ModuleResolver, … from the package
+  test('the package exports the module system', () => {
     const api = require('../../src/index') as Record<string, unknown>;
     const names = ['ModuleSystem', 'ModuleResolver', 'ModuleLoader', 'ModuleRegistry'];
     expect(names.filter(name => api[name] === undefined)).toEqual([]);

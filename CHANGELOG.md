@@ -112,6 +112,9 @@ All notable changes to this project will be documented in this file. See [Conven
 * The `loading.externals` of a `ModuleSystem` were cleared by every `compile()`/`bundle()` that named no externals of its own, so they never applied.
 * A `ModuleSystem` that built a bundle with `externals` and then one without them (or the other way round) reused the modules of the first build, leaving a module out of the second bundle or bundling one that was external; modules whose imports became or stopped being externals are loaded again.
 * The suggestions of module system errors (`💡 Suggestion:` of `somon bundle`) missed the compiler's wording: a name declared twice, a type that is not assignable and an unclosed block ("Unexpected token end of input") got no suggestion or the one for stray brackets.
+* `somon bundle` reported "Bundled N modules" with N counting the Node.js modules and packages the bundle leaves to the run time; it reports the modules in the bundle (`BundleOutput.moduleCount`).
+* `somon run --module esm prog.txt` wrote the entry as `prog.txt`, which Node.js does not run as an ES module; an entry not named `.som`, `.js` or `.mjs` is written as `prog.txt.js`.
+* The package exports the module system (`ModuleSystem`, `ModuleResolver`, `ModuleLoader`, `ModuleRegistry`, the timeout helpers and their types), as `docs/module-system.md` shows; `import { ModuleSystem } from '@lindentech/somon-script'` was `undefined`.
 
 ## 0.4.0 (2026-10-09)
 
