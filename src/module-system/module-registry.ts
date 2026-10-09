@@ -65,7 +65,12 @@ export class ModuleRegistry {
    * Get module metadata
    */
   get(moduleId: string): ModuleMetadata | undefined {
-    return this.modules.get(moduleId);
+    const metadata = this.modules.get(moduleId);
+    if (metadata) {
+      // Modules registered later may depend on this one
+      metadata.dependents = this.getDependents(moduleId);
+    }
+    return metadata;
   }
 
   /**
@@ -79,7 +84,7 @@ export class ModuleRegistry {
    * Get all registered modules
    */
   getAll(): ModuleMetadata[] {
-    return Array.from(this.modules.values());
+    return Array.from(this.modules.keys(), moduleId => this.get(moduleId)!);
   }
 
   /**

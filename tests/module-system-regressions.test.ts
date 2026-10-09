@@ -775,6 +775,21 @@ describe('module system regressions', () => {
       expect(ms.getStatistics().totalModules).toBe(3);
       expect(ms.getStatistics().totalDependencies).toBe(3);
     });
+
+    test('the metadata of a module lists the modules that import it', async () => {
+      write({
+        'b.som': 'содир собит Б = 1;\n',
+        'a.som': 'ворид { Б } аз "./b";\nсодир собит А = Б;\n',
+        'main.som': 'ворид { А } аз "./a";\nворид { Б } аз "./b";\nчоп.сабт(А + Б);\n',
+      });
+      const ms = createSystem();
+      await ms.loadModule('./main', root);
+      const [main, a, b] = ['main.som', 'a.som', 'b.som'].map(file => path.join(root, file));
+      expect(ms.getModule(b)?.dependents.sort()).toEqual([a, main].sort());
+      expect(ms.getModule(main)?.dependents).toEqual([]);
+      const all = Object.fromEntries(ms.getAllModules().map(meta => [meta.id, meta.dependents]));
+      expect(all[a]).toEqual([main]);
+    });
   });
 
   describe('entry points', () => {

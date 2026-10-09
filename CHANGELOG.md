@@ -108,6 +108,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * A `moduleSystem.resolution.paths` pattern `"lib/*"` also matched names that only start with `lib` (`library` was mapped to `src/lib/rary`, `lib` to `src/lib/`); as in TypeScript it matches `lib/…` only.
 * `moduleSystem.resolution.allowJs` and `resolveJsonModule` were accepted but had no effect: with `false` the project could still import its JavaScript and JSON files. They now keep the project's `.js`/`.cjs`/`.mjs` and `.json` files out of module resolution (packages are not affected).
 * `somon run` and `somon bundle` of an entry point whose name does not end in `.som` (`prog.txt`), or of a file named just `.som`, failed with "Entry module … missing from bundle results" (and `run --module esm` with a missing file): the entry point is compiled as SomonScript whatever its name.
+* The `dependents` of a module's metadata (`ModuleSystem.getModule()`, `getAllModules()`, `ModuleRegistry.get()`) were always empty; they list the modules that import it.
 
 ## 0.4.0 (2026-10-09)
 
