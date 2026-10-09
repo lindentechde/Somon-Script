@@ -19,32 +19,32 @@ export interface Known {
  * format (`es5/*`), and `*` alone for every cell.
  */
 export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: string[] }>> = {
-  'ts-syntax-codegen.test.ts:43': {
+  'ts-syntax-codegen.test.ts › ворид Д, { навъ Т, х, навъ У чун Ф, у } аз "./м";': {
     cells: ['*'],
     reason:
       'imports a module that does not exist, with bindings it never uses. SomonScript keeps ' +
       'the import, so the module still runs (as with verbatimModuleSyntax); ' +
       "ts.transpileModule's default drops an import whose bindings are unused",
   },
-  'ts-syntax-codegen.test.ts:216': {
+  'ts-syntax-codegen.test.ts › ворид путь = require("path");': {
     cells: ['*/cjs'],
     reason:
       '`ворид м = require("./м")` of a missing module, never used: SomonScript requires it, ' +
       'TypeScript drops unused import-equals declarations',
   },
-  'ts-syntax-parser.test.ts:528': {
+  'ts-syntax-parser.test.ts › ворид путь = require("path");': {
     cells: ['*/cjs'],
     reason:
       'the unused alias `ворид ф = Н.Д.ф` names an undeclared namespace (TS2503): SomonScript ' +
       'evaluates the alias, TypeScript drops unused aliases',
   },
-  'ts-syntax-parser.test.ts:494': {
+  'ts-syntax-parser.test.ts › содир навъ { Т };': {
     cells: ['*/cjs'],
     reason:
       '`содир { навъ Т, х }` exports the undeclared `х` (TS2304): SomonScript reads it, ' +
       'TypeScript drops an export it cannot resolve to a value',
   },
-  'ts-syntax-codegen.test.ts:356': {
+  'ts-syntax-codegen.test.ts › содир номфазо Н { содир собит а = 1; }': {
     cells: ['es2015/esm', 'es2017/esm', 'es2020/esm', 'es2022/esm', 'esnext/esm'],
     reason: 'BUG: the second declaration of a merged exported namespace is `export (function …)`',
   },
@@ -63,13 +63,13 @@ export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: st
  * (es2022, CommonJS).
  */
 export const KNOWN_CELL_DIFFERENCES: Readonly<Record<string, Known & { cells: string[] }>> = {
-  'ts-syntax-checker.test.ts:269': {
+  'ts-syntax-checker.test.ts › интерфейс Ҳисоб { баланс: рақам; }': {
     cells: ['*/esm'],
     reason:
       'calls a function that uses `ин` without a receiver: `undefined` in an ES module (strict), ' +
       'the global object in a CommonJS script',
   },
-  'ts-syntax-parser.test.ts:494': {
+  'ts-syntax-parser.test.ts › содир навъ { Т };': {
     cells: ['*/esm'],
     reason: 'exporting an undeclared name is a link error in an ES module',
   },
@@ -109,36 +109,36 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
     strict: 'typescript-only',
     reason: 'TS2695: TypeScript rejects a comma operator whose left side has no side effects',
   },
-  'ts-syntax-behaviour.test.ts:451': {
+  'ts-syntax-behaviour.test.ts › синф Гиреҳ {': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason: 'TS2775: TypeScript needs an explicit type on the target of an assertion call',
   },
-  'ts-syntax-parser.test.ts:561': {
+  'ts-syntax-parser.test.ts › функсия ф<собит Т мерос рақам[]>(х: Т): Т { бозгашт х; }': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason: 'TS2637: TypeScript allows `in`/`out` only on type aliases of object types',
   },
-  'ts-syntax-parser.test.ts:762': {
+  'ts-syntax-parser.test.ts › синф Л { [калид: сатр]: рақам; статикӣ [к: сатр]: ҳар; танҳо…': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason: "TS2413: TypeScript checks a number index signature against the string one's type",
   },
-  'ts-syntax-parser.test.ts:555': {
+  'ts-syntax-parser.test.ts › содир = 1;': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason:
       'TS2309: TypeScript allows no other exports, even type exports, next to `содир =`; ' +
       'SomonScript only rejects value exports there',
   },
-  'ts-syntax-parser.test.ts:828': {
+  'ts-syntax-parser.test.ts › интерфейс И { get: рақам; set(х: рақам): беджавоб; get?(): с…': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason:
       'TS2300: an interface property and method of the same name; the SomonScript checker ' +
       'does not look for duplicate interface members',
   },
-  'ts-syntax-parser.test.ts:202': {
+  'ts-syntax-parser.test.ts › синф К { дастрасӣ() {} }': {
     strict: 'typescript-only',
     reason:
       'TS2564 (strictPropertyInitialization): the SomonScript checker does not require ' +
@@ -170,7 +170,7 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
       "TS2550/TS2339: findLast, toSorted and with are not in the default target's lib " +
       "(es2022); the SomonScript checker knows every method of the engine's arrays",
   },
-  'ts-syntax-checker.test.ts:158': {
+  'ts-syntax-checker.test.ts › синф А { х = 1; м(): рақам { бозгашт 1; } get г(): рақам { б…': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason:
@@ -178,31 +178,31 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
       'does not know the members of built-in base classes',
   },
   // The SomonScript checker reports this as a warning without --strict
-  'ts-syntax-checker.test.ts:347': {
+  'ts-syntax-checker.test.ts › синф Л { номҳо: сатр[] = []; }': {
     default: 'typescript-only',
     reason:
       'an unknown member is a warning without --strict and an error with it ' +
       '(PROPERTY_NOT_FOUND); TypeScript always reports TS2339',
   },
   // The SomonScript checker does not resolve type names
-  'ts-syntax-codegen.test.ts:50': {
+  'ts-syntax-codegen.test.ts › тағ х = 1;': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason:
       'TS2304: `содир { навъ Т }` exports a type that does not exist; the SomonScript ' +
       'checker does not resolve type names',
   },
-  'ts-syntax-parser.test.ts:718': {
+  'ts-syntax-parser.test.ts › функсия ф(ин: Нуқта, х: рақам) {}': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason: 'TS2304: the type of an `ин` parameter does not exist (type names are not resolved)',
   },
-  'ts-syntax-parser.test.ts:736': {
+  'ts-syntax-parser.test.ts › собит о = { м(ин: Т, х: рақам) {} };': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason: 'TS2304: the type of an `ин` parameter does not exist (type names are not resolved)',
   },
-  'ts-syntax-parser.test.ts:839': {
+  'ts-syntax-parser.test.ts › интерфейс И { [калид]: рақам; [Symbol.iterator](): Iterator<…': {
     default: 'typescript-only',
     strict: 'typescript-only',
     reason:

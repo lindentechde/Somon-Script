@@ -133,6 +133,21 @@ function importedModules(file: string, source: string): Record<string, string> {
   return modules;
 }
 
+/**
+ * A name for a ts-syntax program that survives edits elsewhere in its test
+ * file: the file and the program's first line (`ts-syntax-parser.test.ts ›
+ * синф К { … }`), numbered when two programs of a file start alike.
+ */
+function stableName(program: CorpusProgram, taken: Set<string>): string {
+  const file = program.name.slice(0, program.name.lastIndexOf(':'));
+  const firstLine = program.source.trim().split(/\r?\n/)[0].trim();
+  const excerpt = firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine;
+  let name = `${file} › ${excerpt}`;
+  for (let count = 2; taken.has(name); count++) name = `${file} › ${excerpt} (${count})`;
+  taken.add(name);
+  return name;
+}
+
 /** The corpus: every runnable `.som` program, the operator and ts-syntax programs, the migrate fixtures. */
 export function differentialCorpus(): DiffProgram[] {
   const files: DiffProgram[] = examplePrograms().map(program => ({
@@ -147,8 +162,9 @@ export function differentialCorpus(): DiffProgram[] {
     source,
     kind,
   }));
+  const taken = new Set<string>();
   const tsSyntax: DiffProgram[] = tsSyntaxPrograms().map(program => ({
-    name: program.name,
+    name: stableName(program, taken),
     kind: program.kind,
     source: program.source,
     helper: program.helper,
