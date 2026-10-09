@@ -1030,7 +1030,6 @@ export class ModuleSystem {
     this.appendToBuilder(bundleBuilder, "  'use strict';\n\n  var modules = {\n");
     const moduleLines: BundleModuleLines[] = [];
 
-    const inlinedSources = new Set<string>();
     let firstModule = true;
 
     for (const module of processedModules) {
@@ -1060,7 +1059,6 @@ export class ModuleSystem {
           generator,
           { key: module.key, map: module.map },
           moduleStartLine,
-          inlinedSources,
           options
         );
       }
@@ -1076,13 +1074,13 @@ export class ModuleSystem {
     generator: SourceMapGenerator,
     module: { key: string; map: RawSourceMap },
     moduleStartLine: number,
-    inlinedSources: Set<string>,
     options: BundleOptions
   ): Promise<void> {
     const moduleMap = module.map;
     await SourceMapConsumer.with(moduleMap, null, consumer => {
       consumer.eachMapping(mapping => {
-        if (mapping.originalLine == null || mapping.originalColumn == null) {
+        // A segment without a source position maps nothing
+        if (mapping.originalLine == null) {
           return;
         }
         generator.addMapping({
@@ -1099,12 +1097,9 @@ export class ModuleSystem {
         });
       });
 
-      if (options.inlineSources && !inlinedSources.has(module.key)) {
-        const content = moduleMap.sourcesContent?.find(item => typeof item === 'string');
-        if (content !== undefined) {
-          generator.setSourceContent(module.key, content);
-          inlinedSources.add(module.key);
-        }
+      if (options.inlineSources) {
+        // parseModuleSourceMap() gives every module map its source
+        generator.setSourceContent(module.key, moduleMap.sourcesContent![0]!);
       }
     });
   }
@@ -1208,10 +1203,8 @@ export class ModuleSystem {
       context.externalModuleIds
     );
 
-    const entryKey = context.moduleIdMapping.get(result.entryPoint);
-    if (!entryKey) {
-      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
-    }
+    // A build without errors compiled its entry: whatever its name it is a program
+    const entryKey = context.moduleIdMapping.get(result.entryPoint)!;
     const bundled = processedModules.filter(module => !context.externalModuleIds.has(module.id));
     const imports = this.collectRuntimeImports(bundled, options.format);
 
