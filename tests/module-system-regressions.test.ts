@@ -670,6 +670,25 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('loading.externals', () => {
+    test('apply to compile() and bundle() calls that name no externals of their own', async () => {
+      write({ 'main.som': 'ворид * чун Л аз "not-installed";\nчоп.сабт(навъи Л);\n' });
+      const ms = createSystem({ loading: { externals: ['not-installed'] } });
+      const entry = path.join(root, 'main.som');
+      const result = await ms.compile(entry);
+      expect(result.errors).toEqual([]);
+      expect(result.dependencies).toEqual(['external:not-installed', entry]);
+      const bundle = await ms.bundle({ entryPoint: entry });
+      expect(bundle.code).toContain('require("not-installed")');
+
+      // A build's own externals replace them while it runs
+      const fresh = createSystem({ loading: { externals: ['not-installed'] } });
+      const own = await fresh.compile(entry, ['other']);
+      expect(own.errors.map(error => error.specifier)).toEqual(['not-installed']);
+      expect((await fresh.compile(entry)).errors).toEqual([]);
+    });
+  });
+
   describe('Node.js built-in modules', () => {
     const files = {
       'util.js': "const os = require('os');\nexports.eol = JSON.stringify(os.EOL);\n",

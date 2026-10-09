@@ -491,11 +491,10 @@ export class ModuleSystem {
     return module;
   }
 
-  private setupExternals(externals: string[] | undefined, previousExternals: string[]): void {
+  /** The externals of one build replace those of `loading.externals` while it runs. */
+  private setupExternals(externals: string[] | undefined): void {
     if (externals !== undefined) {
       this.loader.setExternals(externals);
-    } else if (previousExternals.length > 0) {
-      this.loader.setExternals();
     }
   }
 
@@ -592,7 +591,7 @@ export class ModuleSystem {
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
-    this.setupExternals(externals, previousExternals);
+    this.setupExternals(externals);
 
     try {
       // The entry is a file, relative to the current directory: not an import specifier,
