@@ -42,6 +42,9 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
   and TypeScript migration (`somon migrate`)
 - **[18-editors.md](18-editors.md)** - Editor support: the language server
   (`somon lsp`), the VS Code extension and the browser build and playground
+- **[19-verification.md](19-verification.md)** - How the tests show that
+  SomonScript behaves like TypeScript: the differential test, fuzzing, other
+  runtimes, the environment variables and replaying a fuzz failure
 
 ---
 

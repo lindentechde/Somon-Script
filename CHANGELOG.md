@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Method signatures in interfaces and object types are checked as function types: calls are checked for argument count and types, and a non-function value for a method is a type error.
 * Top-level `интизор`, `барои интизор` and `интизор истифода`, and `ворид.meta`, are compile errors in CommonJS output, which cannot run them (they failed when the program loaded). Compile with `module: 'esm'` (`--module esm`); a host that runs the code inside an async function, as the REPL does, passes `topLevelAwait: true`.
 * `--target es2020`, `es2019` and the other targets below es2022 now lower the syntax the target lacks (class fields, private members, static blocks, …); es2020 output used to be returned unchanged. The default target is now es2022, which Node.js 20 runs in full, so the default output is the same as before.
+* CommonJS output of a module (a program that imports or exports) starts with `"use strict";`, as TypeScript's does: module code is strict mode code, as it already was in ES module output. Code that relied on sloppy mode there (`ин` in a plain function call being the global object, assigning an undeclared name) behaves as in TypeScript and ES modules now.
 
 ### ✨ Features
 
@@ -55,6 +56,10 @@ All notable changes to this project will be documented in this file. See [Conven
 * Call and construct signatures in interfaces and object types (`{ (х: рақам): сатр; нав (х: рақам): К; }`, also generic and several of them): calls and `нав` of such values are checked against them, a function is a value of a type with call signatures (when its other members are optional) and a class one of a type with construct signatures; the TypeScript emitter prints them and `somon migrate` keeps them.
 * A union or intersection type may start with `|` or `&`, as in TypeScript: `навъ Т = | "а" | "б";`, also with each member on its own line.
 * Instantiation expressions `ф<рақам>` and `нав К<Т>` without arguments (TypeScript 4.7): erased in JavaScript, kept by the TypeScript emitter; `ф<Т>.ном` is TypeScript's error TS1477. Optional calls and tagged templates take type arguments too: `ф?.<рақам>(1)`, `тег<рақам>\`…\``.
+* Verification against TypeScript, described in `llm-guide/19-verification.md`:
+  * A differential test (`tests/differential.test.ts`) runs every runnable `.som` program, the operator and TypeScript 5 syntax programs of the tests and the TypeScript programs of `tests/fixtures/migrate` three ways: compiled by SomonScript, printed by the TypeScript emitter and transpiled by TypeScript, and (for the fixtures) the original TypeScript transpiled by TypeScript. On es5, es2015, es2017, es2020, es2022 and esnext, as CommonJS and ES modules, all three must print and throw the same; the verdicts of the SomonScript and TypeScript checkers are compared in default and strict mode. Every known difference is listed with its reason in `tests/helpers/differential-known.ts`, and the test fails on a new one. `SOMON_FULL_MATRIX=1` runs every cell instead of a rotating sample.
+  * Property-based tests with fast-check (`tests/fuzz.test.ts`, grammar-based generators in `tests/helpers/fuzz.ts`): the lexer and parser raise only positioned errors on any input; generated programs survive printing, the code generator, the TypeScript emitter, `format()` (idempotent) and `migrate()`; and compiled programs run like their TypeScript on random targets. Fixed seed; `SOMON_FUZZ_RUNS`, `SOMON_FUZZ_SEED` and `SOMON_FUZZ_PATH` run more and replay a failure.
+  * `scripts/run-runtimes.js` runs the compiled examples and LeetCode solutions on Bun and Deno and compares them with Node.js; the pull request workflow runs it on both, and a nightly workflow (`nightly-verification.yml`, also started by hand) runs the full targets matrix, the full differential test and long fuzz runs with a new seed.
 
 ### 🐛 Bug Fixes
 
@@ -71,6 +76,13 @@ All notable changes to this project will be documented in this file. See [Conven
 * `-1` was typed `рақам`, so `тағ н: -1 | 1 = -1;` was a type error; a negative number literal has its literal type.
 * `.github/copilot-instructions.md` showed `синф Саг мерос_мебарад Ҳайвон`, which does not parse (inheritance is `мерос`), and an outdated list of bundle formats; tests/docs-snippets.test.ts now compiles the snippets of `.github/**/*.md` too.
 * Examples with errors the TypeScript checker found work as written: a demo whose module exported nothing, `кофтан` (find) called with a value, `хато.паём` (undefined; `.message`), private members read by subclasses, and return types that did not say what the code returns.
+* The TypeScript emitter declares an optional parameter property (`конструктор(хосусӣ х?: сатр)`) as optional; the TypeScript checker rejected the assignment of `х` in strict mode.
+* The SomonScript checker knows a class's `prototype`, lets a later declaration of a merged `шумориш` name the members of earlier ones, and checks the computed names of class members (`[калид] = 1`).
+* ES module output exports a later block of a merged `номфазо`/`шумориш` by name; it was `export (function (Н) { … })(…)`, a syntax error.
+* `навъи {}`, `навъи --х`, `void ++х`, `void -1` and `typeof +х` parse as the operators they are; a stray run of tokens in an `интихоб` body is one error, and switch and class body errors give their column.
+* `somon migrate` keeps `typeof` before a sign (`typeof -x`), which `навъи -x` would read as a subtraction.
+* Lowering for a target no longer fails when TypeScript 5.4's checker crashes on valid JavaScript (an `интихоб` over a variable that holds `[]`): the code is then lowered as TypeScript.
+* The TypeScript emitter keeps the parentheses of `(а < б) > (в)` and `ф((а < б), в > (г))`, which TypeScript would otherwise read as calls with type arguments.
 
 ## 0.4.0 (2026-10-09)
 
