@@ -79,6 +79,17 @@ export interface CompileOptions {
    * Either way TypeScript lowers them, since no JavaScript runtime runs them.
    */
   experimentalDecorators?: boolean;
+  /**
+   * Module format of the output: CommonJS `require`/`module.exports` (the
+   * default) or ES modules `import`/`export`, which also allow top-level
+   * `интизор` and `ворид.meta`.
+   */
+  module?: 'commonjs' | 'esm';
+  /**
+   * Allow top-level `интизор` in CommonJS output, for hosts that run the code
+   * inside an async function (as the REPL does).
+   */
+  topLevelAwait?: boolean;
 }
 
 /**
@@ -196,7 +207,11 @@ function emitCode(
   warnings: string[],
   source: string
 ): CompileResult {
-  const generator = new CodeGenerator({ experimentalDecorators: options.experimentalDecorators });
+  const generator = new CodeGenerator({
+    experimentalDecorators: options.experimentalDecorators,
+    module: options.module,
+    topLevelAwait: options.topLevelAwait,
+  });
   const generated = generator.generateWithMappings(ast);
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {

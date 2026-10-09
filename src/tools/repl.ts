@@ -306,7 +306,8 @@ export class Repl {
 
   /** Compiles and runs one complete input. */
   async evaluate(source: string): Promise<EvaluationResult> {
-    const compiled = compile(source, { typeCheck: false });
+    // Top-level `интизор` runs: `prepareScript` wraps such code in an async function
+    const compiled = compile(source, { typeCheck: false, topLevelAwait: true });
     if (compiled.errors.length > 0) return { errors: compiled.errors, hasValue: false };
     this.lastJs = compiled.code;
     const ending = lastStatementKind(source);
