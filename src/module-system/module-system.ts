@@ -4,7 +4,13 @@ import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
-import { ModuleLoader, ModuleLoadOptions, LoadedModule, ModuleLoadError } from './module-loader';
+import {
+  locationOf,
+  ModuleLoader,
+  ModuleLoadOptions,
+  LoadedModule,
+  ModuleLoadError,
+} from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
@@ -218,9 +224,7 @@ export class ModuleSystem {
     }
 
     // Compiler diagnostics are strings; take the line and column from the message
-    const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
-    const line = lineColMatch?.[1] ? Number.parseInt(lineColMatch[1], 10) : undefined;
-    const column = lineColMatch?.[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
+    const { line, column } = locationOf(message);
 
     return {
       message,

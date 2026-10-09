@@ -382,6 +382,25 @@ describe('module system regressions', () => {
       expect(error.message).toContain(path.join(root, 'sub', 'inner.som'));
     });
 
+    test('compiler errors keep the line and the column of their message', async () => {
+      write({
+        'dep.som': 'содир собит Д: рақам = 1;\n\nтағ х: рақам = "сатр";\n',
+        'main.som': 'ворид { Д } аз "./dep";\nчоп.сабт(Д);\n',
+      });
+      const ms = createSystem({ compilation: { strict: true } });
+      const result = await ms.compile(path.join(root, 'main.som'));
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toMatchObject({
+        filePath: path.join(root, 'dep.som'),
+        line: 3,
+        column: 16,
+      });
+      expect(result.errors[0].message).toMatch(/^Type error \[\w+\] at line 3, column 16: /);
+      await expect(ms.bundle({ entryPoint: path.join(root, 'main.som') })).rejects.toThrow(
+        `${path.join(root, 'dep.som')}:3:16\n`
+      );
+    });
+
     test('bundle() throws one message naming the failing file', async () => {
       write({ 'bad.som': 'функсия (\n', 'main.som': 'ворид { а } аз "./bad";\n' });
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

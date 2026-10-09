@@ -103,6 +103,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Bundles took text that only looks like a require for one: a string such as `"use require(x)"` in a `.som` module failed the bundle ("Dynamic require expressions are not supported"), `"require('./a')"` in a string was rewritten (breaking the string, or the bundle's syntax), and `// require('./x')` in a comment of a local `.js` file became an import of an `esm` bundle (which then failed to load) and made `iife` bundles fail. Requires are found in the syntax tree; modules larger than 10 MiB can be bundled too.
 * A bundle (also `somon run`) that imported a directory (`ворид … аз "./lib"` for `lib/index.som`) or a file found by another extension (`"./data"` for `data.json`) failed at run time with "Cannot find module './lib.js'"; such modules are bundled.
 * With `moduleSystem.loading.cache: false` the module system compiled nothing: `compile()` returned no modules and no errors and `somon bundle`/`somon run` failed with "Entry module … missing from bundle results". Without a cache every build reads its files again.
+* The errors of `ModuleSystem.compile()` for a module that does not compile had no `column` (and bundle errors named `file:line`), because the compiler's "at line 3, column 16" was read with a pattern for "line 3:16"; they have both.
 
 ## 0.4.0 (2026-10-09)
 

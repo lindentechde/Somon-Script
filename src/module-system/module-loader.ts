@@ -110,6 +110,19 @@ interface DependencyReference {
 
 const RELATIVE_SPECIFIER = /^\.{1,2}\//;
 
+/**
+ * The position a compiler message names: `… at line 3, column 7: …`.
+ * @internal
+ */
+export function locationOf(message: string): { line?: number; column?: number } {
+  const match = /line (\d+)(?:,\s*column (\d+))?/i.exec(message);
+  if (!match) return {};
+  return {
+    line: Number.parseInt(match[1], 10),
+    column: match[2] ? Number.parseInt(match[2], 10) : undefined,
+  };
+}
+
 const MAX_SPECIFIER_LENGTH = 500;
 
 export class ModuleLoader {
@@ -273,7 +286,7 @@ export class ModuleLoader {
         const message = error instanceof Error ? error.message : String(error);
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${message}`, {
           filePath,
-          ...this.extractLocation(message),
+          ...locationOf(message),
           cause: error,
         });
       }
@@ -282,7 +295,7 @@ export class ModuleLoader {
       if (parseErrors.length > 0) {
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${parseErrors[0]}`, {
           filePath,
-          ...this.extractLocation(parseErrors[0]),
+          ...locationOf(parseErrors[0]),
         });
       }
 
@@ -306,15 +319,6 @@ export class ModuleLoader {
     }
 
     return [];
-  }
-
-  private extractLocation(message: string): { line?: number; column?: number } {
-    const match = /line (\d+)(?:,\s*column (\d+))?/i.exec(message);
-    if (!match) return {};
-    return {
-      line: Number.parseInt(match[1], 10),
-      column: match[2] ? Number.parseInt(match[2], 10) : undefined,
-    };
   }
 
   /**
