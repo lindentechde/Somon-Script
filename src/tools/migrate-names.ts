@@ -87,7 +87,6 @@ export const OPTIONAL_KEYWORD_NAMES: ReadonlyMap<ts.SyntaxKind, { name: string; 
     [ts.SyntaxKind.OverrideKeyword, { name: 'бознавис', feature: 'override' }],
     [ts.SyntaxKind.AccessorKeyword, { name: 'дастрасӣ', feature: 'accessor' }],
     [ts.SyntaxKind.UsingKeyword, { name: 'истифода', feature: 'using' }],
-    [ts.SyntaxKind.GlobalKeyword, { name: 'глобалӣ', feature: 'declareGlobal' }],
     [ts.SyntaxKind.OutKeyword, { name: 'берун', feature: 'variance' }],
     [ts.SyntaxKind.BigIntKeyword, { name: 'калонрақам', feature: 'bigintType' }],
   ]);

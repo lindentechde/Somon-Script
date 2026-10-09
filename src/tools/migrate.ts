@@ -106,7 +106,11 @@ const FEATURE_PROBES: Readonly<Record<string, Probe>> = {
   decorators: { source: 'функсия д(...а: ҳар[]): ҳар {}\n@д синф А {}' },
   importType: { source: 'ворид навъ { А } аз "./а";', absent: ['require'] },
   typeSpecifier: { source: 'ворид { навъ А, б } аз "./а";', absent: ['А', 'навъ'] },
-  exportType: { source: 'навъ Т = рақам;\nсодир навъ { Т };', absent: ['Т'] },
+  // The output keeps the alias only in a comment: no `exports` may appear
+  exportType: { source: 'навъ Т = рақам;\nсодир навъ { Т };', absent: ['exports'] },
+  importEquals: { source: 'ворид х = require("м");' },
+  importTypeEquals: { source: 'ворид навъ х = require("м");', absent: ['require'] },
+  exportEquals: { source: 'содир = 1;' },
   overloads: { source: 'функсия ф(а: сатр): беджавоб;\nфунксия ф(а: ҳар) {}' },
   methodOverloads: { source: 'синф А {\nм(а: сатр): беджавоб;\nм(а: ҳар) {}\n}' },
   optionalMethod: { source: 'синф А { м?() {} }' },
@@ -125,6 +129,8 @@ const FEATURE_PROBES: Readonly<Record<string, Probe>> = {
   exportDefaultFunction: { source: 'содир пешфарз функсия () {}' },
   exportDefaultClass: { source: 'содир пешфарз синф {}' },
   importMeta: { source: 'тағ м = ворид.meta;' },
+  // `о.м<Т>(х)`: older parsers read the type arguments of a method call as `<` and `>`
+  memberTypeArguments: { source: 'тағ а = [1].map<рақам>(х => х);', absent: ['<'] },
 };
 
 const featureCache = new Map<string, boolean>();
@@ -409,7 +415,9 @@ class Converter {
         this.warn(node, "'var' became 'тағ' (let): check code that relies on function scope");
         break;
       case ts.SyntaxKind.ImportKeyword:
-        if (!ts.isImportDeclaration(parent)) return this.importKeyword(node, parent);
+        if (!ts.isImportDeclaration(parent) && !ts.isImportEqualsDeclaration(parent)) {
+          return this.importKeyword(node, parent);
+        }
         break;
       case ts.SyntaxKind.InKeyword:
         if (
@@ -485,6 +493,11 @@ class Converter {
     }
     if (node.text === 'const' && ts.isTypeReferenceNode(parent)) {
       this.replace(node, 'собит'); // `as const`
+      return;
+    }
+    // `declare global { … }`: TypeScript reads `global` as the module's name
+    if (ts.isModuleDeclaration(parent) && parent.flags & ts.NodeFlags.GlobalAugmentation) {
+      this.optionalKeyword(node, 'глобалӣ', 'declareGlobal');
       return;
     }
     const global = this.globalName(node, parent);
@@ -820,8 +833,12 @@ class Converter {
     return false;
   }
 
-  /** `import х = require("м")` → `собит х = require("м")` (CommonJS, like the compiled code). */
+  /**
+   * `import х = require("м")` → `ворид х = require("м")`; for an older compiler
+   * `собит х = require("м")` (CommonJS, like the compiled code).
+   */
   importEquals(node: ts.ImportEqualsDeclaration): boolean {
+    if (supports(node.isTypeOnly ? 'importTypeEquals' : 'importEquals')) return false;
     if (node.isTypeOnly) {
       this.remove(node);
       this.warn(node, "a type-only 'import =' has no SomonScript form and was left out");
@@ -836,9 +853,9 @@ class Converter {
     return true;
   }
 
-  /** `export = х` → `module.exports = х` (CommonJS, like the compiled code). */
+  /** `export = х` → `содир = х`; for an older compiler `module.exports = х`. */
   exportAssignment(node: ts.ExportAssignment): boolean {
-    if (!node.isExportEquals) return false;
+    if (!node.isExportEquals || supports('exportEquals')) return false;
     this.edits.push({
       start: node.getStart(this.file),
       end: node.expression.getStart(this.file),
@@ -861,7 +878,8 @@ class Converter {
     const open = this.child(node, ts.SyntaxKind.LessThanToken);
     const close = this.child(node, ts.SyntaxKind.GreaterThanToken);
     if (!open || !close) return false;
-    if (!this.readableTypeArguments(typeArguments)) {
+    const callee = ts.isIdentifier(node.expression) || supports('memberTypeArguments');
+    if (!callee || !this.readableTypeArguments(typeArguments)) {
       this.edits.push({ start: open.getStart(this.file), end: close.getEnd(), text: '' });
       this.warn(
         node,

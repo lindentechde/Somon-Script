@@ -300,6 +300,9 @@ const ALL_FEATURES = [
   'exportDefaultFunction',
   'exportDefaultClass',
   'importMeta',
+  'importEquals',
+  'importTypeEquals',
+  'exportEquals',
 ];
 
 describe('migrate: constructs without a SomonScript form', () => {
@@ -430,6 +433,14 @@ describe('migrate: newer constructs once SomonScript supports them', () => {
     'dynamicImport',
     'importMeta',
     'declareModule',
+    'declareGlobal',
+    'using',
+    'decorators',
+    'typeSpecifier',
+    'exportType',
+    'importEquals',
+    'importTypeEquals',
+    'exportEquals',
   ];
   afterEach(() => features.forEach(feature => setFeatureSupport(feature, undefined)));
 
@@ -449,6 +460,15 @@ describe('migrate: newer constructs once SomonScript supports them', () => {
         'import("./m");',
         'const meta = import.meta;',
         'declare module "m" {}',
+        'declare global { interface W {} }',
+        'function h() { using r = { [Symbol.dispose]() {} }; }',
+        'function deco(value: any, context: unknown) {}',
+        '@deco class D {}',
+        'import { type U, u } from "./u";',
+        'export type { T };',
+        'import fs = require("fs");',
+        'import type Q = require("./q");',
+        'export = fs;',
       ].join('\n'),
       { format: false }
     );
@@ -464,9 +484,19 @@ describe('migrate: newer constructs once SomonScript supports them', () => {
       'ворид("./m")',
       'ворид.meta',
       'эълон модул "m"',
+      'эълон глобалӣ { интерфейс W {} }',
+      'истифода r =',
+      '@deco синф D {}',
+      'ворид { навъ U, u }',
+      'содир навъ { T };',
+      'ворид fs = require("fs");',
+      'ворид навъ Q = require("./q");',
+      'содир = fs;',
     ]) {
       expect(result.code).toContain(word);
     }
+    // Only the compile check may complain (`калонрақам` is pinned, not yet a type)
+    expect(result.warnings.filter(warning => warning.line > 0)).toEqual([]);
   });
 
   test('supports() probes the compiler once', () => {
