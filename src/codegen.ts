@@ -3134,12 +3134,14 @@ export class CodeGenerator {
 
   /**
    * Private names a class declares. Declaring one twice is an early error,
-   * except for a getter and a setter of the same name.
+   * except for a getter and a setter of the same name; overload signatures
+   * (`#м(х: рақам): беджавоб;`) declare nothing.
    */
   private declaredPrivateNames(node: ClassDeclaration | ClassExpression): Set<string> {
     const declared = new Map<string, string>();
     for (const member of node.body.body) {
       if (member.type === 'StaticBlock' || member.key?.type !== 'PrivateIdentifier') continue;
+      if (member.type === 'MethodDefinition' && member.signature) continue;
       const name = (member.key as PrivateIdentifier).name;
       const kind = member.type === 'MethodDefinition' ? member.kind : 'field';
       const previous = declared.get(name);
