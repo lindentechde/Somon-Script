@@ -41,8 +41,9 @@ let cachedCliPath: string | undefined;
 /**
  * Resolve the CLI path, building it only when `dist/cli.js` is missing.
  *
- * The CI pipeline runs `npm run build` as its own step before tests, so the
- * usual path is a pure existence check. When invoked locally without a
+ * The CI pipeline (`test:ci`) and `npm test` (via `pretest`) run
+ * `npm run build` before jest starts, so the usual path is a pure existence
+ * check. An existing but stale `dist/` is not rebuilt here. When invoked locally without a
  * prior build, it falls back to `npm run build` — always with an explicit
  * `cwd: PROJECT_ROOT` so a leaked `process.chdir(tempDir)` from a prior
  * test can't misdirect npm into a deleted temp directory (the Windows CI

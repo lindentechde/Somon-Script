@@ -20,8 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   check-version:
@@ -80,6 +79,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-version
     if: needs.check-version.outputs.should_publish == 'true'
+    permissions:
+      contents: write # push tag, create GitHub release
+      id-token: write # JSR OIDC authentication and npm provenance
+    env:
+      VERSION: ${{ needs.check-version.outputs.new_version }}
+
+    # Publish npm first, then JSR, then tag and release. Each publish step
+    # skips a version that is already published, so "Re-run failed jobs"
+    # can resume after a partial failure.
 
     steps:
       - name: Checkout main
@@ -122,9 +130,6 @@ jobs:
             echo "Coverage directory does NOT exist"
           fi
 
-      - name: Publish to JSR
-        run: npx jsr publish
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -139,13 +144,16 @@ jobs:
         id: npm_publish
         run: |
           set -e
-          npm publish --access public --provenance
+          if npm view "@lindentech/somon-script@${VERSION}" version >/dev/null 2>&1; then
+            echo "@lindentech/somon-script@${VERSION} is already on npm, skipping publish"
+          else
+            npm publish --access public --provenance
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Verify NPM Package Published
         run: |
-          VERSION="${{ needs.check-version.outputs.new_version }}"
           PACKAGE_NAME="@lindentech/somon-script"
 
           # Configuration for retry mechanism
@@ -225,22 +233,31 @@ jobs:
           echo "::error::Total time: ${ELAPSED}s"
           exit 1
 
+      - name: Publish to JSR
+        run: |
+          if curl -fsS "https://jsr.io/@lindentechde/somon-script/meta.json" | jq -e --arg v "$VERSION" '.versions[$v]' >/dev/null 2>&1; then
+            echo "@lindentechde/somon-script@${VERSION} is already on JSR, skipping publish"
+          else
+            npx jsr publish
+          fi
+
       - name: Create Git Tag
         run: |
-          VERSION="${{ needs.check-version.outputs.new_version }}"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # Create annotated tag
-          git tag -a "v${VERSION}" -m "Release v${VERSION}"
-          git push origin "v${VERSION}"
-          echo "✅ Git tag created: v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null; then
+            echo "Tag v${VERSION} already exists, skipping"
+          else
+            # Create annotated tag
+            git tag -a "v${VERSION}" -m "Release v${VERSION}"
+            git push origin "v${VERSION}"
+            echo "✅ Git tag created: v${VERSION}"
+          fi
 
       - name: Generate Release Notes
         id: release_notes
         run: |
-          VERSION="${{ needs.check-version.outputs.new_version }}"
-
           NOTES=$(mktemp)
           {
             echo "## 🎉 SomonScript v${VERSION}"
@@ -248,8 +265,8 @@ jobs:
             echo "### ✨ What's New"
             echo ""
 
-            # Try to get commits since last tag
-            LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            # Previous release tag; the tag for this release already points at HEAD
+            LAST_TAG=$(git describe --tags --abbrev=0 --exclude "v${VERSION}" HEAD 2>/dev/null || echo "")
 
             if [ -n "$LAST_TAG" ] && git rev-parse "${LAST_TAG}" >/dev/null 2>&1; then
               echo "Changes since ${LAST_TAG}:"
@@ -271,17 +288,17 @@ jobs:
             echo ""
             echo "### 🔗 Resources"
             echo "- [NPM Package](https://www.npmjs.com/package/@lindentech/somon-script)"
-            echo "- [JSR Package](https://jsr.io/@lindentech/somon-script)"
+            echo "- [JSR Package](https://jsr.io/@lindentechde/somon-script)"
             echo "- [GitHub Repository](https://github.com/lindentechde/Somon-Script)"
           } > "$NOTES"
 
           echo "path=$NOTES" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.check-version.outputs.new_version }}
-          name: SomonScript v${{ needs.check-version.outputs.new_version }}
+          tag_name: v${{ env.VERSION }}
+          name: SomonScript v${{ env.VERSION }}
           body_path: ${{ steps.release_notes.outputs.path }}
           draft: false
           prerelease: false
@@ -290,6 +307,6 @@ jobs:
         run: |
           echo "## ✅ Release Published Successfully"
           echo ""
-          echo "**Version**: v${{ needs.check-version.outputs.new_version }}"
+          echo "**Version**: v${VERSION}"
           echo "**NPM Package**: [@lindentech/somon-script](https://www.npmjs.com/package/@lindentech/somon-script)"
-          echo "**GitHub Release**: [v${{ needs.check-version.outputs.new_version }}](https://github.com/lindentechde/Somon-Script/releases/tag/v${{ needs.check-version.outputs.new_version }})"
+          echo "**GitHub Release**: [v${VERSION}](https://github.com/lindentechde/Somon-Script/releases/tag/v${VERSION})"

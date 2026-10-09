@@ -82,12 +82,13 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
 
 Each Tajik keyword maps to exactly one JavaScript/TypeScript construct.
 
-### 2. Context-Sensitive Method Translation
+### 2. Built-in Method Name Translation
 
-Built-in method names only translate when accessing built-in objects:
+Built-in method/property names translate on built-in objects. Avoid them as
+names of your own properties and methods, because the compiler cannot always
+tell a user object from a built-in one:
 
-- `рӯйхат.дарозӣ` → `array.length` ✅
-- `корбар.дарозӣ` → `user.дарозӣ` ✅ (user property, not translated)
+- `рақамҳо.дарозӣ` → `рақамҳо.length` ✅
 
 ### 3. Type Safety
 
@@ -119,7 +120,7 @@ ES6+ import/export with automatic `.som` → `.js` extension handling.
 
 1. Use keyword mappings to translate Tajik → JavaScript
 2. Recognize built-in objects (чоп, Риёзӣ, рӯйхат, сатр, объект)
-3. Apply context-sensitive translation rules
+3. Translate built-in method names on built-in objects
 4. Preserve user-defined variable/method names
 
 ### For Code Translation
@@ -161,7 +162,9 @@ ES6+ import/export with automatic `.som` → `.js` extension handling.
 
 1. **Preserve User Names**: Don't translate user-defined variable, function, or
    class names
-2. **Context Matters**: Method names only translate on built-in objects
+2. **Built-in Names Are Reserved**: Don't reuse built-in method names (e.g.
+   `дарозӣ`, `сабт`, `илова`) for user properties; they may be translated on
+   user objects too
 3. **Type Annotations**: Use Tajik type names in type positions (рақам, сатр,
    мантиқӣ)
 4. **File Extensions**: `.som` files compile to `.js` with automatic module
@@ -183,4 +186,5 @@ When adding new mappings or features:
 ---
 
 **Last Updated**: Based on SomonScript v0.3.36  
-**Source**: [src/codegen.ts](../src/codegen.ts)
+**Source**: [src/keyword-map.ts](../src/keyword-map.ts),
+[src/codegen.ts](../src/codegen.ts)

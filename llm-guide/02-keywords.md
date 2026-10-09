@@ -20,16 +20,16 @@
 
 ## Control Flow
 
-| Tajik           | JavaScript | Purpose          |
-| --------------- | ---------- | ---------------- |
-| `агар`          | `if`       | If statement     |
-| `вагарна`       | `else`     | Else clause      |
-| `дар_ҳолати_ки` | `else if`  | Else-if          |
-| `интихоб`       | `switch`   | Switch statement |
-| `вақте`         | `case`     | Case clause      |
-| `пешфарз`       | `default`  | Default case     |
-| `шикастан`      | `break`    | Break            |
-| `давом`         | `continue` | Continue         |
+| Tajik          | JavaScript | Purpose          |
+| -------------- | ---------- | ---------------- |
+| `агар`         | `if`       | If statement     |
+| `вагарна`      | `else`     | Else clause      |
+| `вагарна агар` | `else if`  | Else-if          |
+| `интихоб`      | `switch`   | Switch statement |
+| `ҳолат`        | `case`     | Case clause      |
+| `пешфарз`      | `default`  | Default case     |
+| `шикастан`     | `break`    | Break            |
+| `давом`        | `continue` | Continue         |
 
 ---
 
@@ -71,14 +71,15 @@
 
 ## Classes
 
-| Tajik           | JavaScript    | Purpose           |
-| --------------- | ------------- | ----------------- |
-| `синф`          | `class`       | Class declaration |
-| `мерос_мебарад` | `extends`     | Inheritance       |
-| `конструктор`   | `constructor` | Constructor       |
-| `ин`            | `this`        | This reference    |
-| `супер`         | `super`       | Super reference   |
-| `нави`          | `new`         | Instantiation     |
+| Tajik         | JavaScript    | Purpose           |
+| ------------- | ------------- | ----------------- |
+| `синф`        | `class`       | Class declaration |
+| `мерос`       | `extends`     | Inheritance       |
+| `татбиқ`      | `implements`  | Implements        |
+| `конструктор` | `constructor` | Constructor       |
+| `ин`          | `this`        | This reference    |
+| `супер`       | `super`       | Super reference   |
+| `нав`         | `new`         | Instantiation     |
 
 ### Access Modifiers
 
@@ -88,7 +89,7 @@
 | `хосусӣ`        | `private`             |
 | `муҳофизатшуда` | `protected`           |
 | `статикӣ`       | `static`              |
-| `абстрактӣ`     | `abstract`            |
+| `мавҳум`        | `abstract`            |
 
 ---
 
@@ -141,7 +142,7 @@
 
 ```som
 кӯшиш {
-    партофтан нави Хато("Хатогӣ");
+    партофтан нав Хато("Хатогӣ");
 } гирифтан (е) {
     чоп.хато(е);
 } ниҳоят {
@@ -156,7 +157,7 @@
 | Tajik       | TypeScript  | Purpose    |
 | ----------- | ----------- | ---------- |
 | `интерфейс` | `interface` | Interface  |
-| `нав`       | `type`      | Type alias |
+| `навъ`      | `type`      | Type alias |
 | `номфазо`   | `namespace` | Namespace  |
 
 ```som
@@ -165,7 +166,7 @@
     синну: рақам;
 }
 
-нав Адад = рақам | сатр;
+навъ Адад = рақам | сатр;
 ```
 
 ---

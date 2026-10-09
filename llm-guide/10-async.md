@@ -17,21 +17,18 @@
 
 ## Promise Methods
 
-| Tajik                   | JavaScript             |
-| ----------------------- | ---------------------- |
-| `Ваъда.ҳама()`          | `Promise.all()`        |
-| `Ваъда.ҳамаҲалшуда()`   | `Promise.allSettled()` |
-| `Ваъда.ҳама гонаҷамъ()` | `Promise.any()`        |
-| `Ваъда.мусобиқа()`      | `Promise.race()`       |
-| `Ваъда.рад()`           | `Promise.reject()`     |
-| `Ваъда.ҳал()`           | `Promise.resolve()`    |
+There are no Tajik aliases for the static Promise methods. Use the JavaScript
+names on `Promise` directly (`Promise.all()`, `Promise.allSettled()`,
+`Promise.any()`, `Promise.race()`, `Promise.reject()`, `Promise.resolve()`).
+Note that `ҳама` is the array `every` alias, so `Ваъда.ҳама()` does **not** mean
+`Promise.all()`.
 
 ## Promise Instance Methods
 
 ```som
-тағ ваъда = fetch(url);
-ваъда.гирифтан(хато => чоп.хато(хато));
-ваъда.ниҳоят(() => чоп.сабт("Анҷом"));
+тағ амал = fetch(url);
+амал.гирифтан(хато => чоп.хато(хато));
+амал.ниҳоят(() => чоп.сабт("Анҷом"));
 // promise.catch(error => console.error(error));
 // promise.finally(() => console.log("Done"));
 ```

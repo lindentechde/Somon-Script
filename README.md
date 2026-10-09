@@ -148,7 +148,7 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
     }
 }
 
-синф Саг мерос_мебарад Ҳайвон {
+синф Саг мерос Ҳайвон {
     ҷамъиятӣ овоз_додан(): сатр {
         бозгашт "Вақ-вақ!";
     }
@@ -252,18 +252,14 @@ embedded into the emitted `.map` file.
 
 - Module System guide: `docs/module-system.md`
 
-### **Production Readiness**
+### **Using SomonScript in Builds**
 
-SomonScript is **production ready** with comprehensive operational features:
+SomonScript is a compiler: you compile `.som` sources to plain JavaScript with
+the `somon` CLI or the `compile()` library API and ship that JavaScript like any
+other Node.js code. The CLI exits non-zero on compilation errors, so it can gate
+CI jobs directly.
 
-- ✅ **Complete language implementation** - All Tajik syntax features working
-- ✅ **Error handling** - Graceful degradation and comprehensive error reporting
-- ✅ **Monitoring & observability** - Health checks, metrics, structured logging
-- ✅ **Resource management** - Memory limits, timeouts, graceful shutdown
-- ✅ **Fault tolerance** - Circuit breakers, error recovery, resource cleanup
-- ✅ **Deployment support** - Docker, Kubernetes, systemd, PM2
-
-📖 **Details**: [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)
+📖 **Details**: [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ### **Module System Overview**
 
@@ -344,9 +340,6 @@ npm install -g @lindentech/somon-script
 # JSR (recommended for TypeScript projects)
 npx jsr add @lindentechde/somon-script
 
-# GitHub Packages (for enterprise usage)
-npm install @lindentechde/somon-script --registry=https://npm.pkg.github.com
-
 # Or use in a project
 npm install @lindentech/somon-script --save-dev
 ```
@@ -410,7 +403,6 @@ somon --lang tj оғоз лоиҳаи-ман
 somon --lang tj баста src/main.som
 somon --lang tj маълумоти-модул src/main.som
 somon --lang tj ҳал "./utils"
-somon --lang tj хидмат --port 8080
 ```
 
 </td>
@@ -423,7 +415,6 @@ somon --lang ru инициализация мой-проект
 somon --lang ru пакет src/main.som
 somon --lang ru информация-модуля src/main.som
 somon --lang ru разрешить "./utils"
-somon --lang ru сервер --port 8080
 ```
 
 </td>
@@ -450,11 +441,11 @@ EOF
 somon run calculator.som
 ```
 
-### Initialize Production Project
+### Initialize a Project
 
 ```bash
-somon init production-app
-cd production-app
+somon init my-app
+cd my-app
 npm install
 npm run dev
 ```

@@ -75,7 +75,7 @@ somon --help
 
 ```bash
 somon compile app.som -o dist/app.js
-somon run app.som --production
+somon run app.som
 somon bundle src/main.som --minify
 somon init my-project
 ```
@@ -88,7 +88,7 @@ somon --lang tj компайл app.som -o dist/app.js
 somon --lang tj к app.som --source-map
 
 # Run command
-somon --lang tj иҷро app.som --production
+somon --lang tj иҷро app.som
 somon --lang tj и app.som
 
 # Bundle command
@@ -105,8 +105,6 @@ somon --lang tj маълумот src/main.som --stats
 # Resolve module
 somon --lang tj ҳал "./utils" --from src/main.som
 
-# Start server
-somon --lang tj хидмат --port 8080
 ```
 
 ### Russian (русский)
@@ -117,7 +115,7 @@ somon --lang ru компилировать app.som -o dist/app.js
 somon --lang ru к app.som --source-map
 
 # Run command
-somon --lang ru запустить app.som --production
+somon --lang ru запустить app.som
 somon --lang ru з app.som
 
 # Bundle command
@@ -134,8 +132,6 @@ somon --lang ru инфо src/main.som --stats
 # Resolve module
 somon --lang ru разрешить "./utils" --from src/main.som
 
-# Start server
-somon --lang ru сервер --port 8080
 ```
 
 ## Help in Different Languages

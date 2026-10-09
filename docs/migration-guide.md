@@ -123,15 +123,17 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 
 **Migration Required:**
 
-```som
+```text
 // OLD (v0.2.40)
 импорт { функция } из "./модуль";
 функция тест() тип рақам {
   возврат 42;
 }
+```
 
+```som
 // NEW (v0.2.50+)
-ворид { функция } аз "./модуль";
+ворид { амал } аз "./модуль";
 функсия тест(): рақам {
   бозгашт 42;
 }
@@ -149,7 +151,7 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 
 **New Features:**
 
-- ✨ Class inheritance with `мерос_мебарад`
+- ✨ Class inheritance with `мерос`
 - ✨ Access modifiers (`хосусӣ`, `ҷамъиятӣ`)
 - ✨ Constructor functions
 
@@ -168,11 +170,13 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 
 **Migration Required:**
 
-```som
+```text
 // OLD (v0.2.20)
 вар ном = "Аҳмад";
 конст ПИ = 3.14;
+```
 
+```som
 // NEW (v0.2.30+)
 тағйирёбанда ном = "Аҳмад";
 собит ПИ = 3.14;
@@ -211,7 +215,7 @@ SomonScript follows [Semantic Versioning (SemVer)](https://semver.org/):
 
 **Old Code:**
 
-```som
+```text
 импорт { ҷамъ, тафриқ } из "./math";
 импорт стандарт из "./utils";
 ```
@@ -236,7 +240,7 @@ somon migrate --fix-imports
 
 **Old Code:**
 
-```som
+```text
 функция ҳисоб() тип рақам {
   возврат 42;
 }
@@ -275,7 +279,7 @@ somon migrate --fix-imports
 
 **Old Code:**
 
-```som
+```text
 вар ном = "Аҳмад";
 конст МАКС = 100;
 лет временная = 42;
@@ -389,7 +393,7 @@ Error: Type 'сатр | рақам' is not assignable to type 'сатр'
 ```som
 // Add type guards
 функсия коркард(маълумот: сатр | рақам): сатр {
-  агар typeof маълумот === "сатр" {
+  агар (typeof маълумот === "string") {
     бозгашт маълумот;
   } вагарна {
     бозгашт маълумот.toString();
@@ -500,9 +504,9 @@ somon compile src/main.som && npm test
 
 ```som
 // Enable new features gradually
-собит USE_NEW_SYNTAX = рост;
+собит USE_NEW_SYNTAX = дуруст;
 
-агар USE_NEW_SYNTAX {
+агар (USE_NEW_SYNTAX) {
   // New syntax
 } вагарна {
   // Legacy fallback
@@ -511,7 +515,7 @@ somon compile src/main.som && npm test
 
 ### 4. Maintain Compatibility
 
-```som
+```text
 // Support multiple versions
 #агар SOMON_VERSION >= "0.2.50"
   ворид { нав_функсия } аз "./utils";

@@ -6,7 +6,7 @@
 
 ## 📌 Basic Output
 
-```somonscript
+```text
 чоп.сабт(...)        // console.log()     - Standard output
 чоп.хато(...)        // console.error()   - Error output
 чоп.огоҳӣ(...)       // console.warn()    - Warning output
@@ -17,46 +17,46 @@
 ## ✅ Assertions
 
 ```somonscript
-чоп.тасдиқ(условие, "сообщение")   // Throws if false
+чоп.тасдиқ(условие, "сообщение");  // Throws if false
 ```
 
 ## 🔢 Counting
 
 ```somonscript
-чоп.қайд('метка')           // Increment counter
-чоп.қайд_асл('метка')       // Reset counter
+чоп.қайд('метка');     // Increment counter
+чоп.қайдАсл('метка');  // Reset counter
 ```
 
 ## ⏱️ Timing
 
 ```somonscript
-чоп.вақт('метка')            // Start timer
-чоп.вақт_сабт('метка')       // Log elapsed time
-чоп.вақт_охир('метка')       // End timer & log
+чоп.вақт('метка');      // Start timer
+чоп.вақтСабт('метка');  // Log elapsed time
+чоп.вақтОхир('метка');  // End timer & log
 ```
 
 ## 📊 Display
 
 ```somonscript
-чоп.ҷадвал(массив)           // Display as table
-чоп.ҷадвал(массив, ['кол1', 'кол2'])  // Show specific columns
-чоп.феҳрист(объект)          // List object properties
-чоп.xml_феҳрист(элемент)     // Show XML structure (DOM)
+чоп.ҷадвал(массив);                    // Display as table
+чоп.ҷадвал(массив, ['кол1', 'кол2']);  // Show specific columns
+чоп.феҳрист(объект);                   // List object properties
+чоп.xmlФеҳрист(элемент);               // Show XML structure (DOM)
 ```
 
 ## 🔍 Debugging
 
 ```somonscript
-чоп.пайҷо('сообщение')       // Print stack trace
-чоп.полиз()                   // Clear console
+чоп.пайҷо('сообщение');  // Print stack trace
+чоп.полиз();             // Clear console
 ```
 
 ## 📦 Grouping
 
 ```somonscript
-чоп.гуруҳ('название')        // Start collapsible group
-чоп.гуруҳ_пӯшида('название') // Start collapsed group
-чоп.гуруҳ_охир()              // End group
+чоп.гуруҳ('название');        // Start collapsible group
+чоп.гуруҳПӯшида('название');  // Start collapsed group
+чоп.гуруҳОхир();              // End group
 ```
 
 ---
@@ -83,7 +83,7 @@
 ```somonscript
 чоп.вақт('обработка');
 // ... do something ...
-чоп.вақт_охир('обработка');
+чоп.вақтОхир('обработка');
 // Output: обработка: 42.5ms
 ```
 
@@ -99,38 +99,38 @@
 чоп.гуруҳ('Марҳалаи 1');
   чоп.сабт('Қадами 1');
   чоп.сабт('Қадами 2');
-чоп.гуруҳ_охир();
+чоп.гуруҳОхир();
 
-чоп.гуруҳ_пӯшида('Марҳалаи 2');
+чоп.гуруҳПӯшида('Марҳалаи 2');
   чоп.маълумот('Натиҷа:', натиҷа);
-чоп.гуруҳ_охир();
+чоп.гуруҳОхир();
 ```
 
 ---
 
 ## 🔑 Complete Method List
 
-| Tajik                | JavaScript                 | Purpose         |
-| -------------------- | -------------------------- | --------------- |
-| `чоп.сабт()`         | `console.log()`            | Basic output    |
-| `чоп.хато()`         | `console.error()`          | Error messages  |
-| `чоп.огоҳӣ()`        | `console.warn()`           | Warnings        |
-| `чоп.маълумот()`     | `console.info()`           | Info            |
-| `чоп.исфти()`        | `console.debug()`          | Debug           |
-| `чоп.тасдиқ()`       | `console.assert()`         | Assert          |
-| `чоп.қайд()`         | `console.count()`          | Count           |
-| `чоп.қайд_асл()`     | `console.countReset()`     | Reset count     |
-| `чоп.вақт()`         | `console.time()`           | Timer start     |
-| `чоп.вақт_сабт()`    | `console.timeLog()`        | Timer log       |
-| `чоп.вақт_охир()`    | `console.timeEnd()`        | Timer end       |
-| `чоп.ҷадвал()`       | `console.table()`          | Table format    |
-| `чоп.феҳрист()`      | `console.dir()`            | Directory       |
-| `чоп.xml_феҳрист()`  | `console.dirxml()`         | XML directory   |
-| `чоп.пайҷо()`        | `console.trace()`          | Stack trace     |
-| `чоп.полиз()`        | `console.clear()`          | Clear           |
-| `чоп.гуруҳ()`        | `console.group()`          | Start group     |
-| `чоп.гуруҳ_охир()`   | `console.groupEnd()`       | End group       |
-| `чоп.гуруҳ_пӯшида()` | `console.groupCollapsed()` | Collapsed group |
+| Tajik               | JavaScript                 | Purpose         |
+| ------------------- | -------------------------- | --------------- |
+| `чоп.сабт()`        | `console.log()`            | Basic output    |
+| `чоп.хато()`        | `console.error()`          | Error messages  |
+| `чоп.огоҳӣ()`       | `console.warn()`           | Warnings        |
+| `чоп.маълумот()`    | `console.info()`           | Info            |
+| `чоп.исфти()`       | `console.debug()`          | Debug           |
+| `чоп.тасдиқ()`      | `console.assert()`         | Assert          |
+| `чоп.қайд()`        | `console.count()`          | Count           |
+| `чоп.қайдАсл()`     | `console.countReset()`     | Reset count     |
+| `чоп.вақт()`        | `console.time()`           | Timer start     |
+| `чоп.вақтСабт()`    | `console.timeLog()`        | Timer log       |
+| `чоп.вақтОхир()`    | `console.timeEnd()`        | Timer end       |
+| `чоп.ҷадвал()`      | `console.table()`          | Table format    |
+| `чоп.феҳрист()`     | `console.dir()`            | Directory       |
+| `чоп.xmlФеҳрист()`  | `console.dirxml()`         | XML directory   |
+| `чоп.пайҷо()`       | `console.trace()`          | Stack trace     |
+| `чоп.полиз()`       | `console.clear()`          | Clear           |
+| `чоп.гуруҳ()`       | `console.group()`          | Start group     |
+| `чоп.гуруҳОхир()`   | `console.groupEnd()`       | End group       |
+| `чоп.гуруҳПӯшида()` | `console.groupCollapsed()` | Collapsed group |
 
 ---
 

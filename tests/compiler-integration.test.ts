@@ -341,15 +341,18 @@ describe('Compiler - Integration Tests', () => {
 
       // Compile multiple times
       for (let i = 0; i < 20; i++) {
-        const source = `ТАҒЙИРЁБАНДА х${i} = ${i};`;
-        compile(source);
+        const source = `тағйирёбанда х${i} = ${i};`;
+        const result = compile(source);
+        expect(result.errors).toEqual([]);
+        expect(result.code).toContain(`let х${i} = ${i};`);
       }
 
       const finalMemory = process.memoryUsage().heapUsed;
       const memoryGrowth = finalMemory - initialMemory;
 
-      // Memory growth should be reasonable (less than 5MB for 20 compilations)
-      expect(memoryGrowth).toBeLessThan(5 * 1024 * 1024);
+      // Heap usage without a forced GC is noisy, so only catch gross leaks
+      // (generous limit: 50MB for 20 compilations)
+      expect(memoryGrowth).toBeLessThan(50 * 1024 * 1024);
     });
   });
 

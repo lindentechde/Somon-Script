@@ -26,18 +26,10 @@ const baseConfig = {
     '!src/**/*.d.ts',
     '!src/index.ts',
     '!src/types.ts', // Re-export file
-    // Exclude non-runtime architectural/demo modules from coverage to keep metrics meaningful
-    '!src/core/**',
-    '!src/architecture-demo.ts',
-    '!src/domain.ts',
-    '!src/modular-lexer-compatible.ts',
     // Exclude the thin Node entry wrapper; we cover CLI logic via program tests
     '!src/cli.ts',
     // Exclude infrastructure/system components that are better tested via integration tests
-    '!src/module-system/circuit-breaker.ts',
-    '!src/module-system/runtime-config.ts',
     '!src/module-system/logger.ts',
-    '!src/module-system/metrics.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {
