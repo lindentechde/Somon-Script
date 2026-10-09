@@ -393,6 +393,7 @@ namespace keeps its usual output.
 | TypeScript                           | SomonScript                                    |
 | ------------------------------------ | ---------------------------------------------- |
 | `A \| B`, `A & B`                    | same                                           |
+| `\| A \| B`, `& A & B` (leading)     | same, also across lines                        |
 | `keyof T`                            | `калидҳои Т`                                   |
 | `typeof x` (in a type)               | `навъи х`                                      |
 | `T["k"]`, `T[K]`                     | same                                           |
@@ -417,6 +418,10 @@ namespace keeps its usual output.
 | `<T extends U = D>`                  | `<Т мерос У = Д>` (`extends` also works)       |
 
 ```som
+навъ Самт =
+    | "чап"
+    | "рост";
+
 функсия сатрАст(х: ношинос): х аст сатр {
     бозгашт навъи х === "string";
 }

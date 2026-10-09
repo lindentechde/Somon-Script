@@ -4390,44 +4390,35 @@ export class Parser {
     return type;
   }
 
+  /** `А | Б`; as in TypeScript a `|` may lead: `| "а" | "б"` (handy across lines). */
   private unionType(): TypeNode {
-    let type = this.intersectionType();
-
+    const leading = this.match(TokenType.BITWISE_OR) ? this.previous() : undefined;
+    const type = this.intersectionType();
+    if (!this.check(TokenType.BITWISE_OR)) return type;
+    const types = [type];
     while (this.match(TokenType.BITWISE_OR)) {
-      const types = [type];
-      do {
-        types.push(this.intersectionType());
-      } while (this.match(TokenType.BITWISE_OR));
-
-      type = {
-        type: 'UnionType',
-        types,
-        line: type.line,
-        column: type.column,
-      } as UnionType;
+      types.push(this.intersectionType());
     }
-
-    return type;
+    const start = leading ?? type;
+    return { type: 'UnionType', types, line: start.line, column: start.column } as UnionType;
   }
 
+  /** `А & Б`; a leading `&` is allowed, as in TypeScript: `& А & Б`. */
   private intersectionType(): TypeNode {
-    let type = this.primaryType();
-
+    const leading = this.match(TokenType.BITWISE_AND) ? this.previous() : undefined;
+    const type = this.primaryType();
+    if (!this.check(TokenType.BITWISE_AND)) return type;
+    const types = [type];
     while (this.match(TokenType.BITWISE_AND)) {
-      const types = [type];
-      do {
-        types.push(this.primaryType());
-      } while (this.match(TokenType.BITWISE_AND));
-
-      type = {
-        type: 'IntersectionType',
-        types,
-        line: type.line,
-        column: type.column,
-      } as IntersectionType;
+      types.push(this.primaryType());
     }
-
-    return type;
+    const start = leading ?? type;
+    return {
+      type: 'IntersectionType',
+      types,
+      line: start.line,
+      column: start.column,
+    } as IntersectionType;
   }
 
   private primaryType(): TypeNode {

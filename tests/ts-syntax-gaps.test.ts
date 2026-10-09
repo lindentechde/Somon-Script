@@ -259,3 +259,42 @@ describe('instantiation expressions', () => {
     ).toEqual([]);
   });
 });
+
+describe('a leading `|` or `&` in a union or intersection type', () => {
+  test('on one line and across lines', async () => {
+    expect(
+      await run(
+        [
+          'навъ Ранг = | "сурх" | "сабз";',
+          'навъ Андоза =',
+          '    | "хурд"',
+          '    | "калон";',
+          'навъ Нуқта = & { х: рақам } & { у: рақам };',
+          'навъ Як = | рақам;',
+          'тағ р: Ранг = "сабз";',
+          'тағ а: Андоза = "калон";',
+          'тағ н: Нуқта = { х: 1, у: 2 };',
+          'тағ я: Як = 3;',
+          'тағ т: Array<| рақам | сатр> = [4, "панҷ"];',
+          'функсия ф(х: | рақам | холӣ): рақам { бозгашт х ?? 0; }',
+          'чоп.сабт(р, а, н.х + н.у, я, т.join(), ф(холӣ));',
+        ].join('\n')
+      )
+    ).toEqual(['сабз калон 3 3 4,панҷ 0']);
+  });
+
+  test('builds the same types as without it', () => {
+    const [union, single] = parseOk('навъ А = | "а" | "б";\nнавъ Б = | рақам;') as Array<
+      Statement & { typeAnnotation: { typeAnnotation: unknown } }
+    >;
+    expect(union.typeAnnotation.typeAnnotation).toMatchObject({
+      type: 'UnionType',
+      types: [{ value: 'а' }, { value: 'б' }],
+    });
+    expect(single.typeAnnotation.typeAnnotation).toMatchObject({ type: 'PrimitiveType' });
+    expect(typescriptOf('навъ А =\n    | "а"\n    | "б";\nнавъ Б = & { а: 1 } & { б: 2 };')).toBe(
+      'type А = "а" | "б";\ntype Б = { а: 1 } & { б: 2 };'
+    );
+    expect(errorsOf('навъ А = | | рақам;')).toHaveLength(1);
+  });
+});

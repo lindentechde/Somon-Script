@@ -703,7 +703,11 @@ class Classifier {
     index: number
   ): void {
     const nested = this.frame.angle; // `<` inside type arguments: `ф<Map<К, В>>()`
-    if (!nested && !this.hasNode(next, TYPE_NODES) && !this.scanSkippedTypeArguments(index)) {
+    // `ф<| "а" | "б">()`: a single type after a leading `|` or `&` starts after it
+    const leading = next?.text === '|' || next?.text === '&';
+    const first = leading ? this.code[index + 2] : next;
+    const typed = this.hasNode(next, TYPE_NODES) || this.hasNode(first, TYPE_NODES);
+    if (!nested && !typed && !this.scanSkippedTypeArguments(index)) {
       item.kind = 'binary';
       return;
     }
