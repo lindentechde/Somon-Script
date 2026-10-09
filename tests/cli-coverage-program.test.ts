@@ -617,7 +617,7 @@ describe('run', () => {
 
   // Bug in src/module-system: an entry named `.som` (or one that does not end in
   // .som, such as `prog.txt`) is "missing from bundle results", so it cannot run.
-  test.failing('a file named only by its extension runs as somon-script.js', async () => {
+  test('a file named only by its extension runs as somon-script.js', async () => {
     writeFiles(dir, { '.som': OK });
     await runInProcess(['run', '.som'], { cwd: dir });
     expect(path.basename(runs[0].file)).toBe('somon-script.js');
@@ -757,11 +757,11 @@ describe('run', () => {
     );
 
     const typeError = await runInProcess(['run', 'typed.som', '--module', 'esm'], { cwd: dir });
-    expect(typeError.stderr).toContain(`  1. ${path.join(dir, 'typed.som')}:1\n     Type error`);
+    expect(typeError.stderr).toContain(`  1. ${path.join(dir, 'typed.som')}:1:16\n     Type error`);
 
     const missingEntry = await runInProcess(['run', 'gone.som', '--module', 'esm'], { cwd: dir });
     expect(missingEntry.stderr).toContain(`  1. ${path.join(dir, 'gone.som')}\n     `);
-    expect(missingEntry.stderr).toContain('ENOENT');
+    expect(missingEntry.stderr).toContain(`Cannot resolve module: ${path.join(dir, 'gone.som')}`);
     expect(runs).toHaveLength(0);
   });
 
@@ -936,7 +936,7 @@ describe('bundle', () => {
   // Bug in src/module-system: with `loading.cache: false` the entry module is
   // missing from the compilation result, so `bundle` and `run` fail with "Entry
   // module … missing from bundle results" (and `run --module esm` runs nothing).
-  test.failing('moduleSystem.loading.cache false still bundles the program', async () => {
+  test('moduleSystem.loading.cache false still bundles the program', async () => {
     config({ moduleSystem: { loading: { cache: false } } });
     const result = await runInProcess(['bundle', 'main.som'], { cwd: dir });
     expect(result.stderr).toBe('');

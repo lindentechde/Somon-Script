@@ -3,7 +3,7 @@ import * as path from 'path';
 
 import { ModuleLoadError, ModuleLoader, ModuleResolver } from '../src/module-system';
 import type { LoadedModule, ModuleLoadOptions } from '../src/module-system';
-import { locationOf } from '../src/module-system/module-loader';
+import { languageOf, locationOf } from '../src/module-system/module-loader';
 import { createTempProject, type TempProject } from './helpers/module-project';
 
 /**
@@ -272,17 +272,36 @@ describe('ModuleLoader', () => {
       expect(unparsed.resolvedDependencies).toEqual(['external:./missing-b']);
     });
 
-    test('JavaScript of packages and files of other types are not scanned', () => {
+    test('JavaScript of packages and imported files of other types are not scanned', () => {
       project.write({
         'node_modules/pkg/index.js': "require('./not-there');\n",
         'notes.txt': "require('./not-there')",
+        'main.som': 'ворид "./notes";\n',
       });
       const loader = createLoader({}, { extensions: ['.som', '.js', '.txt'] });
       expect(loader.loadSync('pkg', project.root)).toMatchObject({
         dependencies: [],
         isExternalLibrary: true,
+        language: 'javascript',
       });
-      expect(loader.loadSync('./notes', project.root).dependencies).toEqual([]);
+      loader.loadSync('./main', project.root);
+      expect(loader.getModule(id('notes.txt'))).toMatchObject({
+        dependencies: [],
+        language: 'other',
+      });
+    });
+
+    test('the entry of a load is SomonScript whatever its name', () => {
+      project.write({ 'prog.txt': 'ворид "./dep";\n', 'dep.som': '', 'lib/.som': '' });
+      const loader = createLoader();
+      expect(loader.loadSync('./prog.txt', project.root)).toMatchObject({
+        language: 'somonscript',
+        dependencies: ['./dep'],
+      });
+      expect(loader.loadSync('./lib/.som', project.root).language).toBe('somonscript');
+      expect(languageOf('/p/x.json', true)).toBe('json');
+      expect(languageOf('/p/x.js', true)).toBe('javascript');
+      expect(languageOf('/p/x.mjs', false)).toBe('other');
     });
   });
 

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
 import {
+  languageOf,
   locationOf,
   ModuleLoader,
   ModuleLoadOptions,
@@ -538,36 +539,28 @@ export class ModuleSystem {
     warnings: string[]
   ): void {
     for (const moduleId of compilationOrder) {
-      const module = this.loader.getModule(moduleId);
-      if (!module || moduleId.startsWith('external:') || module.isExternalLibrary) {
+      // The modules of this build are in the loader's cache
+      const module = this.loader.getModule(moduleId)!;
+      if (module.isExternalLibrary) {
         // Packages from module directories stay host requires
         continue;
       }
 
-      const extension = path.extname(module.resolvedPath);
-      if (extension === '.js') {
-        // Local JavaScript is bundled verbatim; its requires are rewritten when bundling
-        modules.set(moduleId, { code: module.source });
-        continue;
+      // Externals have no language; files of other types stay host requires
+      switch (module.language) {
+        case 'javascript':
+          // Local JavaScript is bundled verbatim; its requires are rewritten when bundling
+          modules.set(moduleId, { code: module.source });
+          break;
+        case 'json':
+          modules.set(moduleId, {
+            code: `module.exports = ${JSON.stringify(JSON.parse(module.source))};`,
+          });
+          break;
+        case 'somonscript':
+          this.compileModule({ module, moduleId, compilationConfig, modules, errors, warnings });
+          break;
       }
-      if (extension === '.json') {
-        modules.set(moduleId, {
-          code: `module.exports = ${JSON.stringify(JSON.parse(module.source))};`,
-        });
-        continue;
-      }
-      if (extension !== '.som') {
-        continue;
-      }
-
-      this.compileModule({
-        module,
-        moduleId,
-        compilationConfig,
-        modules,
-        errors,
-        warnings,
-      });
     }
   }
 
@@ -1248,7 +1241,7 @@ export class ModuleSystem {
         options.format === 'esm'
           ? collectExportNames(entryKey, new Map(bundled.map(module => [module.key, module.code])))
           : [],
-      defaultIsExportsObject: !result.entryPoint.endsWith('.som'),
+      defaultIsExportsObject: languageOf(result.entryPoint, true) !== 'somonscript',
     });
     const bundleBuilder = this.createBundleCodeBuilder();
     // The entry's `#!/usr/bin/env node` starts a bundle that runs under Node.js
@@ -1446,7 +1439,8 @@ export class ModuleSystem {
 
     // Local JavaScript is bundled verbatim: its dynamic requires are left to the host
     // require instead of failing the bundle.
-    const isSomonModule = ownerModuleId.endsWith('.som');
+    const isSomonModule =
+      languageOf(ownerModuleId, ownerModuleId === context.entryPoint) === 'somonscript';
     const dynamic = calls.find(call => call.specifier === undefined);
     if (isSomonModule && dynamic) {
       const kind = dynamic.template ? 'Dynamic template literal require' : 'Dynamic require';

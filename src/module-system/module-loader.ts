@@ -39,6 +39,8 @@ export interface LoadedModule {
   resolvedDependencies?: string[];
   /** True for modules resolved from a module directory such as node_modules */
   isExternalLibrary?: boolean;
+  /** What the file holds, for modules read from files (see languageOf) */
+  language?: ModuleLanguage;
   exports: ModuleExports;
   isLoaded: boolean;
   isLoading: boolean;
@@ -47,6 +49,22 @@ export interface LoadedModule {
   mtimeMs?: number;
   size?: number;
   error?: Error;
+}
+
+export type ModuleLanguage = 'somonscript' | 'javascript' | 'json' | 'other';
+
+/**
+ * What a module file holds: SomonScript for names ending in `.som` (also a file named
+ * just `.som`), JavaScript for `.js`, JSON for `.json`. The entry point of a load is
+ * a SomonScript program whatever its name (`somon run program.txt`); an import of
+ * another file is 'other' and left to the run time.
+ */
+export function languageOf(filePath: string, isEntry: boolean): ModuleLanguage {
+  if (filePath.endsWith('.som')) return 'somonscript';
+  const extension = path.extname(filePath);
+  if (extension === '.js') return 'javascript';
+  if (extension === '.json') return 'json';
+  return isEntry ? 'somonscript' : 'other';
 }
 
 // Export map for a module. "default" holds default export runtime value; named holds each named export.
@@ -167,13 +185,13 @@ export class ModuleLoader {
       // are kept until the next, so that cycles and shared modules load once.
       this.clearCache();
     }
-    const module = this.loadSyncInternal(specifier, fromFile);
+    const module = this.loadSyncInternal(specifier, fromFile, true);
     // Enforce limits only between builds, never evicting what this build needs
     this.enforceCacheLimits(this.collectDependencyClosure(module.id));
     return module;
   }
 
-  private loadSyncInternal(specifier: string, fromFile: string): LoadedModule {
+  private loadSyncInternal(specifier: string, fromFile: string, isEntry: boolean): LoadedModule {
     const externalMatch = this.matchExternal(specifier);
     if (externalMatch) {
       return this.getOrCreateExternalModule(externalMatch);
@@ -181,11 +199,13 @@ export class ModuleLoader {
 
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
+    const language = languageOf(resolved.resolvedPath, isEntry);
 
-    // A module being loaded is in the cache from its start: meeting it again is a cycle
+    // A module being loaded is in the cache from its start: meeting it again is a cycle.
+    // A file loaded as an import and then as an entry (or back) is read again.
     const cached = this.moduleCache.get(moduleId);
     if (cached?.isLoaded) {
-      if (this.isFresh(cached)) {
+      if (cached.language === language && this.isFresh(cached)) {
         cached.lastAccessed = Date.now();
         return cached;
       }
@@ -194,10 +214,14 @@ export class ModuleLoader {
       return this.handleCircularDependency(moduleId, cached);
     }
 
-    return this.loadModuleSync(resolved, moduleId);
+    return this.loadModuleSync(resolved, moduleId, language);
   }
 
-  private loadModuleSync(resolved: ResolvedModule, moduleId: string): LoadedModule {
+  private loadModuleSync(
+    resolved: ResolvedModule,
+    moduleId: string,
+    language: ModuleLanguage
+  ): LoadedModule {
     const module: LoadedModule = {
       id: moduleId,
       resolvedPath: resolved.resolvedPath,
@@ -211,6 +235,7 @@ export class ModuleLoader {
       dependencies: [],
       resolvedDependencies: [],
       isExternalLibrary: resolved.isExternalLibrary,
+      language,
       exports: { named: {} },
       isLoaded: false,
       isLoading: true,
@@ -239,7 +264,7 @@ export class ModuleLoader {
       for (const ref of references) {
         let dependency: LoadedModule;
         try {
-          dependency = this.loadSyncInternal(ref.specifier, resolved.resolvedPath);
+          dependency = this.loadSyncInternal(ref.specifier, resolved.resolvedPath, false);
         } catch (error) {
           throw this.attributeDependencyError(error, ref, resolved.resolvedPath);
         }
@@ -277,7 +302,7 @@ export class ModuleLoader {
   private readDependencies(module: LoadedModule, resolved: ResolvedModule): DependencyReference[] {
     const filePath = resolved.resolvedPath;
 
-    if (resolved.extension === '.som') {
+    if (module.language === 'somonscript') {
       let parser: Parser;
       try {
         parser = new Parser(new Lexer(module.source).tokenize());
@@ -303,7 +328,7 @@ export class ModuleLoader {
       return this.extractDependencies(module.ast, filePath);
     }
 
-    if (resolved.extension === '.json') {
+    if (module.language === 'json') {
       try {
         JSON.parse(module.source);
       } catch (error) {
@@ -315,7 +340,7 @@ export class ModuleLoader {
       return [];
     }
 
-    if (resolved.extension === '.js' && !resolved.isExternalLibrary) {
+    if (module.language === 'javascript' && !resolved.isExternalLibrary) {
       return this.extractJsDependencies(module.source);
     }
 

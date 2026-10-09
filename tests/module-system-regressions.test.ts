@@ -809,6 +809,41 @@ describe('module system regressions', () => {
         path.join(root, 'scripts', 'build.som'),
       ]);
     });
+
+    test('an entry is a SomonScript program whatever its name', async () => {
+      write({
+        'prog.txt': 'ворид { У } аз "./src/util";\nчоп.сабт("txt", У);\n',
+        'scripts/.som': 'ворид { У } аз "../src/util";\nчоп.сабт("dotfile", У);\n',
+      });
+      const ms = createSystem();
+      expect(await bundleAndRun('prog.txt', { ms })).toBe('txt 7');
+      expect(await bundleAndRun(path.join('scripts', '.som'), { ms })).toBe('dotfile 7');
+      const esm = await ms.bundle({ entryPoint: path.join(root, 'prog.txt'), format: 'esm' });
+      // A SomonScript entry without a default export has none
+      expect(esm.code).toMatch(/export \{ {2}\};\n$/);
+    });
+
+    test('an import of a file named only .som is SomonScript; other files are not compiled', async () => {
+      write({
+        'lib/.som': 'содир собит Н = 3;\n',
+        'notes.txt': 'module.exports = "notes";\n',
+        'main.som': 'ворид { Н } аз "./lib/.som";\nворид "./notes.txt";\nчоп.сабт(Н);\n',
+      });
+      const ms = createSystem();
+      const result = await ms.compile(path.join(root, 'main.som'));
+      expect(result.errors).toEqual([]);
+      expect([...result.modules.keys()].map(id => path.relative(root, id))).toEqual([
+        path.join('lib', '.som'),
+        'main.som',
+      ]);
+      // The program that a file was the entry of, and then an import: read again for each
+      write({ 'other.som': 'ворид "./prog.txt";\n', 'prog.txt': 'чоп.сабт(1);\n' });
+      expect((await ms.compile(path.join(root, 'prog.txt'))).modules.size).toBe(1);
+      expect([...(await ms.compile(path.join(root, 'other.som'))).modules.keys()]).toEqual([
+        path.join(root, 'other.som'),
+      ]);
+      expect((await ms.compile(path.join(root, 'prog.txt'))).modules.size).toBe(1);
+    });
   });
 
   describe('minified bundles', () => {

@@ -69,7 +69,9 @@ Behavior:
 
 - Parses `.som` files and extracts dependencies from imports and re-exports.
   Local `.js` files contribute their static relative `require('./x')` calls;
-  `.json` files are validated.
+  `.json` files are validated. The entry point of a load is a SomonScript
+  program whatever its name (`program.txt`, a file named `.som`); an imported
+  file of another type is not compiled or bundled (`module.language`).
 - `module.dependencies` holds the specifiers as written,
   `module.resolvedDependencies` the module ids they resolved to.
 - Caches in-memory. A cache hit is re-validated against the file's mtime and
