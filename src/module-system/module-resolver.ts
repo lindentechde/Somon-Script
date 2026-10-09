@@ -41,6 +41,9 @@ export class ModuleResolver {
    * Resolve a module specifier to an absolute file path
    */
   resolve(specifier: string, fromFile: string): ResolvedModule {
+    // A relative fromFile would make the node_modules walk stop at '.'
+    fromFile = path.resolve(fromFile);
+
     // Determine a correct base directory whether 'fromFile' is a file path or a directory path
     let fromDir: string;
     try {
@@ -105,7 +108,10 @@ export class ModuleResolver {
   private resolveAbsolute(specifier: string): ResolvedModule {
     const targetPath = path.resolve(this.options.baseUrl, specifier.slice(1));
     this.assertInsideBaseUrl(targetPath, specifier);
-    return this.resolveFile(targetPath, false);
+    const resolved = this.resolveFile(targetPath, false);
+    // Re-check with symlinks resolved so a link inside baseUrl cannot point outside it
+    this.assertInsideBaseUrl(resolved.resolvedPath, specifier);
+    return resolved;
   }
 
   private resolveMappedPath(specifier: string): ResolvedModule | null {
@@ -118,10 +124,9 @@ export class ModuleResolver {
             continue;
           }
 
-          try {
-            return this.resolveFile(targetPath, false);
-          } catch {
-            continue; // Try next mapping
+          const resolved = this.tryResolveFile(targetPath);
+          if (resolved && this.isInsideDir(resolved.resolvedPath, this.options.baseUrl)) {
+            return resolved;
           }
         }
       }
@@ -129,23 +134,139 @@ export class ModuleResolver {
     return null;
   }
 
-  private resolveNodeModules(specifier: string, fromDir: string): ResolvedModule {
-    let currentDir = fromDir;
+  private tryResolveFile(targetPath: string): ResolvedModule | null {
+    try {
+      return this.resolveFile(targetPath, false);
+    } catch {
+      return null;
+    }
+  }
 
-    while (currentDir !== path.dirname(currentDir)) {
+  private resolveNodeModules(specifier: string, fromDir: string): ResolvedModule {
+    // Bare specifiers name a package (and optional subpath); '..' would let them climb
+    // out of the module directory, so they are rejected outright.
+    if (specifier.split('/').includes('..')) {
+      throw new Error(`Bare module specifier '${specifier}' must not contain '..' segments`);
+    }
+
+    const segments = specifier.split('/');
+    const nameLength = specifier.startsWith('@') ? 2 : 1;
+    const packageName = segments.slice(0, nameLength).join('/');
+    const subpath = ['.', ...segments.slice(nameLength)].join('/');
+
+    let currentDir = fromDir;
+    for (;;) {
       for (const moduleDir of this.options.moduleDirectories) {
-        const modulePath = path.join(currentDir, moduleDir, specifier);
+        const packageDir = path.join(currentDir, moduleDir, packageName);
+        const fromExports = this.tryPackageExports(packageDir, subpath, specifier);
+        if (fromExports) return fromExports;
 
         try {
-          return this.resolveFile(modulePath, true, specifier);
+          return this.resolveFile(path.join(currentDir, moduleDir, specifier), true, specifier);
         } catch {
           // Continue searching
         }
       }
-      currentDir = path.dirname(currentDir);
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) break;
+      currentDir = parentDir;
     }
 
     throw new Error(`Module not found: ${specifier}`);
+  }
+
+  /**
+   * Resolve `subpath` through the package.json "exports" field like Node's require():
+   * string, array and conditional targets ("require", "node", "default") and
+   * "./dir/*" patterns. Returns null when the package has no "exports" field.
+   */
+  private tryPackageExports(
+    packageDir: string,
+    subpath: string,
+    specifier: string
+  ): ResolvedModule | null {
+    const packageJsonPath = path.join(packageDir, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return null;
+    }
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    const exportsField: unknown = packageJson.exports;
+    if (exportsField === undefined || exportsField === null) {
+      return null;
+    }
+
+    const isSubpathMap =
+      typeof exportsField === 'object' &&
+      !Array.isArray(exportsField) &&
+      Object.keys(exportsField).some(key => key.startsWith('.'));
+
+    let target: string | null = null;
+    if (!isSubpathMap) {
+      target = subpath === '.' ? this.resolveExportsTarget(exportsField) : null;
+    } else {
+      target = this.matchExportsSubpath(exportsField as Record<string, unknown>, subpath);
+    }
+
+    if (target === null || !target.startsWith('./')) {
+      throw new Error(
+        `Package subpath '${subpath}' is not exported by ${packageJsonPath} (importing '${specifier}')`
+      );
+    }
+
+    const targetPath = path.resolve(packageDir, target);
+    if (!this.isInsideDir(targetPath, packageDir)) {
+      throw new Error(`package.json 'exports' target escapes package directory: ${target}`);
+    }
+    const resolved = this.tryExactPath(targetPath, true, specifier);
+    if (!resolved) {
+      throw new Error(`Cannot resolve module: ${targetPath} (exported by ${packageJsonPath})`);
+    }
+    return resolved;
+  }
+
+  private matchExportsSubpath(map: Record<string, unknown>, subpath: string): string | null {
+    if (Object.prototype.hasOwnProperty.call(map, subpath)) {
+      return this.resolveExportsTarget(map[subpath]);
+    }
+
+    // Longest matching "./prefix*suffix" pattern wins
+    const patterns = Object.keys(map)
+      .filter(key => key.split('*').length === 2)
+      .sort((a, b) => b.indexOf('*') - a.indexOf('*'));
+    for (const key of patterns) {
+      const [prefix, suffix] = key.split('*');
+      if (
+        subpath.startsWith(prefix) &&
+        subpath.endsWith(suffix) &&
+        subpath.length >= prefix.length + suffix.length
+      ) {
+        const match = subpath.slice(prefix.length, subpath.length - suffix.length);
+        return this.resolveExportsTarget(map[key], match);
+      }
+    }
+    return null;
+  }
+
+  private resolveExportsTarget(target: unknown, patternMatch?: string): string | null {
+    if (typeof target === 'string') {
+      return patternMatch === undefined ? target : target.split('*').join(patternMatch);
+    }
+    if (Array.isArray(target)) {
+      for (const item of target) {
+        const resolved = this.resolveExportsTarget(item, patternMatch);
+        if (resolved !== null) return resolved;
+      }
+      return null;
+    }
+    if (target && typeof target === 'object') {
+      for (const [condition, value] of Object.entries(target)) {
+        if (condition === 'require' || condition === 'node' || condition === 'default') {
+          const resolved = this.resolveExportsTarget(value, patternMatch);
+          if (resolved !== null) return resolved;
+        }
+      }
+    }
+    return null;
   }
 
   private resolveFile(
@@ -237,7 +358,11 @@ export class ModuleResolver {
       if (!this.isInsideDir(mainPath, targetPath)) {
         throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
       }
-      return this.resolveFile(mainPath, isExternal, packageName);
+      const resolved = this.resolveFile(mainPath, isExternal, packageName);
+      if (!this.isInsideDir(resolved.resolvedPath, targetPath)) {
+        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+      }
+      return resolved;
     }
 
     return null;
@@ -305,84 +430,67 @@ export class ModuleResolver {
   }
 
   /**
-   * Determine if an absolute path is an OS-level path (like /Users/..., C:\...)
-   * vs a project-relative path (like /lib/utils)
+   * Classify an absolute import specifier. Absolute imports are allowed: a path inside
+   * baseUrl or under a common system prefix (/home/, /tmp/, C:\ …) is used as-is;
+   * anything else (e.g. /lib/utils) is project-relative, resolved against baseUrl and
+   * confined to it.
    *
-   * SECURITY NOTE: This method performs READ-ONLY path classification for module
-   * resolution. It does NOT perform file operations or create files in any directory.
-   * The actual file operations (reading source files) happen in ModuleLoader with
-   * proper error handling and validation. This classification prevents path traversal
-   * attacks by ensuring project-relative paths (like /lib/utils) don't escape the
-   * project baseUrl.
-   *
-   * Strategy:
-   * 1. Check if path is within or equal to baseUrl (OS path)
-   * 2. Check if path matches common OS directory patterns
-   * 3. Otherwise assume it's project-relative (resolved relative to baseUrl)
-   *
-   * @param absolutePath - The absolute path to classify
-   * @returns true if this is an OS-level filesystem path, false if project-relative
+   * Containment policy of the resolver: project-relative absolute imports, `paths`
+   * mappings and package.json "main"/"exports" targets must stay inside their root
+   * (checked after resolving symlinks); bare specifiers must not contain '..'.
+   * Relative imports (`./`, `../`) and OS-absolute imports are not confined —
+   * SomonScript sources are trusted code.
    */
   private isOsLevelAbsolutePath(absolutePath: string): boolean {
     const normalizedPath = path.normalize(absolutePath);
-    const normalizedBase = path.normalize(this.options.baseUrl);
 
-    // If the path starts with the baseUrl, it's an OS-level path within the project
-    if (normalizedPath.startsWith(normalizedBase)) {
+    if (this.isInsideDir(normalizedPath, this.options.baseUrl)) {
       return true;
     }
 
-    // Check for common OS-level path patterns
-    // These patterns are used for READ-ONLY path classification only
-    // Unix-like: /home/, /Users/, /var/, /tmp/, /opt/, /usr/, /etc/
-    // Windows: C:\, D:\, etc. (drive letters)
-    // Note: Including /tmp/ is necessary to correctly classify temp file paths
-    // (e.g., from test suites). No file operations are performed here - only
-    // path string matching for resolution logic.
-    // NOSONAR: This is read-only pattern matching for path classification, not file I/O
     const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
     const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
 
-    // Check Unix patterns
-    for (const prefix of unixOsPrefixes) {
-      if (normalizedPath.startsWith(prefix)) {
-        return true;
-      }
-    }
-
-    // Check Windows drive pattern
-    if (windowsDrivePattern.test(normalizedPath)) {
+    if (unixOsPrefixes.some(prefix => normalizedPath.startsWith(prefix))) {
       return true;
     }
 
-    // If we get here, assume it's a project-relative path like /lib/utils
-    return false;
+    return windowsDrivePattern.test(normalizedPath);
   }
 
   /**
-   * Return true if `candidate` resolves to a path that is equal to, or inside, `directory`.
-   * Both arguments are normalised with `path.resolve` before comparison to collapse ".."
-   * and mixed separators. This is the canonical check to prevent path-traversal through
-   * user-controlled inputs (package.json "main", import specifiers, path mappings).
+   * Return true if `candidate` is equal to, or inside, `directory`. Both are resolved,
+   * and symlinks are followed for the parts that exist, so a link cannot be used to
+   * leave the directory. Comparison is separator-aware ('/proj-evil' is not in '/proj').
    */
   private isInsideDir(candidate: string, directory: string): boolean {
-    const resolvedCandidate = path.resolve(candidate);
-    const resolvedDir = path.resolve(directory);
+    const resolvedCandidate = this.realpathOrResolve(candidate);
+    const resolvedDir = this.realpathOrResolve(directory);
     if (resolvedCandidate === resolvedDir) return true;
     const withSep = resolvedDir.endsWith(path.sep) ? resolvedDir : resolvedDir + path.sep;
     return resolvedCandidate.startsWith(withSep);
   }
 
+  private realpathOrResolve(target: string): string {
+    const resolved = path.resolve(target);
+    try {
+      return fs.realpathSync.native(resolved);
+    } catch {
+      // Not on disk (yet): resolve the deepest existing ancestor and append the rest
+      const parent = path.dirname(resolved);
+      if (parent === resolved) return resolved;
+      return path.join(this.realpathOrResolve(parent), path.basename(resolved));
+    }
+  }
+
   /**
-   * Assert that a resolved import target stays inside baseUrl. Imports with `..` that
-   * climb out of the project tree are rejected — they have no legitimate use and can
-   * be exploited to read arbitrary files via the ModuleLoader.
+   * Assert that a project-relative absolute import stays inside baseUrl.
    */
   private assertInsideBaseUrl(absolutePath: string, specifier: string): void {
     if (!this.isInsideDir(absolutePath, this.options.baseUrl)) {
       throw new Error(
         `Module specifier '${specifier}' resolves outside baseUrl '${this.options.baseUrl}'. ` +
-          `Relative imports must stay inside the project tree.`
+          `Project-relative absolute imports must stay inside the project tree.`
       );
     }
   }
