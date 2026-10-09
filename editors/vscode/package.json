@@ -1,0 +1,90 @@
+{
+  "name": "somonscript",
+  "displayName": "SomonScript",
+  "description": "SomonScript (Tajik Cyrillic TypeScript) for VS Code: syntax highlighting, snippets and the somon language server",
+  "version": "0.1.0",
+  "publisher": "lindentech",
+  "license": "MIT",
+  "homepage": "https://lindentech.de",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lindentechde/Somon-Script.git",
+    "directory": "editors/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/lindentechde/Somon-Script/issues"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": ["Programming Languages", "Snippets", "Linters", "Formatters"],
+  "keywords": ["somonscript", "somon", "tajik", "тоҷикӣ", "lsp"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:somonscript", "workspaceContains:**/*.som"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "somonscript",
+        "aliases": ["SomonScript", "somonscript", "somon"],
+        "extensions": [".som"],
+        "firstLine": "^#!.*\\bsomon\\b",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "somonscript",
+        "scopeName": "source.somonscript",
+        "path": "./syntaxes/somonscript.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "somonscript",
+        "path": "./snippets/somonscript.json"
+      }
+    ],
+    "configuration": {
+      "title": "SomonScript",
+      "properties": {
+        "somonscript.server.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the `somon` CLI (`dist/cli.js` of `@lindentech/somon-script`, or a `somon` executable). Empty: the workspace's `node_modules/@lindentech/somon-script`, then `somon` on the `PATH`."
+        },
+        "somonscript.server.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the SomonScript language server (diagnostics, hover, completion, go to definition)."
+        },
+        "somonscript.locale": {
+          "type": "string",
+          "enum": ["", "en", "ru", "tj"],
+          "default": "",
+          "markdownDescription": "Language of the language server's messages. Empty: the VS Code display language (`ru` → Russian, `tg` → Tajik, otherwise English)."
+        },
+        "somonscript.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Log the communication between VS Code and the language server."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "somonscript.restartServer",
+        "title": "SomonScript: Restart Language Server"
+      }
+    ]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.82.0"
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  }
+}

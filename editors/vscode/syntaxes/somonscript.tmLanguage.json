@@ -1,0 +1,1217 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SomonScript",
+  "scopeName": "source.somonscript",
+  "fileTypes": ["som"],
+  "patterns": [
+    {
+      "include": "#shebang"
+    },
+    {
+      "include": "#statements"
+    }
+  ],
+  "repository": {
+    "shebang": {
+      "name": "comment.line.shebang.somonscript",
+      "match": "\\A(#!).*$",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.comment.somonscript"
+        }
+      }
+    },
+    "statements": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#template"
+        },
+        {
+          "include": "#regex"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#decorator"
+        },
+        {
+          "include": "#label"
+        },
+        {
+          "include": "#case-clause"
+        },
+        {
+          "include": "#function-declaration"
+        },
+        {
+          "include": "#class-declaration"
+        },
+        {
+          "include": "#interface-declaration"
+        },
+        {
+          "include": "#type-alias"
+        },
+        {
+          "include": "#enum-declaration"
+        },
+        {
+          "include": "#namespace-declaration"
+        },
+        {
+          "include": "#ambient-module"
+        },
+        {
+          "include": "#variable-declaration"
+        },
+        {
+          "include": "#type-annotation"
+        },
+        {
+          "include": "#heritage"
+        },
+        {
+          "include": "#type-parameters"
+        },
+        {
+          "include": "#ternary"
+        },
+        {
+          "include": "#object-literal"
+        },
+        {
+          "include": "#block"
+        },
+        {
+          "include": "#paren"
+        },
+        {
+          "include": "#bracket"
+        },
+        {
+          "include": "#member"
+        },
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#builtins"
+        },
+        {
+          "include": "#function-call"
+        },
+        {
+          "include": "#private-name"
+        },
+        {
+          "include": "#identifier"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#punctuation"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.documentation.somonscript",
+          "begin": "/\\*\\*(?!/)",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.somonscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.somonscript"
+            }
+          }
+        },
+        {
+          "name": "comment.block.somonscript",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.somonscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.somonscript"
+            }
+          }
+        },
+        {
+          "name": "comment.line.double-slash.somonscript",
+          "match": "(//).*$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.somonscript"
+            }
+          }
+        }
+      ]
+    },
+    "string-escape": {
+      "name": "constant.character.escape.somonscript",
+      "match": "\\\\(?:x\\h{2}|u\\{\\h+\\}|u\\h{4}|[0-7]{1,3}|.|$)"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.somonscript",
+          "begin": "\"",
+          "end": "(\")|((?:[^\\\\\\n])$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.somonscript"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.somonscript"
+            },
+            "2": {
+              "name": "invalid.illegal.newline.somonscript"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#string-escape"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.somonscript",
+          "begin": "'",
+          "end": "(')|((?:[^\\\\\\n])$)",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.somonscript"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.somonscript"
+            },
+            "2": {
+              "name": "invalid.illegal.newline.somonscript"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#string-escape"
+            }
+          ]
+        }
+      ]
+    },
+    "template": {
+      "patterns": [
+        {
+          "match": "([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)(?=`)",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.tagged-template.somonscript"
+            }
+          }
+        },
+        {
+          "name": "string.template.somonscript",
+          "begin": "`",
+          "end": "`",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.template.begin.somonscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.template.end.somonscript"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#string-escape"
+            },
+            {
+              "name": "meta.template.expression.somonscript",
+              "contentName": "meta.embedded.line.somonscript",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template-expression.begin.somonscript"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template-expression.end.somonscript"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#statements"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "regex": {
+      "name": "string.regexp.somonscript",
+      "begin": "(?<!\\+\\+|--)(?<=^|[=(:,\\[?+!&|{};~*%<>^-]|=>|^бозгашт|[^\\p{L}\\p{N}_$.]бозгашт|^партофтан|[^\\p{L}\\p{N}_$.]партофтан|^навъи|[^\\p{L}\\p{N}_$.]навъи|^нав|[^\\p{L}\\p{N}_$.]нав|^интизор|[^\\p{L}\\p{N}_$.]интизор|^ҳолат|[^\\p{L}\\p{N}_$.]ҳолат|^вагарна|[^\\p{L}\\p{N}_$.]вагарна|^чунин|[^\\p{L}\\p{N}_$.]чунин|^ҳосил|[^\\p{L}\\p{N}_$.]ҳосил|^пешфарз|[^\\p{L}\\p{N}_$.]пешфарз|^дар|[^\\p{L}\\p{N}_$.]дар|^аз|[^\\p{L}\\p{N}_$.]аз|^return|[^\\p{L}\\p{N}_$.]return|^throw|[^\\p{L}\\p{N}_$.]throw|^typeof|[^\\p{L}\\p{N}_$.]typeof|^case|[^\\p{L}\\p{N}_$.]case|^yield|[^\\p{L}\\p{N}_$.]yield|^await|[^\\p{L}\\p{N}_$.]await|^void|[^\\p{L}\\p{N}_$.]void|^delete|[^\\p{L}\\p{N}_$.]delete|^in|[^\\p{L}\\p{N}_$.]in|^of|[^\\p{L}\\p{N}_$.]of|^do|[^\\p{L}\\p{N}_$.]do|^else|[^\\p{L}\\p{N}_$.]else)\\s*(/)(?![/*])(?=(?:[^/\\\\\\[\\n]|\\\\.|\\[(?:[^\\]\\\\\\n]|\\\\.)*\\])+/[dgimsuyv]*(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]))",
+      "end": "(/)([dgimsuyv]*)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.somonscript"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.somonscript"
+        },
+        "2": {
+          "name": "keyword.other.regex-flags.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#regex-body"
+        }
+      ]
+    },
+    "regex-body": {
+      "patterns": [
+        {
+          "name": "constant.other.character-class.set.regexp.somonscript",
+          "begin": "\\[\\^?",
+          "end": "\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.character-class.regexp.somonscript"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.character-class.regexp.somonscript"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.regexp.somonscript"
+            }
+          ]
+        },
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.regexp.somonscript"
+        },
+        {
+          "match": "[?+*]\\??|\\{\\d+(?:,\\d*)?\\}\\??",
+          "name": "keyword.operator.quantifier.regexp.somonscript"
+        },
+        {
+          "match": "\\((?:\\?(?::|=|!|<=|<!|<[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*>))?|\\)",
+          "name": "punctuation.definition.group.regexp.somonscript"
+        },
+        {
+          "match": "[\\^$]",
+          "name": "keyword.control.anchor.regexp.somonscript"
+        },
+        {
+          "match": "\\|",
+          "name": "keyword.operator.or.regexp.somonscript"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.somonscript",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$.])0[xX]\\h(?:_?\\h)*(n)?(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}])",
+          "captures": {
+            "1": {
+              "name": "storage.type.numeric.bigint.somonscript"
+            }
+          }
+        },
+        {
+          "name": "constant.numeric.binary.somonscript",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$.])0[bB][01](?:_?[01])*(n)?(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}])",
+          "captures": {
+            "1": {
+              "name": "storage.type.numeric.bigint.somonscript"
+            }
+          }
+        },
+        {
+          "name": "constant.numeric.octal.somonscript",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$.])0[oO][0-7](?:_?[0-7])*(n)?(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}])",
+          "captures": {
+            "1": {
+              "name": "storage.type.numeric.bigint.somonscript"
+            }
+          }
+        },
+        {
+          "name": "constant.numeric.decimal.somonscript",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$.])(?:0|[1-9](?:_?\\d)*)(n)(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}])",
+          "captures": {
+            "1": {
+              "name": "storage.type.numeric.bigint.somonscript"
+            }
+          }
+        },
+        {
+          "name": "constant.numeric.decimal.somonscript",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$.])(?:\\d(?:_?\\d)*(?:(\\.)(?:\\d(?:_?\\d)*)?)?|(\\.)\\d(?:_?\\d)*)(?:[eE][+-]?\\d(?:_?\\d)*)?(?![\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}])",
+          "captures": {
+            "1": {
+              "name": "meta.delimiter.decimal.period.somonscript"
+            },
+            "2": {
+              "name": "meta.delimiter.decimal.period.somonscript"
+            }
+          }
+        }
+      ]
+    },
+    "decorator": {
+      "name": "meta.decorator.somonscript",
+      "match": "(@)([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*(?:\\s*\\.\\s*[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)*)?",
+      "captures": {
+        "1": {
+          "name": "punctuation.decorator.somonscript"
+        },
+        "2": {
+          "name": "entity.name.function.decorator.somonscript"
+        }
+      }
+    },
+    "label": {
+      "match": "^\\s*([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)\\s*(:)(?=\\s*(?:(?:while|барои|for|кун|do|то)(?![\\p{L}\\p{N}\\p{M}_$])|\\{))",
+      "captures": {
+        "1": {
+          "name": "entity.name.label.somonscript"
+        },
+        "2": {
+          "name": "punctuation.separator.label.somonscript"
+        }
+      }
+    },
+    "case-clause": {
+      "patterns": [
+        {
+          "begin": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:ҳолат|case)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "end": "(:)",
+          "beginCaptures": {
+            "0": {
+              "name": "keyword.control.switch.somonscript"
+            }
+          },
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.separator.case.somonscript"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#statements"
+            }
+          ]
+        },
+        {
+          "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:default|пешфарз)(?![\\p{L}\\p{N}\\p{M}_$]))\\s*(:)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.switch.somonscript"
+            },
+            "2": {
+              "name": "punctuation.separator.case.somonscript"
+            }
+          }
+        }
+      ]
+    },
+    "function-declaration": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:function|функсия|функция)(?![\\p{L}\\p{N}\\p{M}_$]))\\s*(\\*)?\\s*([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)?",
+      "captures": {
+        "1": {
+          "name": "storage.type.function.somonscript"
+        },
+        "2": {
+          "name": "keyword.generator.asterisk.somonscript"
+        },
+        "3": {
+          "name": "entity.name.function.somonscript"
+        }
+      }
+    },
+    "class-declaration": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:class|синф)(?![\\p{L}\\p{N}\\p{M}_$]))(?:\\s+(?!(?:implements|extends|татбиқ|мерос)(?![\\p{L}\\p{N}\\p{M}_$]))([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*))?",
+      "captures": {
+        "1": {
+          "name": "storage.type.class.somonscript"
+        },
+        "2": {
+          "name": "entity.name.type.class.somonscript"
+        }
+      }
+    },
+    "interface-declaration": {
+      "name": "meta.interface.somonscript",
+      "begin": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:interface|интерфейс)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)",
+      "end": "(?<=\\})",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.interface.somonscript"
+        },
+        "2": {
+          "name": "entity.name.type.interface.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "type-alias": {
+      "name": "meta.type.declaration.somonscript",
+      "begin": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:type|навъ)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)(?=\\s*(?:<[^=]*>)?\\s*=(?!=))",
+      "end": ";|(?=^\\s*(?:(?:интерфейс|функсия|ворид|собит|содир|навъ|синф|тағ)(?![\\p{L}\\p{N}\\p{M}_$])))",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.type.somonscript"
+        },
+        "2": {
+          "name": "entity.name.type.alias.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.terminator.statement.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "enum-declaration": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:шумориш|enum)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.enum.somonscript"
+        },
+        "2": {
+          "name": "entity.name.type.enum.somonscript"
+        }
+      }
+    },
+    "namespace-declaration": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:namespace|номфазо)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*(?:\\s*\\.\\s*[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.namespace.somonscript"
+        },
+        "2": {
+          "name": "entity.name.type.module.somonscript"
+        }
+      }
+    },
+    "ambient-module": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:declare|эълон)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+((?:глобалӣ|global|module|модул)(?![\\p{L}\\p{N}\\p{M}_$]))",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.somonscript"
+        },
+        "2": {
+          "name": "storage.type.namespace.somonscript"
+        }
+      }
+    },
+    "variable-declaration": {
+      "patterns": [
+        {
+          "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:собит)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+(?!(?:шумориш|enum)(?![\\p{L}\\p{N}\\p{M}_$]))([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.somonscript"
+            },
+            "2": {
+              "name": "variable.other.constant.somonscript"
+            }
+          }
+        },
+        {
+          "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:тағйирёбанда|истифода|using|тағ)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.somonscript"
+            },
+            "2": {
+              "name": "variable.other.readwrite.somonscript"
+            }
+          }
+        }
+      ]
+    },
+    "type-annotation": {
+      "name": "meta.type.annotation.somonscript",
+      "begin": "(?<=[\\p{L}\\p{N}\\p{M}_$)\\]?]|[\\p{L}\\p{N}\\p{M}_$)\\]?]\\s)(:)(?!:)",
+      "end": "(?=[;,=)}\\]]|$)|(?<=[\\p{L}\\p{N}\\p{M}_$)\\]>\"\\'`])\\s*(?=\\{)|(?<=[\\p{L}\\p{N}\\p{M}_$\\]>\"\\'`])\\s*(?==>)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.operator.type.annotation.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "type": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#template"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#type-object"
+        },
+        {
+          "include": "#type-tuple"
+        },
+        {
+          "include": "#type-paren"
+        },
+        {
+          "include": "#type-arguments"
+        },
+        {
+          "match": "=>",
+          "name": "storage.type.function.arrow.somonscript"
+        },
+        {
+          "match": "[|&]",
+          "name": "keyword.operator.type.somonscript"
+        },
+        {
+          "match": "\\?|:",
+          "name": "keyword.operator.ternary.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:калидҳои|asserts|беназир|typeof|unique|тасдиқ|хулоса|infer|keyof|инфер|навъи|new|аст|дар|нав|чун|as|in|is)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "keyword.operator.expression.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:танҳохонӣ|abstract|readonly|extends|мавҳум|const|берун|мерос|собит|out)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "storage.modifier.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:ин)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "variable.language.this.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:undefined|нодуруст|беқимат|дуруст|false|null|true|холӣ)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:калонрақам|беджавоб|boolean|unknown|мантиқӣ|ношинос|bigint|number|object|string|symbol|абадан|объект|never|ваъда|рақам|рамз|сатр|any|ҳар)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.type.primitive.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:параметрҳои_конструктор|навъи_параметри_ин|гирифтан_навъ|навъи_бозгашт|навъи_намуна|интизоршуда|параметрҳо|сабт_навъ|истихроҷ|танҳохон|беналиӣ|хориҷ|қисмӣ|ҳатмӣ|ҳазф)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.type.builtin.somonscript"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.somonscript"
+        },
+        {
+          "match": "[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*",
+          "name": "entity.name.type.somonscript"
+        }
+      ]
+    },
+    "type-object": {
+      "name": "meta.object.type.somonscript",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "match": "(?:((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:танҳохонӣ|readonly)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+)?(?:((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:get|set)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+)?([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)\\s*(\\?)?(?=\\s*[:(<])",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.somonscript"
+            },
+            "2": {
+              "name": "storage.type.property.somonscript"
+            },
+            "3": {
+              "name": "variable.object.property.somonscript"
+            },
+            "4": {
+              "name": "keyword.operator.optional.somonscript"
+            }
+          }
+        },
+        {
+          "include": "#type-annotation"
+        },
+        {
+          "include": "#type-paren"
+        },
+        {
+          "include": "#type-arguments"
+        },
+        {
+          "begin": "\\[",
+          "end": "\\]",
+          "patterns": [
+            {
+              "include": "#type-annotation"
+            },
+            {
+              "include": "#type"
+            }
+          ]
+        },
+        {
+          "match": "[;,]",
+          "name": "punctuation.separator.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "type-tuple": {
+      "name": "meta.type.tuple.somonscript",
+      "begin": "\\[",
+      "end": "\\]",
+      "beginCaptures": {
+        "0": {
+          "name": "meta.brace.square.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "meta.brace.square.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "match": "\\.\\.\\.",
+          "name": "keyword.operator.rest.somonscript"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "type-paren": {
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "0": {
+          "name": "meta.brace.round.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "meta.brace.round.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "match": "(\\.\\.\\.)?([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)\\s*(\\?)?(?=\\s*:)",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.rest.somonscript"
+            },
+            "2": {
+              "name": "variable.parameter.somonscript"
+            },
+            "3": {
+              "name": "keyword.operator.optional.somonscript"
+            }
+          }
+        },
+        {
+          "include": "#type-annotation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.parameter.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "type-arguments": {
+      "name": "meta.type.parameters.somonscript",
+      "begin": "<",
+      "end": ">",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.typeparameters.begin.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.typeparameters.end.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.somonscript"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "heritage": {
+      "match": "((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:implements|extends|татбиқ|мерос)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*(?:\\s*\\.\\s*[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)*)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.somonscript"
+        },
+        "2": {
+          "name": "entity.other.inherited-class.somonscript"
+        }
+      }
+    },
+    "type-parameters": {
+      "name": "meta.type.parameters.somonscript",
+      "begin": "(?<=[\\p{L}\\p{N}\\p{M}_$])(<)(?=(?:[^<>;=(){}]|<[^<>;=(){}]*>)*>\\s*(?:\\(|\\{|=[^=>]|(?:implements|extends|татбиқ|мерос)(?![\\p{L}\\p{N}\\p{M}_$])))",
+      "end": ">",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.typeparameters.begin.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.typeparameters.end.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.somonscript"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.somonscript"
+        },
+        {
+          "include": "#type"
+        }
+      ]
+    },
+    "ternary": {
+      "begin": "(\\?)(?![.?:),=])",
+      "end": "(:)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.operator.ternary.somonscript"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "keyword.operator.ternary.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "object-literal": {
+      "name": "meta.objectliteral.somonscript",
+      "begin": "(?<=[=(,\\[?:]|\\$\\{|^бозгашт|[^\\p{L}\\p{N}_$.]бозгашт|^return|[^\\p{L}\\p{N}_$.]return|^собит|[^\\p{L}\\p{N}_$.]собит|^тағ|[^\\p{L}\\p{N}_$.]тағ|^тағйирёбанда|[^\\p{L}\\p{N}_$.]тағйирёбанда)\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "match": "(?:((?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:get|set)(?![\\p{L}\\p{N}\\p{M}_$]))\\s+)?([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)\\s*(:)(?!:)",
+          "captures": {
+            "1": {
+              "name": "storage.type.property.somonscript"
+            },
+            "2": {
+              "name": "meta.object-literal.key.somonscript"
+            },
+            "3": {
+              "name": "punctuation.separator.key-value.somonscript"
+            }
+          }
+        },
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "block": {
+      "name": "meta.block.somonscript",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.block.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "paren": {
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "0": {
+          "name": "meta.brace.round.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "meta.brace.round.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "bracket": {
+      "begin": "\\[",
+      "end": "\\]",
+      "beginCaptures": {
+        "0": {
+          "name": "meta.brace.square.somonscript"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "meta.brace.square.somonscript"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#statements"
+        }
+      ]
+    },
+    "member": {
+      "patterns": [
+        {
+          "match": "(\\??\\.)\\s*((?:гуруҳПӯшида|гуруҳпӯшида|ҷойивазкунӣ|xmlФеҳрист|xmlфеҳрист|баровардан|гуруҳОхир|гуруҳохир|пайвастан|вақтОхир|вақтСабт|вақтохир|вақтсабт|маълумот|ҷудокунӣ|калидҳо|феҳрист|қайдАсл|қайдасл|қиматҳо|кофтан|тасдиқ|тақсим|харита|ҷадвал|гуруҳ|илова|исфти|огоҳӣ|пайҷо|полиз|филтр|вақт|зарб|сабт|тарҳ|хато|қайд|ҷамъ)(?![\\p{L}\\p{N}\\p{M}_$]))",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.somonscript"
+            },
+            "2": {
+              "name": "support.function.builtin.somonscript"
+            }
+          }
+        },
+        {
+          "match": "(\\??\\.)\\s*((?:дарозииСатр|дарозиисатр|дарозӣ)(?![\\p{L}\\p{N}\\p{M}_$]))",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.somonscript"
+            },
+            "2": {
+              "name": "support.variable.property.somonscript"
+            }
+          }
+        },
+        {
+          "match": "(\\??\\.)\\s*(#?[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)(?=\\s*(?:\\?\\.\\s*)?\\()",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.somonscript"
+            },
+            "2": {
+              "name": "entity.name.function.somonscript"
+            }
+          }
+        },
+        {
+          "match": "(\\??\\.)\\s*(#?[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.accessor.somonscript"
+            },
+            "2": {
+              "name": "variable.other.property.somonscript"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:кун|do)(?![\\p{L}\\p{N}\\p{M}_$])(?=\\s*\\{)",
+          "name": "keyword.control.loop.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:export|import|ворид|содир)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "keyword.control.import.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:партофтан|debugger|гирифтан|шикастан|default|бозгашт|вагарна|интизор|интихоб|пешфарз|ниҳоят|await|yield|барои|давом|кӯшиш|чунин|ҳолат|ҳосил|case|агар|то)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "keyword.control.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:function|функсия|функция)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "storage.type.function.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:тағйирёбанда|конструктор|namespace|интерфейс|истифода|номфазо|шумориш|якхела|using|собит|enum|type|навъ|синф|тағ)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "storage.type.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:глобалӣ|модул)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "storage.type.namespace.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:берун)(?![\\p{L}\\p{N}\\p{M}_$])(?=\\s+[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*\\s*(?:[,>=]|(?:extends|мерос)(?![\\p{L}\\p{N}\\p{M}_$])))",
+          "name": "storage.modifier.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:get|set)(?![\\p{L}\\p{N}\\p{M}_$])(?=\\s+[\\p{L}_$#\\[])",
+          "name": "storage.type.property.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:муҳофизатшуда|implements|protected|танҳохонӣ|abstract|accessor|override|readonly|бознавис|дастрасӣ|ҳамзамон|ҷамъиятӣ|declare|extends|private|статикӣ|public|static|мавҳум|татбиқ|хосусӣ|async|мерос|эълон)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "storage.modifier.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:instanceof|satisfies|бармесоё|калидҳои|asserts|беназир|delete|typeof|unique|хулоса|infer|keyof|инфер|навъи|void|new|аст|дар|нав|чун|as|in|is|of|аз)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "keyword.operator.expression.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:дуруст|true)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.boolean.true.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:нодуруст|false)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.boolean.false.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:null|холӣ)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.null.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:undefined|беқимат)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.undefined.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:Infinity|NaN)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "constant.language.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:this|ин)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "variable.language.this.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:super|супер)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "variable.language.super.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:калонрақам|беджавоб|boolean|unknown|мантиқӣ|ношинос|bigint|number|object|string|symbol|абадан|объект|never|ваъда|рақам|рамз|сатр|any|ҳар)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.type.primitive.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:параметрҳои_конструктор|навъи_параметри_ин|гирифтан_навъ|навъи_бозгашт|навъи_намуна|интизоршуда|параметрҳо|сабт_навъ|истихроҷ|танҳохон|беналиӣ|хориҷ|қисмӣ|ҳатмӣ|ҳазф)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.type.builtin.somonscript"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:сатрМетодҳо|сатрметодҳо|globalThis|математика|Boolean|Promise|Reflect|console|BigInt|Number|Object|RegExp|String|Symbol|рӯйхат|Array|Error|Proxy|Ваъда|Риёзӣ|Date|JSON|Math|Хато|Map|Set|чоп)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.class.builtin.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:гуруҳПӯшида|гуруҳпӯшида|ҷойивазкунӣ|xmlФеҳрист|xmlфеҳрист|баровардан|гуруҳОхир|гуруҳохир|пайвастан|вақтОхир|вақтСабт|вақтохир|вақтсабт|маълумот|ҷудокунӣ|калидҳо|феҳрист|қайдАсл|қайдасл|қиматҳо|кофтан|тасдиқ|тақсим|харита|ҷадвал|гуруҳ|илова|исфти|огоҳӣ|пайҷо|полиз|филтр|вақт|зарб|сабт|тарҳ|хато|қайд|ҷамъ)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.function.builtin.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:дарозииСатр|дарозиисатр|дарозӣ)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "support.variable.property.somonscript"
+        }
+      ]
+    },
+    "function-call": {
+      "match": "([\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*)\\s*(?=(?:\\?\\.\\s*)?\\()",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.somonscript"
+        }
+      }
+    },
+    "private-name": {
+      "match": "(#)[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*",
+      "name": "variable.other.private.somonscript"
+    },
+    "identifier": {
+      "match": "[\\p{L}\\p{Nl}_$][\\p{L}\\p{N}\\p{M}_$\\x{200C}\\x{200D}]*",
+      "name": "variable.other.readwrite.somonscript"
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "=>",
+          "name": "storage.type.function.arrow.somonscript"
+        },
+        {
+          "match": "\\.\\.\\.",
+          "name": "keyword.operator.spread.somonscript"
+        },
+        {
+          "match": "\\?\\?=|&&=|\\|\\|=|\\*\\*=|>>>=|<<=|>>=|[-+*/%&|^]=",
+          "name": "keyword.operator.assignment.compound.somonscript"
+        },
+        {
+          "match": "===?|!==?",
+          "name": "keyword.operator.comparison.somonscript"
+        },
+        {
+          "match": "<=|>=|<|>",
+          "name": "keyword.operator.relational.somonscript"
+        },
+        {
+          "match": "&&|\\|\\||\\?\\?|!",
+          "name": "keyword.operator.logical.somonscript"
+        },
+        {
+          "match": ">>>|<<|>>|[&|^~]",
+          "name": "keyword.operator.bitwise.somonscript"
+        },
+        {
+          "match": "\\+\\+|--",
+          "name": "keyword.operator.increment.somonscript"
+        },
+        {
+          "match": "\\*\\*|[-+*/%]",
+          "name": "keyword.operator.arithmetic.somonscript"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.somonscript"
+        },
+        {
+          "match": "\\?\\.",
+          "name": "punctuation.accessor.optional.somonscript"
+        },
+        {
+          "match": "\\?(?=\\s*:)",
+          "name": "keyword.operator.optional.somonscript"
+        },
+        {
+          "match": "\\?|:",
+          "name": "keyword.operator.ternary.somonscript"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": ";",
+          "name": "punctuation.terminator.statement.somonscript"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.somonscript"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.somonscript"
+        }
+      ]
+    }
+  }
+}
