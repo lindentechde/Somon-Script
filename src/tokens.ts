@@ -229,6 +229,8 @@ export enum TokenType {
   EOF = 'EOF',
   NEWLINE = 'NEWLINE',
   WHITESPACE = 'WHITESPACE',
+  /** A line or block comment; only a Lexer created with `{ comments: true }` emits these. */
+  COMMENT = 'COMMENT',
 }
 
 export interface Token {
@@ -236,4 +238,8 @@ export interface Token {
   value: string;
   line: number;
   column: number;
+  /** Offset of the first character in the source; set only in comment mode. */
+  start?: number;
+  /** Offset just past the last character in the source; set only in comment mode. */
+  end?: number;
 }

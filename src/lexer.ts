@@ -46,8 +46,21 @@ export function isRegexStartInText(text: string, index: number, start: number): 
   return '(,=:[&|?{};+-*%<>~^'.includes(previous);
 }
 
+/** Options for {@link Lexer}. */
+export interface LexerOptions {
+  /**
+   * Keep comments as `COMMENT` tokens and give every token its source offsets
+   * (`start`, `end`), for tools that reproduce the source, such as the
+   * formatter. Comments never influence the other tokens.
+   */
+  comments?: boolean;
+}
+
 export class Lexer {
   private readonly input: string;
+  private readonly keepComments: boolean;
+  /** Offset where the token being read starts (comment mode). */
+  private tokenStart = 0;
   private position: number = 0;
   private line: number = 1;
   private column: number = 1;
@@ -167,9 +180,10 @@ export class Lexer {
     '0': '\0',
   };
 
-  constructor(input: string) {
+  constructor(input: string, options: LexerOptions = {}) {
     // Remove BOM if present
     this.input = input.codePointAt(0) === 0xfeff ? input.slice(1) : input;
+    this.keepComments = options.comments === true;
   }
 
   tokenize(): Token[] {
@@ -181,17 +195,26 @@ export class Lexer {
     }
 
     while (!this.isAtEnd()) {
-      const token = this.nextToken();
+      const token = this.keepComments ? this.nextTokenOrComment() : this.nextToken();
       if (token.type !== TokenType.WHITESPACE) {
+        if (this.keepComments) {
+          token.start = this.tokenStart;
+          token.end = this.position;
+        }
         tokens.push(token);
-        if (token.type !== TokenType.NEWLINE) {
+        if (token.type !== TokenType.NEWLINE && token.type !== TokenType.COMMENT) {
           this.trackRegexContext(token);
           this.previousTokenEndLine = this.line;
         }
       }
     }
 
-    tokens.push(this.createToken(TokenType.EOF, ''));
+    const eof = this.createToken(TokenType.EOF, '');
+    if (this.keepComments) {
+      eof.start = this.position;
+      eof.end = this.position;
+    }
+    tokens.push(eof);
     return tokens;
   }
 
@@ -572,6 +595,13 @@ export class Lexer {
     }
     this.advance();
     return this.createToken(TokenType.QUESTION, '?', startLine, startColumn);
+  }
+
+  /** Comment mode: the next token, which may be a comment. */
+  private nextTokenOrComment(): Token {
+    this.skipWhitespace();
+    this.tokenStart = this.position;
+    return this.isAtCommentStart() ? this.readComment() : this.nextToken();
   }
 
   private nextToken(): Token {
@@ -1051,9 +1081,31 @@ export class Lexer {
     }
   }
 
+  private isAtCommentStart(): boolean {
+    return this.currentChar() === '/' && (this.peek() === '/' || this.peek() === '*');
+  }
+
+  /** A comment as a `COMMENT` token whose value is its source text (comment mode). */
+  private readComment(): Token {
+    const line = this.line;
+    const column = this.column;
+    const start = this.position;
+    if (this.peek() === '/') {
+      this.skipLineComment();
+    } else {
+      this.skipBlockComment();
+    }
+    return this.createToken(
+      TokenType.COMMENT,
+      this.input.slice(start, this.position),
+      line,
+      column
+    );
+  }
+
   private skipWhitespaceAndComments(): void {
     this.skipWhitespace();
-    while (this.currentChar() === '/' && (this.peek() === '/' || this.peek() === '*')) {
+    while (this.isAtCommentStart()) {
       if (this.peek() === '/') {
         this.skipLineComment();
       } else {

@@ -149,6 +149,14 @@ interface MemberName {
 /** Raised when input nests deeper than the parser supports; aborts the parse. */
 class NestingError extends Error {}
 
+/** A statement or member terminator `;` that the source left out (see `consumeSemicolon`). */
+export interface OmittedSemicolon {
+  /** The token before which the `;` belongs. */
+  before: Token;
+  /** True for the separator after an interface or object-type member. */
+  member: boolean;
+}
+
 export class Parser {
   private tokens: Token[];
   private current: number = 0;
@@ -168,6 +176,8 @@ export class Parser {
    * functions and methods have no bodies and constants no initializers.
    */
   private ambient = false;
+  /** Terminators the source left out, in source order (used by the formatter). */
+  readonly omittedSemicolons: OmittedSemicolon[] = [];
 
   constructor(tokens: Token[]) {
     // Line breaks are insignificant: statements end with ';', so expressions
@@ -962,7 +972,7 @@ export class Parser {
     const test = this.expression();
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after do-while condition");
     // As in JavaScript, the ';' after the condition may be left out
-    this.match(TokenType.SEMICOLON);
+    if (!this.match(TokenType.SEMICOLON)) this.noteOmittedSemicolon();
 
     return {
       type: 'DoWhileStatement',
@@ -1564,12 +1574,14 @@ export class Parser {
   private speculate<T>(parse: () => T): T | null {
     const savedIndex = this.current;
     const savedErrors = this.errors.length;
+    const savedOmitted = this.omittedSemicolons.length;
     try {
       return parse();
     } catch (error) {
       if (this.isNestingError(error)) throw error;
       this.current = savedIndex;
       this.errors.length = savedErrors;
+      this.omittedSemicolons.length = savedOmitted;
       return null;
     }
   }
@@ -2458,6 +2470,7 @@ export class Parser {
     const start = this.current;
     const tokens = [...this.tokens];
     const errorCount = this.errors.length;
+    const omittedCount = this.omittedSemicolons.length;
     try {
       this.advance();
       const typeArguments: TypeNode[] = [];
@@ -2472,6 +2485,7 @@ export class Parser {
     this.tokens = tokens;
     this.current = start;
     this.errors.length = errorCount;
+    this.omittedSemicolons.length = omittedCount;
     this.skipGenericTypeArguments();
     return undefined;
   }
@@ -3020,16 +3034,24 @@ export class Parser {
    * Statement terminator. As in JavaScript, ';' may be omitted before '}', at
    * the end of input, or when the next token starts on a new line.
    */
-  private consumeSemicolon(message: string): void {
+  private consumeSemicolon(message: string, member = false): void {
     if (this.match(TokenType.SEMICOLON)) return;
-    if (this.check(TokenType.RIGHT_BRACE) || this.isAtEnd() || this.hasLineBreakBefore()) return;
+    if (this.check(TokenType.RIGHT_BRACE) || this.isAtEnd() || this.hasLineBreakBefore()) {
+      this.noteOmittedSemicolon(member);
+      return;
+    }
     throw new Error(this.unexpectedTokenMessage(message));
+  }
+
+  /** Records that the `;` before the current token was left out. */
+  private noteOmittedSemicolon(member = false): void {
+    this.omittedSemicolons.push({ before: this.peek(), member });
   }
 
   /** Separator after an interface or object-type member: ';' or ','. */
   private consumeMemberSeparator(message: string): void {
     if (this.match(TokenType.COMMA)) return;
-    this.consumeSemicolon(message);
+    this.consumeSemicolon(message, true);
   }
 
   /** True when the current token starts on a later line than the previous one ended. */
@@ -4754,6 +4776,7 @@ export class Parser {
     const start = this.current;
     const tokens = [...this.tokens];
     const errorCount = this.errors.length;
+    const omittedCount = this.omittedSemicolons.length;
     try {
       const typeParameters = this.parseTypeParameters();
       if (this.errors.length === errorCount) return typeParameters;
@@ -4763,6 +4786,7 @@ export class Parser {
     this.tokens = tokens;
     this.current = start;
     this.errors.length = errorCount;
+    this.omittedSemicolons.length = omittedCount;
     this.skipGenericTypeArguments();
     return undefined;
   }
@@ -5877,7 +5901,7 @@ export class Parser {
     }
 
     // Optional semicolon after property declaration
-    this.match(TokenType.SEMICOLON);
+    if (!this.match(TokenType.SEMICOLON)) this.noteOmittedSemicolon();
 
     return {
       type: 'PropertyDefinition',
