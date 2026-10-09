@@ -8,12 +8,14 @@ const baseConfig = {
 
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json'],
+  // The suite covers 99.9% of lines and 99.5% of branches (on Linux); the margin
+  // leaves room for the few paths that differ by platform
   coverageThreshold: {
     global: {
-      branches: 55,
-      functions: 75,
-      lines: 68,
-      statements: 68,
+      branches: 98,
+      functions: 99,
+      lines: 99,
+      statements: 99,
     },
   },
   testTimeout: 10000,
