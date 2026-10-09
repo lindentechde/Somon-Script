@@ -909,6 +909,8 @@ interface Line {
   trailing?: string;
   /** The trailing comment was aligned with spaces in the source. */
   trailingAligned?: boolean;
+  /** The line starts with a decorator (`@ном`): the next line starts a declaration. */
+  decorator?: boolean;
 }
 
 interface LayoutFrame {
@@ -953,7 +955,7 @@ class Layout {
     const indent = this.indentFor(item, items, index);
     const blankBefore =
       item.nl >= 2 && this.line !== undefined && !this.previous?.opens && item.closes === 0;
-    this.line = { indent, text: '', blankBefore };
+    this.line = { indent, text: '', blankBefore, decorator: item.kind === 'at' };
     this.lines.push(this.line);
     this.write(item, indent * this.indentWidth);
   }
@@ -996,6 +998,7 @@ class Layout {
     const last = this.lastCode;
     if (!last || last.opens || last.caseColon) return false;
     if (last.text === ';' || last.text === ',') return false;
+    if (this.lines[this.lastCodeLine].decorator) return false;
     if (last.text === '}') return last.closesBrace === 'expression';
     return !anchor.startsStatement;
   }
