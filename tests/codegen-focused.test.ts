@@ -4,6 +4,23 @@
  */
 
 import { CodeGenerator } from '../src/codegen';
+import { compile } from '../src/compiler';
+import { Lexer } from '../src/lexer';
+import { Parser } from '../src/parser';
+
+/**
+ * Emitted JavaScript for `lines` of SomonScript. `compile` generates with
+ * position markers (`generateWithMappings`); the plain `generate` path must
+ * produce the very same text.
+ */
+function emitted(lines: string[]): string {
+  const source = lines.join('\n');
+  const result = compile(source, { typeCheck: false });
+  expect(result.errors).toEqual([]);
+  const ast = new Parser(new Lexer(source).tokenize()).parse();
+  expect(new CodeGenerator().generate(ast)).toBe(result.code);
+  return result.code;
+}
 
 describe('CodeGenerator - Core Coverage Tests', () => {
   let generator: CodeGenerator;
@@ -206,6 +223,184 @@ describe('CodeGenerator - Core Coverage Tests', () => {
 
       const result = generator.generate(program);
       expect(typeof result).toBe('string');
+    });
+
+    // Regression: the first statement of a nested block lost one level of
+    // indentation, a single-statement body was not indented at all
+    test('indents every statement of nested statement blocks one level deeper', () => {
+      const code = emitted([
+        'функсия ф(х: рақам): рақам {',
+        '    агар (х > 0) {',
+        '        х++;',
+        '        х++;',
+        '    } вагарна агар (х < 0) {',
+        '        х--;',
+        '        х--;',
+        '    } вагарна {',
+        '        х = 1;',
+        '    }',
+        '    агар (х) бозгашт х;',
+        '    то (х < 10) {',
+        '        х++;',
+        '        агар (х == 5) {',
+        '            шикастан;',
+        '        }',
+        '    }',
+        '    барои (тағ и = 0; и < 2; и++) {',
+        '        собит а = и;',
+        '        х += а;',
+        '    }',
+        '    барои (собит к дар {а: 1}) {',
+        '        чоп.сабт(к);',
+        '        чоп.сабт(к);',
+        '    }',
+        '    барои (собит в аз [1, 2]) чоп.сабт(в);',
+        '    интихоб (х) {',
+        '        ҳолат 1:',
+        '        ҳолат 2:',
+        '            чоп.сабт(1);',
+        '            шикастан;',
+        '        пешфарз:',
+        '            чоп.сабт(2);',
+        '    }',
+        '    кӯшиш {',
+        '        х++;',
+        '        х++;',
+        '    } гирифтан (е) {',
+        '        чоп.сабт(е);',
+        '        чоп.сабт(е);',
+        '    } ниҳоят {',
+        '        чоп.сабт(х);',
+        '        чоп.сабт(х);',
+        '    }',
+        '    {',
+        '        собит б = 1;',
+        '        чоп.сабт(б);',
+        '    }',
+        '    собит г = (а: рақам) => {',
+        '        агар (а) {',
+        '            бозгашт а;',
+        '        }',
+        '        бозгашт 0;',
+        '    };',
+        '    бозгашт х;',
+        '}',
+      ]);
+
+      expect(code).toBe(
+        [
+          'function ф(х) {',
+          '  if (х > 0) {',
+          '    х++;',
+          '    х++;',
+          '  } else if (х < 0) {',
+          '    х--;',
+          '    х--;',
+          '  } else {',
+          '    х = 1;',
+          '  }',
+          '  if (х) {',
+          '    return х;',
+          '  }',
+          '  while (х < 10) {',
+          '    х++;',
+          '    if (х == 5) {',
+          '      break;',
+          '    }',
+          '  }',
+          '  for (let и = 0; и < 2; и++) {',
+          '    const а = и;',
+          '    х += а;',
+          '  }',
+          '  for (const к in {а: 1}) {',
+          '    console.log(к);',
+          '    console.log(к);',
+          '  }',
+          '  for (const в of [1, 2]) {',
+          '    console.log(в);',
+          '  }',
+          '  switch (х) {',
+          '    case 1:',
+          '    case 2:',
+          '      console.log(1);',
+          '      break;',
+          '    default:',
+          '      console.log(2);',
+          '  }',
+          '  try {',
+          '    х++;',
+          '    х++;',
+          '  } catch (е) {',
+          '    console.log(е);',
+          '    console.log(е);',
+          '  } finally {',
+          '    console.log(х);',
+          '    console.log(х);',
+          '  }',
+          '  {',
+          '    const б = 1;',
+          '    console.log(б);',
+          '  }',
+          '  const г = (а) => {',
+          '    if (а) {',
+          '      return а;',
+          '    }',
+          '    return 0;',
+          '  };',
+          '  return х;',
+          '}',
+        ].join('\n')
+      );
+    });
+
+    test('indents class members and namespace bodies one level deeper', () => {
+      const code = emitted([
+        'синф Ҳайвон {',
+        '    ном: сатр;',
+        '    конструктор(ном: сатр) {',
+        '        ин.ном = ном;',
+        '        агар (ном) {',
+        '            чоп.сабт(ном);',
+        '            чоп.сабт(ном);',
+        '        }',
+        '    }',
+        '}',
+        'номфазо Асбоб {',
+        '    содир функсия ё(а: рақам): рақам {',
+        '        агар (а) {',
+        '            бозгашт 1;',
+        '        }',
+        '        бозгашт а;',
+        '    }',
+        '}',
+      ]);
+
+      expect(code).toBe(
+        [
+          'class Ҳайвон {',
+          '  ном;',
+          '  constructor(ном) {',
+          '    this.ном = ном;',
+          '    if (ном) {',
+          '      console.log(ном);',
+          '      console.log(ном);',
+          '    }',
+          '  }',
+          '}',
+          'const Асбоб = (function() {',
+          '  const Асбоб = {};',
+          '  function ё(а) {',
+          '    if (а) {',
+          '      return 1;',
+          '    }',
+          '    return а;',
+          '  }',
+          '  Асбоб.ё = ё;',
+          '  return Асбоб;',
+          '})();',
+          '',
+        ].join('\n')
+      );
     });
   });
 

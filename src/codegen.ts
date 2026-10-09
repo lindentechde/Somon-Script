@@ -339,7 +339,8 @@ export class CodeGenerator {
       case 'FunctionDeclaration':
         return this.generateFunctionDeclaration(node as FunctionDeclaration);
       case 'BlockStatement':
-        return this.generateBlockStatement(node as BlockStatement);
+        // A bare block opens on its own line, at the statement's indentation
+        return this.indent(this.generateBlockStatement(node as BlockStatement));
       case 'ReturnStatement':
         return this.generateReturnStatement(node as ReturnStatement);
       case 'IfStatement':
@@ -462,6 +463,10 @@ export class CodeGenerator {
   }
 
   /**
+   * A block as it follows a header on the same line (`if (…) `, `try `, a
+   * function signature): it starts with `{` itself, its statements one level
+   * deeper than the current indentation and the closing `}` at it.
+   *
    * `scopeNames` are bound in the block's scope (a catch parameter); a function
    * body passes its `paramNames` instead, which it may redeclare as functions.
    */
@@ -494,26 +499,32 @@ export class CodeGenerator {
     return this.indent(`return${argument};`);
   }
 
+  /**
+   * The body of an `if` branch or a loop, emitted after its header: a block
+   * as is, a single statement braced and indented one level deeper.
+   */
+  private generateBody(node: Statement): string {
+    if (node.type === 'BlockStatement') {
+      return this.generateBlockStatement(node as BlockStatement);
+    }
+    this.indentLevel++;
+    const statement = this.generateStatement(node);
+    this.indentLevel--;
+    return statement.length > 0 ? `{\n${statement}\n${this.getIndent()}}` : '{}';
+  }
+
   private generateIfStatement(node: IfStatement): string {
     const test = this.generateExpression(node.test);
-    const consequent = this.generateStatement(node.consequent);
-
-    let result = this.indent(`if (${test}) `);
-
-    if (node.consequent.type === 'BlockStatement') {
-      result += consequent.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${consequent}\n${this.getIndent()}}`;
-    }
+    let result = this.indent(`if (${test}) `) + this.generateBody(node.consequent);
 
     if (node.alternate) {
       result += ' else ';
-      if (node.alternate.type === 'BlockStatement') {
-        result += this.generateStatement(node.alternate).replace(this.getIndent(), '');
-      } else if (node.alternate.type === 'IfStatement') {
-        result += this.generateStatement(node.alternate).replace(this.getIndent(), '');
+      if (node.alternate.type === 'IfStatement') {
+        // `else if` continues this line: drop the nested statement's indentation
+        // (but keep its position marker, which follows the indentation)
+        result += this.generateStatement(node.alternate).slice(this.getIndent().length);
       } else {
-        result += `{\n${this.generateStatement(node.alternate)}\n${this.getIndent()}}`;
+        result += this.generateBody(node.alternate);
       }
     }
 
@@ -522,66 +533,26 @@ export class CodeGenerator {
 
   private generateWhileStatement(node: WhileStatement): string {
     const test = this.generateExpression(node.test);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`while (${test}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`while (${test}) `) + this.generateBody(node.body);
   }
 
   private generateForStatement(node: ForStatement): string {
     const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
     const test = node.test ? this.generateExpression(node.test) : '';
     const update = node.update ? this.generateExpression(node.update) : '';
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${init}; ${test}; ${update}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${init}; ${test}; ${update}) `) + this.generateBody(node.body);
   }
 
   private generateForInStatement(node: ForInStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
     const right = this.generateExpression(node.right);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${left} in ${right}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${left} in ${right}) `) + this.generateBody(node.body);
   }
 
   private generateForOfStatement(node: ForOfStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
     const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${left} of ${right}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${left} of ${right}) `) + this.generateBody(node.body);
   }
 
   private generateExpressionStatement(node: ExpressionStatement): string {
@@ -1413,8 +1384,7 @@ export class CodeGenerator {
   }
 
   private generateTryStatement(node: TryStatement): string {
-    let result =
-      this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
+    let result = this.indent('try ') + this.generateBlockStatement(node.block);
 
     if (node.handler) {
       const param = node.handler.param;
@@ -1423,15 +1393,12 @@ export class CodeGenerator {
       result += param
         ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param, true))}) `
         : ' catch ';
-      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []).replace(
-        this.getIndent(),
-        ''
-      );
+      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []);
     }
 
     if (node.finalizer) {
       result += ' finally ';
-      result += this.generateBlockStatement(node.finalizer).replace(this.getIndent(), '');
+      result += this.generateBlockStatement(node.finalizer);
     }
 
     return result;
@@ -1605,8 +1572,9 @@ export class CodeGenerator {
 
     let classBody = '';
 
-    // Generate class members
+    // Generate class members, one level deeper than the class
     if (node.body && node.body.body) {
+      this.indentLevel++;
       const members = node.body.body
         .map(member => {
           switch (member.type) {
@@ -1619,11 +1587,10 @@ export class CodeGenerator {
           }
         })
         .filter((member: string) => member.length > 0);
+      this.indentLevel--;
 
       if (members.length > 0) {
-        this.indentLevel++;
         classBody = '\n' + members.join('\n') + '\n' + this.getIndent();
-        this.indentLevel--;
       }
     }
 
@@ -1667,21 +1634,19 @@ export class CodeGenerator {
   private generateSwitchStatement(node: SwitchStatement): string {
     const discriminant = this.generateExpression(node.discriminant);
 
+    // Case labels one level deeper than `switch`, their statements two
     this.indentLevel++;
     const cases = node.cases
       .map((switchCase: SwitchCase) => {
-        if (!switchCase.test) {
-          const consequent = switchCase.consequent
-            .map(stmt => this.generateStatement(stmt))
-            .join('\n');
-          return this.indent(`default:\n${consequent}`);
-        } else {
-          const test = this.generateExpression(switchCase.test);
-          const consequent = switchCase.consequent
-            .map(stmt => this.generateStatement(stmt))
-            .join('\n');
-          return this.indent(`case ${test}:\n${consequent}`);
-        }
+        const label = switchCase.test
+          ? `case ${this.generateExpression(switchCase.test)}:`
+          : 'default:';
+        this.indentLevel++;
+        const consequent = switchCase.consequent
+          .map(stmt => this.generateStatement(stmt))
+          .filter(stmt => stmt.length > 0);
+        this.indentLevel--;
+        return [this.indent(label), ...consequent].join('\n');
       })
       .join('\n');
     this.indentLevel--;
