@@ -1,4 +1,6 @@
 import { transformSync, type PluginItem } from '@babel/core';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 
 import { CodeGenerator, type CodeMapping } from './codegen';
@@ -273,6 +275,8 @@ function emitCode(
     experimentalDecorators: options.experimentalDecorators,
     module: options.module,
     topLevelAwait: options.topLevelAwait,
+    isDirectoryImport:
+      options.filePath === undefined ? undefined : directoryImports(options.filePath),
   });
   const generated = generator.generateWithMappings(ast);
   const codegenErrors = generator.getErrors();
@@ -310,6 +314,24 @@ function emitCode(
     sourceMap: options.sourceMap && map ? JSON.stringify(map) : undefined,
     errors,
     warnings,
+  };
+}
+
+/**
+ * Whether a relative specifier of the file at `filePath` names a directory
+ * with an `index.som` (and no `.som` or `.js` file of that name), as the
+ * module system resolves `./м`.
+ */
+function directoryImports(filePath: string): (_specifier: string) => boolean {
+  const directory = path.dirname(path.resolve(filePath));
+  return specifier => {
+    const base = path.resolve(directory, specifier);
+    // The modules the compiled file imports (S8707)
+    return (
+      !fs.existsSync(`${base}.som`) && // NOSONAR
+      !fs.existsSync(`${base}.js`) && // NOSONAR
+      fs.existsSync(path.join(base, 'index.som')) // NOSONAR
+    );
   };
 }
 

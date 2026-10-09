@@ -503,9 +503,9 @@ describe('reported: outside the module system', () => {
 
   afterEach(() => project.remove());
 
-  // src/codegen.ts: `ворид … аз "./lib"` compiles to `require("./lib.js")` also when
-  // ./lib is a directory (lib/index.som), which Node then cannot find. Bundles work.
-  test.failing('compiled module by module, an import of a directory runs', async () => {
+  // src/codegen.ts: `ворид … аз "./lib"` of a directory (lib/index.som) compiles to
+  // `require("./lib/index.js")`, which Node finds; it was `./lib.js`. Bundles work too.
+  test('compiled module by module, an import of a directory runs', async () => {
     project.write({
       'lib/index.som': 'содир собит И = 1;\n',
       'main.som': 'ворид { И } аз "./lib";\nчоп.сабт(И);\n',

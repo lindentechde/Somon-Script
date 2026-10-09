@@ -94,6 +94,14 @@ export interface CodeGeneratorOptions {
    * run the code inside an async function (the REPL). ES modules always allow it.
    */
   topLevelAwait?: boolean;
+  /**
+   * Whether a relative specifier without an extension (`./lib`) names a
+   * directory with an `index.som` rather than a file `lib.som`: its import is
+   * then emitted as `./lib/index.js`, which Node.js finds for `require` and
+   * for ES modules alike. The compiler answers it from the file system when
+   * it knows the file it compiles (`filePath`).
+   */
+  isDirectoryImport?: (_specifier: string) => boolean;
 }
 
 /** Precedence levels of non-binary expressions; binary levels live in `operatorPrecedence`. */
@@ -343,11 +351,13 @@ export class CodeGenerator {
   private readonly experimentalDecorators: boolean;
   /** See `CodeGeneratorOptions.topLevelAwait`. */
   private readonly topLevelAwait: boolean;
+  private readonly isDirectoryImport: ((_specifier: string) => boolean) | undefined;
 
   constructor(options: CodeGeneratorOptions = {}) {
     this.experimentalDecorators = Boolean(options.experimentalDecorators);
     this.topLevelAwait = Boolean(options.topLevelAwait);
     this.module = options.module ?? 'commonjs';
+    this.isDirectoryImport = options.isDirectoryImport;
   }
 
   private static noLowering(): LoweringNeeds {
@@ -1844,8 +1854,13 @@ export class CodeGenerator {
       return `${quote}${specifier.slice(0, -'.som'.length)}.js${quote}`;
     }
     if (/^\.\.?\//.test(specifier) && !/\.(?:[cm]?js|json)$/.test(specifier)) {
-      // For relative imports without extension, add .js
-      return `${quote}${specifier}.js${quote}`;
+      // A relative import without an extension: `./м` → `./м.js`, or `./м/index.js` for a directory
+      // (`./м/` always names a directory)
+      const file =
+        specifier.endsWith('/') || this.isDirectoryImport?.(specifier)
+          ? `${specifier.replace(/\/$/, '')}/index`
+          : specifier;
+      return `${quote}${file}.js${quote}`;
     }
     return source;
   }

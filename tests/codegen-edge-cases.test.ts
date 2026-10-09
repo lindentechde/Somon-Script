@@ -2,7 +2,11 @@
  * The code generator on rarer programs, compiled and run: each case checks
  * the program's output, the generated JavaScript or the error it reports.
  */
+import * as fs from 'fs';
+import * as path from 'path';
+
 import { compile, type CompileOptions } from '../src/compiler';
+import { canonicalTmpDir } from './helpers/paths';
 
 /** Compiles and runs a program; returns what it logged. */
 function run(source: string, options: CompileOptions = {}): string[] {
@@ -31,6 +35,46 @@ describe('codegen: private methods', () => {
     // Two implementations are still an error
     expect(errorsOf('синф К { #м() {} #м() {} }')).toEqual([
       "Code generation error: Identifier '#м' has already been declared at line 1, column 18",
+    ]);
+  });
+});
+
+describe('codegen: imports of directories', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = canonicalTmpDir('somon-codegen-dirs-');
+    fs.mkdirSync(path.join(dir, 'lib'));
+    fs.writeFileSync(path.join(dir, 'lib', 'index.som'), 'содир собит И = 1;\n');
+    fs.writeFileSync(path.join(dir, 'util.som'), 'содир собит У = 2;\n');
+  });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const source =
+    'ворид { И } аз "./lib";\nворид { У } аз "./util";\nворид { Й } аз "./lib/";\nчоп.сабт(И, У, Й);\n';
+  const imports = (options: CompileOptions) =>
+    compile(source, { typeCheck: false, ...options })
+      .code.split('\n')
+      .filter(line => line.includes('./'));
+
+  test('with the file it compiles, `./lib` of lib/index.som is `./lib/index.js`', () => {
+    const filePath = path.join(dir, 'main.som');
+    expect(imports({ filePath })).toEqual([
+      'const __somon_import_0 = require("./lib/index.js");',
+      'const __somon_import_1 = require("./util.js");',
+      'const __somon_import_2 = require("./lib/index.js");',
+    ]);
+    expect(imports({ filePath, module: 'esm' })).toEqual([
+      'import { И } from "./lib/index.js";',
+      'import { У } from "./util.js";',
+      'import { Й } from "./lib/index.js";',
+    ]);
+  });
+
+  test('without it, a relative import without an extension gets `.js`; `./м/` is a directory', () => {
+    expect(imports({})).toEqual([
+      'const __somon_import_0 = require("./lib.js");',
+      'const __somon_import_1 = require("./util.js");',
+      'const __somon_import_2 = require("./lib/index.js");',
     ]);
   });
 });

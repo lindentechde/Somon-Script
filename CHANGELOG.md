@@ -125,6 +125,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Overload signatures of a class method with a computed name (`[к](): беджавоб; [к]() { … }`), which TypeScript accepts, were the parse error "Function implementation is missing"; a computed name matches the same expression.
 * A missing operand at the end of the input (`тағ х =`, `@д`, a template interpolation cut short) was reported as "Unexpected token ''"; it is "Unexpected token end of input", as elsewhere.
 * `compile({ minify: true })` (`somon compile --minify`) applied the Babel configuration of the current directory (`babel.config.json`, `.babelrc`), which could break or change the output; it uses only its own options, as bundles do.
+* An import of a directory (`ворид { И } аз "./lib"` of `lib/index.som`) compiled to `require("./lib.js")`, which Node.js cannot find when modules are compiled one by one (`somon compile`, `ModuleSystem.compile`); it is `./lib/index.js` when the compiler knows the file (`filePath`), and always for `./lib/`.
 
 ## 0.4.0 (2026-10-09)
 
