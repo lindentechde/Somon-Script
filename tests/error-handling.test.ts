@@ -377,3 +377,18 @@ describe('Error Handling Tests', () => {
     });
   });
 });
+
+describe('Compiler: parse errors are fatal', () => {
+  test('compile() emits no code when parsing fails', () => {
+    const result = compile('тағ а = 1;\nчоп.сабт(а б);\nчоп.сабт("ok");');
+    expect(result.code).toBe('');
+    expect(result.errors).toEqual([expect.stringMatching(/^Parse error: .*line 2/)]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  test('also with type checking disabled', () => {
+    const result = compile('тағ а = ;', { typeCheck: false });
+    expect(result.code).toBe('');
+    expect(result.errors).toHaveLength(1);
+  });
+});

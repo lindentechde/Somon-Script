@@ -87,7 +87,7 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
   try {
     const { ast, parserErrors } = parseSource(source);
 
-    if (routeParserErrors(parserErrors, options, errors, warnings)) {
+    if (routeParserErrors(parserErrors, errors)) {
       return { code: '', errors, warnings };
     }
 
@@ -103,24 +103,12 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
 }
 
 /**
- * Parser errors are recoverable diagnostics — `parser.synchronize()` keeps
- * walking and emits a best-effort AST. In the default mode they become
- * warnings so the CLI/audit doesn't treat a partially-parseable example as a
- * hard failure. Strict mode promotes them to fatal errors.
+ * Parser errors are fatal in every mode: the parser skips the statement it
+ * could not parse, so emitting code would silently drop part of the program.
  *
- * Returns true when compilation must stop (strict mode + at least one parser
- * error).
+ * Returns true when compilation must stop (at least one parser error).
  */
-function routeParserErrors(
-  parserErrors: string[],
-  options: CompileOptions,
-  errors: string[],
-  warnings: string[]
-): boolean {
-  if (!options.strict) {
-    warnings.push(...parserErrors);
-    return false;
-  }
+function routeParserErrors(parserErrors: string[], errors: string[]): boolean {
   errors.push(...parserErrors);
   return parserErrors.length > 0;
 }
