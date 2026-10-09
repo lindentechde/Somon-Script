@@ -95,6 +95,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * An absolute import path (`ворид { х } аз "/home/…/лоиҳа/util"`) was used as written: without its extension or naming a directory it failed with `ENOENT`; it now tries the extensions, `index.*` files and `package.json` "main" like a relative import, and a path that names no file is a "Cannot resolve module" error.
 * A package from `node_modules` whose `package.json` "exports" only has an `import` condition (an ES module package) could not be imported ("Package subpath '.' is not exported"), not even into an `esm` bundle or with `run --module esm`; such a subpath now resolves to its ES module.
 * `ModuleResolver.resolve()` returned the whole specifier of a package subpath as `packageName` (`somon resolve pkg/lib/x` printed "Package: pkg/lib/x"); it is the package's name (`pkg`, `@scope/kit`).
+* A `package.json` that is not valid JSON made module resolution fail with JSON's bare message, which does not say which file is broken, and one that is not an object, or has a `main` that is not a string, failed with a `TypeError`; the error names the file (`Invalid package.json …/package.json: …`), and like Node a `main` that is not a string is ignored.
 
 ## 0.4.0 (2026-10-09)
 

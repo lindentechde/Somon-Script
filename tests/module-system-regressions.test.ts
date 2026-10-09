@@ -409,6 +409,32 @@ describe('module system regressions', () => {
       expect(resolver.resolve('plain/lib/y', from).packageName).toBe('plain');
     });
 
+    test('a broken package.json is named in the error', () => {
+      write({
+        'node_modules/broken/package.json': '{ "name": "broken", }',
+        'node_modules/listed/package.json': '["not", "an", "object"]',
+        'lib/package.json': '{ "main": ',
+        'odd/package.json': '{ "main": 5 }',
+        'odd/index.som': '',
+      });
+      const resolver = new ModuleResolver({ baseUrl: root });
+      const from = path.join(root, 'main.som');
+      const brokenJson = path.join(root, 'node_modules', 'broken', 'package.json');
+      expect(() => resolver.resolve('broken', from)).toThrow(
+        `Invalid package.json ${brokenJson}: `
+      );
+      expect(() => resolver.resolve('listed/x', from)).toThrow(
+        `Invalid package.json ${path.join(root, 'node_modules', 'listed', 'package.json')}: it must contain a JSON object`
+      );
+      expect(() => resolver.resolve('./lib', from)).toThrow(
+        `Invalid package.json ${path.join(root, 'lib', 'package.json')}: `
+      );
+      // Like Node, a "main" that is not a string is ignored
+      expect(resolver.resolve('./odd', from).resolvedPath).toBe(
+        path.join(root, 'odd', 'index.som')
+      );
+    });
+
     test('a relative fromFile still searches node_modules', () => {
       const resolver = new ModuleResolver({ baseUrl: root });
       const relativeFrom = path.relative(process.cwd(), path.join(root, 'main.som'));

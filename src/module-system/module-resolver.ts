@@ -196,8 +196,7 @@ export class ModuleResolver {
     if (!fs.existsSync(packageJsonPath)) {
       return null;
     }
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    const exportsField: unknown = packageJson.exports;
+    const exportsField = this.readPackageJson(packageJsonPath).exports;
     if (exportsField === undefined || exportsField === null) {
       return null;
     }
@@ -367,21 +366,36 @@ export class ModuleResolver {
       return null;
     }
 
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    if (packageJson.main) {
-      const mainPath = path.resolve(targetPath, packageJson.main);
+    // Like Node, a "main" that is not a string is ignored
+    const { main } = this.readPackageJson(packageJsonPath);
+    if (typeof main === 'string' && main.length > 0) {
+      const mainPath = path.resolve(targetPath, main);
       // Confine package main to its own directory — reject "main": "../../etc/passwd"
       if (!this.isInsideDir(mainPath, targetPath)) {
-        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+        throw new Error(`package.json 'main' field escapes package directory: ${main}`);
       }
       const resolved = this.resolveFile(mainPath, isExternal, packageName);
       if (!this.isInsideDir(resolved.resolvedPath, targetPath)) {
-        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+        throw new Error(`package.json 'main' field escapes package directory: ${main}`);
       }
       return resolved;
     }
 
     return null;
+  }
+
+  /** The fields of a package.json; an unreadable file is an error that names it. */
+  private readPackageJson(packageJsonPath: string): { main?: unknown; exports?: unknown } {
+    let packageJson: unknown;
+    try {
+      packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    } catch (error) {
+      throw new Error(`Invalid package.json ${packageJsonPath}: ${(error as Error).message}`);
+    }
+    if (typeof packageJson !== 'object' || packageJson === null || Array.isArray(packageJson)) {
+      throw new Error(`Invalid package.json ${packageJsonPath}: it must contain a JSON object`);
+    }
+    return packageJson;
   }
 
   private tryIndexFiles(
