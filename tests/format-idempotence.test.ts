@@ -14,11 +14,13 @@ import { format } from '../src/tools/format';
  * idempotent and compile to the same JavaScript.
  */
 const ROOT = path.join(__dirname, '..');
-const SKIPPED = new Set(['node_modules', 'dist', 'coverage', '.git']);
+const SKIPPED = new Set(['node_modules', 'dist', 'coverage']);
 
 function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
-    if (SKIPPED.has(entry.name)) return [];
+    // Hidden directories hold no sources of this repository, only tool state such as
+    // .git or other checkouts of it (.claude/worktrees), which would count twice
+    if (SKIPPED.has(entry.name) || (entry.isDirectory() && entry.name.startsWith('.'))) return [];
     const full = path.join(dir, entry.name);
     return entry.isDirectory() ? walk(full) : [full];
   });
