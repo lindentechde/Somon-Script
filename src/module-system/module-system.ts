@@ -1608,7 +1608,8 @@ export class ModuleSystem {
    * The bundle key of the module that `require(specifier)` loads in `ownerModuleId`,
    * or undefined when it stays a require at run time (externals, packages, Node.js
    * modules, files that are not bundled). Compiled SomonScript requires `./x.js` for
-   * an import of `./x`, so when that is no bundled file, `./x.som` is tried.
+   * an import of `./x`, so when that is no bundled file, `./x.som` and `./x` (a
+   * directory, or a file with another extension such as `.json`) are tried.
    */
   private bundleKeyOf(
     ownerModuleId: string,
@@ -1617,7 +1618,8 @@ export class ModuleSystem {
   ): string | undefined {
     const candidates = [specifier];
     if (/^\.\.?\/.+\.js$/i.test(specifier)) {
-      candidates.push(`${specifier.slice(0, -'.js'.length)}.som`);
+      const withoutExtension = specifier.slice(0, -'.js'.length);
+      candidates.push(`${withoutExtension}.som`, withoutExtension);
     }
     for (const candidate of candidates) {
       if (this.matchesExternal(candidate, context.externals, context.entryPoint)) {

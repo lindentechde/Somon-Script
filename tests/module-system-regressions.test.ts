@@ -127,6 +127,29 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('imports of directories and of files found by their extension', () => {
+    test('are bundled: index files, .json and .js', async () => {
+      write({
+        'lib/index.som': 'содир собит И = 1;\n',
+        'nested/deep/index.js': 'exports.Ч = 2;\n',
+        'data.json': '{ "Д": 3 }\n',
+        'util.js': 'exports.У = 4;\n',
+        'main.som': [
+          'ворид { И } аз "./lib";',
+          'ворид { Ч } аз "./nested/deep";',
+          'ворид { Д } аз "./data";',
+          'ворид { У } аз "./util";',
+          'чоп.сабт(И, Ч, Д, У);',
+        ].join('\n'),
+      });
+      const ms = createSystem();
+      const bundle = await ms.bundle({ entryPoint: path.join(root, 'main.som') });
+      // Every import is a module of the bundle, none is left to the run time
+      expect(bundle.code).not.toMatch(/require\("\.\//);
+      expect(await bundleAndRun('main.som', { ms })).toBe('1 2 3 4');
+    });
+  });
+
   describe('deep relative imports', () => {
     test.each([2, 3, 4, 5])('import climbing %i directories works at runtime', async depth => {
       const dirs = Array.from({ length: depth }, (_, i) => `d${i}`);

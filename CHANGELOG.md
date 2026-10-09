@@ -101,6 +101,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon bundle --minify` and `somon run --minify` minified the bundle with the `babel.config.json` of the current directory, applying the project's presets and plugins to it (and failing when they were not installed); bundles are minified the same way in every project.
 * `ModuleSystem.compile()`/`bundle()` treated their entry point as an import specifier: a relative entry (`compile("src/main.som")`) failed with "Module not found", and an absolute entry outside `baseUrl` whose path has no known system prefix (`/private/var/…` on macOS, `/workspaces/…`, `/srv/…`) was resolved inside `baseUrl` instead. The entry is a file path, relative to the current directory.
 * Bundles took text that only looks like a require for one: a string such as `"use require(x)"` in a `.som` module failed the bundle ("Dynamic require expressions are not supported"), `"require('./a')"` in a string was rewritten (breaking the string, or the bundle's syntax), and `// require('./x')` in a comment of a local `.js` file became an import of an `esm` bundle (which then failed to load) and made `iife` bundles fail. Requires are found in the syntax tree; modules larger than 10 MiB can be bundled too.
+* A bundle (also `somon run`) that imported a directory (`ворид … аз "./lib"` for `lib/index.som`) or a file found by another extension (`"./data"` for `data.json`) failed at run time with "Cannot find module './lib.js'"; such modules are bundled.
 
 ## 0.4.0 (2026-10-09)
 
