@@ -3,7 +3,7 @@
 
 export { ModuleResolver } from './module-resolver';
 export type { ModuleResolutionOptions, ResolvedModule } from './module-resolver';
-export { ModuleLoader } from './module-loader';
+export { ModuleLoader, ModuleLoadError } from './module-loader';
 export type { LoadedModule, ModuleExports, ModuleLoadOptions } from './module-loader';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleMetadata, ModuleImports, DependencyNode } from './module-registry';
@@ -12,6 +12,7 @@ export type {
   ModuleSystemOptions,
   CompiledModule,
   CompilationResult,
+  CompilationError,
   BundleOptions,
   BundleOutput,
   ModuleSystemWatchOptions,

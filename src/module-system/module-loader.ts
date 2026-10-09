@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
-import { Program, ImportDeclaration } from '../types';
+import { Program, ImportDeclaration, ExportDeclaration } from '../types';
 import { moduleLoaderLogger as logger } from './logger';
 
 type BufferEncoding =
@@ -24,11 +24,19 @@ export interface LoadedModule {
   resolvedPath: string;
   source: string;
   ast: Program;
+  /** Raw import specifiers as written in the source (e.g. "./utils") */
   dependencies: string[];
+  /** Module ids the loader resolved each entry of `dependencies` to (same order) */
+  resolvedDependencies?: string[];
+  /** True for modules resolved from a module directory such as node_modules */
+  isExternalLibrary?: boolean;
   exports: ModuleExports;
   isLoaded: boolean;
   isLoading: boolean;
   lastAccessed: number; // Timestamp for LRU eviction
+  /** File stats at load time, used to detect stale cache entries */
+  mtimeMs?: number;
+  size?: number;
   error?: Error;
 }
 
@@ -46,6 +54,50 @@ export interface ModuleLoadOptions {
   maxCacheSize?: number; // Maximum number of cached modules
   maxCacheMemory?: number; // Maximum memory usage in bytes
 }
+
+/**
+ * Error raised while loading a module graph. `filePath` is the file the problem is in
+ * (the module that failed to parse, or the importer whose specifier could not be loaded);
+ * `importer` and `specifier` describe the import that led to it.
+ */
+export class ModuleLoadError extends Error {
+  readonly filePath: string;
+  importer?: string;
+  specifier?: string;
+  readonly line?: number;
+  readonly column?: number;
+
+  constructor(
+    message: string,
+    details: {
+      filePath: string;
+      importer?: string;
+      specifier?: string;
+      line?: number;
+      column?: number;
+      cause?: unknown;
+    }
+  ) {
+    super(message);
+    this.name = 'ModuleLoadError';
+    this.filePath = details.filePath;
+    this.importer = details.importer;
+    this.specifier = details.specifier;
+    this.line = details.line;
+    this.column = details.column;
+    if (details.cause !== undefined) {
+      (this as { cause?: unknown }).cause = details.cause;
+    }
+  }
+}
+
+interface DependencyReference {
+  specifier: string;
+  line?: number;
+  column?: number;
+}
+
+const MAX_SPECIFIER_LENGTH = 500;
 
 export class ModuleLoader {
   private readonly resolver: ModuleResolver;
@@ -75,42 +127,23 @@ export class ModuleLoader {
    */
   async load(specifier: string, fromFile: string): Promise<LoadedModule> {
     logger.debug('Loading module', { specifier, fromFile });
-
-    const externalMatch = this.matchExternal(specifier);
-    if (externalMatch) {
-      return this.getOrCreateExternalModule(specifier, externalMatch);
-    }
-
-    const resolved = this.resolver.resolve(specifier, fromFile);
-    const moduleId = this.getModuleId(resolved.resolvedPath);
-
-    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
-    if (cached?.isLoaded) {
-      cached.lastAccessed = Date.now();
-      return cached;
-    }
-    if (cached?.isLoading) {
-      logger.warn('Circular dependency detected during load', { moduleId });
-      return this.handleCircularDependency(moduleId, cached);
-    }
-
-    if (this.loadingStack.has(moduleId)) {
-      logger.warn('Circular dependency in loading stack', { moduleId });
-      return this.handleCircularDependency(moduleId);
-    }
-
-    try {
-      return await this.loadModule(resolved, moduleId);
-    } catch (error) {
-      logger.error('Module load failed', error, { moduleId, specifier });
-      throw error;
-    }
+    return this.loadSync(specifier, fromFile);
   }
 
   /**
    * Load module synchronously
    */
   loadSync(specifier: string, fromFile: string): LoadedModule {
+    const isTopLevel = this.loadingStack.size === 0;
+    const module = this.loadSyncInternal(specifier, fromFile);
+    if (isTopLevel) {
+      // Enforce limits only between builds, never evicting what this build needs
+      this.enforceCacheLimits(this.collectDependencyClosure(module.id));
+    }
+    return module;
+  }
+
+  private loadSyncInternal(specifier: string, fromFile: string): LoadedModule {
     const externalMatch = this.matchExternal(specifier);
     if (externalMatch) {
       return this.getOrCreateExternalModule(specifier, externalMatch);
@@ -119,13 +152,14 @@ export class ModuleLoader {
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
 
-    // Atomic cache check - single operation to avoid race conditions
     const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
     if (cached?.isLoaded) {
-      cached.lastAccessed = Date.now();
-      return cached;
-    }
-    if (cached?.isLoading) {
+      if (this.isFresh(cached)) {
+        cached.lastAccessed = Date.now();
+        return cached;
+      }
+      this.evictModule(moduleId);
+    } else if (cached?.isLoading) {
       return this.handleCircularDependency(moduleId, cached);
     }
 
@@ -137,19 +171,7 @@ export class ModuleLoader {
     return this.loadModuleSync(resolved, moduleId);
   }
 
-  private async loadModule(resolved: ResolvedModule, moduleId: string): Promise<LoadedModule> {
-    try {
-      return this.loadModuleSync(resolved, moduleId);
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(String(error));
-    }
-  }
-
   private loadModuleSync(resolved: ResolvedModule, moduleId: string): LoadedModule {
-    // Synchronous version of loadModule for backward compatibility
     const module: LoadedModule = {
       id: moduleId,
       resolvedPath: resolved.resolvedPath,
@@ -161,6 +183,8 @@ export class ModuleLoader {
         column: 1,
       } as Program,
       dependencies: [],
+      resolvedDependencies: [],
+      isExternalLibrary: resolved.isExternalLibrary,
       exports: { named: {} },
       isLoaded: false,
       isLoading: true,
@@ -169,66 +193,172 @@ export class ModuleLoader {
 
     // Add to loading stack first to detect circular dependencies early
     this.loadingStack.add(moduleId);
-    let moduleAddedToCache = false;
 
     try {
-      // Add to cache only after loading stack is set
       if (this.options.cache) {
         this.moduleCache.set(moduleId, module);
-        moduleAddedToCache = true;
       }
 
-      // Read source file
+      const stat = fs.statSync(resolved.resolvedPath);
+      module.mtimeMs = stat.mtimeMs;
+      module.size = stat.size;
       module.source = fs.readFileSync(resolved.resolvedPath, {
         encoding: this.options.encoding,
       });
 
-      // Parse only if it's a SomonScript file
-      if (resolved.extension === '.som') {
-        const lexer = new Lexer(module.source);
-        const tokens = lexer.tokenize();
-        const parser = new Parser(tokens);
-        module.ast = parser.parse();
+      const references = this.readDependencies(module, resolved);
+      module.dependencies = references.map(ref => ref.specifier);
 
-        // If parsing produced errors, surface them as a load error
-        const parseErrors = parser.getErrors();
-        if (parseErrors.length > 0) {
-          throw new Error(`Parse error(s) in ${resolved.resolvedPath}: ${parseErrors[0]}`);
+      // Load dependencies recursively, recording the id each specifier resolved to
+      for (const ref of references) {
+        let dependency: LoadedModule;
+        try {
+          dependency = this.loadSyncInternal(ref.specifier, resolved.resolvedPath);
+        } catch (error) {
+          throw this.attributeDependencyError(error, ref, resolved.resolvedPath);
         }
-
-        // Extract dependency specifiers (raw, e.g. "./utils")
-        module.dependencies = this.extractDependencies(module.ast);
-
-        // Load dependencies recursively (keep original specifiers in metadata)
-        for (const dep of module.dependencies) {
-          this.loadSync(dep, resolved.resolvedPath);
-        }
+        module.resolvedDependencies!.push(dependency.id);
       }
 
-      // Mark as loaded successfully
       module.isLoaded = true;
       module.isLoading = false;
 
-      // Update memory usage tracking and enforce cache limits
-      if (this.options.cache && moduleAddedToCache) {
+      if (this.options.cache) {
         this.currentMemoryUsage += this.estimateModuleSize(module);
-        this.enforceCacheLimits();
       }
 
       return module;
     } catch (error) {
-      // Handle loading/parsing errors with proper cleanup
-      module.error = error as Error;
+      // Keep module in cache with error state so callers can inspect broken dependencies
       module.isLoading = false;
-
-      // Keep module in cache with error state for validation purposes
-      // Don't delete from cache - let the registry validate broken dependencies
-
-      throw error;
+      const loadError =
+        error instanceof ModuleLoadError
+          ? error
+          : new ModuleLoadError(error instanceof Error ? error.message : String(error), {
+              filePath: resolved.resolvedPath,
+              cause: error,
+            });
+      module.error = loadError;
+      throw loadError;
     } finally {
-      // Always clean up loading stack
       this.loadingStack.delete(moduleId);
     }
+  }
+
+  /**
+   * Parse the module (when it is SomonScript) and return the imports it depends on.
+   * Local JavaScript files contribute their static relative `require()` calls so they
+   * can be bundled; JSON files are validated here so errors point at the JSON file.
+   */
+  private readDependencies(module: LoadedModule, resolved: ResolvedModule): DependencyReference[] {
+    const filePath = resolved.resolvedPath;
+
+    if (resolved.extension === '.som') {
+      let parser: Parser;
+      try {
+        parser = new Parser(new Lexer(module.source).tokenize());
+        module.ast = parser.parse();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${message}`, {
+          filePath,
+          ...this.extractLocation(message),
+          cause: error,
+        });
+      }
+
+      const parseErrors = parser.getErrors();
+      if (parseErrors.length > 0) {
+        throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${parseErrors[0]}`, {
+          filePath,
+          ...this.extractLocation(parseErrors[0]),
+        });
+      }
+
+      return this.extractDependencies(module.ast, filePath);
+    }
+
+    if (resolved.extension === '.json') {
+      try {
+        JSON.parse(module.source);
+      } catch (error) {
+        throw new ModuleLoadError(
+          `Invalid JSON in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+          { filePath, cause: error }
+        );
+      }
+      return [];
+    }
+
+    if (resolved.extension === '.js' && !resolved.isExternalLibrary) {
+      return this.extractJsDependencies(module.source);
+    }
+
+    return [];
+  }
+
+  private extractLocation(message: string): { line?: number; column?: number } {
+    const match = /line (\d+)(?:,\s*column (\d+))?/i.exec(message);
+    if (!match) return {};
+    return {
+      line: Number.parseInt(match[1], 10),
+      column: match[2] ? Number.parseInt(match[2], 10) : undefined,
+    };
+  }
+
+  /**
+   * Attribute a failure while loading `ref` from `importer`. Errors that already describe
+   * a broken file keep that file and gain the importing context; anything else (resolution
+   * failures, circular-dependency errors) is reported against the import in the importer.
+   */
+  private attributeDependencyError(
+    error: unknown,
+    ref: DependencyReference,
+    importer: string
+  ): ModuleLoadError {
+    if (error instanceof ModuleLoadError) {
+      if (error.importer === undefined) {
+        error.importer = importer;
+        error.specifier = ref.specifier;
+        if (error.filePath !== importer) {
+          error.message += ` (imported as '${ref.specifier}' from ${importer})`;
+        }
+      }
+      return error;
+    }
+
+    const reason = error instanceof Error ? error.message : String(error);
+    return new ModuleLoadError(`Cannot import '${ref.specifier}' in ${importer}: ${reason}`, {
+      filePath: importer,
+      importer,
+      specifier: ref.specifier,
+      line: ref.line,
+      column: ref.column,
+      cause: error,
+    });
+  }
+
+  private isFresh(module: LoadedModule, seen = new Set<string>()): boolean {
+    if (seen.has(module.id) || module.id.startsWith('external:')) return true;
+    seen.add(module.id);
+
+    try {
+      const stat = fs.statSync(module.resolvedPath);
+      if (stat.mtimeMs !== module.mtimeMs || stat.size !== module.size) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+
+    for (const depId of module.resolvedDependencies ?? []) {
+      const dependency = this.moduleCache.get(depId);
+      if (dependency?.isLoading) continue; // part of the cycle being loaded right now
+      if (!dependency?.isLoaded || !this.isFresh(dependency, seen)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private handleCircularDependency(moduleId: string, module?: LoadedModule): LoadedModule {
@@ -237,17 +367,10 @@ export class ModuleLoader {
 
     switch (this.options.circularDependencyStrategy) {
       case 'error':
-        throw new Error(message);
-      case 'warn': {
-        const warningMessage = `${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`;
-        this.warnings.push(warningMessage);
-        logger.warn('Circular dependency detected', {
-          moduleId,
-          chain,
-          message,
-        });
+        throw new Error(`${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`);
+      case 'warn':
+        this.warnings.push(`${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`);
         break;
-      }
       case 'ignore':
         break;
     }
@@ -260,6 +383,7 @@ export class ModuleLoader {
         source: '',
         ast: { type: 'Program', body: [], line: 1, column: 1 },
         dependencies: [],
+        resolvedDependencies: [],
         exports: { named: {} },
         isLoaded: false,
         isLoading: true,
@@ -269,50 +393,68 @@ export class ModuleLoader {
   }
 
   /**
-   * Extract raw dependency specifiers from AST (e.g., "./utils", "../math")
-   * These need to be resolved to absolute paths before being stored in the dependency graph
+   * Extract raw dependency specifiers (e.g. "./utils", "../math") from imports and
+   * re-exports, with the location of the declaration for error reporting.
    */
-  private extractDependencies(ast: Program): string[] {
-    const rawSpecifiers: string[] = [];
+  private extractDependencies(ast: Program, filePath: string): DependencyReference[] {
+    const references: DependencyReference[] = [];
 
-    // Validate AST input
     if (!ast?.body || !Array.isArray(ast.body)) {
-      return rawSpecifiers;
+      return references;
     }
 
     for (const statement of ast.body) {
-      if (statement?.type === 'ImportDeclaration') {
-        const importDecl = statement as ImportDeclaration;
-
-        // Validate import declaration structure
-        if (!importDecl.source?.value) {
-          continue;
-        }
-
-        const specifier = importDecl.source.value;
-
-        // Validate specifier is string and reasonable length
-        if (typeof specifier !== 'string' || specifier.length === 0 || specifier.length > 500) {
-          continue;
-        }
-
-        // Basic security validation - prevent obvious path traversal attacks
-        const normalizedSpec = specifier.trim();
-        if (normalizedSpec.includes('\\') || normalizedSpec.split('..').length > 5) {
-          logger.warn('Suspicious import specifier detected and skipped', {
-            specifier,
-            normalizedSpec,
-            hasBackslash: normalizedSpec.includes('\\'),
-            dotDotCount: normalizedSpec.split('..').length - 1,
-          });
-          continue;
-        }
-
-        rawSpecifiers.push(normalizedSpec);
+      if (statement?.type !== 'ImportDeclaration' && statement?.type !== 'ExportDeclaration') {
+        continue;
       }
+      const source = (statement as ImportDeclaration | ExportDeclaration).source;
+      if (!source) {
+        continue;
+      }
+
+      const specifier = source.value;
+      const location = { line: statement.line, column: statement.column };
+      const reject = (reason: string): never => {
+        throw new ModuleLoadError(`Invalid import specifier in ${filePath}: ${reason}`, {
+          filePath,
+          specifier: typeof specifier === 'string' ? specifier : undefined,
+          ...location,
+        });
+      };
+
+      if (typeof specifier !== 'string' || specifier.trim().length === 0) {
+        reject('the module specifier must be a non-empty string');
+      }
+      const normalizedSpec = (specifier as string).trim();
+      if (normalizedSpec.length > MAX_SPECIFIER_LENGTH) {
+        reject(
+          `'${normalizedSpec.slice(0, 40)}…' is longer than ${MAX_SPECIFIER_LENGTH} characters`
+        );
+      }
+      if (normalizedSpec.includes('\\')) {
+        reject(`'${normalizedSpec}' contains a backslash; use '/' as the path separator`);
+      }
+
+      references.push({ specifier: normalizedSpec, ...location });
     }
 
-    return rawSpecifiers;
+    return references;
+  }
+
+  /**
+   * Static relative `require('./x')` calls in a local JavaScript file. Bare specifiers are
+   * left to the host `require` at runtime.
+   */
+  private extractJsDependencies(source: string): DependencyReference[] {
+    const references: DependencyReference[] = [];
+    const pattern = /(?<![\w$.])require\s*\(\s*(['"])(\.{1,2}\/[^'"\n\r]*)\1\s*\)/g;
+    for (const match of source.matchAll(pattern)) {
+      const before = source.slice(0, match.index);
+      const line = before.split('\n').length;
+      const column = match.index! - before.lastIndexOf('\n');
+      references.push({ specifier: match[2], line, column });
+    }
+    return references;
   }
 
   private getModuleId(resolvedPath: string): string {
@@ -356,34 +498,80 @@ export class ModuleLoader {
   }
 
   /**
-   * Enforce cache limits by evicting least recently used modules
+   * Evict a module and every cached module that depends on it, directly or
+   * transitively. Returns the ids that were evicted.
    */
-  private enforceCacheLimits(): void {
-    if (!this.options.cache) return;
-
-    // Check size limit
-    if (this.moduleCache.size > this.options.maxCacheSize) {
-      const excess = this.moduleCache.size - this.options.maxCacheSize;
-      const keysToEvict = Array.from(this.moduleCache.keys()).slice(0, excess);
-
-      for (const key of keysToEvict) {
-        this.evictModule(key);
+  invalidate(filePath: string): string[] {
+    const targetId = this.getModuleId(filePath);
+    const dependents = new Map<string, string[]>();
+    for (const module of this.moduleCache.values()) {
+      for (const depId of module.resolvedDependencies ?? []) {
+        const list = dependents.get(depId) ?? [];
+        list.push(module.id);
+        dependents.set(depId, list);
       }
     }
 
-    // Check memory limit
-    if (this.currentMemoryUsage > this.options.maxCacheMemory) {
-      // Evict modules until under memory limit (simple LRU approximation)
-      const sortedEntries = Array.from(this.moduleCache.entries()).sort(
-        (a, b) => a[1].lastAccessed - b[1].lastAccessed
-      );
-
-      for (const [key] of sortedEntries) {
-        this.evictModule(key);
-        if (this.currentMemoryUsage <= this.options.maxCacheMemory * 0.8) {
-          break; // Leave some headroom
+    const evicted: string[] = [];
+    const queue = [targetId];
+    const seen = new Set(queue);
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      if (this.moduleCache.has(id)) {
+        this.evictModule(id);
+        evicted.push(id);
+      }
+      for (const dependent of dependents.get(id) ?? []) {
+        if (!seen.has(dependent)) {
+          seen.add(dependent);
+          queue.push(dependent);
         }
       }
+    }
+    return evicted;
+  }
+
+  /**
+   * Ids of a module and everything it (transitively) depends on.
+   */
+  collectDependencyClosure(moduleId: string): Set<string> {
+    const closure = new Set<string>();
+    const queue = [moduleId];
+    while (queue.length > 0) {
+      const id = queue.pop()!;
+      if (closure.has(id)) continue;
+      closure.add(id);
+      queue.push(...(this.moduleCache.get(id)?.resolvedDependencies ?? []));
+    }
+    return closure;
+  }
+
+  /**
+   * Enforce cache limits by evicting least recently used modules. Modules that are
+   * loading or in `protectedIds` (the current build) are never evicted, so the cache
+   * may temporarily exceed its limits while a large build is in use.
+   */
+  private enforceCacheLimits(protectedIds: Set<string> = new Set()): void {
+    if (!this.options.cache) return;
+    if (
+      this.moduleCache.size <= this.options.maxCacheSize &&
+      this.currentMemoryUsage <= this.options.maxCacheMemory
+    ) {
+      return;
+    }
+
+    const candidates = Array.from(this.moduleCache.values())
+      .filter(module => !protectedIds.has(module.id) && !this.loadingStack.has(module.id))
+      .sort((a, b) => a.lastAccessed - b.lastAccessed);
+
+    const memoryTarget = this.options.maxCacheMemory * 0.8; // Leave some headroom
+    let memoryExceeded = this.currentMemoryUsage > this.options.maxCacheMemory;
+    for (const module of candidates) {
+      if (this.moduleCache.size <= this.options.maxCacheSize && !memoryExceeded) {
+        break;
+      }
+      this.evictModule(module.id);
+      memoryExceeded = memoryExceeded && this.currentMemoryUsage > memoryTarget;
     }
   }
 
@@ -393,7 +581,9 @@ export class ModuleLoader {
   private evictModule(moduleId: string): void {
     const module = this.moduleCache.get(moduleId);
     if (module) {
-      this.currentMemoryUsage -= this.estimateModuleSize(module);
+      if (module.isLoaded) {
+        this.currentMemoryUsage -= this.estimateModuleSize(module);
+      }
       this.moduleCache.delete(moduleId);
     }
   }
@@ -503,7 +693,6 @@ export class ModuleLoader {
     if (this.options.cache) {
       this.moduleCache.set(moduleId, module);
       this.currentMemoryUsage += this.estimateModuleSize(module);
-      this.enforceCacheLimits();
     }
 
     return module;
@@ -511,6 +700,10 @@ export class ModuleLoader {
 
   private getExternalModuleId(specifier: string): string {
     return `external:${specifier}`;
+  }
+
+  getCircularDependencyStrategy(): 'error' | 'warn' | 'ignore' {
+    return this.options.circularDependencyStrategy;
   }
 
   /**

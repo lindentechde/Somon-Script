@@ -3,7 +3,7 @@ import type { FSWatcher, WatchOptions } from 'chokidar';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
-import { ModuleLoader, ModuleLoadOptions, LoadedModule } from './module-loader';
+import { ModuleLoader, ModuleLoadOptions, LoadedModule, ModuleLoadError } from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
@@ -40,9 +40,13 @@ export interface CompiledModule {
 
 export interface CompilationError {
   message: string;
+  /** File the error is in */
   filePath: string;
   line?: number;
   column?: number;
+  /** For module loading errors: the file whose import led to `filePath`, and the specifier */
+  importer?: string;
+  specifier?: string;
   suggestion?: string;
   originalError?: Error;
 }
@@ -143,7 +147,20 @@ export class ModuleSystem {
     filePath: string,
     originalError?: Error
   ): CompilationError {
-    // Try to extract line and column from error message
+    if (originalError instanceof ModuleLoadError) {
+      return {
+        message,
+        filePath: originalError.filePath,
+        line: originalError.line,
+        column: originalError.column,
+        importer: originalError.importer,
+        specifier: originalError.specifier,
+        suggestion: this.getSuggestionForError(message, originalError.filePath),
+        originalError,
+      };
+    }
+
+    // Compiler diagnostics are strings; take the line and column from the message
     const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
     const line = lineColMatch?.[1] ? Number.parseInt(lineColMatch[1], 10) : undefined;
     const column = lineColMatch?.[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
@@ -410,21 +427,36 @@ export class ModuleSystem {
     }
   }
 
-  private collectLoaderWarnings(warnings: string[]): void {
-    const loaderWarnings = this.loader.getWarnings();
-    if (loaderWarnings.length > 0) {
-      warnings.push(...loaderWarnings);
-      this.loader.clearWarnings();
+  /**
+   * Report cycles among the modules of the current build according to
+   * `circularDependencyStrategy`. Returns false when the build must fail.
+   */
+  private checkCircularDependencies(
+    buildIds: Set<string>,
+    warnings: string[],
+    errors: CompilationError[]
+  ): boolean {
+    const strategy = this.loader.getCircularDependencyStrategy();
+    if (strategy === 'ignore') {
+      return true;
     }
-  }
 
-  private checkCircularDependencies(warnings: string[]): void {
-    const circularDeps = this.registry.findCircularDependencies();
-    if (circularDeps.length > 0) {
-      warnings.push(
-        `Circular dependencies detected: ${circularDeps.map(cycle => cycle.join(' -> ')).join(', ')}`
-      );
+    const cycles = this.registry
+      .findCircularDependencies()
+      .filter(cycle => cycle.every(id => buildIds.has(id)));
+    if (cycles.length === 0) {
+      return true;
     }
+
+    const description = cycles.map(cycle => cycle.join(' -> ')).join(', ');
+    if (strategy === 'error') {
+      errors.push(
+        this.createCompilationError(`Circular dependency detected: ${description}`, cycles[0][0])
+      );
+      return false;
+    }
+    warnings.push(`Circular dependencies detected: ${description}`);
+    return true;
   }
 
   private compileModulesInOrder(
@@ -436,7 +468,24 @@ export class ModuleSystem {
   ): void {
     for (const moduleId of compilationOrder) {
       const module = this.loader.getModule(moduleId);
-      if (!module?.resolvedPath.endsWith('.som')) {
+      if (!module || moduleId.startsWith('external:') || module.isExternalLibrary) {
+        // Packages from module directories stay host requires
+        continue;
+      }
+
+      const extension = path.extname(module.resolvedPath);
+      if (extension === '.js') {
+        // Local JavaScript is bundled verbatim; its requires are rewritten when bundling
+        modules.set(moduleId, { code: module.source });
+        continue;
+      }
+      if (extension === '.json') {
+        modules.set(moduleId, {
+          code: `module.exports = ${JSON.stringify(JSON.parse(module.source))};`,
+        });
+        continue;
+      }
+      if (extension !== '.som') {
         continue;
       }
 
@@ -456,20 +505,14 @@ export class ModuleSystem {
     entryPoint: string,
     errors: CompilationError[]
   ): void {
-    const loadError = this.createCompilationError(
-      `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`,
-      entryPoint,
-      error instanceof Error ? error : undefined
+    // Errors inside the module graph already name the failing file and import
+    const message =
+      error instanceof ModuleLoadError
+        ? error.message
+        : `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`;
+    errors.push(
+      this.createCompilationError(message, entryPoint, error instanceof Error ? error : undefined)
     );
-    errors.push(loadError);
-
-    if (this.logger) {
-      this.logger.error('Entry point loading failed', {
-        file: loadError.filePath,
-        message: loadError.message,
-        suggestion: loadError.suggestion,
-      });
-    }
   }
 
   private async cleanupOnCompilationFailure(): Promise<void> {
@@ -500,11 +543,18 @@ export class ModuleSystem {
 
     try {
       const entryModule = await this.loader.load(entryPoint, path.dirname(entryPoint));
-      this.collectLoaderWarnings(warnings);
+      // The loader's cycle warnings depend on load order and cache state; cycles are
+      // reported once, from the module graph, by checkCircularDependencies().
+      this.loader.clearWarnings();
       this.registerAllLoadedModules();
 
-      const compilationOrder = this.registry.getTopologicalSort();
-      this.checkCircularDependencies(warnings);
+      const buildIds = this.loader.collectDependencyClosure(entryModule.id);
+      const compilationOrder = this.registry
+        .getTopologicalSort()
+        .filter(moduleId => buildIds.has(moduleId));
+      if (!this.checkCircularDependencies(buildIds, warnings, errors)) {
+        return { modules, entryPoint: entryModule.id, dependencies: [], errors, warnings };
+      }
 
       const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
       this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, warnings);
@@ -582,15 +632,6 @@ export class ModuleSystem {
 
       const errorMessage = `Bundle process failed with ${compilationResult.errors.length} error(s):\n\n${errorDetails}${warningInfo}`;
 
-      if (this.logger) {
-        this.logger.error('Bundle compilation failed', {
-          entryPoint: options.entryPoint,
-          errorCount: compilationResult.errors.length,
-          warningCount: compilationResult.warnings.length,
-          errors: compilationResult.errors,
-        });
-      }
-
       // Stop bundling immediately - no partial bundles on errors
       throw new Error(errorMessage);
     }
@@ -608,14 +649,6 @@ export class ModuleSystem {
       return await this.generateCommonJSBundle(compilationResult, options);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      if (this.logger) {
-        this.logger.error('Bundle generation failed', {
-          entryPoint: options.entryPoint,
-          format: options.format,
-          error: message,
-        });
-      }
 
       // Fail fast on bundle generation errors
       throw new Error(`Failed to generate bundle: ${message}`);
@@ -671,6 +704,18 @@ export class ModuleSystem {
   clearCache(): void {
     this.loader.clearCache();
     this.registry.clear();
+  }
+
+  /**
+   * Drop a changed file and every module that (transitively) imports it from the
+   * caches, so the next compile/bundle re-reads them. Returns the evicted module ids.
+   */
+  invalidate(filePath: string): string[] {
+    const evicted = this.loader.invalidate(filePath);
+    for (const moduleId of evicted) {
+      this.registry.remove(moduleId);
+    }
+    return evicted;
   }
 
   /**
@@ -739,17 +784,21 @@ export class ModuleSystem {
     ];
 
     watcher.on('all', (event: string, changedPath: string) => {
-      if (!options.onChange) {
-        return;
-      }
-
       if (!supportedEvents.includes(event as ModuleWatchEventType)) {
         return;
       }
 
-      options.onChange({
+      const filePath = path.resolve(changedPath);
+      if (event === 'change' || event === 'unlink') {
+        this.invalidate(filePath);
+      } else {
+        // A new file or directory can change how existing specifiers resolve
+        this.clearCache();
+      }
+
+      options.onChange?.({
         type: event as ModuleWatchEventType,
-        filePath: path.resolve(changedPath),
+        filePath,
       });
     });
 
@@ -982,7 +1031,7 @@ export class ModuleSystem {
 
       this.appendToBuilder(
         bundleBuilder,
-        `  '${module.key}': function(module, exports, require) {\n`
+        `  ${JSON.stringify(module.key)}: function(module, exports, require) {\n`
       );
       const moduleStartLine = bundleBuilder.line;
       this.appendToBuilder(bundleBuilder, module.code);
@@ -1076,7 +1125,7 @@ export class ModuleSystem {
 
     this.appendToBuilder(
       bundleBuilder,
-      `  // Start with entry point and expose its exports\n  var entryModule = _require('${entryKey}');\n\n`
+      `  // Start with entry point and expose its exports\n  var entryModule = _require(${JSON.stringify(entryKey)});\n\n`
     );
 
     this.appendToBuilder(
@@ -1093,10 +1142,7 @@ export class ModuleSystem {
     );
   }
 
-  private generateBundleSourceMap(
-    generator: SourceMapGenerator | null,
-    entryPoint: string
-  ): RawSourceMap | undefined {
+  private generateBundleSourceMap(generator: SourceMapGenerator | null): RawSourceMap | undefined {
     if (!generator) {
       return undefined;
     }
@@ -1107,14 +1153,6 @@ export class ModuleSystem {
       return rawMap;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      if (this.logger) {
-        this.logger.error('Failed to generate bundle source map', {
-          entryPoint,
-          error: message,
-        });
-      }
-
       throw new Error(`Source map generation failed: ${message}`);
     }
   }
@@ -1122,8 +1160,7 @@ export class ModuleSystem {
   private async applyMinification(
     bundleBuilder: { code: string; line: number },
     rawMap: RawSourceMap | undefined,
-    options: BundleOptions,
-    entryPoint: string
+    options: BundleOptions
   ): Promise<RawSourceMap | undefined> {
     if (!options.minify) {
       return rawMap;
@@ -1141,22 +1178,11 @@ export class ModuleSystem {
       return minifiedMap;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      if (this.logger) {
-        this.logger.error('Minification failed', {
-          entryPoint,
-          error: message,
-        });
-      }
-
       throw new Error(`Minification failed: ${message}`);
     }
   }
 
-  private serializeBundleSourceMap(
-    rawMap: RawSourceMap | undefined,
-    entryPoint: string
-  ): string | undefined {
+  private serializeBundleSourceMap(rawMap: RawSourceMap | undefined): string | undefined {
     if (!rawMap) {
       return undefined;
     }
@@ -1165,14 +1191,6 @@ export class ModuleSystem {
       return JSON.stringify(rawMap);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      if (this.logger) {
-        this.logger.error('Failed to serialize source map', {
-          entryPoint,
-          error: message,
-        });
-      }
-
       throw new Error(`Failed to serialize source map: ${message}`);
     }
   }
@@ -1207,9 +1225,9 @@ export class ModuleSystem {
 
     this.addBundleRuntimeCode(bundleBuilder, entryKey);
 
-    let rawMap = this.generateBundleSourceMap(generator, result.entryPoint);
-    rawMap = await this.applyMinification(bundleBuilder, rawMap, options, result.entryPoint);
-    const serializedMap = this.serializeBundleSourceMap(rawMap, result.entryPoint);
+    let rawMap = this.generateBundleSourceMap(generator);
+    rawMap = await this.applyMinification(bundleBuilder, rawMap, options);
+    const serializedMap = this.serializeBundleSourceMap(rawMap);
 
     return {
       code: bundleBuilder.code,
@@ -1325,28 +1343,29 @@ export class ModuleSystem {
       ? ownerModuleId
       : path.resolve(ownerModuleId);
 
-    const dynamicTemplatePattern = /require\s*\(\s*`[^`]*\$\{[^`]*`\s*\)/;
-    if (dynamicTemplatePattern.test(code)) {
+    // Local JavaScript is bundled verbatim: its dynamic requires are left to the host
+    // require instead of failing the bundle.
+    const isSomonModule = normalizedOwner.endsWith('.som');
+
+    // `(?<![\w$.])` keeps `obj.require(...)` and `_require(...)` untouched
+    const dynamicTemplatePattern = /(?<![\w$.])require\s*\(\s*`[^`]*\$\{[^`]*`\s*\)/;
+    if (isSomonModule && dynamicTemplatePattern.test(code)) {
       throw new Error(
         `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
       );
     }
 
-    const dynamicRequirePattern = /require\s*\(\s*(?!['"`])/;
-    if (dynamicRequirePattern.test(code)) {
+    const dynamicRequirePattern = /(?<![\w$.])require\s*\(\s*(?!['"`])/;
+    if (isSomonModule && dynamicRequirePattern.test(code)) {
       throw new Error(`Dynamic require expressions are not supported in ${normalizedOwner}.`);
     }
 
-    const singleQuotePattern = /require\s*\(\s*'([^'\n\r]{1,500})'\s*\)/g;
-    const doubleQuotePattern = /require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
-    const templatePattern = /require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
+    const singleQuotePattern = /(?<![\w$.])require\s*\(\s*'([^'\n\r]{1,500})'\s*\)/g;
+    const doubleQuotePattern = /(?<![\w$.])require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
+    const templatePattern = /(?<![\w$.])require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
 
     const processMatch = (match: string, spec: string): string => {
       if (!spec || spec.length === 0 || spec.length > 500) {
-        return match;
-      }
-
-      if (spec.includes('..') && spec.split('..').length > 3) {
         return match;
       }
 
@@ -1405,6 +1424,7 @@ export class ModuleSystem {
     );
     result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {
+        if (!isSomonModule) return match;
         throw new Error(
           `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
         );
@@ -1474,14 +1494,6 @@ export class ModuleSystem {
         error instanceof Error ? error : undefined
       );
       errors.push(compilationError);
-
-      if (this.logger) {
-        this.logger.error('Unexpected compilation error', {
-          file: compilationError.filePath,
-          message: compilationError.message,
-        });
-      }
-
       return { success: false };
     }
   }
@@ -1492,18 +1504,7 @@ export class ModuleSystem {
     errors: CompilationError[]
   ): void {
     for (const errorMsg of errorMessages) {
-      const error = this.createCompilationError(errorMsg, filePath);
-      errors.push(error);
-
-      if (this.logger) {
-        this.logger.error('Module compilation error', {
-          file: error.filePath,
-          line: error.line,
-          column: error.column,
-          message: error.message,
-          suggestion: error.suggestion,
-        });
-      }
+      errors.push(this.createCompilationError(errorMsg, filePath));
     }
   }
 
@@ -1533,13 +1534,6 @@ export class ModuleSystem {
       return parsed;
     } catch (mapError) {
       const message = mapError instanceof Error ? mapError.message : String(mapError);
-
-      if (this.logger) {
-        this.logger.error('Source map parsing failed', {
-          module: module.resolvedPath,
-          error: message,
-        });
-      }
 
       // Add to warnings for now - compilation can continue without source maps
       // In strict production mode, this could be upgraded to fail-fast

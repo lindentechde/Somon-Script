@@ -487,8 +487,8 @@ describe('Module System', () => {
       const graph = moduleSystem.getDependencyGraph();
       expect(graph.size).toBeGreaterThan(0);
 
-      const appDeps = Array.from(graph.values()).find(deps => deps.includes('./lib'));
-      expect(appDeps).toBeDefined();
+      // Edges hold the resolved module ids, not the raw './lib' specifier
+      expect(graph.get(path.resolve(appFile))).toEqual([path.resolve(libFile)]);
     });
 
     test('should generate commonjs bundle and reject unsupported formats', async () => {
@@ -540,8 +540,8 @@ describe('Module System', () => {
 
         expect(bundleWithMockedCwd.code).toEqual(bundleFromProjectRoot.code);
         expect(bundleWithMockedCwd.map).toEqual(bundleFromProjectRoot.map);
-        expect(bundleWithMockedCwd.code).toContain("'main.som'");
-        expect(bundleWithMockedCwd.code).toContain("'../lib/helper.som'");
+        expect(bundleWithMockedCwd.code).toContain('"main.som"');
+        expect(bundleWithMockedCwd.code).toContain('"../lib/helper.som"');
         expect(bundleWithMockedCwd.code).not.toContain(tempDir);
       } finally {
         cwdSpy.mockRestore();
@@ -687,6 +687,29 @@ describe('Module System', () => {
       await moduleSystem.shutdown();
       expect(watcher.close).toHaveBeenCalled();
     });
+
+    test('should evict changed modules and their dependents on watch events', async () => {
+      watchMock.mockClear();
+
+      const depFile = path.join(tempDir, 'watch-dep.som');
+      const mainFile = path.join(tempDir, 'watch-entry.som');
+      fs.writeFileSync(depFile, 'содир собит Қ = 1;');
+      fs.writeFileSync(mainFile, 'ворид { Қ } аз "./watch-dep";\nчоп.сабт(Қ);');
+
+      await moduleSystem.compile(mainFile);
+      moduleSystem.watch(mainFile);
+      const watcherInstance = watchMock.mock.results[0].value;
+
+      // Same size and mtime, so only the watch event can reveal the edit
+      const stat = fs.statSync(depFile);
+      fs.writeFileSync(depFile, 'содир собит Қ = 2;');
+      fs.utimesSync(depFile, stat.atime, stat.mtime);
+      watcherInstance.emit('change', depFile);
+
+      expect(moduleSystem.getModule(path.resolve(mainFile))).toBeUndefined();
+      const result = await moduleSystem.compile(mainFile);
+      expect(result.modules.get(path.resolve(depFile))?.code).toContain('= 2');
+    });
   });
 
   describe('Error Handling', () => {
@@ -760,17 +783,19 @@ describe('Module System', () => {
       const moduleFile = path.join(tempDir, 'cached.som');
       fs.writeFileSync(moduleFile, 'содир функсия cached() {}');
 
+      const first = loader.loadSync('./cached', tempDir);
       const startTime = Date.now();
 
       // Load same module multiple times
       for (let i = 0; i < 10; i++) {
-        loader.loadSync('./cached', tempDir);
+        expect(loader.loadSync('./cached', tempDir)).toBe(first);
       }
 
       const endTime = Date.now();
 
-      // Subsequent loads should be much faster due to caching
-      expect(endTime - startTime).toBeLessThan(100);
+      // Cache hits are served without re-parsing; the generous limit only guards
+      // against pathological slowdowns on loaded CI machines
+      expect(endTime - startTime).toBeLessThan(1000);
     });
   });
 });
