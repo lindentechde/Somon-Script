@@ -181,6 +181,84 @@ describe('invalid programs fail instead of emitting wrong code', () => {
   });
 });
 
+/**
+ * Programs JavaScript rejects with an early error must be compile errors, with
+ * or without type checking, instead of output node refuses to load.
+ */
+describe('JavaScript early errors are compile errors', () => {
+  test.each([
+    ['a binary expression as assignment target', 'тағ а = 1;\nа + 1 = 2;', /left-hand side/],
+    ['a unary expression as compound target', 'тағ а = 1;\n-а *= 3;', /left-hand side/],
+    ['a literal as assignment target', '5 = 3;', /left-hand side/],
+    ['a call as assignment target', 'функсия ф() {}\nф() = 1;', /left-hand side/],
+    ['an optional chain as assignment target', 'тағ о = {};\nо?.а = 1;', /left-hand side/],
+    ['a pattern with compound assignment', 'тағ а = 1;\n[а] += 1;', /left-hand side/],
+    [
+      'an invalid element in a destructuring target',
+      'тағ а = 1;\n[а + 1] = [2];',
+      /left-hand side/,
+    ],
+    ['a prefix update of an expression', 'тағ а = 1;\n++(а + 1);', /operand/],
+    ['a postfix update of a call', 'функсия ф() {}\nф()++;', /operand/],
+    ['a constant without initializer', 'собит а: рақам;', /initializer/],
+    ['break outside a loop', 'шикастан;', /break/],
+    ['continue outside a loop', 'давом;', /continue/],
+    ['continue in a switch outside a loop', 'интихоб (1) { ҳолат 1: давом; }', /continue/],
+    ['break in a function inside a loop', 'то (дуруст) { функсия ф() { шикастан; } }', /break/],
+    ['let declared twice', 'тағ а = 1;\nтағ а = 2;', /'а' has already been declared/],
+    ['function and let', 'функсия а() {}\nтағ а = 1;', /'а' has already been declared/],
+    ['class declared twice', 'синф Б {}\nсинф Б {}', /'Б' has already been declared/],
+    ['function declared twice', 'функсия а() {}\nфунксия а() {}', /'а' has already been declared/],
+    [
+      'a body-level let named like a parameter',
+      'функсия ф(п: рақам) { тағ п = 2; }',
+      /'п' has already been declared/,
+    ],
+    [
+      'a let named like the catch parameter',
+      'кӯшиш { } гирифтан (х) { тағ х = 1; }',
+      /'х' has already been declared/,
+    ],
+    [
+      'one switch body is one scope',
+      'интихоб (1) { ҳолат 1: тағ х = 1; шикастан; ҳолат 2: тағ х = 2; шикастан; }',
+      /'х' has already been declared/,
+    ],
+    ['break in a namespace inside a loop', 'то (дуруст) { номфазо Н { шикастан; } }', /break/],
+    [
+      'a namespace member named like the namespace',
+      'номфазо Н { тағ Н = 1; }',
+      /'Н' has already been declared/,
+    ],
+    ['an import and a let', 'ворид { а } аз "./м";\nтағ а = 1;', /'а' has already been declared/],
+  ])('%s', (_name, source, message) => {
+    for (const typeCheck of [true, false]) {
+      const result = compile(source, { typeCheck });
+      expect(result.errors).toEqual(expect.arrayContaining([expect.stringMatching(message)]));
+      expect(result.errors.join('\n')).toMatch(/line \d+, column \d+/);
+      expect(result.code).toBe('');
+    }
+  });
+
+  test('legal shadowing, loops and assignment targets still compile', () => {
+    const lines = run(
+      'тағ а = 1;\n' +
+        'агар (дуруст) { тағ а = 2; чоп.сабт(а); }\n' +
+        'функсия ф(п: рақам) { агар (дуруст) { тағ п = 3; бозгашт п; } бозгашт п; }\n' +
+        'функсия г(п: рақам) { функсия п() { бозгашт 4; } бозгашт п(); }\n' +
+        'барои (тағ и = 0; и < 1; и++) { тағ и = 5; чоп.сабт(и); }\n' +
+        'интихоб (1) { ҳолат 1: { тағ х = 6; чоп.сабт(х); шикастан; } ҳолат 2: { тағ х = 7; шикастан; } }\n' +
+        'кӯшиш { партофтан 1; } гирифтан (х) { агар (дуруст) { тағ х = 8; чоп.сабт(х); } }\n' +
+        'то (дуруст) { интихоб (1) { ҳолат 1: шикастан; } агар (дуруст) { шикастан; } давом; }\n' +
+        'тағ о = { б: 1, в: [0] };\n' +
+        'тағ б = 0; тағ в = 0;\n' +
+        '[а, б] = [б, а]; ({ б, в } = о); [о.б, ...о.в] = [9, 10]; (а) = а + 1; о.в[0] += 1; о.б++;\n' +
+        'чоп.сабт(ф(1), г(2), а, б, о.б, о.в[0]);'
+    );
+    expect(lines).toEqual(['2', '5', '6', '8', '3 4 1 1 10 11']);
+  });
+});
+
 test('a value that does not match a function type is a type error', () => {
   const result = compile('тағйирёбанда ф: (а: рақам) => рақам = 5;');
   expect(result.errors).toEqual([expect.stringContaining('TYPE_NOT_ASSIGNABLE')]);

@@ -224,6 +224,10 @@ export class Parser {
     let init: Expression | undefined;
     if (this.match(TokenType.ASSIGN)) {
       init = this.assignment();
+    } else if (kind === 'СОБИТ') {
+      throw new Error(
+        `Missing initializer in constant declaration at line ${kindToken.line}, column ${kindToken.column}`
+      );
     }
 
     if (this.check(TokenType.COMMA)) {
@@ -575,6 +579,11 @@ export class Parser {
 
       if (this.match(...Parser.ASSIGNMENT_OPERATORS)) {
         const operator = this.previous();
+        if (!this.isAssignmentTarget(expr, operator.type === TokenType.ASSIGN)) {
+          throw new Error(
+            `Invalid left-hand side in assignment at line ${operator.line}, column ${operator.column}`
+          );
+        }
         const value = this.assignment();
 
         return {
@@ -590,6 +599,63 @@ export class Parser {
       return expr;
     } finally {
       this.depth--;
+    }
+  }
+
+  /**
+   * Whether `expr` may be assigned to: a variable or a (non-optional) member
+   * and, for plain `=`, an array/object literal read as a destructuring
+   * pattern whose elements are targets themselves.
+   */
+  private isAssignmentTarget(expr: Expression, allowPattern: boolean): boolean {
+    switch (expr.type) {
+      case 'Identifier':
+        return true;
+      case 'MemberExpression':
+        return !(expr as MemberExpression).optional;
+      case 'ArrayPattern':
+      case 'ObjectPattern':
+        return allowPattern;
+      case 'ArrayExpression':
+        return (
+          allowPattern &&
+          !this.parenthesized.has(expr) &&
+          (expr as ArrayExpression).elements.every(
+            element => !element || this.isPatternElement(element)
+          )
+        );
+      case 'ObjectExpression':
+        return (
+          allowPattern &&
+          !this.parenthesized.has(expr) &&
+          (expr as ObjectExpression).properties.every(property =>
+            property.type === 'SpreadElement'
+              ? this.isPatternElement(property)
+              : !property.method && this.isPatternElement(property.value)
+          )
+        );
+      default:
+        return false;
+    }
+  }
+
+  /** An element of a destructuring assignment: a target, `...target` or `target = default`. */
+  private isPatternElement(element: Expression): boolean {
+    if (element.type === 'SpreadElement') {
+      return this.isAssignmentTarget((element as SpreadElement).argument, true);
+    }
+    if (element.type === 'AssignmentExpression') {
+      const assignment = element as AssignmentExpression;
+      return assignment.operator === '=' && !this.parenthesized.has(element);
+    }
+    return this.isAssignmentTarget(element, true);
+  }
+
+  private checkUpdateOperand(argument: Expression, operator: Token): void {
+    if (!this.isAssignmentTarget(argument, false)) {
+      throw new Error(
+        `Invalid operand for '${operator.value}' at line ${operator.line}, column ${operator.column}; expected a variable or property`
+      );
     }
   }
 
@@ -1042,6 +1108,7 @@ export class Parser {
       if (this.match(TokenType.INCREMENT, TokenType.DECREMENT)) {
         const operator = this.previous();
         const argument = this.unary();
+        this.checkUpdateOperand(argument, operator);
         return {
           type: 'UpdateExpression',
           operator: operator.value,
@@ -1160,6 +1227,7 @@ export class Parser {
       } else if (this.match(TokenType.INCREMENT, TokenType.DECREMENT)) {
         // Postfix increment/decrement
         const operator = this.previous();
+        this.checkUpdateOperand(expr, operator);
         expr = {
           type: 'UpdateExpression',
           operator: operator.value,

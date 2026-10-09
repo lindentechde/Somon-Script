@@ -161,6 +161,8 @@ export class CodeGenerator {
   private readonly errors: string[] = [];
   /** Names declared by the program, innermost scope last (see `withScope`). */
   private readonly scopes: Set<string>[] = [];
+  /** Enclosing loops and `интихоб` statements of the current function, for `шикастан`/`давом`. */
+  private jumpTargets = { loops: 0, switches: 0 };
   /** Whether statements are prefixed with position markers (`generateWithMappings`). */
   private trackPositions = false;
 
@@ -689,6 +691,7 @@ export class CodeGenerator {
   }
 
   private generateProgram(node: Program): string {
+    this.checkRedeclarations(node.body ?? []);
     const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
@@ -726,18 +729,20 @@ export class CodeGenerator {
       case 'IfStatement':
         return this.generateIfStatement(node as IfStatement);
       case 'WhileStatement':
-        return this.generateWhileStatement(node as WhileStatement);
+        return this.withJumpTarget('loops', () =>
+          this.generateWhileStatement(node as WhileStatement)
+        );
       case 'ForStatement':
         return this.withScope(this.declaredNames([(node as ForStatement).init as Statement]), () =>
-          this.generateForStatement(node as ForStatement)
+          this.withJumpTarget('loops', () => this.generateForStatement(node as ForStatement))
         );
       case 'ForInStatement':
         return this.withScope(this.declaredNames([(node as ForInStatement).left]), () =>
-          this.generateForInStatement(node as ForInStatement)
+          this.withJumpTarget('loops', () => this.generateForInStatement(node as ForInStatement))
         );
       case 'ForOfStatement':
         return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
-          this.generateForOfStatement(node as ForOfStatement)
+          this.withJumpTarget('loops', () => this.generateForOfStatement(node as ForOfStatement))
         );
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
@@ -754,14 +759,28 @@ export class CodeGenerator {
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
       case 'SwitchStatement': {
-        const cases = (node as SwitchStatement).cases;
-        return this.withScope(this.declaredNames(cases.flatMap(c => c.consequent)), () =>
-          this.generateSwitchStatement(node as SwitchStatement)
+        // All `ҳолат` arms share one scope
+        const consequents = (node as SwitchStatement).cases.flatMap(c => c.consequent);
+        this.checkRedeclarations(consequents);
+        return this.withScope(this.declaredNames(consequents), () =>
+          this.withJumpTarget('switches', () =>
+            this.generateSwitchStatement(node as SwitchStatement)
+          )
         );
       }
       case 'BreakStatement':
+        if (this.jumpTargets.loops + this.jumpTargets.switches === 0) {
+          this.errors.push(
+            `Illegal break statement at line ${node.line}, column ${node.column}: 'шикастан' must be inside a loop or 'интихоб'`
+          );
+        }
         return this.indent('break;');
       case 'ContinueStatement':
+        if (this.jumpTargets.loops === 0) {
+          this.errors.push(
+            `Illegal continue statement at line ${node.line}, column ${node.column}: 'давом' must be inside a loop`
+          );
+        }
         return this.indent('continue;');
       default: {
         const unknown = node as { type?: string };
@@ -813,15 +832,30 @@ export class CodeGenerator {
     params: Parameter[] | undefined,
     body: BlockStatement
   ): { params: string; body: string } {
-    return this.withScope(this.paramNames(params), () => ({
+    const paramNames = this.paramNames(params);
+    return this.withScope(paramNames, () => ({
       params: this.generateParams(params),
-      body: this.generateBlockStatement(body),
+      body: this.withFunctionBoundary(() => this.generateBlockStatement(body, [], paramNames)),
     }));
   }
 
-  private generateBlockStatement(node: BlockStatement, scopeNames: string[] = []): string {
+  /**
+   * `scopeNames` are bound in the block's scope (a catch parameter); a function
+   * body passes its `paramNames` instead, which it may redeclare as functions.
+   */
+  private generateBlockStatement(
+    node: BlockStatement,
+    scopeNames: string[] = [],
+    paramNames?: string[]
+  ): string {
     if (node.body.length === 0) {
       return '{}';
+    }
+
+    if (paramNames) {
+      this.checkRedeclarations(node.body, paramNames, true);
+    } else {
+      this.checkRedeclarations(node.body, scopeNames);
     }
 
     this.indentLevel++;
@@ -1371,6 +1405,59 @@ export class CodeGenerator {
     }
   }
 
+  /** Run `generate` inside one more loop or `интихоб`. */
+  private withJumpTarget<T>(kind: 'loops' | 'switches', generate: () => T): T {
+    this.jumpTargets[kind]++;
+    try {
+      return generate();
+    } finally {
+      this.jumpTargets[kind]--;
+    }
+  }
+
+  /** Run `generate` for a function body: loops around the function are not jump targets. */
+  private withFunctionBoundary<T>(generate: () => T): T {
+    const outer = this.jumpTargets;
+    this.jumpTargets = { loops: 0, switches: 0 };
+    try {
+      return generate();
+    } finally {
+      this.jumpTargets = outer;
+    }
+  }
+
+  /**
+   * Report a name declared twice in one scope, an early SyntaxError in
+   * JavaScript (every SomonScript variable is `let`/`const`). `bound` holds
+   * names the scope already binds: parameters (`functionBody`), which a
+   * function declaration may reuse, or a catch parameter, which nothing may.
+   * Two function declarations of one name are rejected as well: sloppy-mode
+   * JavaScript would let the second replace the first, but strict code
+   * (ES modules, bundles) rejects it, and it is almost always a mistake.
+   */
+  private checkRedeclarations(
+    statements: Statement[],
+    bound: string[] = [],
+    functionBody = false
+  ): void {
+    const declared = new Set<string>();
+    for (const stmt of statements) {
+      const names: string[] = [];
+      this.collectDeclaredNames(stmt, names);
+      const declaration =
+        stmt.type === 'ExportDeclaration' ? (stmt as ExportDeclaration).declaration : stmt;
+      const reusesParam = functionBody && declaration?.type === 'FunctionDeclaration';
+      for (const name of names) {
+        if (declared.has(name) || (bound.includes(name) && !reusesParam)) {
+          this.errors.push(
+            `Identifier '${name}' has already been declared at line ${stmt.line}, column ${stmt.column}`
+          );
+        }
+        declared.add(name);
+      }
+    }
+  }
+
   /** Names bound by the statements of one block (lexical declarations are hoisted to it). */
   private declaredNames(statements: Statement[]): string[] {
     const names: string[] = [];
@@ -1796,20 +1883,25 @@ export class CodeGenerator {
 
     // Generate namespace body
     const statements = node.body?.statements ?? [];
+    // The body shares the IIFE's scope with the `const ${name} = {}` above
+    this.checkRedeclarations(statements, [node.name.name]);
     this.scopes.push(new Set(this.declaredNames(statements)));
-    for (const stmt of statements) {
-      const isExported = (stmt as Statement & { exported?: boolean }).exported;
+    this.withFunctionBoundary(() => {
+      for (const stmt of statements) {
+        const isExported = (stmt as Statement & { exported?: boolean }).exported;
 
-      // Skip interface declarations and type aliases - they don't generate runtime code
-      if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
-        result += this.generateStatement(stmt);
-        continue;
+        // Skip interface declarations and type aliases - they don't generate runtime code
+        if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
+          result += this.generateStatement(stmt);
+          continue;
+        }
+
+        const code = isExported
+          ? this.generateExportedNamespaceMember(stmt, name)
+          : this.generateStatement(stmt);
+        result += code && !code.endsWith('\n') ? `${code}\n` : code;
       }
-
-      result += isExported
-        ? this.generateExportedNamespaceMember(stmt, name)
-        : this.generateStatement(stmt);
-    }
+    });
     this.scopes.pop();
 
     result += this.indent(`return ${name};\n`);
