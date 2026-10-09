@@ -205,6 +205,13 @@ interface AmbientModuleExports {
   values: Map<string, Type>;
   /** Interfaces and type aliases the module exports. */
   types: Set<string>;
+  /**
+   * What it exports from other modules: `содир { х чун у } аз "н"` (`у` is
+   * `х` of "н") and `содир * чун у аз "н"` (`у` is "н" itself, `*`).
+   */
+  forwarded: Map<string, { source: string; name: string }>;
+  /** `содир * аз "н"`: every module whose exports it exports too. */
+  forwardedAll: string[];
 }
 
 /**
@@ -941,7 +948,8 @@ export class TypeChecker {
     const type =
       module.values.get(name) ??
       (isDefault ? exportAssignment : undefined) ??
-      (exportAssignment ? this.getAllProperties(exportAssignment).get(name)?.type : undefined);
+      (exportAssignment ? this.getAllProperties(exportAssignment).get(name)?.type : undefined) ??
+      this.forwardedExport(module, name, new Set());
     if (type) return type;
     if (module.types.has(name) || (exportAssignment && this.isOpenType(exportAssignment))) {
       return UNKNOWN;
@@ -953,11 +961,52 @@ export class TypeChecker {
     return UNKNOWN;
   }
 
+  /**
+   * The type of `name` when `module` exports it from another module; unknown
+   * when that module is not declared here, undefined when no module has it.
+   */
+  private forwardedExport(
+    module: AmbientModuleExports,
+    name: string,
+    seen: Set<AmbientModuleExports>
+  ): Type | undefined {
+    if (seen.has(module)) return undefined;
+    seen.add(module);
+    const forwarded = module.forwarded.get(name);
+    if (forwarded) {
+      const source = this.ambientModules.get(forwarded.source);
+      if (!source) return UNKNOWN;
+      if (forwarded.name === '*') return this.ambientModuleObject(source, forwarded.source);
+      return this.exportedFrom(source, forwarded.name, seen) ?? UNKNOWN;
+    }
+    // `содир * аз "н"` leaves out the default export
+    if (name === 'default') return undefined;
+    for (const sourceName of module.forwardedAll) {
+      const source = this.ambientModules.get(sourceName);
+      if (!source) return UNKNOWN;
+      const type = this.exportedFrom(source, name, seen);
+      if (type) return type;
+    }
+    return undefined;
+  }
+
+  /** What `module` exports as `name`: a value's type, unknown for a type, or undefined. */
+  private exportedFrom(
+    module: AmbientModuleExports,
+    name: string,
+    seen: Set<AmbientModuleExports>
+  ): Type | undefined {
+    if (module.types.has(name)) return UNKNOWN;
+    return module.values.get(name) ?? this.forwardedExport(module, name, seen);
+  }
+
   /** `ворид * чун м аз "ном"`: an object of the module's exports. */
   private ambientModuleObject(module: AmbientModuleExports, source: string): Type {
     const properties = new Map<string, PropertyType>();
     module.values.forEach((type, name) => properties.set(name, { type, optional: false }));
-    return { kind: 'object', name: `"${source}"`, properties };
+    // What it exports from other modules is not listed: other members are not errors
+    const forwards = module.forwarded.size > 0 || module.forwardedAll.length > 0;
+    return { kind: 'object', name: `"${source}"`, properties, ...(forwards && { open: true }) };
   }
 
   /** `ворид х = require("ном")`, `ворид х = Н.а;` (the alias is typed when checked). */
@@ -1036,7 +1085,12 @@ export class TypeChecker {
     for (const statement of statements) {
       const module = statement as AmbientModuleDeclaration;
       if (module.type !== 'AmbientModuleDeclaration' || !module.name) continue;
-      const exports: AmbientModuleExports = { values: new Map(), types: new Set() };
+      const exports: AmbientModuleExports = {
+        values: new Map(),
+        types: new Set(),
+        forwarded: new Map(),
+        forwardedAll: [],
+      };
       const explicit = module.body.some(
         inner => inner.type === 'ExportDeclaration' || inner.type === 'ExportAssignment'
       );
@@ -1063,8 +1117,12 @@ export class TypeChecker {
       return;
     }
     const exportDecl = statement as ExportDeclaration;
+    if (statement.type === 'ExportDeclaration' && exportDecl.source) {
+      this.collectForwardedExports(exportDecl, exports);
+      return;
+    }
     if (statement.type === 'ExportDeclaration' && !exportDecl.declaration) {
-      for (const spec of exportDecl.specifiers ?? []) {
+      for (const spec of exportDecl.specifiers!) {
         const type = scope.get(spec.local.name);
         if (type) exports.values.set(spec.exported.name, type);
         else exports.types.add(spec.exported.name);
@@ -1079,6 +1137,22 @@ export class TypeChecker {
       } else {
         exports.values.set(exportDecl.default ? 'default' : name, scope.get(name) ?? UNKNOWN);
       }
+    }
+  }
+
+  /** `содир { х } аз "н"`, `содир * аз "н"`, `содир * чун Н аз "н"` in a declared module. */
+  private collectForwardedExports(
+    exportDecl: ExportDeclaration,
+    exports: AmbientModuleExports
+  ): void {
+    const source = String(exportDecl.source!.value);
+    if (exportDecl.namespaceExport) {
+      exports.forwarded.set(exportDecl.namespaceExport.name, { source, name: '*' });
+    } else if (exportDecl.specifiers!.length === 0) {
+      exports.forwardedAll.push(source);
+    }
+    for (const spec of exportDecl.specifiers!) {
+      exports.forwarded.set(spec.exported.name, { source, name: spec.local.name });
     }
   }
 

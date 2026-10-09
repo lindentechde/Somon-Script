@@ -26,6 +26,46 @@ function typeScriptErrors(source: string): string[] {
   );
 }
 
+describe('type checker: declared modules', () => {
+  test('a module exports what it exports from another declared module', () => {
+    const source = [
+      'эълон модул "н" { содир собит х: рақам; содир интерфейс И { а: рақам; } }',
+      'эълон модул "м" { содир * аз "н"; содир * чун Н аз "н"; содир { х чун з } аз "н"; }',
+      'ворид { х, з, Н, И } аз "м";',
+      'тағ у: сатр = х;',
+      'тағ ю: сатр = з;',
+      'тағ я: сатр = Н.х;',
+      'тағ и: И = { а: 1 };',
+      'ворид { в } аз "м";',
+    ].join('\n');
+    // `х`, `з` and `Н` were "Module '"м"' has no exported member"; imports come first
+    expect(check(source)).toEqual([
+      `PROPERTY_NOT_FOUND 8:9 Module '"м"' has no exported member 'в'`,
+      "TYPE_NOT_ASSIGNABLE 4:15 Type 'рақам' is not assignable to type 'сатр'",
+      "TYPE_NOT_ASSIGNABLE 5:15 Type 'рақам' is not assignable to type 'сатр'",
+      "TYPE_NOT_ASSIGNABLE 6:15 Type 'рақам' is not assignable to type 'сатр'",
+    ]);
+    expect(typeScriptErrors(source)).toEqual(['TS2322 4', 'TS2322 5', 'TS2322 6', 'TS2305 8']);
+  });
+
+  test('modules that export each other end the search; one not declared here may export anything', () => {
+    const cycle = [
+      'эълон модул "а" { содир * аз "б"; содир собит я: рақам; }',
+      'эълон модул "б" { содир * аз "а"; }',
+      'ворид { х, я } аз "б";',
+    ].join('\n');
+    expect(check(cycle)).toEqual([
+      `PROPERTY_NOT_FOUND 3:9 Module '"б"' has no exported member 'х'`,
+    ]);
+    expect(typeScriptErrors(cycle)).toEqual(['TS2305 3']);
+    expect(
+      check(
+        'эълон модул "м" { содир * аз "берун"; содир { а } аз "берун"; }\nворид { х, а } аз "м";\nворид * чун М аз "м";\nМ.ҳарчӣ;'
+      )
+    ).toEqual([]);
+  });
+});
+
 describe('type checker: namespaces', () => {
   test('a destructuring declaration exports each name it binds', () => {
     const source = [
