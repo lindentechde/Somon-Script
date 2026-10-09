@@ -83,6 +83,11 @@ const cases: Array<[string, string, string[]]> = [
     ['255 1000 1000 0.5 5 15 15'],
   ],
   [
+    'prefixed BigInt literals stay BigInts',
+    'тағ в = 0x10n;\nчоп.сабт(в, 0o7n, 0b11n, навъи в, навъи 0b1n, навъи 0o7n, 0xFFn * 2n);',
+    ['16 7 3 bigint bigint bigint 510'],
+  ],
+  [
     'expressions spanning several lines',
     'тағ а = 1 +\n  2;\nчоп.сабт(а, [1, 2, 3]\n  .map(х => х * 2)\n  .join(","));',
     ['3 2,4,6'],

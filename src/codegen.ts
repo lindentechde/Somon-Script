@@ -1454,7 +1454,7 @@ export class CodeGenerator {
   private static isNumericLiteralText(raw: unknown): raw is string {
     return (
       typeof raw === 'string' &&
-      /^(?:0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|\d+n|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$/.test(
+      /^(?:0[xX][0-9a-fA-F]+n?|0[oO][0-7]+n?|0[bB][01]+n?|\d+n|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$/.test(
         raw
       )
     );
