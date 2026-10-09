@@ -48,3 +48,35 @@ describe('parser: type parameter lists', () => {
     expect(run('синф А<Т> { х = 1; }\nсинф Б мерос А<1> {}\nчоп.сабт(нав Б().х);')).toEqual(['1']);
   });
 });
+
+describe('parser: overloads of class methods', () => {
+  test('computed, string, number and private names match their implementation', () => {
+    expect(
+      run(
+        [
+          'собит к = "а";',
+          'синф К {',
+          '  [к](): беджавоб;',
+          '  [к](х?: ҳар) { чоп.сабт("к", х); }',
+          '  "с"(): беджавоб;',
+          '  "с"() { чоп.сабт("с"); }',
+          '  1(): беджавоб;',
+          '  1() { чоп.сабт("1"); }',
+          '  #м(): беджавоб;',
+          '  #м() { чоп.сабт("#м"); }',
+          '  м() { ин.#м(); }',
+          '}',
+          'собит о = нав К();',
+          'о[к](); о.с(); о[1](); о.м();',
+        ].join('\n')
+      )
+    ).toEqual(['к undefined', 'с', '1', '#м']);
+  });
+
+  test('an overload whose implementation has another name is an error', () => {
+    // TypeScript's TS2389: "Function implementation name must be '[к]'"
+    expect(errorsOf('собит к = "а";\nсинф Л { [к](): беджавоб; [к + 1]() {} }')).toEqual([
+      'Function implementation is missing or not immediately following the declaration at line 2, column 10',
+    ]);
+  });
+});

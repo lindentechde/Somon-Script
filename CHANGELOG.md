@@ -122,6 +122,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * With the TypeScript checker, a namespace member declared in one `содир` declaration with a member named like a built-in member (`номфазо Н { содир собит илова = 1, х = 2; }`) was not exported: `Н.х` was the error TS2339. The TypeScript emitter exports such a declaration, and the built-in name also under its JavaScript name.
 * A type parameter list that does not parse (`функсия ф<1>()`, the empty `функсия ф<>()`, also on methods and classes) was silently left out, and so were heritage type arguments that do not parse; they are parse errors, as in TypeScript.
 * Overload signatures of a private method (`#м(х: рақам): сатр; #м(х: ҳар) { … }`), which TypeScript accepts, were the code generation error "Identifier '#м' has already been declared"; a signature declares nothing.
+* Overload signatures of a class method with a computed name (`[к](): беджавоб; [к]() { … }`), which TypeScript accepts, were the parse error "Function implementation is missing"; a computed name matches the same expression.
 
 ## 0.4.0 (2026-10-09)
 

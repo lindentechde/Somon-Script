@@ -6691,9 +6691,13 @@ export class Parser {
     };
   }
 
-  /** Name of a member for matching overloads: undefined for a computed name. */
-  private memberKeyText(member: MethodDefinition): string | undefined {
-    if (member.computed) return undefined;
+  /** Name of a member for matching overloads; a computed name by its expression (`[к]`). */
+  private memberKeyText(member: MethodDefinition): string {
+    if (member.computed) {
+      return `[${JSON.stringify(member.key, (key, value: unknown) =>
+        key === 'line' || key === 'column' ? undefined : value
+      )}]`;
+    }
     const key = member.key as Identifier | PrivateIdentifier | Literal;
     if (key.type === 'PrivateIdentifier') return `#${key.name}`;
     return key.type === 'Literal' ? String((key as Literal).value) : (key as Identifier).name;
@@ -6713,7 +6717,6 @@ export class Parser {
       const continues =
         next?.type === 'MethodDefinition' &&
         next.static === member.static &&
-        name !== undefined &&
         this.memberKeyText(next) === name;
       if (continues) return;
       const message =
