@@ -51,6 +51,7 @@ import {
   ConditionalExpression,
   SequenceExpression,
   Property,
+  RestElement,
 } from './types';
 
 /** Precedence levels of non-binary expressions; binary levels live in `operatorPrecedence`. */
@@ -63,6 +64,64 @@ const PREC = {
   CALL: 19,
   PRIMARY: 20,
 } as const;
+
+type PatternNode =
+  | Identifier
+  | ArrayPattern
+  | ObjectPattern
+  | AssignmentPattern
+  | SpreadElement
+  | RestElement;
+
+/** Words that are not valid JavaScript identifiers (strict mode, CommonJS output). */
+const JS_RESERVED_WORDS: ReadonlySet<string> = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'null',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'return',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+]);
 
 const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   SequenceExpression: PREC.SEQUENCE,
@@ -82,6 +141,8 @@ export class CodeGenerator {
   private readonly indentSize: number = 2;
   private importCounter: number = 0;
   private readonly errors: string[] = [];
+  /** Names declared by the program, innermost scope last (see `withScope`). */
+  private readonly scopes: Set<string>[] = [];
 
   // Static — allocated once for the class, not rebuilt per member expression.
   // O(1) membership test via Set replaces the previous O(n) Array.includes.
@@ -559,9 +620,9 @@ export class CodeGenerator {
   }
 
   private generateProgram(node: Program): string {
-    const statements = node.body
-      .map(stmt => this.generateStatement(stmt))
-      .filter(stmt => stmt.length > 0);
+    const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
+      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
+    );
 
     return statements.join('\n');
   }
@@ -586,11 +647,17 @@ export class CodeGenerator {
       case 'WhileStatement':
         return this.generateWhileStatement(node as WhileStatement);
       case 'ForStatement':
-        return this.generateForStatement(node as ForStatement);
+        return this.withScope(this.declaredNames([(node as ForStatement).init as Statement]), () =>
+          this.generateForStatement(node as ForStatement)
+        );
       case 'ForInStatement':
-        return this.generateForInStatement(node as ForInStatement);
+        return this.withScope(this.declaredNames([(node as ForInStatement).left]), () =>
+          this.generateForInStatement(node as ForInStatement)
+        );
       case 'ForOfStatement':
-        return this.generateForOfStatement(node as ForOfStatement);
+        return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
+          this.generateForOfStatement(node as ForOfStatement)
+        );
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -605,8 +672,12 @@ export class CodeGenerator {
         return this.generateNamespaceDeclaration(node as NamespaceDeclaration);
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
-      case 'SwitchStatement':
-        return this.generateSwitchStatement(node as SwitchStatement);
+      case 'SwitchStatement': {
+        const cases = (node as SwitchStatement).cases;
+        return this.withScope(this.declaredNames(cases.flatMap(c => c.consequent)), () =>
+          this.generateSwitchStatement(node as SwitchStatement)
+        );
+      }
       case 'BreakStatement':
         return this.indent('break;');
       case 'ContinueStatement':
@@ -630,8 +701,7 @@ export class CodeGenerator {
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
     const async = node.async ? 'async ' : '';
     const name = this.generateIdentifier(node.name);
-    const params = this.generateParams(node.params);
-    const body = this.generateBlockStatement(node.body);
+    const { params, body } = this.generateFunctionParts(node.params, node.body);
 
     return this.indent(`${async}function ${name}(${params}) ${body}`);
   }
@@ -657,15 +727,26 @@ export class CodeGenerator {
       .join(', ');
   }
 
-  private generateBlockStatement(node: BlockStatement): string {
+  /** Parameter list and body of a function, with the parameters in scope. */
+  private generateFunctionParts(
+    params: Parameter[] | undefined,
+    body: BlockStatement
+  ): { params: string; body: string } {
+    return this.withScope(this.paramNames(params), () => ({
+      params: this.generateParams(params),
+      body: this.generateBlockStatement(body),
+    }));
+  }
+
+  private generateBlockStatement(node: BlockStatement, scopeNames: string[] = []): string {
     if (node.body.length === 0) {
       return '{}';
     }
 
     this.indentLevel++;
-    const statements = node.body
-      .map(stmt => this.generateStatement(stmt))
-      .filter(stmt => stmt.length > 0);
+    const statements = this.withScope([...scopeNames, ...this.declaredNames(node.body)], () =>
+      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
+    );
     this.indentLevel--;
 
     return `{\n${statements.join('\n')}\n${this.getIndent()}}`;
@@ -941,27 +1022,28 @@ export class CodeGenerator {
   private generateFunctionExpression(node: FunctionExpression): string {
     const async = node.async ? 'async ' : '';
     const name = node.name ? ` ${this.generateIdentifier(node.name)}` : '';
-    const params = this.generateParams(node.params);
-    const body = this.generateBlockStatement(node.body);
+    const { params, body } = this.generateFunctionParts(node.params, node.body);
     return `${async}function${name}(${params}) ${body}`;
   }
 
   private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
     const async = node.isAsync ? 'async ' : '';
-    const params = this.generateParams(node.params);
 
     if (node.body.type === 'BlockStatement') {
       // Block body
-      const body = this.generateBlockStatement(node.body as BlockStatement);
+      const { params, body } = this.generateFunctionParts(node.params, node.body as BlockStatement);
       return `${async}(${params}) => ${body}`;
     }
 
-    // Expression body; a leading `{` would be parsed as a block
-    let body = this.generateExpression(node.body as Expression, PREC.ASSIGNMENT);
-    if (body.startsWith('{')) {
-      body = `(${body})`;
-    }
-    return `${async}(${params}) => ${body}`;
+    return this.withScope(this.paramNames(node.params), () => {
+      const params = this.generateParams(node.params);
+      // Expression body; a leading `{` would be parsed as a block
+      let body = this.generateExpression(node.body as Expression, PREC.ASSIGNMENT);
+      if (body.startsWith('{')) {
+        body = `(${body})`;
+      }
+      return `${async}(${params}) => ${body}`;
+    });
   }
 
   private generateImportExpression(node: ImportExpression): string {
@@ -1136,31 +1218,118 @@ export class CodeGenerator {
   }
 
   private generateIdentifier(node: Identifier): string {
-    // Only map specific built-in identifiers, not general variable names
-    // This prevents variable names like 'рӯйхат' from being mapped to 'Array'
+    // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
+    // when the program does not declare a binding of that name in scope;
+    // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
+    const mapped = this.isDeclared(node.name) ? undefined : this.mapBuiltinIdentifier(node.name);
+    if (mapped) {
+      return mapped;
+    }
 
+    if (JS_RESERVED_WORDS.has(node.name)) {
+      this.errors.push(
+        `'${node.name}' is a reserved word in JavaScript and cannot be used as an identifier at line ${node.line}, column ${node.column}`
+      );
+    }
+    return node.name;
+  }
+
+  private mapBuiltinIdentifier(name: string): string | undefined {
     // Map built-in literals
-    if (node.name === 'беқимат') {
+    if (name === 'беқимат') {
       return 'undefined';
     }
 
     // Handle Хато (capitalized) as Error constructor
-    if (node.name === 'Хато') {
+    if (name === 'Хато') {
       return 'Error';
     }
 
     // Map built-in constructors/objects (when used as identifiers)
     const builtinConstructors = ['сатр', 'рӯйхат', 'объект', 'математика', 'Риёзӣ', 'сатрМетодҳо'];
-    if (builtinConstructors.includes(node.name)) {
-      const mapped = this.builtinMappings.get(node.name);
-      if (mapped) {
-        return mapped;
+    return builtinConstructors.includes(name) ? this.builtinMappings.get(name) : undefined;
+  }
+
+  private isDeclared(name: string): boolean {
+    return this.scopes.some(scope => scope.has(name));
+  }
+
+  /** Run `generate` with `names` declared in a new innermost scope. */
+  private withScope<T>(names: Iterable<string>, generate: () => T): T {
+    this.scopes.push(new Set(names));
+    try {
+      return generate();
+    } finally {
+      this.scopes.pop();
+    }
+  }
+
+  /** Names bound by the statements of one block (lexical declarations are hoisted to it). */
+  private declaredNames(statements: Statement[]): string[] {
+    const names: string[] = [];
+    for (const stmt of statements) {
+      this.collectDeclaredNames(stmt, names);
+    }
+    return names;
+  }
+
+  private collectDeclaredNames(stmt: Statement | null | undefined, names: string[]): void {
+    switch (stmt?.type) {
+      case 'VariableDeclaration':
+        this.collectPatternNames((stmt as VariableDeclaration).identifier, names);
+        break;
+      case 'FunctionDeclaration':
+      case 'ClassDeclaration':
+      case 'NamespaceDeclaration':
+        names.push(
+          (stmt as FunctionDeclaration | ClassDeclaration | NamespaceDeclaration).name.name
+        );
+        break;
+      case 'ImportDeclaration':
+        names.push(...(stmt as ImportDeclaration).specifiers.map(spec => spec.local.name));
+        break;
+      case 'ExportDeclaration':
+        this.collectDeclaredNames((stmt as ExportDeclaration).declaration, names);
+        break;
+    }
+  }
+
+  private paramNames(params: Parameter[] | undefined): string[] {
+    const names: string[] = [];
+    for (const param of params ?? []) {
+      if ((param as { type: string }).type === 'Identifier') {
+        names.push((param as unknown as Identifier).name);
+      } else {
+        this.collectPatternNames(param.pattern ?? param.name, names);
       }
     }
+    return names;
+  }
 
-    // Don't map variable names that could conflict with JS built-ins
-    // Only map in specific contexts (handled in generateMemberExpression)
-    return node.name;
+  private collectPatternNames(pattern: PatternNode | null | undefined, names: string[]): void {
+    switch (pattern?.type) {
+      case 'Identifier':
+        names.push(pattern.name);
+        break;
+      case 'AssignmentPattern':
+        this.collectPatternNames(pattern.left, names);
+        break;
+      case 'SpreadElement':
+      case 'RestElement':
+        this.collectPatternNames(pattern.argument as PatternNode, names);
+        break;
+      case 'ArrayPattern':
+        pattern.elements.forEach(element => this.collectPatternNames(element, names));
+        break;
+      case 'ObjectPattern':
+        for (const prop of pattern.properties) {
+          this.collectPatternNames(
+            prop.type === 'PropertyPattern' ? (prop.value ?? (prop.key as Identifier)) : prop,
+            names
+          );
+        }
+        break;
+    }
   }
 
   private generateLiteral(node: Literal): string {
@@ -1315,7 +1484,7 @@ export class CodeGenerator {
     const objectName = (node.object as Identifier).name;
     const builtinObjects = ['чоп', 'математика', 'объект', 'Риёзӣ', 'сатр', 'сатрМетодҳо'];
 
-    if (!builtinObjects.includes(objectName)) {
+    if (!builtinObjects.includes(objectName) || this.isDeclared(objectName)) {
       return { mapped: object, wasMapped: false };
     }
 
@@ -1408,7 +1577,8 @@ export class CodeGenerator {
     if (prop.method && prop.value.type === 'FunctionExpression') {
       const fn = prop.value as FunctionExpression;
       const asyncPrefix = fn.async ? 'async ' : '';
-      return `${asyncPrefix}${key}(${this.generateParams(fn.params)}) ${this.generateBlockStatement(fn.body)}`;
+      const { params, body } = this.generateFunctionParts(fn.params, fn.body);
+      return `${asyncPrefix}${key}(${params}) ${body}`;
     }
     const value = this.generateExpression(prop.value, PREC.ASSIGNMENT);
     return `${key}: ${value}`;
@@ -1441,14 +1611,16 @@ export class CodeGenerator {
       this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
 
     if (node.handler) {
-      result += ' catch ';
-      if (node.handler.param) {
-        // Don't map catch parameter names - preserve original
-        result += `(${node.handler.param.name}) `;
-      } else {
-        result += '(error) ';
-      }
-      result += this.generateBlockStatement(node.handler.body).replace(this.getIndent(), '');
+      const param = node.handler.param;
+      // A parameterless catch stays parameterless (ES2019) so it cannot shadow
+      // an outer variable such as `error`.
+      result += param
+        ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param))}) `
+        : ' catch ';
+      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []).replace(
+        this.getIndent(),
+        ''
+      );
     }
 
     if (node.finalizer) {
@@ -1508,32 +1680,37 @@ export class CodeGenerator {
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
     // Generate namespace as an IIFE (Immediately Invoked Function Expression)
     const name = this.generateIdentifier(node.name);
-    const exported = node.exported ? 'exports.' : '';
 
-    let result = this.indent(`${exported}${name} = (function() {\n`);
+    // A local binding, so the namespace never leaks into (or, in strict code,
+    // fails on) the global scope
+    let result = this.indent(`const ${name} = (function() {\n`);
     this.indentLevel++;
     result += this.indent(`const ${name} = {};\n`);
 
     // Generate namespace body
-    if (node.body && node.body.statements) {
-      for (const stmt of node.body.statements) {
-        const isExported = (stmt as Statement & { exported?: boolean }).exported;
+    const statements = node.body?.statements ?? [];
+    this.scopes.push(new Set(this.declaredNames(statements)));
+    for (const stmt of statements) {
+      const isExported = (stmt as Statement & { exported?: boolean }).exported;
 
-        // Skip interface declarations and type aliases - they don't generate runtime code
-        if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
-          result += this.generateStatement(stmt);
-          continue;
-        }
-
-        result += isExported
-          ? this.generateExportedNamespaceMember(stmt, name)
-          : this.generateStatement(stmt);
+      // Skip interface declarations and type aliases - they don't generate runtime code
+      if (stmt.type === 'InterfaceDeclaration' || stmt.type === 'TypeAlias') {
+        result += this.generateStatement(stmt);
+        continue;
       }
+
+      result += isExported
+        ? this.generateExportedNamespaceMember(stmt, name)
+        : this.generateStatement(stmt);
     }
+    this.scopes.pop();
 
     result += this.indent(`return ${name};\n`);
     this.indentLevel--;
     result += this.indent('})();\n');
+    if (node.exported) {
+      result += this.indent(`module.exports.${name} = ${name};\n`);
+    }
 
     return result;
   }
@@ -1653,12 +1830,14 @@ export class CodeGenerator {
       return '';
     }
 
-    const params = this.generateParams(node.value?.params);
     // Handle cases where body might be null or undefined
     if (!node.value || !node.value.body) {
+      const params = this.withScope(this.paramNames(node.value?.params), () =>
+        this.generateParams(node.value?.params)
+      );
       return this.indent(`${isStatic}${isAsync}${methodName}(${params}) {}`);
     }
-    const body = this.generateBlockStatement(node.value.body);
+    const { params, body } = this.generateFunctionParts(node.value.params, node.value.body);
     return this.indent(`${isStatic}${isAsync}${methodName}(${params}) ${body}`);
   }
 

@@ -17,4 +17,23 @@ describe('compiler pipeline', () => {
     expect(result.code).toBe('');
     expect(result.errors).toEqual(['Code generation error: Unknown node: Foo']);
   });
+
+  test('JavaScript reserved words used as identifiers are compile errors', () => {
+    const result = compile('тағйирёбанда а = 1;\nтағйирёбанда class = 2;\nчоп.сабт(new);', {
+      typeCheck: false,
+    });
+    expect(result.code).toBe('');
+    expect(result.errors).toEqual([
+      expect.stringMatching(/'class'.*line 2, column \d+/),
+      expect.stringMatching(/'new'.*line 3, column \d+/),
+    ]);
+  });
+
+  test('reserved words stay allowed as property names', () => {
+    const result = compile('тағйирёбанда о = {class: 1, new: 2};\nчоп.сабт(о.class + о.new);', {
+      typeCheck: false,
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.code).toContain('о.class + о.new');
+  });
 });

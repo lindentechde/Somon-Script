@@ -62,6 +62,38 @@ f(my_val);
     expect(output).toEqual(['a ` b C:\\temp']);
   });
 
+  test('built-in object names map only when not declared by the program', () => {
+    const output = run(`
+тағйирёбанда рӯйхат = [1, 2];
+функсия ф(сатр) { бозгашт сатр + "!"; }
+чоп.сабт(рӯйхат.length, Array.isArray(рӯйхат), ф("а"), сатр(5) === "5");
+`);
+    expect(output).toEqual(['2 true а! true']);
+  });
+
+  test('a catch without a parameter does not shadow an outer `error`', () => {
+    const output = run(`
+тағйирёбанда error = "outer";
+кӯшиш { партофтан нав Хато("x"); } гирифтан { чоп.сабт(error); }
+`);
+    expect(output).toEqual(['outer']);
+  });
+
+  test('a namespace is a local binding, also in strict code', () => {
+    const source = `
+номфазо Асбоб {
+  содир функсия ҷамъ(а, б) { бозгашт а + б; }
+}
+чоп.сабт(Асбоб.ҷамъ(1, 2));
+`;
+    const result = compile(source, { typeCheck: false });
+    const output: string[] = [];
+    vm.runInNewContext(`"use strict";\n${result.code}`, {
+      console: { log: (...args: unknown[]) => output.push(args.join(' ')) },
+    });
+    expect(output).toEqual(['3']);
+  });
+
   test('double negation does not become a decrement', () => {
     const output = run(`
 тағйирёбанда а = 5;
