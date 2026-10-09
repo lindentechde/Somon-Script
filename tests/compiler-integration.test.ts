@@ -35,7 +35,7 @@ describe('Compiler - Integration Tests', () => {
     });
 
     test('should compile simple variable declaration', () => {
-      const source = 'ТАҒЙИРЁБАНДА х = 5;';
+      const source = 'тағйирёбанда х = 5;';
       const result = compile(source);
 
       expect(result.code).toBeTruthy();
@@ -43,7 +43,7 @@ describe('Compiler - Integration Tests', () => {
     });
 
     test('should compile variable declaration with short keyword', () => {
-      const source = 'ТАҒ х = 5;';
+      const source = 'тағ х = 5;';
       const result = compile(source);
 
       expect(result.code).toBeTruthy();

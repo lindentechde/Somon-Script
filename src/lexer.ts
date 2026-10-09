@@ -9,6 +9,16 @@ export class Lexer {
 
   private readonly keywords = KEYWORDS;
 
+  private static readonly SIMPLE_ESCAPES: Readonly<Record<string, string>> = {
+    n: '\n',
+    t: '\t',
+    r: '\r',
+    b: '\b',
+    f: '\f',
+    v: '\v',
+    '0': '\0',
+  };
+
   constructor(input: string) {
     // Remove BOM if present
     this.input = input.codePointAt(0) === 0xfeff ? input.slice(1) : input;
@@ -250,7 +260,8 @@ export class Lexer {
       this.advance();
       return this.createToken(TokenType.NULLISH_COALESCING, '??', startLine, startColumn);
     }
-    if (this.peek() === '.') {
+    // '?.5' is a conditional followed by a number, not optional chaining
+    if (this.peek() === '.' && !this.isDigit(this.peekNext(1))) {
       this.advance();
       this.advance();
       return this.createToken(TokenType.OPTIONAL_CHAINING, '?.', startLine, startColumn);
@@ -260,7 +271,7 @@ export class Lexer {
   }
 
   private nextToken(): Token {
-    this.skipWhitespace();
+    this.skipWhitespaceAndComments();
 
     if (this.isAtEnd()) {
       return this.createToken(TokenType.EOF, '');
@@ -270,14 +281,8 @@ export class Lexer {
     const startLine = this.line;
     const startColumn = this.column;
 
-    if (char === '/' && this.peek() === '/') {
-      this.skipLineComment();
-      return this.nextToken();
-    }
-
-    if (char === '/' && this.peek() === '*') {
-      this.skipBlockComment();
-      return this.nextToken();
+    if (char === '.' && this.isDigit(this.peek())) {
+      return this.readNumber(startLine, startColumn);
     }
 
     switch (char) {
@@ -344,11 +349,14 @@ export class Lexer {
       return this.readNumber(startLine, startColumn);
     }
 
-    if (this.isAlpha(char) || this.isCyrillic(char)) {
+    const codePoint = this.currentCodePoint();
+    if (this.isIdentifierStart(codePoint)) {
       return this.readIdentifier(startLine, startColumn);
     }
 
-    throw new Error(`Unexpected character '${char}' at line ${this.line}, column ${this.column}`);
+    throw new Error(
+      `Unexpected character '${codePoint}' at line ${this.line}, column ${this.column}`
+    );
   }
 
   private singleCharToken(type: TokenType): Token {
@@ -360,6 +368,8 @@ export class Lexer {
   }
 
   private processStringEscapeSequence(): string {
+    const escapeLine = this.line;
+    const escapeColumn = this.column;
     this.advance(); // Skip backslash
     if (this.isAtEnd()) {
       return '';
@@ -369,30 +379,58 @@ export class Lexer {
     this.advance();
 
     switch (escaped) {
-      case 'n':
-        return '\n';
-      case 't':
-        return '\t';
-      case 'r':
-        return '\r';
-      case '\\':
-        return '\\';
-      case '"':
-        return '"';
-      case "'":
-        return "'";
+      case 'x':
+        return this.readHexEscape(2, escapeLine, escapeColumn);
+      case 'u':
+        return this.readUnicodeEscape(escapeLine, escapeColumn);
+      case '\r':
+        // Line continuation: a backslash before a line break contributes nothing
+        if (this.currentChar() === '\n') this.advance();
+        this.startNewLine();
+        return '';
+      case '\n':
+        this.startNewLine();
+        return '';
       default:
-        return escaped;
+        // '\\', '\'' and '"' (like any other character) stand for themselves
+        return Lexer.SIMPLE_ESCAPES[escaped] ?? escaped;
     }
   }
 
-  private processStringCharacter(): string {
-    const char = this.currentChar();
-    this.advance();
+  private readHexEscape(length: number, line: number, column: number): string {
+    const hex = this.input.slice(this.position, this.position + length);
+    if (hex.length !== length || !/^[0-9a-fA-F]+$/.test(hex)) {
+      throw this.invalidEscapeError(line, column);
+    }
+    for (let i = 0; i < length; i++) this.advance();
+    return String.fromCodePoint(Number.parseInt(hex, 16));
+  }
 
-    if (char === '\n') {
-      this.line++;
-      this.column = 1;
+  private readUnicodeEscape(line: number, column: number): string {
+    if (this.currentChar() !== '{') {
+      return this.readHexEscape(4, line, column);
+    }
+
+    const close = this.input.indexOf('}', this.position);
+    const hex = close === -1 ? '' : this.input.slice(this.position + 1, close);
+    if (!/^[0-9a-fA-F]+$/.test(hex) || Number.parseInt(hex, 16) > 0x10ffff) {
+      throw this.invalidEscapeError(line, column);
+    }
+    while (this.position <= close) this.advance();
+    return String.fromCodePoint(Number.parseInt(hex, 16));
+  }
+
+  private invalidEscapeError(line: number, column: number): Error {
+    return new Error(`Invalid escape sequence at line ${line}, column ${column}`);
+  }
+
+  private processStringCharacter(): string {
+    const char = this.currentCodePoint();
+    const isLineBreak = char === '\n' || this.isLoneCarriageReturn();
+    this.advanceCodePoint();
+
+    if (isLineBreak) {
+      this.startNewLine();
     }
 
     return char;
@@ -489,48 +527,105 @@ export class Lexer {
   }
 
   private readNumber(startLine: number, startColumn: number): Token {
-    let value = '';
-    let hasDecimal = false;
+    const prefix = this.currentChar() === '0' ? this.peek().toLowerCase() : '';
+    const isPrefixed = prefix === 'x' || prefix === 'b' || prefix === 'o';
+    let value = isPrefixed
+      ? this.readPrefixedNumber(prefix, startLine, startColumn)
+      : this.readDecimalNumber(startLine, startColumn);
 
-    while (!this.isAtEnd() && this.isDigit(this.currentChar())) {
-      value += this.currentChar();
-      this.advance();
-    }
-
-    // Handle decimal numbers
-    if (!this.isAtEnd() && this.currentChar() === '.' && this.isDigit(this.peek())) {
-      hasDecimal = true;
-      value += this.currentChar();
-      this.advance();
-
-      while (!this.isAtEnd() && this.isDigit(this.currentChar())) {
-        value += this.currentChar();
-        this.advance();
+    if (this.currentChar() === 'n') {
+      if (!isPrefixed && /[.eE]/.test(value)) {
+        throw this.numberError('BigInt suffix requires an integer', startLine, startColumn);
       }
+      value += 'n';
+      this.advance();
     }
 
-    // Check for invalid number patterns (multiple decimal points)
-    if (!this.isAtEnd() && this.currentChar() === '.' && hasDecimal) {
-      throw new Error(
-        `Invalid number format at line ${startLine}, column ${startColumn}: multiple decimal points`
-      );
+    if (
+      !this.isAtEnd() &&
+      (this.isDigit(this.currentChar()) || this.isIdentifierStart(this.currentCodePoint()))
+    ) {
+      throw this.numberError('identifier directly after number', startLine, startColumn);
     }
 
     return this.createToken(TokenType.NUMBER, value, startLine, startColumn);
   }
 
+  /** Reads '0x…', '0b…' or '0o…'. */
+  private readPrefixedNumber(prefix: string, startLine: number, startColumn: number): string {
+    const value = this.currentChar() + this.peek();
+    this.advance();
+    this.advance();
+    const digitPattern = { x: /[0-9a-fA-F]/, b: /[01]/, o: /[0-7]/ }[prefix] as RegExp;
+    const digits = this.readDigits(digitPattern, startLine, startColumn);
+    if (digits === '') {
+      throw this.numberError(`missing digits after 0${prefix} prefix`, startLine, startColumn);
+    }
+    return value + digits;
+  }
+
+  /** Reads '1', '1.5', '.5' and exponent forms such as '1.5e-3'. */
+  private readDecimalNumber(startLine: number, startColumn: number): string {
+    let value = this.readDigits(/\d/, startLine, startColumn);
+    if (value.length > 1 && value.startsWith('0')) {
+      throw this.numberError('leading zero is not allowed', startLine, startColumn);
+    }
+
+    // Handle decimal numbers; in '1.5.toFixed' the second '.' is member access
+    if (this.currentChar() === '.' && this.isDigit(this.peek())) {
+      this.advance();
+      value += '.' + this.readDigits(/\d/, startLine, startColumn);
+    }
+
+    if (this.currentChar() === 'e' || this.currentChar() === 'E') {
+      value += this.currentChar();
+      this.advance();
+      if (this.currentChar() === '+' || this.currentChar() === '-') {
+        value += this.currentChar();
+        this.advance();
+      }
+      const exponent = this.readDigits(/\d/, startLine, startColumn);
+      if (exponent === '') {
+        throw this.numberError('missing exponent digits', startLine, startColumn);
+      }
+      value += exponent;
+    }
+
+    return value;
+  }
+
+  /** Reads digits matching `digitPattern`, dropping '_' separators placed between digits. */
+  private readDigits(digitPattern: RegExp, startLine: number, startColumn: number): string {
+    let digits = '';
+    while (!this.isAtEnd()) {
+      const char = this.currentChar();
+      if (digitPattern.test(char)) {
+        digits += char;
+      } else if (char === '_') {
+        if (digits === '' || !digitPattern.test(this.peek())) {
+          throw this.numberError('invalid numeric separator', startLine, startColumn);
+        }
+      } else {
+        break;
+      }
+      this.advance();
+    }
+    return digits;
+  }
+
+  private numberError(reason: string, line: number, column: number): Error {
+    return new Error(`Invalid number format at line ${line}, column ${column}: ${reason}`);
+  }
+
   private readIdentifier(startLine: number, startColumn: number): Token {
     let value = '';
 
-    while (
-      !this.isAtEnd() &&
-      (this.isAlphaNumeric(this.currentChar()) || this.isCyrillic(this.currentChar()))
-    ) {
-      value += this.currentChar();
-      this.advance();
+    while (!this.isAtEnd() && this.isIdentifierPart(this.currentCodePoint())) {
+      value += this.currentCodePoint();
+      this.advanceCodePoint();
     }
 
-    const tokenType = this.keywords.get(value.toLowerCase()) || TokenType.IDENTIFIER;
+    const tokenType = this.keywords.get(value) || TokenType.IDENTIFIER;
     return this.createToken(tokenType, value, startLine, startColumn);
   }
 
@@ -540,7 +635,23 @@ export class Lexer {
       this.isWhitespace(this.currentChar()) &&
       this.currentChar() !== '\n'
     ) {
+      const isLineBreak = this.isLoneCarriageReturn();
       this.advance();
+      if (isLineBreak) {
+        this.startNewLine();
+      }
+    }
+  }
+
+  private skipWhitespaceAndComments(): void {
+    this.skipWhitespace();
+    while (this.currentChar() === '/' && (this.peek() === '/' || this.peek() === '*')) {
+      if (this.peek() === '/') {
+        this.skipLineComment();
+      } else {
+        this.skipBlockComment();
+      }
+      this.skipWhitespace();
     }
   }
 
@@ -550,12 +661,15 @@ export class Lexer {
     this.advance();
 
     // Skip until end of line
-    while (!this.isAtEnd() && this.currentChar() !== '\n') {
-      this.advance();
+    while (!this.isAtEnd() && this.currentChar() !== '\n' && this.currentChar() !== '\r') {
+      this.advanceCodePoint();
     }
   }
 
   private skipBlockComment(): void {
+    const startLine = this.line;
+    const startColumn = this.column;
+
     // Skip the '/*'
     this.advance();
     this.advance();
@@ -566,12 +680,24 @@ export class Lexer {
         this.advance();
         return;
       }
-      if (this.currentChar() === '\n') {
-        this.line++;
-        this.column = 1;
+      const isLineBreak = this.currentChar() === '\n' || this.isLoneCarriageReturn();
+      this.advanceCodePoint();
+      if (isLineBreak) {
+        this.startNewLine();
       }
-      this.advance();
     }
+
+    throw new Error(`Unterminated block comment at line ${startLine}, column ${startColumn}`);
+  }
+
+  private startNewLine(): void {
+    this.line++;
+    this.column = 1;
+  }
+
+  /** A '\r' not followed by '\n' is a line break on its own (old Mac line endings). */
+  private isLoneCarriageReturn(): boolean {
+    return this.currentChar() === '\r' && this.peek() !== '\n';
   }
 
   private currentChar(): string {
@@ -581,6 +707,20 @@ export class Lexer {
   private peek(): string {
     if (this.position + 1 >= this.input.length) return '\0';
     return this.input[this.position + 1];
+  }
+
+  /** The full code point at the current position (both halves of a surrogate pair). */
+  private currentCodePoint(): string {
+    const code = this.input.codePointAt(this.position);
+    return code === undefined ? '' : String.fromCodePoint(code);
+  }
+
+  /** Advances past one code point, counting it as a single column. */
+  private advanceCodePoint(): void {
+    const length = this.currentCodePoint().length;
+    if (length === 0) return;
+    this.position += length;
+    this.column++;
   }
 
   private advance(): void {
@@ -598,21 +738,12 @@ export class Lexer {
     return char >= '0' && char <= '9';
   }
 
-  private isAlpha(char: string): boolean {
-    return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char === '_';
+  private isIdentifierStart(char: string): boolean {
+    return /^[\p{ID_Start}$_]$/u.test(char);
   }
 
-  private isAlphaNumeric(char: string): boolean {
-    return this.isAlpha(char) || this.isDigit(char);
-  }
-
-  private isCyrillic(char: string): boolean {
-    const code = char.codePointAt(0);
-    if (code === undefined) return false;
-    return (
-      (code >= 0x0400 && code <= 0x04ff) || // Cyrillic
-      (code >= 0x0500 && code <= 0x052f)
-    ); // Cyrillic Supplement
+  private isIdentifierPart(char: string): boolean {
+    return /^[\p{ID_Continue}$\u200C\u200D]$/u.test(char);
   }
 
   private isWhitespace(char: string): boolean {
