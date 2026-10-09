@@ -39,7 +39,8 @@ Runs on every push to `main` that touches `package.json` or `package-lock.json`
 1. checks whether the version in `package.json` is already on npm, and stops if
    it is;
 2. builds, runs `npm run test:ci` and `npm run audit:examples`;
-3. publishes to npm (with provenance), then to JSR;
+3. publishes to npm through trusted publishing (OIDC, with automatic
+   provenance), then to JSR;
 4. creates the `v<version>` tag and a GitHub release whose notes list the
    commits since the previous tag.
 
@@ -56,10 +57,16 @@ bump is committed only after publishing, JSR is published with `--allow-dirty`.
 Every step skips work that already happened, so a failed run can be started
 again with the same version.
 
-## Required Secrets
+## Publishing Credentials
 
-- `NPM_TOKEN`: npm automation token with publish rights for
-  `@lindentech/somon-script`.
+- npm: `automated-release.yml` uses
+  [trusted publishing](https://docs.npmjs.com/trusted-publishers) and needs no
+  token. The package `@lindentech/somon-script` must list a GitHub Actions
+  trusted publisher for `lindentechde/Somon-Script` with workflow
+  `automated-release.yml` and direct publishing allowed. A trusted publisher
+  covers one workflow file, so `manual-release.yml` still publishes with the
+  `NPM_TOKEN` secret (a granular token with read and write access to the
+  package).
 - `CODECOV_TOKEN`: optional, for coverage upload.
 - JSR uses GitHub OIDC; the repository must be linked to the JSR package.
 
