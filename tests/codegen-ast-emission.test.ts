@@ -411,4 +411,27 @@ describe('new AST node emission', () => {
     expect(code).toContain('{length: дарозӣ}');
     expect(vm.runInNewContext(`${code}\n[дарозӣ, о.length, о.filter]`, {})).toEqual([5, 5, 1]);
   });
+  test('rest elements in array and object patterns', () => {
+    const rest = (argument: any): any => ({ type: 'RestElement', argument, ...pos });
+    const code = emit([
+      {
+        type: 'VariableDeclaration',
+        kind: 'СОБИТ',
+        identifier: { type: 'ArrayPattern', elements: [id('а'), rest(id('б'))], ...pos },
+        init: arr(lit(1), lit(2), lit(3)),
+        ...pos,
+      },
+      {
+        type: 'VariableDeclaration',
+        kind: 'СОБИТ',
+        identifier: {
+          ...objPattern('x'),
+          properties: [...objPattern('x').properties, spread(id('р'))],
+        },
+        init: obj(prop('x', lit(1)), prop('y', lit(2))),
+        ...pos,
+      },
+    ]);
+    expect(vm.runInNewContext(`${code}\n[а, б, x, р]`, {})).toEqual([1, [2, 3], 1, { y: 2 }]);
+  });
 });

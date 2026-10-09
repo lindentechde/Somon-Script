@@ -1954,9 +1954,7 @@ export class CodeGenerator {
   }
 
   // Pattern generation methods
-  private generatePattern(
-    node: Identifier | ArrayPattern | ObjectPattern | AssignmentPattern
-  ): string {
+  private generatePattern(node: PatternNode): string {
     switch (node.type) {
       case 'Identifier':
         return this.generateIdentifier(node);
@@ -1966,6 +1964,9 @@ export class CodeGenerator {
         return this.generateArrayPattern(node);
       case 'ObjectPattern':
         return this.generateObjectPattern(node);
+      case 'SpreadElement':
+      case 'RestElement':
+        return `...${this.generatePattern(node.argument as PatternNode)}`;
       default: {
         const unknown = node as { type?: string };
         this.errors.push(`Unknown pattern type: ${unknown.type ?? 'unknown'}`);
@@ -1977,13 +1978,7 @@ export class CodeGenerator {
   private generateArrayPattern(node: ArrayPattern): string {
     const elements = node.elements
       .map(element => {
-        if (element === null) {
-          return '';
-        } else if (element.type === 'SpreadElement') {
-          return this.generateSpreadElement(element);
-        } else {
-          return this.generatePattern(element);
-        }
+        return element === null ? '' : this.generatePattern(element);
       })
       .join(', ');
 
@@ -1993,11 +1988,9 @@ export class CodeGenerator {
   private generateObjectPattern(node: ObjectPattern): string {
     const properties = node.properties
       .map(prop => {
-        if (prop.type === 'SpreadElement') {
-          return this.generateSpreadElement(prop);
-        } else {
-          return this.generatePropertyPattern(prop as PropertyPattern);
-        }
+        return prop.type === 'SpreadElement'
+          ? this.generatePattern(prop)
+          : this.generatePropertyPattern(prop as PropertyPattern);
       })
       .join(', ');
 
