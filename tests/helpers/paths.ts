@@ -18,7 +18,8 @@ const CLI_PATH = path.join(__dirname, '..', '..', 'dist', 'cli.js');
  * `require.resolve` follows; on Linux it is usually an identity operation.
  */
 export function canonicalTmpDir(prefix: string): string {
-  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  // The native variant expands 8.3 names; the JS `realpathSync` keeps them.
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 }
 
 /**

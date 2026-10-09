@@ -72,8 +72,10 @@ describe('module system regressions', () => {
     });
 
     test('entry file name with quotes is emitted as an escaped literal', async () => {
-      write({ [`main'"x.som`]: 'чоп.сабт("ok");\n' });
-      expect(await bundleAndRun(`main'"x.som`)).toBe('ok');
+      // Windows does not allow `"` in file names
+      const entry = process.platform === 'win32' ? `main'x.som` : `main'"x.som`;
+      write({ [entry]: 'чоп.сабт("ok");\n' });
+      expect(await bundleAndRun(entry)).toBe('ok');
     });
   });
 
