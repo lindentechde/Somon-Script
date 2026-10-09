@@ -869,9 +869,9 @@ function transpileJavaScript(code: string, options: ts.TranspileOptions): ts.Tra
 export const TYPESCRIPT_CRASH = `TypeScript ${ts.version} crashed while lowering the code`;
 
 function typeScriptCrash(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
+  // TypeScript fails with Errors (a stack overflow is a RangeError)
   return new Error(
-    `${TYPESCRIPT_CRASH} (${message}); TypeScript 5.6 and later no longer type-check the code they lower`
+    `${TYPESCRIPT_CRASH} (${(error as Error).message}); TypeScript 5.6 and later no longer type-check the code they lower`
   );
 }
 
