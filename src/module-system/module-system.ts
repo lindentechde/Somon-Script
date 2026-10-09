@@ -67,11 +67,40 @@ export interface BundleOptions {
   sourceMaps?: boolean;
   externals?: string[];
   inlineSources?: boolean;
+  /**
+   * Run every module as if from its original file: `__filename`/`__dirname` are the
+   * module's absolute path and requires that are not bundled resolve from it. Embeds
+   * absolute paths, so the bundle only works on the machine that built it.
+   */
+  modulePaths?: boolean;
 }
 
 export interface BundleOutput {
   code: string;
   map?: string;
+}
+
+const SIMPLE_ESCAPES: Record<string, string> = {
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  b: '\b',
+  f: '\f',
+  v: '\v',
+  '0': '\0',
+};
+
+/** The value of a JavaScript string literal body, e.g. `ё` → `ё`, `\"` → `"`. */
+function decodeStringLiteral(body: string): string {
+  return body.replaceAll(
+    /\\(?:u\{([\da-fA-F]+)\}|u([\da-fA-F]{4})|x([\da-fA-F]{2})|\r\n|([\s\S]))/g,
+    (sequence: string, codePoint?: string, unit?: string, byte?: string, other?: string) => {
+      const hex = codePoint ?? unit ?? byte;
+      if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
+      if (other === undefined || other === '\n' || other === '\r') return '';
+      return SIMPLE_ESCAPES[other] ?? other;
+    }
+  );
 }
 
 type RequireRewriteContext = {
@@ -592,10 +621,10 @@ export class ModuleSystem {
         `Only the 'commonjs' bundle format is currently supported. Received '${format}'.`
       );
     }
-    const compilationOverrides: Partial<CompilerOptions> = {};
-    if (options.minify !== undefined) {
-      compilationOverrides.minify = options.minify;
-    }
+    // The whole bundle is minified once at the end. Minifying modules as well would
+    // escape non-ASCII import paths, which the require rewriter cannot match.
+    const minify = options.minify ?? this.resolveCompilationOptions().minify;
+    const compilationOverrides: Partial<CompilerOptions> = { minify: false };
     if (options.sourceMaps !== undefined) {
       compilationOverrides.sourceMap = options.sourceMaps;
     }
@@ -646,7 +675,7 @@ export class ModuleSystem {
 
     // Generate bundle based on format
     try {
-      return await this.generateCommonJSBundle(compilationResult, options);
+      return await this.generateCommonJSBundle(compilationResult, { ...options, minify });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -1029,9 +1058,12 @@ export class ModuleSystem {
         firstModule = false;
       }
 
+      const params = options.modulePaths
+        ? 'module, exports, require, __filename, __dirname'
+        : 'module, exports, require';
       this.appendToBuilder(
         bundleBuilder,
-        `  ${JSON.stringify(module.key)}: function(module, exports, require) {\n`
+        `  ${JSON.stringify(module.key)}: function(${params}) {\n`
       );
       const moduleStartLine = bundleBuilder.line;
       this.appendToBuilder(bundleBuilder, module.code);
@@ -1095,7 +1127,8 @@ export class ModuleSystem {
 
   private addBundleRuntimeCode(
     bundleBuilder: { code: string; line: number },
-    entryKey: string
+    entryKey: string,
+    modulePaths: Map<string, string> | null
   ): void {
     this.appendToBuilder(
       bundleBuilder,
@@ -1104,21 +1137,47 @@ export class ModuleSystem {
         '    ? module.require.bind(module)\n' +
         "    : typeof require === 'function'\n" +
         '      ? require\n' +
-        '      : null;\n\n'
+        '      : null;\n' +
+        '  var __hasOwn = Object.prototype.hasOwnProperty;\n\n'
     );
+
+    let moduleCall = '    modules[id](module, module.exports, _require);\n\n';
+    if (modulePaths) {
+      // Each module gets its own path and a require that resolves what is not bundled
+      // from that path, as Node would for the original file.
+      this.appendToBuilder(
+        bundleBuilder,
+        `  var __paths = ${JSON.stringify(Object.fromEntries(modulePaths))};\n` +
+          '  var __createRequire = require("module").createRequire;\n' +
+          '  var __dirnameOf = require("path").dirname;\n\n' +
+          '  function __moduleRequire(filename) {\n' +
+          '    var hostRequire = __createRequire(filename);\n' +
+          '    function moduleRequire(id) {\n' +
+          '      return __hasOwn.call(modules, id) ? _require(id) : hostRequire(id);\n' +
+          '    }\n' +
+          '    moduleRequire.resolve = hostRequire.resolve;\n' +
+          '    moduleRequire.cache = hostRequire.cache;\n' +
+          '    moduleRequire.main = hostRequire.main;\n' +
+          '    return moduleRequire;\n' +
+          '  }\n\n'
+      );
+      moduleCall =
+        '    var filename = __paths[id];\n' +
+        '    modules[id](module, module.exports, __moduleRequire(filename), filename, __dirnameOf(filename));\n\n';
+    }
 
     this.appendToBuilder(
       bundleBuilder,
       '  function _require(id) {\n' +
-        '    if (cache[id]) return cache[id].exports;\n\n' +
-        '    if (!modules[id]) {\n' +
+        '    if (__hasOwn.call(cache, id)) return cache[id].exports;\n\n' +
+        '    if (!__hasOwn.call(modules, id)) {\n' +
         '      if (__externalRequire) {\n' +
         '        return __externalRequire(id);\n' +
         '      }\n' +
         '      throw new Error("Module \'" + id + "\' not found in bundle and no external require available.");\n' +
         '    }\n\n' +
         '    var module = cache[id] = { exports: {} };\n' +
-        '    modules[id](module, module.exports, _require);\n\n' +
+        moduleCall +
         '    return module.exports;\n' +
         '  }\n\n'
     );
@@ -1223,7 +1282,10 @@ export class ModuleSystem {
       options
     );
 
-    this.addBundleRuntimeCode(bundleBuilder, entryKey);
+    const modulePaths = options.modulePaths
+      ? new Map(processedModules.map(module => [module.key, module.id]))
+      : null;
+    this.addBundleRuntimeCode(bundleBuilder, entryKey, modulePaths);
 
     let rawMap = this.generateBundleSourceMap(generator);
     rawMap = await this.applyMinification(bundleBuilder, rawMap, options);
@@ -1360,8 +1422,9 @@ export class ModuleSystem {
       throw new Error(`Dynamic require expressions are not supported in ${normalizedOwner}.`);
     }
 
-    const singleQuotePattern = /(?<![\w$.])require\s*\(\s*'([^'\n\r]{1,500})'\s*\)/g;
-    const doubleQuotePattern = /(?<![\w$.])require\s*\(\s*"([^"\n\r]{1,500})"\s*\)/g;
+    // Literals may contain escapes (quotes in file names, `\u` escapes from minifiers)
+    const singleQuotePattern = /(?<![\w$.])require\s*\(\s*'((?:[^'\\\n\r]|\\.){1,500})'\s*\)/g;
+    const doubleQuotePattern = /(?<![\w$.])require\s*\(\s*"((?:[^"\\\n\r]|\\.){1,500})"\s*\)/g;
     const templatePattern = /(?<![\w$.])require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
 
     const processMatch = (match: string, spec: string): string => {
@@ -1417,10 +1480,10 @@ export class ModuleSystem {
     };
 
     let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec)
+      processMatch(match, decodeStringLiteral(spec))
     );
     result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, spec)
+      processMatch(match, decodeStringLiteral(spec))
     );
     result = result.replaceAll(templatePattern, (match: string, spec: string) => {
       if (spec.includes('${')) {

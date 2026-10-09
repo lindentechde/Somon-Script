@@ -436,15 +436,6 @@ function createRunWorkspace(input: string): { file: string; cleanup: () => void 
 }
 
 /**
- * The bundle lives in a temporary directory, so make requires that are not part
- * of the bundle (node_modules packages, plain .js files) resolve from the source
- * file's location instead. Kept on the first line so source map lines stay valid.
- */
-function externalRequirePrelude(input: string): string {
-  return `module.require = require("module").createRequire(${JSON.stringify(path.resolve(input))});`;
-}
-
-/**
  * Bundle source maps name sources relative to the entry directory; the temporary
  * bundle lives elsewhere, so point them at the original files with file URLs.
  */
@@ -486,13 +477,15 @@ async function executeRunCommand(
       sourceMaps,
       inlineSources: false,
       externals: config.bundle?.externals,
+      // The bundle runs from a temporary directory; modules keep their real locations.
+      modulePaths: true,
     });
 
     const workspace = createRunWorkspace(input);
     cleanup = workspace.cleanup;
     const compiledFilePath = workspace.file;
 
-    let code = `${externalRequirePrelude(input)}${bundle.code}`;
+    let code = bundle.code;
     if (sourceMaps && bundle.map) {
       const mapPath = `${compiledFilePath}.map`;
       fs.writeFileSync(mapPath, absoluteSourceMap(bundle.map, baseDir), 'utf8');

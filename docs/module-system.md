@@ -130,7 +130,18 @@ Bundling:
 - Local `.js` dependencies are included verbatim (their relative requires are
   rewritten too) and `.json` dependencies as `module.exports = <json>`. Packages
   from `node_modules` and `externals` stay `require()` calls resolved by the
-  host at runtime, relative to the bundle file.
+  host at runtime, relative to the bundle file. A relative `require()` in a
+  local `.js` file that does not resolve at build time (an optional dependency
+  in `try`/`catch`, say) is left to the runtime as well; requires in comments
+  are ignored.
+- Bundles are relocatable: they contain no absolute paths of the build machine,
+  and every bundled module sees the bundle file's `__filename` and `__dirname`.
+  `somon run` instead bundles with `modulePaths: true`: each module gets its
+  original absolute path as `__filename`/`__dirname`, and requires that are not
+  bundled (packages, optional or `.cjs` files, `require.resolve`) resolve from
+  that module's own location, as under plain Node. Such a bundle only works on
+  the machine that built it.
+- `minify` (or `compilerOptions.minify`) minifies the finished bundle once.
 - Internal require rewrite maps `require("./x")` or compiled `require("./x.js")`
   to the correct module map entry (`.js` is mapped back to `.som` internally
   when needed).

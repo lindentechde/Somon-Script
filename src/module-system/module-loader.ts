@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { parseSync } from '@babel/core';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
@@ -95,6 +96,40 @@ interface DependencyReference {
   specifier: string;
   line?: number;
   column?: number;
+  /** A require() in local JavaScript: left to the runtime require when it does not resolve. */
+  optional?: boolean;
+}
+
+/** The parts of a Babel AST node that the JavaScript dependency scan looks at. */
+interface BabelNode {
+  type?: string;
+  name?: string;
+  value?: unknown;
+  callee?: BabelNode;
+  arguments?: BabelNode[];
+  expressions?: unknown[];
+  quasis?: Array<{ value?: { cooked?: string } }>;
+  loc?: { start: { line: number; column: number } };
+}
+
+/** `'./x'` for a `require('./x')` call with a constant relative specifier. */
+function relativeRequireSpecifier(node: BabelNode): string | undefined {
+  if (
+    node.type !== 'CallExpression' ||
+    node.callee?.type !== 'Identifier' ||
+    node.callee.name !== 'require' ||
+    node.arguments?.length !== 1
+  ) {
+    return undefined;
+  }
+  const [argument] = node.arguments;
+  let specifier: unknown;
+  if (argument.type === 'StringLiteral') {
+    specifier = argument.value;
+  } else if (argument.type === 'TemplateLiteral' && argument.expressions?.length === 0) {
+    specifier = argument.quasis?.[0]?.value?.cooked;
+  }
+  return typeof specifier === 'string' && /^\.{1,2}\//.test(specifier) ? specifier : undefined;
 }
 
 const MAX_SPECIFIER_LENGTH = 500;
@@ -206,7 +241,9 @@ export class ModuleLoader {
         encoding: this.options.encoding,
       });
 
-      const references = this.readDependencies(module, resolved);
+      const references = this.readDependencies(module, resolved).filter(
+        ref => !ref.optional || this.canResolve(ref.specifier, resolved.resolvedPath)
+      );
       module.dependencies = references.map(ref => ref.specifier);
 
       // Load dependencies recursively, recording the id each specifier resolved to
@@ -441,18 +478,73 @@ export class ModuleLoader {
     return references;
   }
 
+  private canResolve(specifier: string, fromFile: string): boolean {
+    if (this.matchExternal(specifier)) return true;
+    try {
+      this.resolver.resolve(specifier, fromFile);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Static relative `require('./x')` calls in a local JavaScript file. Bare specifiers are
-   * left to the host `require` at runtime.
+   * left to the host `require` at runtime, and so are relative ones that do not resolve
+   * (optional dependencies). Comments and strings are skipped by parsing the file; files
+   * Babel cannot parse fall back to a plain text scan.
    */
   private extractJsDependencies(source: string): DependencyReference[] {
+    let ast: unknown;
+    try {
+      ast = parseSync(source, {
+        configFile: false,
+        babelrc: false,
+        sourceType: 'unambiguous',
+        parserOpts: { allowReturnOutsideFunction: true, errorRecovery: true },
+      });
+    } catch {
+      ast = null;
+    }
+    if (!ast) {
+      return this.scanJsRequires(source);
+    }
+
+    const references: DependencyReference[] = [];
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+        return;
+      }
+      if (!node || typeof node !== 'object') return;
+      const call = node as BabelNode;
+      const specifier = relativeRequireSpecifier(call);
+      if (specifier !== undefined) {
+        references.push({
+          specifier,
+          line: call.loc?.start.line,
+          column: call.loc ? call.loc.start.column + 1 : undefined,
+          optional: true,
+        });
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (key !== 'loc' && key !== 'leadingComments' && key !== 'trailingComments') {
+          visit(value);
+        }
+      }
+    };
+    visit((ast as { program: unknown }).program);
+    return references;
+  }
+
+  private scanJsRequires(source: string): DependencyReference[] {
     const references: DependencyReference[] = [];
     const pattern = /(?<![\w$.])require\s*\(\s*(['"])(\.{1,2}\/[^'"\n\r]*)\1\s*\)/g;
     for (const match of source.matchAll(pattern)) {
       const before = source.slice(0, match.index);
       const line = before.split('\n').length;
       const column = match.index! - before.lastIndexOf('\n');
-      references.push({ specifier: match[2], line, column });
+      references.push({ specifier: match[2], line, column, optional: true });
     }
     return references;
   }

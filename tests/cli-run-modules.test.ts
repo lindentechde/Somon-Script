@@ -1,4 +1,6 @@
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { buildCliOnce, canonicalTmpDir, runCli } from './helpers/paths';
 
@@ -395,6 +397,95 @@ describe('CLI Run Command - Module Imports', () => {
       expect(result).toContain('Модули сатрӣ');
       expect(result).toContain('ПИ');
       expect(result).toContain('Модулҳо бомуваффақият ворид шуданд');
+    });
+  });
+
+  describe('module locations', () => {
+    const write = (relative: string, content: string): string => {
+      const file = path.join(tempDir, relative);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content);
+      return file;
+    };
+
+    test('each module sees its own __dirname and __filename', () => {
+      write(
+        'lib/where.som',
+        `содир функсия ҷой(): сатр {\n  бозгашт __filename + "|" + __dirname;\n}`
+      );
+      const mainFile = write(
+        'main.som',
+        `ворид { ҷой } аз "./lib/where";\nчоп.сабт(__filename + "|" + __dirname);\nчоп.сабт(ҷой());`
+      );
+
+      const lines = runCli(['run', mainFile], { cwd: os.tmpdir() }).trim().split('\n');
+
+      expect(lines).toEqual([
+        `${mainFile}|${tempDir}`,
+        `${path.join(tempDir, 'lib', 'where.som')}|${path.join(tempDir, 'lib')}`,
+      ]);
+    });
+
+    test('local .js modules read files next to themselves and resolve from their location', () => {
+      write('tpl.txt', 'hello\n');
+      write(
+        'util.js',
+        `const fs = require('fs');
+exports.tpl = () => fs.readFileSync(require('path').join(__dirname, 'tpl.txt'), 'utf8').trim();
+exports.where = () => require.resolve('./tpl.txt');`
+      );
+      const mainFile = write(
+        'main.som',
+        `ворид { tpl, where } аз "./util";\nчоп.сабт(tpl());\nчоп.сабт(where());`
+      );
+
+      const lines = runCli(['run', mainFile], { cwd: os.tmpdir() }).trim().split('\n');
+
+      expect(lines).toEqual(['hello', path.join(tempDir, 'tpl.txt')]);
+    });
+
+    test('unbundled relative requires resolve from the requiring module', () => {
+      write('x.cjs', `module.exports = { c: 'root-cjs' };`);
+      write('sub/x.cjs', `module.exports = { c: 'sub-cjs' };`);
+      write('sub/lib.js', `exports.g = () => require('./x.cjs').c;`);
+      const mainFile = write('main.som', `ворид { g } аз "./sub/lib";\nчоп.сабт(g());`);
+
+      expect(runCli(['run', mainFile], { cwd: tempDir }).trim()).toBe('sub-cjs');
+    });
+
+    test('unresolvable requires in local .js files stay runtime requires', () => {
+      write(
+        'util.js',
+        `// Optional speedup: require('./native-binding') if available
+let fast = null;
+try { fast = require('./optional-accel'); } catch (e) { /* not installed */ }
+exports.f = () => fast ? 'fast' : 'slow';`
+      );
+      const mainFile = write('main.som', `ворид { f } аз "./util";\nчоп.сабт(f());`);
+
+      expect(runCli(['run', mainFile], { cwd: tempDir }).trim()).toBe('slow');
+
+      write('optional-accel.js', `module.exports = {};`);
+      expect(runCli(['run', mainFile], { cwd: tempDir }).trim()).toBe('fast');
+    });
+
+    test('--minify keeps imports of Cyrillic and quoted file names working', () => {
+      write('ёрдамчӣ.som', `содир собит А = "кирилл";`);
+      write(`it's "q".som`, `содир собит Б = "quoted";`);
+      const mainFile = write(
+        'main.som',
+        `ворид { А } аз "./ёрдамчӣ";\nворид { Б } аз "./it's \\"q\\"";\nчоп.сабт(А, Б);`
+      );
+
+      expect(runCli(['run', mainFile, '--minify'], { cwd: tempDir }).trim()).toBe('кирилл quoted');
+
+      const bundleFile = path.join(tempDir, 'out', 'main.bundle.js');
+      runCli(['bundle', mainFile, '--minify', '-o', bundleFile], { cwd: tempDir });
+      const output = execFileSync(process.execPath, [bundleFile], {
+        cwd: os.tmpdir(),
+        encoding: 'utf-8',
+      });
+      expect(output.trim()).toBe('кирилл quoted');
     });
   });
 
