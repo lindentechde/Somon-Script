@@ -13,8 +13,9 @@ const CLI_PATH = path.join(__dirname, '..', '..', 'dist', 'cli.js');
  * `C:\Users\RUNNER~1\AppData\Local\Temp`. Downstream code (path.join,
  * path.resolve) typically returns the long form, which then fails
  * `toContain` / `toEqual` assertions in suites that mix the two. Resolving
- * through `realpathSync` forces a single canonical representation. On
- * Linux/macOS the call is an identity operation.
+ * through `realpathSync` forces a single canonical representation. On macOS
+ * it likewise resolves the `/var` → `/private/var` symlink that
+ * `require.resolve` follows; on Linux it is usually an identity operation.
  */
 export function canonicalTmpDir(prefix: string): string {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));

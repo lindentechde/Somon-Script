@@ -1,9 +1,9 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 
 import { ModuleLoader, ModuleResolver, ModuleSystem } from '../src/module-system';
+import { canonicalTmpDir } from './helpers/paths';
 import type { ModuleSystemOptions } from '../src/module-system';
 
 // Regression tests for the module system, run against real multi-file projects.
@@ -15,8 +15,10 @@ describe('module system regressions', () => {
   const systems: ModuleSystem[] = [];
 
   beforeEach(() => {
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-modreg-'));
-    root = path.join(parent, `лоиҳа 'q" dir`);
+    // Canonical so paths compare equal to require.resolve (macOS /private/var,
+    // Windows 8.3 names); Windows does not allow `"` in file names.
+    const parent = canonicalTmpDir('somon-modreg-');
+    root = path.join(parent, process.platform === 'win32' ? `лоиҳа 'q dir` : `лоиҳа 'q" dir`);
     fs.mkdirSync(root);
   });
 

@@ -5,13 +5,14 @@ import * as vm from 'vm';
 import { createRequire } from 'module';
 
 import { ModuleSystem } from '../src/module-system';
+import { canonicalTmpDir } from './helpers/paths';
 
 describe('ModuleSystem Bundle Runtime', () => {
   let tempDir: string;
   const moduleSystems: ModuleSystem[] = [];
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-bundle-'));
+    tempDir = canonicalTmpDir('somon-bundle-');
   });
 
   afterEach(async () => {

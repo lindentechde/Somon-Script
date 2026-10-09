@@ -470,11 +470,13 @@ exports.f = () => fast ? 'fast' : 'slow';`
     });
 
     test('--minify keeps imports of Cyrillic and quoted file names working', () => {
+      // Windows does not allow `"` in file names
+      const quoted = process.platform === 'win32' ? `it's q` : `it's "q"`;
       write('ёрдамчӣ.som', `содир собит А = "кирилл";`);
-      write(`it's "q".som`, `содир собит Б = "quoted";`);
+      write(`${quoted}.som`, `содир собит Б = "quoted";`);
       const mainFile = write(
         'main.som',
-        `ворид { А } аз "./ёрдамчӣ";\nворид { Б } аз "./it's \\"q\\"";\nчоп.сабт(А, Б);`
+        `ворид { А } аз "./ёрдамчӣ";\nворид { Б } аз ${JSON.stringify(`./${quoted}`)};\nчоп.сабт(А, Б);`
       );
 
       expect(runCli(['run', mainFile, '--minify'], { cwd: tempDir }).trim()).toBe('кирилл quoted');
