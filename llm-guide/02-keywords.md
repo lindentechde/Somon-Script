@@ -50,7 +50,14 @@
 барои (собит [к, в] аз объект.воридот(obj)) { }  // for (const [k, v] of Object.entries(obj)) { }
 ```
 
-There is no `do … while` loop.
+```som
+кун { і++; } то (і < 10);               // do { i++; } while (i < 10);
+барои интизор (собит х аз ҷараён) { }   // for await (const x of stream) { }
+```
+
+`кун` is a keyword only before `{`. Labels work as in JavaScript:
+`берун: барои (…) { … шикастан берун; }`. See [Operators](14-operators.md) for
+every operator and statement.
 
 ---
 

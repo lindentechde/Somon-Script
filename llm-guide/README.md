@@ -32,6 +32,8 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
 - **[11-classes.md](11-classes.md)** - Object-oriented programming
 - **[12-examples.md](12-examples.md)** - Common patterns and examples
 - **[13-map-set.md](13-map-set.md)** - Map and Set (`дорадКалид`, not `дорад`)
+- **[14-operators.md](14-operators.md)** - Every TypeScript operator and
+  statement in SomonScript
 
 ---
 

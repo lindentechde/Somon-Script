@@ -215,7 +215,9 @@ Narrowing checks: `!== холӣ`, `=== холӣ`, `!= холӣ` (also excludes `
 `=== беқимат`, truthiness (`агар (х)`), `!`, `&&`, `||`, `? :`,
 `навъи х === "number"`, `instanceof`, early `бозгашт`/`партофтан`/`шикастан`/
 `давом`, and assignments. `х?.ном` and `х ?? пешфарз` accept a nullable `х`.
-There is no non-null assertion (`х!`) or cast (`as`): use one of the checks.
+When you know more than the checker, assert it: `х!` removes `холӣ`/`беқимат`,
+`х чун Т` asserts a type, and `х бармесоё Т` checks a value against a type while
+keeping its own (see [Operators](14-operators.md)).
 
 ---
 
