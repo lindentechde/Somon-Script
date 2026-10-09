@@ -3,6 +3,7 @@
  * names match the JavaScript output, and positions map back to the source.
  */
 import ts from 'typescript';
+import { CodeGenerator } from '../src/codegen';
 import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { originalPosition, TsEmitter, TYPE_NAMES } from '../src/ts-emitter';
@@ -387,6 +388,18 @@ describe('TypeScript emitter: expressions', () => {
     expect(emit(source)).toBe(
       'const р = [3, 1, 2];\nр.push(4);\nconsole.log(р.sort().join(", "), Math.max(...р));'
     );
+  });
+
+  test('comparisons that TypeScript would read as type arguments are parenthesized', () => {
+    // Found by tests/fuzz.test.ts: TypeScript reads `а < б > (в, г)` as the call `а<б>(в, г)`
+    expect(emit('(а < б) > (в, г);')).toBe('(а < б) > (в, г);');
+    expect(emit('ф((а < б), в > (г));')).toBe('ф((а < б), в > г);');
+    expect(emit('[(а << б), в > `т`];')).toBe('[(а << б), в > `т`];');
+    expect(emit('тағ х = ((а < б), в > (г));')).toBe('let х = ((а < б), в > г);');
+    expect(emit('ф(а, б < в);')).toBe('ф(а, б < в);');
+    // JavaScript has no type arguments
+    const javascript = new CodeGenerator().generate(parse('ф((а < б), в > (г));'));
+    expect(javascript).toBe('ф(а < б, в > г);');
   });
 });
 

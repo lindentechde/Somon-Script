@@ -1322,9 +1322,7 @@ export class CodeGenerator {
       case 'ConditionalExpression':
         return this.generateConditionalExpression(node as ConditionalExpression);
       case 'SequenceExpression':
-        return (node as SequenceExpression).expressions
-          .map(expr => this.generateExpression(expr, PREC.ASSIGNMENT))
-          .join(', ');
+        return this.generateArguments((node as SequenceExpression).expressions);
       default:
         return this.handleUnknownExpression(node);
     }
@@ -2190,10 +2188,31 @@ export class CodeGenerator {
     // operator is left-associative: an equal-precedence right operand needs
     // parentheses (`а - (б - в)`).
     const isExponent = node.operator === '**';
-    const left = this.generateExpression(node.left, isExponent ? PREC.UNARY + 1 : precedence);
+    let left = this.generateExpression(node.left, isExponent ? PREC.UNARY + 1 : precedence);
     const right = this.generateExpression(node.right, isExponent ? precedence : precedence + 1);
+    // `(а < б) > (в)`: without the parentheses TypeScript reads a call `а<б>(в)`
+    if (node.operator === '>' && this.isTypeArgumentLike(node.left)) left = `(${left})`;
 
     return `${this.wrapMixedNullish(node, node.left, left)} ${node.operator} ${this.wrapMixedNullish(node, node.right, right)}`;
+  }
+
+  /**
+   * Whether the output language reads `а < б > (в)` and `ф(а < б, в > (г))`
+   * as calls with type arguments, so that comparisons there need
+   * parentheses: TypeScript does, JavaScript does not.
+   */
+  protected readsTypeArguments(): boolean {
+    return false;
+  }
+
+  /** A `<` or `<<` comparison that could open type arguments in the output. */
+  private isTypeArgumentLike(node: Expression): boolean {
+    const operator = (skipAssertions(node) as BinaryExpression).operator;
+    return (
+      this.readsTypeArguments() &&
+      skipAssertions(node).type === 'BinaryExpression' &&
+      (operator === '<' || operator === '<<')
+    );
   }
 
   /** `??` cannot be combined with an unparenthesised `&&` or `||` operand. */
@@ -2254,12 +2273,14 @@ export class CodeGenerator {
 
   /** Call/new argument list; elements may be `SpreadElement`s. */
   private generateArguments(args: Expression[] | undefined): string {
-    return (args ?? [])
-      .map(arg =>
-        arg.type === 'SpreadElement'
-          ? this.generateSpreadElement(arg as SpreadElement)
-          : this.generateExpression(arg, PREC.ASSIGNMENT)
-      )
+    const list = args ?? [];
+    return list
+      .map((arg, index) => {
+        if (arg.type === 'SpreadElement') return this.generateSpreadElement(arg as SpreadElement);
+        const code = this.generateExpression(arg, PREC.ASSIGNMENT);
+        // `ф((а < б), в > (г))`, not the call `ф(а<б, в>(г))`
+        return index < list.length - 1 && this.isTypeArgumentLike(arg) ? `(${code})` : code;
+      })
       .join(', ');
   }
 

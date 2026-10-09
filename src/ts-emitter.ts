@@ -267,6 +267,11 @@ export class TsEmitter extends CodeGenerator {
     return optional ? '?' : '';
   }
 
+  /** TypeScript reads `а < б > (в)` as a call with type arguments. */
+  protected readsTypeArguments(): boolean {
+    return true;
+  }
+
   protected thisParameterText(thisType: TypeAnnotation | undefined): string {
     return thisType ? `this${this.typeAnnotationText(thisType)}` : '';
   }
