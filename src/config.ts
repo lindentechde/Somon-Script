@@ -31,6 +31,13 @@ export interface SomonConfig {
   compilerOptions?: CompilerOptions;
   moduleSystem?: ModuleSystemConfig;
   bundle?: BundleConfig;
+  /** Settings of the formatter (`somon fmt`). */
+  fmt?: FmtConfig;
+}
+
+export interface FmtConfig {
+  /** Spaces per indentation level (1–16, default 4). */
+  indent?: number;
 }
 
 export class ConfigError extends Error {
@@ -446,6 +453,21 @@ function validateBundleExternals(externals: unknown, basePath: string): ConfigVa
   return [];
 }
 
+const KNOWN_FMT_KEYS = ['indent'] as const;
+
+function validateFmt(config: unknown, basePath = 'fmt'): ConfigValidationError[] {
+  if (config === undefined) return [];
+  if (!isObject(config)) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+  const errors = rejectUnknownKeys(config, KNOWN_FMT_KEYS, basePath);
+  const indent = (config as FmtConfig).indent;
+  if (indent !== undefined && !(Number.isInteger(indent) && indent >= 1 && indent <= 16)) {
+    errors.push({ path: `${basePath}.indent`, message: 'must be an integer from 1 to 16' });
+  }
+  return errors;
+}
+
 function validateConfig(config: unknown): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
@@ -454,7 +476,7 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   }
 
   // Check for unknown top-level properties
-  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle'];
+  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle', 'fmt'];
   for (const key of Object.keys(config)) {
     if (!knownProperties.includes(key)) {
       errors.push({
@@ -476,6 +498,7 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   if ((config as SomonConfig).bundle !== undefined) {
     errors.push(...validateBundle((config as SomonConfig).bundle));
   }
+  errors.push(...validateFmt((config as SomonConfig).fmt));
 
   return errors;
 }
