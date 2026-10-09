@@ -495,8 +495,10 @@ class Converter {
       this.replace(node, 'собит'); // `as const`
       return;
     }
-    // `declare global { … }`: TypeScript reads `global` as the module's name
-    if (ts.isModuleDeclaration(parent) && (parent.flags & ts.NodeFlags.GlobalAugmentation) !== 0) {
+    // `declare global { … }`: TypeScript reads `global` as the module's name. NodeFlags is
+    // a bit set, so `&` is meant here (S1529).
+    const globalAugmentation = parent.flags & ts.NodeFlags.GlobalAugmentation; // NOSONAR
+    if (ts.isModuleDeclaration(parent) && globalAugmentation !== 0) {
       this.optionalKeyword(node, 'глобалӣ', 'declareGlobal');
       return;
     }
