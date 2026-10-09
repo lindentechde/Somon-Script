@@ -115,6 +115,43 @@ describe('parser: an optional chain in a new expression', () => {
   });
 });
 
+describe('parser: shorthand defaults in destructuring assignments', () => {
+  test('`{ а = 1 }` is a default in an assignment or for-of target', () => {
+    // They were "Expected ':' after property key"
+    const source = [
+      'тағ а: рақам, б: рақам, в: рақам, г: сатр;',
+      '({ а = 1, б } = { б: 2 });',
+      '[{ в = 3 }, ...[{ а = 4 }]] = [{}, {}];',
+      'чоп.сабт(а, б, в);',
+      '({ к: { б = 5 } } = { к: {} });',
+      'барои ({ г = "х" } аз [{}, { г: "у" }]) чоп.сабт(г, б);',
+    ].join('\n');
+    expect(run(source)).toEqual(['4 2 3', 'х 5', 'у 5']);
+    for (const options of [{ strict: true }, { checker: 'typescript' as const, strict: true }]) {
+      expect(compile(source, options).errors).toEqual([]);
+    }
+  });
+
+  test('anywhere else it is an error, as in JavaScript and TypeScript', () => {
+    const invalid = (at: string) =>
+      `Invalid shorthand property initializer at ${at}: '=' may follow a property name only in a destructuring assignment`;
+    expect(errorsOf('тағ а;\n({ а = 1 });')).toEqual([invalid('line 2, column 6')]);
+    // The default of a target is an expression
+    expect(errorsOf('тағ а;\n[а = { б = 1 }] = [];')).toEqual([invalid('line 2, column 10')]);
+    expect(errorsOf('тағ ф = () => ({ а = 1 });')).toEqual([invalid('line 1, column 20')]);
+    expect(errorsOf('тағ с = `${ ({ а = 1 }) }`;')).toEqual([invalid('line 1, column 18')]);
+    expect(errorsOf('тағ а;\nбарои (({ а = 1 }); ; ) {}')).toEqual([invalid('line 2, column 13')]);
+    // One statement's target does not take another's
+    expect(errorsOf('тағ а;\n({ а = 1 } = {}); ({ а = 2 });')).toEqual([
+      invalid('line 2, column 24'),
+    ]);
+    // A statement that does not parse has one error
+    expect(errorsOf('тағ а;\n({ а = 1 } + );')).toEqual([
+      "Unexpected token ')' at line 2, column 14",
+    ]);
+  });
+});
+
 describe('parser: named function expressions', () => {
   const source = [
     'собит факт = функсия ф(н: рақам): рақам {',

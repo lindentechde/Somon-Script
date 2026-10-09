@@ -194,6 +194,12 @@ export class Parser {
    * (see `consumeTypeArgumentsClose`), so that a failed attempt can undo it.
    */
   private tokenSplits: Array<{ index: number; token: Token }> | undefined;
+  /**
+   * Shorthand properties with a default (`{ а = 1 }`, after its `=`) not yet
+   * known to be in a destructuring assignment target, the only place they
+   * may be. Replaced, never changed, so that a failed `speculate` can restore it.
+   */
+  private coverInitializers: ReadonlyArray<{ property: Property; at: Token }> = [];
 
   constructor(tokens: Token[]) {
     // Line breaks are insignificant: statements end with ';', so expressions
@@ -316,6 +322,7 @@ export class Parser {
 
   private statement(): Statement | null {
     const startIndex = this.current;
+    const covers = this.coverInitializers;
     try {
       this.enterNesting();
       const parsers: Array<() => Statement | null> = [
@@ -343,6 +350,8 @@ export class Parser {
 
       return this.expressionStatement();
     } catch (error) {
+      // A statement that does not parse has its error already
+      this.coverInitializers = covers;
       if (this.isNestingError(error)) throw error;
       // The parser and the lexer report problems with Errors
       this.errors.push((error as Error).message);
@@ -350,6 +359,51 @@ export class Parser {
       return null;
     } finally {
       this.depth--;
+      this.reportCoverInitializers(covers);
+    }
+  }
+
+  /**
+   * Reports the shorthand defaults (`{ а = 1 }`) parsed since `outer` that no
+   * destructuring assignment took: JavaScript's "Invalid shorthand property
+   * initializer", TypeScript's TS1312.
+   */
+  private reportCoverInitializers(outer: ReadonlyArray<{ property: Property; at: Token }>): void {
+    for (const { at } of this.coverInitializers.filter(entry => !outer.includes(entry))) {
+      this.errors.push(
+        `Invalid shorthand property initializer at line ${at.line}, column ${at.column}: '=' may follow a property name only in a destructuring assignment`
+      );
+    }
+    this.coverInitializers = outer;
+  }
+
+  /** `{ а = 1 }` in a destructuring assignment target: the default of `а`, not an error. */
+  private releaseCoverInitializers(target: Expression | null): void {
+    switch (target?.type) {
+      case 'ArrayExpression':
+        (target as ArrayExpression).elements.forEach(element =>
+          this.releaseCoverInitializers(element)
+        );
+        break;
+      case 'ObjectExpression':
+        for (const property of (target as ObjectExpression).properties) {
+          if (property.type === 'SpreadElement') {
+            this.releaseCoverInitializers(property);
+            continue;
+          }
+          this.coverInitializers = this.coverInitializers.filter(
+            entry => entry.property !== property
+          );
+          this.releaseCoverInitializers(property.value);
+        }
+        break;
+      case 'SpreadElement':
+        this.releaseCoverInitializers((target as SpreadElement).argument);
+        break;
+      case 'AssignmentExpression':
+        // `[а = { б = 1 }] = …`: the default is an expression, its own initializers stay
+        this.releaseCoverInitializers((target as AssignmentExpression).left);
+        break;
     }
   }
 
@@ -1244,6 +1298,7 @@ export class Parser {
         `Invalid left-hand side in a for-${head.isForOf ? 'of' : 'in'} loop at line ${head.left.line}, column ${head.left.column}`
       );
     }
+    this.releaseCoverInitializers(head.left);
     const right = head.isForOf ? this.assignment() : this.expression();
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after for-of/for-in clauses");
     const body = this.statement()!;
@@ -1523,6 +1578,7 @@ export class Parser {
             `Invalid left-hand side in assignment at line ${operator.line}, column ${operator.column}`
           );
         }
+        this.releaseCoverInitializers(expr);
         const value = this.assignment();
 
         return {
@@ -1740,13 +1796,14 @@ export class Parser {
 
   /**
    * Runs `parse`; when it throws or returns undefined, restores the position,
-   * the errors, the omitted semicolons and every `>>` it split (see
-   * `consumeTypeArgumentsClose`), and returns null.
+   * the errors, the omitted semicolons, the pending shorthand defaults and
+   * every `>>` it split (see `consumeTypeArgumentsClose`), and returns null.
    */
   private speculate<T>(parse: () => T | undefined): T | null {
     const savedIndex = this.current;
     const savedErrors = this.errors.length;
     const savedOmitted = this.omittedSemicolons.length;
+    const savedCovers = this.coverInitializers;
     const outerSplits = this.tokenSplits;
     const splits: Array<{ index: number; token: Token }> = [];
     this.tokenSplits = splits;
@@ -1767,6 +1824,7 @@ export class Parser {
     this.current = savedIndex;
     this.errors.length = savedErrors;
     this.omittedSemicolons.length = savedOmitted;
+    this.coverInitializers = savedCovers;
     return null;
   }
 
@@ -3284,6 +3342,8 @@ export class Parser {
       if (!subParser.isAtEnd()) {
         throw new Error(subParser.unexpectedTokenMessage(endMessage));
       }
+      // A whole sub-source is no destructuring target: `${ ({ а = 1 }) }`
+      subParser.reportCoverInitializers([]);
     } finally {
       this.errors.push(...subParser.errors);
     }
@@ -4196,19 +4256,33 @@ export class Parser {
       return property;
     }
 
-    // Shorthand: { ном } stands for { ном: ном }
-    if (
-      !computed &&
-      key.type === 'Identifier' &&
-      this.isPlainIdentifierToken(startToken) &&
-      (this.check(TokenType.COMMA) || this.check(TokenType.RIGHT_BRACE))
-    ) {
-      property.value = this.createIdentifier(startToken);
-      property.shorthand = true;
+    if (!computed && key.type === 'Identifier' && this.isPlainIdentifierToken(startToken)) {
+      return this.parseShorthandProperty(property, startToken);
+    }
+    throw new Error(this.unexpectedTokenMessage("Expected ':' after property key"));
+  }
+
+  /**
+   * `{ ном }`, which stands for `{ ном: ном }`, or `{ ном = 1 }`: a default,
+   * if the object turns out to be a destructuring assignment target.
+   */
+  private parseShorthandProperty(property: Property, name: Token): Property {
+    property.shorthand = true;
+    if (this.check(TokenType.COMMA) || this.check(TokenType.RIGHT_BRACE)) {
+      property.value = this.createIdentifier(name);
       return property;
     }
-
-    throw new Error(this.unexpectedTokenMessage("Expected ':' after property key"));
+    const at = this.consume(TokenType.ASSIGN, "Expected ':' after property key");
+    property.value = {
+      type: 'AssignmentExpression',
+      left: this.createIdentifier(name),
+      operator: '=',
+      right: this.assignment(),
+      line: name.line,
+      column: name.column,
+    } as AssignmentExpression;
+    this.coverInitializers = [...this.coverInitializers, { property, at }];
+    return property;
   }
 
   /** Method shorthand `{ ном() { … } }` or accessor `{ get ном() { … } }`, after its '('. */
