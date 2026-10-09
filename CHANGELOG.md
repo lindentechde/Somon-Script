@@ -124,6 +124,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * Overload signatures of a private method (`#м(х: рақам): сатр; #м(х: ҳар) { … }`), which TypeScript accepts, were the code generation error "Identifier '#м' has already been declared"; a signature declares nothing.
 * Overload signatures of a class method with a computed name (`[к](): беджавоб; [к]() { … }`), which TypeScript accepts, were the parse error "Function implementation is missing"; a computed name matches the same expression.
 * A missing operand at the end of the input (`тағ х =`, `@д`, a template interpolation cut short) was reported as "Unexpected token ''"; it is "Unexpected token end of input", as elsewhere.
+* `compile({ minify: true })` (`somon compile --minify`) applied the Babel configuration of the current directory (`babel.config.json`, `.babelrc`), which could break or change the output; it uses only its own options, as bundles do.
 
 ## 0.4.0 (2026-10-09)
 

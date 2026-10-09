@@ -402,6 +402,9 @@ function minifyCode(
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
   const babel = transformSync(code, {
+    // The options here are the whole configuration: no babel.config.json or .babelrc
+    configFile: false,
+    babelrc: false,
     sourceMaps: sourceMap,
     // Babel composes its own map with this one, so the result maps to the .som input
     inputSourceMap: map,

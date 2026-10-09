@@ -940,10 +940,10 @@ describe('module system regressions', () => {
     });
   });
 
-  describe('minified single files (src/compiler.ts, reported: not part of the module system)', () => {
-    // compile()'s minifyCode() calls Babel without `configFile: false, babelrc: false`,
-    // so `somon compile --minify` applies the babel.config.json of the current directory.
-    test.failing('compile({ minify: true }) ignores the Babel configuration', () => {
+  describe('minified single files (src/compiler.ts)', () => {
+    // compile()'s minifyCode() calls Babel with `configFile: false, babelrc: false`:
+    // `somon compile --minify` does not apply the babel.config.json of the current directory
+    test('compile({ minify: true }) ignores the Babel configuration', () => {
       write({ 'babel.config.json': '{ "presets": ["somon-test-preset-that-does-not-exist"] }\n' });
       const cwd = process.cwd();
       process.chdir(root);
