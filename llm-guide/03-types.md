@@ -129,6 +129,10 @@
 | `typeof` | Type of     | `typeof а`        |
 | `delete` | Delete      | `delete obj.prop` |
 
+`навъи а` / `typeof а` returns JavaScript's type names, so compare with
+`"string"`, `"number"`, `"boolean"`, `"object"`, … — never with the Tajik type
+names: `навъи а === "сатр"` is always false.
+
 ---
 
 ## Bitwise Operators

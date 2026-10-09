@@ -1671,7 +1671,7 @@ export class TypeChecker {
     report: (_source: string, _target: string) => void
   ): void {
     // Control flow isn't tracked, so a union-typed reference may already be
-    // narrowed (`агар (навъи х === "сатр") бозгашт х;`): accept it when any
+    // narrowed (`агар (навъи х === "string") бозгашт х;`): accept it when any
     // member fits.
     const narrowable =
       sourceType.kind === 'union' &&
