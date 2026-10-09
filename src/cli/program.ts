@@ -37,23 +37,16 @@ import { checkWithTypeScript, type TsCheckInput } from '../tsc-checker';
 import { i18n, LANGUAGES, t, type Translations } from './i18n';
 import { registerLspCommand } from './lsp-command';
 import { registerToolCommands } from './tool-commands';
-// Read package.json at runtime to avoid import attribute issues
+// Read package.json at runtime to avoid import attribute issues: the nearest one
+// at or above this file (src/cli in a checkout, dist/cli in the package).
 function findPackageJson(): { name: string; version: string } {
-  let currentDir = __dirname;
-  while (currentDir !== path.dirname(currentDir)) {
-    const packagePath = path.join(currentDir, 'package.json');
+  for (let dir = __dirname; ; dir = path.dirname(dir)) {
+    const packagePath = path.join(dir, 'package.json');
     if (fs.existsSync(packagePath)) {
       return JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     }
-    currentDir = path.dirname(currentDir);
+    if (path.dirname(dir) === dir) throw new Error('package.json not found');
   }
-  // Fallback for test environments - use deterministic path resolution
-  // Instead of process.cwd(), use relative paths from __dirname
-  const fallbackPath = path.resolve(__dirname, '..', '..', 'package.json');
-  if (fs.existsSync(fallbackPath)) {
-    return JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
-  }
-  throw new Error('package.json not found');
 }
 const pkg = findPackageJson();
 
@@ -91,7 +84,7 @@ function handleCliFailure(error: unknown, fallbackPrefix: string): void {
     console.error(fallbackPrefix, error instanceof Error ? error.message : error);
   }
 
-  if (!process.exitCode || process.exitCode === 0) {
+  if (!process.exitCode) {
     process.exitCode = 1;
   }
 }
@@ -191,9 +184,12 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
   };
 }
 
-/** Resolve a path from the config file relative to the directory of that file. */
-function resolveFromConfig(loaded: LoadedConfig, value: string, fallbackDir: string): string {
-  return path.resolve(loaded.configDir ?? fallbackDir, value);
+/**
+ * Resolve a path from the config file relative to the directory of that file
+ * (a value of the configuration means there is a config file).
+ */
+function resolveFromConfig(loaded: LoadedConfig, value: string): string {
+  return path.resolve(loaded.configDir!, value);
 }
 
 /** `x.som` → `x<suffix>`, anything else → `x.ext<suffix>` so the input is never overwritten. */
@@ -251,9 +247,7 @@ async function createModuleSystem(
   return new ModuleSystem({
     resolution: {
       ...resolution,
-      baseUrl: resolution?.baseUrl
-        ? resolveFromConfig(loaded, resolution.baseUrl, inputDir)
-        : inputDir,
+      baseUrl: resolution?.baseUrl ? resolveFromConfig(loaded, resolution.baseUrl) : inputDir,
     },
     loading: config.moduleSystem?.loading
       ? {
@@ -277,7 +271,7 @@ function createBundleOptions(
   if (options.output) {
     outputPath = path.resolve(options.output);
   } else if (config.bundle?.output) {
-    outputPath = resolveFromConfig(loaded, config.bundle.output, path.dirname(path.resolve(input)));
+    outputPath = resolveFromConfig(loaded, config.bundle.output);
   }
 
   return {
@@ -324,8 +318,6 @@ async function performBundling(
 }
 
 export interface CompileOptions extends CompilerOptions {
-  noSourceMap?: boolean;
-  noMinify?: boolean;
   /** `--no-type-check` is stored by commander as `typeCheck: false`. */
   typeCheck?: boolean;
   production?: boolean;
@@ -343,15 +335,10 @@ function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileO
   const inputDir = path.dirname(path.resolve(input));
   const loaded = loadConfigWithPath(inputDir);
   const config = loaded.config.compilerOptions ?? {};
+  // `--no-source-map` and `--no-minify` arrive as `sourceMap: false` and
+  // `minify: false`, so the command line overrides the configuration.
   const merged: CompileOptions = { ...config, ...cliOptions };
 
-  // Handle negation flags - they override positive flags
-  if (cliOptions.noSourceMap) {
-    merged.sourceMap = false;
-  }
-  if (cliOptions.noMinify) {
-    merged.minify = false;
-  }
   if (cliOptions.typeCheck === false) {
     merged.noTypeCheck = true;
   }
@@ -369,9 +356,9 @@ function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileO
   } else if (cliOptions.outDir) {
     outputFile = path.join(path.resolve(cliOptions.outDir), outputName);
   } else if (config.output) {
-    outputFile = resolveFromConfig(loaded, config.output, inputDir);
+    outputFile = resolveFromConfig(loaded, config.output);
   } else if (config.outDir) {
-    outputFile = path.join(resolveFromConfig(loaded, config.outDir, inputDir), outputName);
+    outputFile = path.join(resolveFromConfig(loaded, config.outDir), outputName);
   } else {
     outputFile = replaceSomExtension(input, '.js');
   }
@@ -516,18 +503,13 @@ function createRunWorkspace(input: string): { dir: string; file: string; cleanup
 }
 
 /**
- * Bundle source maps name sources relative to the entry directory; the temporary
- * bundle lives elsewhere, so point them at the original files with file URLs.
+ * Bundle source maps name sources by their paths relative to the entry
+ * directory; the temporary bundle lives elsewhere, so point them at the
+ * original files with file URLs.
  */
 function absoluteSourceMap(map: string, entryDir: string): string {
-  const parsed = JSON.parse(map) as { sources?: string[] };
-  if (Array.isArray(parsed.sources)) {
-    parsed.sources = parsed.sources.map(source =>
-      /^[a-z][a-z\d+.-]*:\/\//i.test(source)
-        ? source
-        : pathToFileURL(path.resolve(entryDir, source)).href
-    );
-  }
+  const parsed = JSON.parse(map) as { sources: string[] };
+  parsed.sources = parsed.sources.map(source => pathToFileURL(path.resolve(entryDir, source)).href);
   return JSON.stringify(parsed);
 }
 
@@ -601,7 +583,7 @@ async function executeRunCommand(
 function reportChildResult(child: ExecutionResult): void {
   const messages = t().commands.run.messages;
   if (child.error) {
-    console.error(messages.failedToExecute, child.error.message ?? child.error);
+    console.error(messages.failedToExecute, child.error.message);
     process.exitCode = 1;
   } else if (typeof child.status === 'number') {
     process.exitCode = child.status;
@@ -712,8 +694,9 @@ type CheckSettings = Required<Pick<CheckOptions, 'checker'>> &
  */
 function executeCheckCommand(files: string[], options: CheckOptions): void {
   try {
+    // commander requires at least one file
     const config =
-      loadConfigWithPath(path.dirname(path.resolve(files[0] ?? '.'))).config.compilerOptions ?? {};
+      loadConfigWithPath(path.dirname(path.resolve(files[0]))).config.compilerOptions ?? {};
     const results = checkFiles(
       files,
       {
