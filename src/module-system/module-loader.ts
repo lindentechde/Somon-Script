@@ -160,17 +160,16 @@ export class ModuleLoader {
    * Load module synchronously
    */
   loadSync(specifier: string, fromFile: string): LoadedModule {
-    const isTopLevel = this.loadingStack.size === 0;
-    if (isTopLevel && !this.options.cache) {
+    // A load is synchronous: it is never called while another one runs, and the
+    // dependencies of a module are loaded with loadSyncInternal()
+    if (!this.options.cache) {
       // Without a cache every load reads its files again; the modules of one load
       // are kept until the next, so that cycles and shared modules load once.
       this.clearCache();
     }
     const module = this.loadSyncInternal(specifier, fromFile);
-    if (isTopLevel) {
-      // Enforce limits only between builds, never evicting what this build needs
-      this.enforceCacheLimits(this.collectDependencyClosure(module.id));
-    }
+    // Enforce limits only between builds, never evicting what this build needs
+    this.enforceCacheLimits(this.collectDependencyClosure(module.id));
     return module;
   }
 
@@ -369,7 +368,8 @@ export class ModuleLoader {
       return false;
     }
 
-    for (const depId of module.resolvedDependencies ?? []) {
+    // Modules read from files (not external ones) list their resolved dependencies
+    for (const depId of module.resolvedDependencies!) {
       const dependency = this.moduleCache.get(depId);
       if (dependency?.isLoading) continue; // part of the cycle being loaded right now
       if (!dependency?.isLoaded || !this.isFresh(dependency, seen)) {
