@@ -314,11 +314,6 @@ class I18n {
   public t(): Translations {
     return translations[this.language];
   }
-
-  public get isRTL(): boolean {
-    // Tajik and Russian both use left-to-right writing
-    return false;
-  }
 }
 
 // Singleton instance
