@@ -2,7 +2,7 @@ import { transformSync, type PluginItem } from '@babel/core';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 import ts from 'typescript';
 
-import { CodeGenerator } from './codegen';
+import { CodeGenerator, type CodeMapping } from './codegen';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { TypeChecker } from './type-checker';
@@ -12,10 +12,15 @@ import { TypeChecker } from './type-checker';
  */
 export interface CompileOptions {
   /**
-   * Emit source maps that map the generated JavaScript back to the SomonScript input.
-   * Enabled automatically when the pipeline needs stack traces or debugger support.
+   * Emit a source map (`CompileResult.sourceMap`) that maps the generated
+   * JavaScript back to the SomonScript input, statement by statement.
    */
   sourceMap?: boolean;
+  /**
+   * Name of the SomonScript input, used as the source map's `sources` entry
+   * (and, with `.som` replaced by `.js`, its `file`). Defaults to `source.som`.
+   */
+  sourceFileName?: string;
   /**
    * Reduce output size by removing whitespace and simplifying expressions where possible.
    */
@@ -29,25 +34,31 @@ export interface CompileOptions {
    */
   typeCheck?: boolean;
   /**
-   * Abort compilation when any type errors are encountered instead of emitting code.
+   * Treat type errors as fatal: no code is emitted when any are found. Without
+   * it, type errors are still reported in `errors` but code is emitted too.
    */
   strict?: boolean;
   /**
-   * Maximum compilation time in milliseconds. Defaults to 120000ms (2 minutes).
-   * Set to 0 to disable timeout.
+   * @deprecated Has no effect: compilation is synchronous and cannot be
+   * interrupted. Enforce time limits around the call (e.g. in a worker).
    */
   timeout?: number;
 }
 
 /**
  * Result of compiling SomonScript source into JavaScript.
+ *
+ * `errors` and `code` are not exclusive: parse errors and code generation
+ * errors always suppress code (`code` is `''`), and so do type errors in
+ * `strict` mode, but without `strict` type errors are reported alongside the
+ * emitted code. Check `errors.length` rather than `code` to detect failure.
  */
 export interface CompileResult {
-  /** Generated JavaScript code, or an empty string if compilation failed. */
+  /** Generated JavaScript code, or an empty string when emission was suppressed. */
   code: string;
-  /** Optional source map bundled as a JSON string when `sourceMap` is enabled. */
+  /** Source map as a JSON string when `sourceMap` is enabled and code was emitted. */
   sourceMap?: string;
-  /** Collection of fatal issues that prevented emission. */
+  /** Errors: parse, code generation and type errors (see above for which suppress code). */
   errors: string[];
   /** Diagnostics that highlight potential problems but do not stop emission. */
   warnings: string[];
@@ -84,7 +95,7 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
       return { code: '', errors, warnings };
     }
 
-    return emitCode(ast, options, errors, warnings);
+    return emitCode(ast, options, errors, warnings, source);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
     return { code: '', errors, warnings };
@@ -136,21 +147,25 @@ function emitCode(
   ast: ReturnType<Parser['parse']>,
   options: CompileOptions,
   errors: string[],
-  warnings: string[]
+  warnings: string[],
+  source: string
 ): CompileResult {
   const generator = new CodeGenerator();
-  let code = generator.generate(ast);
+  const generated = generator.generateWithMappings(ast);
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
     errors.push(...codegenErrors.map(err => `Code generation error: ${err}`));
     return { code: '', errors, warnings };
   }
-  const transpileResult = transpile(code, options);
-  code = transpileResult.code;
-  let map = transpileResult.map;
 
-  if (options.sourceMap && !map) {
-    map = generateIdentityMap(code);
+  const sourceFileName = options.sourceFileName ?? 'source.som';
+  let map = options.sourceMap
+    ? buildSourceMap(generated.mappings, sourceFileName, source)
+    : undefined;
+  const transpileResult = transpile(generated.code, options);
+  let code = transpileResult.code;
+  if (map && transpileResult.map) {
+    map = chainSourceMaps(transpileResult.map, map, source);
   }
 
   if (options.minify) {
@@ -213,20 +228,114 @@ function transpile(code: string, options: CompileOptions) {
     options.sourceMap && transpile.sourceMapText
       ? (JSON.parse(transpile.sourceMapText) as unknown as RawSourceMap)
       : undefined;
-  return { code: transpile.outputText, map };
+  // TypeScript points at a `module.js.map` file that is never written
+  const outputText = transpile.outputText.replace(/\n?\/\/# sourceMappingURL=\S*\s*$/, '\n');
+  return { code: outputText, map };
 }
 
-function generateIdentityMap(code: string): RawSourceMap {
-  const generator = new SourceMapGenerator({ file: 'compiled.js' });
-  const lines = code.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    generator.addMapping({
-      generated: { line: i + 1, column: 0 },
-      original: { line: i + 1, column: 0 },
-      source: 'source.som',
-    });
+function outputFileName(sourceFileName: string): string {
+  const baseName = sourceFileName.split(/[\\/]/).pop() || 'source.som';
+  return baseName.replace(/\.som$/, '') + '.js';
+}
+
+/** Source map from the code generator's statement positions to the `.som` input. */
+function buildSourceMap(
+  mappings: CodeMapping[],
+  sourceFileName: string,
+  source: string
+): RawSourceMap {
+  const generator = new SourceMapGenerator({ file: outputFileName(sourceFileName) });
+  generator.setSourceContent(sourceFileName, source);
+  for (const mapping of mappings) {
+    generator.addMapping({ ...mapping, source: sourceFileName });
   }
-  return JSON.parse(generator.toString()) as unknown as RawSourceMap;
+  return generator.toJSON();
+}
+
+/**
+ * Compose `outer` (transpiled JS → generated JS) with `inner` (generated JS →
+ * `.som`). Done by hand because `source-map`'s consumer is asynchronous and
+ * `compile` is not. Each outer segment takes the nearest inner mapping at or
+ * before its position on the same line.
+ */
+function chainSourceMaps(outer: RawSourceMap, inner: RawSourceMap, source: string): RawSourceMap {
+  const innerLines = decodeMappings(inner.mappings);
+  const sourceFileName = inner.sources[0];
+  const generator = new SourceMapGenerator({ file: inner.file });
+  generator.setSourceContent(sourceFileName, source);
+
+  decodeMappings(outer.mappings).forEach((segments, outerLine) => {
+    for (const [column, , line, originalColumn] of segments) {
+      if (line === undefined) continue;
+      const candidates = innerLines[line] ?? [];
+      let match: number[] | undefined;
+      for (const candidate of candidates) {
+        if (candidate[0] > originalColumn) break;
+        match = candidate;
+      }
+      match ??= candidates[0];
+      if (!match || match.length < 4) continue;
+      generator.addMapping({
+        generated: { line: outerLine + 1, column },
+        original: { line: match[2] + 1, column: match[3] },
+        source: sourceFileName,
+      });
+    }
+  });
+  return generator.toJSON();
+}
+
+const BASE64_DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Decode a source map `mappings` string into absolute segments per generated
+ * line: [column, sourceIndex, originalLine (0-based), originalColumn, name].
+ */
+function decodeMappings(mappings: string): number[][][] {
+  const state = [0, 0, 0, 0, 0];
+  return mappings.split(';').map(lineText => {
+    state[0] = 0;
+    return lineText
+      .split(',')
+      .filter(segment => segment.length > 0)
+      .map(segment => decodeVlq(segment).map((delta, index) => (state[index] += delta)));
+  });
+}
+
+function decodeVlq(segment: string): number[] {
+  const values: number[] = [];
+  let value = 0;
+  let shift = 0;
+  for (const char of segment) {
+    const digit = BASE64_DIGITS.indexOf(char);
+    value += (digit & 31) << shift;
+    if (digit & 32) {
+      shift += 5;
+    } else {
+      values.push(value & 1 ? -(value >>> 1) : value >>> 1);
+      value = 0;
+      shift = 0;
+    }
+  }
+  return values;
+}
+
+let minifyPreset: PluginItem | undefined;
+
+/** `babel-preset-minify` is a regular dependency; load it once, on first use. */
+function loadMinifyPreset(): PluginItem {
+  if (!minifyPreset) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      minifyPreset = require('babel-preset-minify') as PluginItem;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Minification failed: the 'babel-preset-minify' dependency could not be loaded (${reason}). Reinstall the package dependencies.`
+      );
+    }
+  }
+  return minifyPreset;
 }
 
 function minifyCode(
@@ -234,33 +343,11 @@ function minifyCode(
   map: RawSourceMap | undefined,
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
-  // Lazy-load minify preset to avoid hard dependency at runtime
-  let presetModule: unknown = null;
-  try {
-    try {
-      const resolvedPreset = require.resolve('babel-preset-minify');
-      delete require.cache[resolvedPreset];
-    } catch {
-      // ignore - module is either not installed or already absent from the cache
-    }
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    presetModule = require('babel-preset-minify');
-  } catch {
-    throw new Error(
-      "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable --minify."
-    );
-  }
-  // Safely coerce the dynamically required preset into a PluginItem if possible.
-  // babel-preset-minify exports either a function or an object acceptable as a preset.
-  const presetItems: PluginItem[] = [];
-  if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
-    presetItems.push(presetModule as PluginItem);
-  }
   const babel = transformSync(code, {
     sourceMaps: sourceMap,
-    // Cast RawSourceMap to Babel's InputSourceMap - they have compatible structures
+    // Babel composes its own map with this one, so the result maps to the .som input
     inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
-    presets: presetItems,
+    presets: [loadMinifyPreset()],
     comments: false,
     compact: true,
   });

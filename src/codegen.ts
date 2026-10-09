@@ -65,6 +65,14 @@ const PREC = {
   PRIMARY: 20,
 } as const;
 
+/** One generated → original position pair recorded by `generateWithMappings`. */
+export interface CodeMapping {
+  generated: { line: number; column: number };
+  original: { line: number; column: number };
+}
+
+const POSITION_MARKER = '\0';
+
 type PatternNode =
   | Identifier
   | ArrayPattern
@@ -143,6 +151,8 @@ export class CodeGenerator {
   private readonly errors: string[] = [];
   /** Names declared by the program, innermost scope last (see `withScope`). */
   private readonly scopes: Set<string>[] = [];
+  /** Whether statements are prefixed with position markers (`generateWithMappings`). */
+  private trackPositions = false;
 
   // Static — allocated once for the class, not rebuilt per member expression.
   // O(1) membership test via Set replaces the previous O(n) Array.includes.
@@ -619,6 +629,55 @@ export class CodeGenerator {
     return this.generateProgram(ast);
   }
 
+  /**
+   * Generate code and record, for every emitted statement, where it starts in
+   * the output and in the SomonScript source (`line` 1-based, `column`
+   * 0-based, as in source maps).
+   */
+  generateWithMappings(ast: Program): { code: string; mappings: CodeMapping[] } {
+    this.trackPositions = true;
+    try {
+      return CodeGenerator.extractPositionMarkers(this.generateProgram(ast));
+    } finally {
+      this.trackPositions = false;
+    }
+  }
+
+  /**
+   * Position markers (`\0line,column\0`) are placed in front of statements
+   * while generating, since statement text is still re-indented and spliced
+   * afterwards. NUL never occurs otherwise: literals escape it.
+   */
+  private static extractPositionMarkers(marked: string): {
+    code: string;
+    mappings: CodeMapping[];
+  } {
+    const parts = marked.split(POSITION_MARKER);
+    const mappings: CodeMapping[] = [];
+    let code = '';
+    let line = 1;
+    let column = 0;
+    parts.forEach((part, index) => {
+      if (index % 2 === 1) {
+        const [originalLine, originalColumn] = part.split(',').map(Number);
+        mappings.push({
+          generated: { line, column },
+          original: { line: originalLine, column: originalColumn },
+        });
+        return;
+      }
+      code += part;
+      const lastNewline = part.lastIndexOf('\n');
+      if (lastNewline === -1) {
+        column += part.length;
+      } else {
+        line += part.split('\n').length - 1;
+        column = part.length - lastNewline - 1;
+      }
+    });
+    return { code, mappings };
+  }
+
   private generateProgram(node: Program): string {
     const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
@@ -627,8 +686,20 @@ export class CodeGenerator {
     return statements.join('\n');
   }
 
-  // eslint-disable-next-line complexity
   private generateStatement(node: Statement): string {
+    const code = this.generateStatementNode(node);
+    if (!this.trackPositions || code.length === 0 || node.type === 'BlockStatement') {
+      return code;
+    }
+    if (typeof node.line !== 'number' || typeof node.column !== 'number') {
+      return code;
+    }
+    const marker = `${POSITION_MARKER}${node.line},${Math.max(node.column - 1, 0)}${POSITION_MARKER}`;
+    return code.replace(/^ */, indentation => indentation + marker);
+  }
+
+  // eslint-disable-next-line complexity
+  private generateStatementNode(node: Statement): string {
     switch (node.type) {
       case 'ImportDeclaration':
         return this.generateImportDeclaration(node as ImportDeclaration);

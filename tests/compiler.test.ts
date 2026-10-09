@@ -185,17 +185,18 @@ describe('Compiler', () => {
   });
 
   test('should fail fast when minify preset is unavailable', () => {
-    // Note: This test verifies the error message in the compiler code.
-    // In practice, babel-preset-minify is installed as a dependency,
-    // so we can't truly test the unavailable case without complex mocking.
-    // The compiler throws an error with the correct message when the module is not found.
-
-    // Verify the error message exists in the compiler source
-    const fs = require('fs');
-    const compilerSource = fs.readFileSync(require.resolve('../src/compiler'), 'utf8');
-    expect(compilerSource).toContain(
-      "Minification requires the optional dependency 'babel-preset-minify'"
-    );
+    jest.isolateModules(() => {
+      jest.doMock('babel-preset-minify', () => {
+        throw new Error('Cannot find module');
+      });
+      const { compile: isolatedCompile } = require('../src/compiler');
+      const result = isolatedCompile('тағйирёбанда а = 1;', { minify: true });
+      expect(result.code).toBe('');
+      expect(result.errors).toEqual([
+        expect.stringContaining("the 'babel-preset-minify' dependency could not be loaded"),
+      ]);
+    });
+    jest.dontMock('babel-preset-minify');
 
     // When minify is available (normal case), compilation should succeed
     const result = compile('тағйирёбанда а = 1;', { minify: true });
