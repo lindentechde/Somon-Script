@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import { ModuleLoader, ModuleRegistry, ModuleResolver, ModuleSystem } from '../src/module-system';
 import { isSystemPath } from '../src/module-system/module-resolver';
+import { compile as compileSource } from '../src/compiler';
 import { canonicalTmpDir } from './helpers/paths';
 import type { ModuleSystemOptions } from '../src/module-system';
 
@@ -582,6 +583,45 @@ describe('module system regressions', () => {
       expect(graph.get(ids[1])).toEqual([ids[2]]);
       expect(ms.getStatistics().totalModules).toBe(3);
       expect(ms.getStatistics().totalDependencies).toBe(3);
+    });
+  });
+
+  describe('minified bundles', () => {
+    test("ignore the Babel configuration of the project they're built in", async () => {
+      write({
+        'babel.config.json': '{ "presets": ["somon-test-preset-that-does-not-exist"] }\n',
+        '.babelrc': '{ "presets": ["somon-test-preset-that-does-not-exist"] }\n',
+        'main.som':
+          'функсия салом(ном: сатр): сатр { бозгашт "салом " + ном; }\nчоп.сабт(салом("ҷаҳон"));\n',
+      });
+      const ms = createSystem();
+      const cwd = process.cwd();
+      process.chdir(root);
+      try {
+        const bundle = await ms.bundle({ entryPoint: path.join(root, 'main.som'), minify: true });
+        fs.writeFileSync(path.join(root, 'out.js'), bundle.code);
+      } finally {
+        process.chdir(cwd);
+      }
+      const output = execFileSync(process.execPath, [path.join(root, 'out.js')], {
+        encoding: 'utf8',
+      });
+      expect(output.trim()).toBe('салом ҷаҳон');
+    });
+  });
+
+  describe('minified single files (src/compiler.ts, reported: not part of the module system)', () => {
+    // compile()'s minifyCode() calls Babel without `configFile: false, babelrc: false`,
+    // so `somon compile --minify` applies the babel.config.json of the current directory.
+    test.failing('compile({ minify: true }) ignores the Babel configuration', () => {
+      write({ 'babel.config.json': '{ "presets": ["somon-test-preset-that-does-not-exist"] }\n' });
+      const cwd = process.cwd();
+      process.chdir(root);
+      try {
+        expect(compileSource('чоп.сабт(1 + 2);', { minify: true }).code).toContain('console.log');
+      } finally {
+        process.chdir(cwd);
+      }
     });
   });
 

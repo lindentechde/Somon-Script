@@ -1825,6 +1825,9 @@ export class ModuleSystem {
       presetItems.push(presetModule as PluginItem);
     }
     const out = transformSync(code, {
+      // The bundle is minified the same way in every project: no babel.config.* or .babelrc
+      configFile: false,
+      babelrc: false,
       sourceMaps,
       inputSourceMap: map ? { ...map, file: map.file ?? '' } : undefined,
       presets: presetItems,
