@@ -728,7 +728,7 @@ describe('anonymous default exports', () => {
       'export default function(х) {\n  return х;\n};'
     );
     expect(compile(source[1], { typeCheck: false }).code).toBe(
-      'module.exports.default = function(х) {\n  return х;\n};'
+      '"use strict";\nmodule.exports.default = function(х) {\n  return х;\n};'
     );
     expect(typescriptOf(source[1])).toBe('export default function(х: number) {\n  return х;\n};');
     expect(typescriptOf(`синф Асос {}\n${source[2]}`)).toBe(
@@ -838,21 +838,25 @@ describe('the rest of the TypeScript 5.4 type syntax', () => {
 
 describe('modules and namespaces', () => {
   test('`пешфарз` and keywords as export names', () => {
+    // A module exports `default` once (more is an error), so this exports it last
     const source = [
       'ворид { пешфарз чун ҳисоб, агар чун шарт } аз "./м";',
-      'содир { пешфарз } аз "./н";',
-      'содир { пешфарз чун дигар, а чун пешфарз } аз "./о";',
+      'содир { пешфарз чун аввал } аз "./н";',
+      'содир { пешфарз чун дигар, а чун агар } аз "./о";',
       'собит у = ҳисоб(шарт);',
       'содир { у чун пешфарз, у чун return };',
     ].join('\n');
     expect(compile(source, { module: 'esm', typeCheck: false }).code).toBe(
       [
         'import { default as ҳисоб, агар as шарт } from "./м.js";',
-        'export { default } from "./н.js";',
-        'export { default as дигар, а as default } from "./о.js";',
+        'export { default as аввал } from "./н.js";',
+        'export { default as дигар, а as агар } from "./о.js";',
         'const у = ҳисоб(шарт);',
         'export { у as default, у as return };',
       ].join('\n')
+    );
+    expect(compile('содир { пешфарз } аз "./н";', { module: 'esm', typeCheck: false }).code).toBe(
+      'export { default } from "./н.js";'
     );
     expect(compile(source, { typeCheck: false }).code).toContain(
       'const { default: ҳисоб, агар: шарт } = __somon_import_0;'

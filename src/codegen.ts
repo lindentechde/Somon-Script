@@ -243,6 +243,16 @@ const ASSERTION_TYPES: ReadonlySet<string> = new Set([
   'InstantiationExpression',
 ]);
 
+/** Declarations without a runtime value: exporting one as default exports no value. */
+const TYPE_ONLY_DECLARATIONS: ReadonlySet<string> = new Set([
+  'InterfaceDeclaration',
+  'TypeAlias',
+  'FunctionSignature',
+]);
+
+/** Spellings of the default export's name: `содир { х чун пешфарз }`. */
+const DEFAULT_NAMES: ReadonlySet<string> = new Set(['default', 'пешфарз']);
+
 /** `code` without the line breaks at its end (a loop, not a backtracking `/\n+$/`). */
 function withoutTrailingNewlines(code: string): string {
   let end = code.length;
@@ -501,6 +511,7 @@ export class CodeGenerator {
       this.typeOnlyNames = this.collectTypeOnlyNames(node.body ?? []);
     }
     this.checkRedeclarations(node.body ?? []);
+    this.checkDefaultExports(node.body ?? []);
     const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
@@ -1957,6 +1968,41 @@ export class CodeGenerator {
    * JavaScript would let the second replace the first, but strict code
    * (ES modules, bundles) rejects it, and it is almost always a mistake.
    */
+  /**
+   * A module has one default export: two are JavaScript's early error in ES
+   * modules and TypeScript's TS2528 ("A module cannot have multiple default
+   * exports"). Overload signatures and types (`содир пешфарз интерфейс`) are
+   * not values and do not count.
+   */
+  private checkDefaultExports(body: Statement[]): void {
+    let exported = false;
+    for (const stmt of body) {
+      if (!this.exportsDefaultValue(stmt)) continue;
+      if (exported) {
+        this.errors.push(
+          `A module cannot have multiple default exports at line ${stmt.line}, column ${stmt.column}`
+        );
+      }
+      exported = true;
+    }
+  }
+
+  private exportsDefaultValue(stmt: Statement): boolean {
+    if (stmt.type !== 'ExportDeclaration') return false;
+    const node = stmt as ExportDeclaration;
+    if (node.exportKind === 'type') return false;
+    if (node.default) {
+      const declaration = node.declaration as (Statement & { declare?: boolean }) | undefined;
+      return !(
+        declaration &&
+        (TYPE_ONLY_DECLARATIONS.has(declaration.type) || declaration.declare === true)
+      );
+    }
+    return (node.specifiers ?? []).some(
+      spec => spec.exportKind !== 'type' && DEFAULT_NAMES.has(spec.exported.name)
+    );
+  }
+
   protected checkRedeclarations(
     statements: Statement[],
     bound: string[] = [],

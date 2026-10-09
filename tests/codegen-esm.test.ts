@@ -95,6 +95,32 @@ describe('ES module exports', () => {
   });
 });
 
+describe('one default export per module', () => {
+  // Found by tests/differential.test.ts: ES module output failed to load, CommonJS kept the last
+  test.each([
+    'содир пешфарз функсия ф() {}\nсодир пешфарз синф К {}',
+    'тағ х = 1;\nсодир { х чун пешфарз };\nсодир пешфарз 2;',
+  ])('%p is an error in both formats', source => {
+    for (const module of ['commonjs', 'esm'] as const) {
+      expect(compile(source, { module, typeCheck: false }).errors).toEqual([
+        expect.stringMatching(
+          /A module cannot have multiple default exports at line \d+, column 1/
+        ),
+      ]);
+    }
+  });
+
+  test('overload signatures and types are no second default export', () => {
+    for (const source of [
+      'содир пешфарз функсия ф(а: рақам): беджавоб;\nсодир пешфарз функсия ф(а: ҳар) {}',
+      'содир пешфарз интерфейс И {}\nсодир пешфарз функсия ф() {}',
+      'тағ х = 1;\nсодир { навъ х чун пешфарз };\nсодир пешфарз 2;',
+    ]) {
+      expect(compile(source, { module: 'esm', typeCheck: false }).errors).toEqual([]);
+    }
+  });
+});
+
 describe('module-only syntax', () => {
   test('top-level интизор and барои интизор in ES modules', () => {
     expect(esm('тағ х = интизор Promise.resolve(1);')).toBe('let х = await Promise.resolve(1);');
