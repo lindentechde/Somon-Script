@@ -1,5 +1,6 @@
 import * as vm from 'vm';
 import { compile, CompileOptions } from '../src/compiler';
+import * as path from 'path';
 
 /**
  * Programs using the TypeScript 5 declaration syntax compile, without type
@@ -269,7 +270,7 @@ describe('`эълон` (declare)', () => {
         {},
         { require }
       )
-    ).toEqual(['б.txt /']);
+    ).toEqual([`б.txt ${path.sep}`]);
   });
 
   test('`эълон` fields are not emitted', async () => {
