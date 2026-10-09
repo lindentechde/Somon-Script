@@ -497,8 +497,8 @@ export class Lexer {
   }
 
   /**
-   * Copies `${…}` as written. Braces inside string literals and nested
-   * template literals do not count towards the closing '}'.
+   * Copies `${…}` as written. Braces inside string literals, nested template
+   * literals and comments do not count towards the closing '}'.
    */
   private handleInterpolation(): string {
     let result = '${';
@@ -508,6 +508,10 @@ export class Lexer {
     let braceCount = 1;
     while (!this.isAtEnd()) {
       const char = this.currentChar();
+      if (char === '/' && (this.peek() === '/' || this.peek() === '*')) {
+        result += this.copyComment();
+        continue;
+      }
       if (char === '"' || char === "'") {
         result += this.copyQuotedString(char);
         continue;
@@ -532,6 +536,24 @@ export class Lexer {
       result += this.processStringCharacter();
     }
 
+    return result;
+  }
+
+  /** Copies a line comment (up to the newline) or a block comment inside an interpolation. */
+  private copyComment(): string {
+    const isBlock = this.peek() === '*';
+    let result = this.processStringCharacter() + this.processStringCharacter();
+    while (!this.isAtEnd()) {
+      if (
+        isBlock ? this.currentChar() === '*' && this.peek() === '/' : this.currentChar() === '\n'
+      ) {
+        break;
+      }
+      result += this.processStringCharacter();
+    }
+    if (isBlock && !this.isAtEnd()) {
+      result += this.processStringCharacter() + this.processStringCharacter();
+    }
     return result;
   }
 

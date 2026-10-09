@@ -1629,13 +1629,22 @@ export class Parser {
     return parts;
   }
 
-  /** Index of the '}' that closes an interpolation whose body starts at `start`. */
+  /**
+   * Index of the '}' that closes an interpolation whose body starts at `start`;
+   * braces in strings, nested templates and comments do not count.
+   */
   private findInterpolationEnd(raw: string, start: number): number {
     let depth = 1;
     let i = start;
     while (i < raw.length) {
       const char = raw[i];
-      if (char === '"' || char === "'") {
+      if (char === '/' && raw[i + 1] === '/') {
+        const newline = raw.indexOf('\n', i);
+        i = newline === -1 ? raw.length : newline;
+      } else if (char === '/' && raw[i + 1] === '*') {
+        const close = raw.indexOf('*/', i + 2);
+        i = close === -1 ? raw.length : close + 2;
+      } else if (char === '"' || char === "'") {
         i = this.skipQuoted(raw, i + 1, char);
       } else if (char === '`') {
         i = this.skipNestedTemplate(raw, i + 1);

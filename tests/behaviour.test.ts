@@ -65,6 +65,11 @@ const cases: Array<[string, string, string[]]> = [
     ['a`b ${х} C:\\temp мусбат'],
   ],
   [
+    'comments inside a template interpolation',
+    "тағ н = 1;\nчоп.сабт(`8:${ н // }\n}`, `${ /* } */ н }`, `${ н /* it's */ }`, `${ `${ н // }\n}` }`);",
+    ['8:1 1 1 1'],
+  ],
+  [
     'call statements are never dropped',
     'функсия ҳисобкунӣ(қиматҳо) { чоп.сабт("ҳисоб", қиматҳо); }\nҳисобкунӣ(1);\n' +
       'функсия ф(x) { чоп.сабт("ф", x); }\nтағ my_val = 2;\nф(my_val);',
