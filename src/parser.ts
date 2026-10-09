@@ -3319,7 +3319,7 @@ export class Parser {
   ): T {
     let tokens: Token[];
     try {
-      tokens = new Lexer(source).tokenize();
+      tokens = new Lexer(source, { expression: true }).tokenize();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(this.shiftPositions(message, line, column));

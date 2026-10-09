@@ -28,13 +28,13 @@ export function regexLiteralEnd(text: string, start: number): number {
 
 /**
  * Whether the '/' at `index` of raw source text starts a regular expression,
- * judged by the last non-blank character since `start`: after an operator or
- * an opening bracket it does, after an operand (`а / 2`, `(а) / 2`, `а++ / 2`,
- * `а! / 2`) it is a division. Used where template interpolations are scanned as text.
+ * judged by the last character since `start` that is not blank or in a block
+ * comment: after an operator or an opening bracket it does, after an operand
+ * (`а / 2`, `(а) / 2`, `а++ / 2`, `а! / 2`, `{} / 2`) it is a division. Used
+ * where template interpolations are scanned as text.
  */
 export function isRegexStartInText(text: string, index: number, start: number): boolean {
-  let i = index - 1;
-  while (i >= start && /\s/.test(text[i])) i--;
+  let i = previousSignificant(text, index - 1, start);
   if (i < start) return true;
   const previous = text[i];
   if ((previous === '+' || previous === '-') && text[i - 1] === previous) return false;
@@ -43,7 +43,47 @@ export function isRegexStartInText(text: string, index: number, start: number): 
     while (i > start && /[! \t]/.test(text[i - 1])) i--;
     return i === start || !/[\p{L}\p{N}\p{M}_$)\]"'`]/u.test(text[i - 1]);
   }
+  // `{ а: 1 } / 2` divides an object literal; a block (`агар (х) {}`) ends a statement
+  if (previous === '}') {
+    return !opensObjectLiteralInText(text, matchingOpenBrace(text, i, start), start);
+  }
   return '(,=:[&|?{};+-*%<>~^'.includes(previous);
+}
+
+/**
+ * Index of the last character at or before `i` (down to `start`) that is not
+ * blank or in a block comment; below `start` when there is none.
+ */
+function previousSignificant(text: string, i: number, start: number): number {
+  while (i >= start) {
+    if (/\s/.test(text[i])) {
+      i--;
+    } else if (text[i] === '/' && text[i - 1] === '*' && i - 1 > start) {
+      const open = text.lastIndexOf('/*', i - 2);
+      if (open < start) return i;
+      i = open - 1;
+    } else {
+      return i;
+    }
+  }
+  return i;
+}
+
+/** Index of the '{' that the '}' at `close` closes; below `start` when it is not in the text. */
+function matchingOpenBrace(text: string, close: number, start: number): number {
+  let depth = 0;
+  for (let i = close; i >= start; i--) {
+    if (text[i] === '}') depth++;
+    else if (text[i] === '{' && --depth === 0) return i;
+  }
+  return start - 1;
+}
+
+/** Whether the '{' at `open` opens an object literal: an operand is expected there (not `=> {`). */
+function opensObjectLiteralInText(text: string, open: number, start: number): boolean {
+  if (open < start) return false;
+  const i = previousSignificant(text, open - 1, start);
+  return i < start || '(,=:[&|?+-*%<~^!'.includes(text[i]);
 }
 
 /** Options for {@link Lexer}. */
@@ -54,11 +94,18 @@ export interface LexerOptions {
    * formatter. Comments never influence the other tokens.
    */
   comments?: boolean;
+  /**
+   * The input is an expression, such as the source of a template
+   * interpolation: a '{' at its start opens an object literal, not a block.
+   */
+  expression?: boolean;
 }
 
 export class Lexer {
   private readonly input: string;
   private readonly keepComments: boolean;
+  /** {@link LexerOptions.expression} */
+  private readonly expressionInput: boolean;
   /** Offset where the token being read starts (comment mode). */
   private tokenStart = 0;
   private position: number = 0;
@@ -184,6 +231,7 @@ export class Lexer {
     // Remove BOM if present
     this.input = input.codePointAt(0) === 0xfeff ? input.slice(1) : input;
     this.keepComments = options.comments === true;
+    this.expressionInput = options.expression === true;
   }
 
   tokenize(): Token[] {
@@ -368,7 +416,10 @@ export class Lexer {
         this.openBrackets.push({ regexAfterClose: false, generatorBody: false });
         break;
       case TokenType.LEFT_BRACE: {
-        const block = !Lexer.opensObjectLiteral(before, previous);
+        const block =
+          previous === undefined
+            ? !this.expressionInput
+            : !Lexer.opensObjectLiteral(before, previous);
         const generatorBody = block && this.generatorPending;
         if (generatorBody) {
           this.generatorPending = false;

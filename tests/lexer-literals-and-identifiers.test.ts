@@ -395,6 +395,20 @@ describe('Lexer: regular expression literals', () => {
   });
 
   test.each([
+    ['`${{} / 2 / 1}`', '{} / 2 / 1'],
+    ['`${{ а: {} } / 2 / 1}`', '{а: {}} / 2 / 1'],
+    ['`${{} / /* и */ ((п) => п / 2)(1)}`', '{} / ((п) => п / 2)(1)'],
+    ['`${1 + /* /}/ */ /}/.source}`', '1 + /}/.source'],
+  ])('a template interpolation tells a division after `}` or a comment: %s', (source, code) => {
+    expect(significant(source)).toEqual([
+      expect.objectContaining({ type: TokenType.TEMPLATE_LITERAL, value: source.slice(1, -1) }),
+    ]);
+    expect(compile(`тағ х = ${source};`, { typeCheck: false })).toEqual(
+      expect.objectContaining({ errors: [], code: expect.stringContaining(`\`\${${code}}\``) })
+    );
+  });
+
+  test.each([
     ['/а/gg', "Invalid regular expression flags 'gg' at line 1, column 5"],
     ['/а/x', "Invalid regular expression flags 'x' at line 1, column 5"],
     ['/а/uv', "Invalid regular expression flags 'uv' at line 1, column 5"],
