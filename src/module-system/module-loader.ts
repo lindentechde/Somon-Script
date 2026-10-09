@@ -393,8 +393,12 @@ export class ModuleLoader {
       return false;
     }
 
-    // Modules read from files (not external ones) list their resolved dependencies
-    for (const depId of module.resolvedDependencies!) {
+    // Modules read from files (not external ones) list their resolved dependencies,
+    // one for each specifier
+    for (const [index, depId] of module.resolvedDependencies!.entries()) {
+      // An import that became an external, or stopped being one, resolves differently now
+      const isExternal = this.matchExternal(module.dependencies[index]) !== null;
+      if (depId.startsWith('external:') !== isExternal) return false;
       const dependency = this.moduleCache.get(depId);
       if (dependency?.isLoading) continue; // part of the cycle being loaded right now
       if (!dependency?.isLoaded || !this.isFresh(dependency, seen)) {

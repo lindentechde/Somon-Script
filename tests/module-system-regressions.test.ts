@@ -687,6 +687,22 @@ describe('module system regressions', () => {
       expect(own.errors.map(error => error.specifier)).toEqual(['not-installed']);
       expect((await fresh.compile(entry)).errors).toEqual([]);
     });
+
+    test('a later build with other externals loads the modules whose imports changed', async () => {
+      write({
+        'util.som': 'содир собит У = 1;\n',
+        'main.som': 'ворид { У } аз "./util";\nчоп.сабт(У);\n',
+      });
+      const ms = createSystem();
+      const entry = path.join(root, 'main.som');
+      const files = async (externals?: string[]) =>
+        [...(await ms.compile(entry, externals)).modules.keys()].map(id => path.basename(id));
+
+      expect(await files(['./util'])).toEqual(['main.som']);
+      expect(await files()).toEqual(['util.som', 'main.som']);
+      expect(await files(['./util'])).toEqual(['main.som']);
+      expect(await bundleAndRun('main.som', { ms })).toBe('1');
+    });
   });
 
   describe('Node.js built-in modules', () => {

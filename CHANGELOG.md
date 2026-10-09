@@ -110,6 +110,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon run` and `somon bundle` of an entry point whose name does not end in `.som` (`prog.txt`), or of a file named just `.som`, failed with "Entry module … missing from bundle results" (and `run --module esm` with a missing file): the entry point is compiled as SomonScript whatever its name.
 * The `dependents` of a module's metadata (`ModuleSystem.getModule()`, `getAllModules()`, `ModuleRegistry.get()`) were always empty; they list the modules that import it.
 * The `loading.externals` of a `ModuleSystem` were cleared by every `compile()`/`bundle()` that named no externals of its own, so they never applied.
+* A `ModuleSystem` that built a bundle with `externals` and then one without them (or the other way round) reused the modules of the first build, leaving a module out of the second bundle or bundling one that was external; modules whose imports became or stopped being externals are loaded again.
 
 ## 0.4.0 (2026-10-09)
 
