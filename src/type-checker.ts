@@ -468,6 +468,8 @@ export class TypeChecker {
   private classStack: Type[] = [];
   /** Enum declarations already declared (merged enums add to the first one's type). */
   private declaredEnums: WeakSet<EnumDeclaration> = new WeakSet();
+  /** Members of the declarations of a (merged) enum checked so far, by its enum object. */
+  private checkedEnumMembers: WeakMap<Type, Set<string>> = new WeakMap();
   /** Types `initializePrimitiveTypes` gives the names `сатр`, `рақам`, … as values. */
   private primitiveValues: Set<Type> = new Set();
   /** Callee type of each call when last inferred, for type predicates (`х аст Т`). */
@@ -1647,15 +1649,25 @@ export class TypeChecker {
     }
   }
 
-  /** Checks member initializers; earlier members are in scope by name (`Б = А * 2`). */
+  /**
+   * Checks member initializers; earlier members are in scope by name
+   * (`Б = А * 2`), and so are the members of the enum's earlier declarations
+   * (`шумориш Э { А } шумориш Э { Б = А + 1 }`).
+   */
   private checkEnumDeclaration(enumDecl: EnumDeclaration): void {
     const enumType = this.lookup(enumDecl.name.name);
+    const earlier = (enumType && this.checkedEnumMembers.get(enumType)) ?? new Set<string>();
+    if (enumType) this.checkedEnumMembers.set(enumType, earlier);
     this.withScope(() => {
+      for (const name of earlier) {
+        this.declare(name, enumType?.properties?.get(name)?.type ?? NUMBER_TYPE);
+      }
       for (const member of enumDecl.members) {
         if (member.initializer) this.inferExpressionType(member.initializer);
         const name = this.enumMemberName(member);
         if (member.id.type === 'Identifier') {
           this.declare(name, enumType?.properties?.get(name)?.type ?? NUMBER_TYPE);
+          earlier.add(name);
         }
       }
     });
@@ -2280,6 +2292,8 @@ export class TypeChecker {
         continue;
       }
       const thisType = member.static ? undefined : classType;
+      // A computed name (`[Symbol.iterator]()`, `[калид] = 1`) is an expression of the outer scope
+      if (member.computed) this.inferExpressionType(member.key as Expression);
       // Signatures without a body (overloads, `эълон синф`) and index signatures
       if (member.type === 'MethodDefinition' && member.signature) continue;
       if (member.type === 'PropertyDefinition' && member.indexSignature) continue;
@@ -3150,7 +3164,9 @@ export class TypeChecker {
   }
 
   private hasStaticMember(classType: Type, name: string, jsName: string): boolean {
-    if (BUILTIN_MEMBERS.function.has(jsName) || this.isOpenType(classType)) return true;
+    // A class is a function: `name`, `call`, … and its own `prototype`
+    if (jsName === 'prototype' || BUILTIN_MEMBERS.function.has(jsName)) return true;
+    if (this.isOpenType(classType)) return true;
     for (
       let t: Type | undefined = classType, depth = 0;
       t && depth < 100;

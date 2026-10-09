@@ -1006,3 +1006,55 @@ describe('TypeChecker regressions: accessors, private members and type operators
     ).toEqual([]);
   });
 });
+
+/** Disagreements with the TypeScript checker found by tests/differential.test.ts. */
+describe('TypeChecker regressions: verdicts of the TypeScript checker', () => {
+  function strictErrorsOf(source: string): string[] {
+    const parser = new Parser(new Lexer(source).tokenize());
+    const program = parser.parse();
+    expect(parser.getErrors()).toEqual([]);
+    return new TypeChecker(source, { strict: true })
+      .check(program)
+      .errors.map(e => `${e.code}: ${e.message}`);
+  }
+
+  test("a class's prototype, name and length exist", () => {
+    // migrate/61-getters-setters.ts: `Temperature.prototype` was PROPERTY_NOT_FOUND
+    expect(
+      strictErrorsOf(
+        'синф К { get х(): рақам { бозгашт 1; } }\n' +
+          'чоп.сабт(объект.тавсифиХосият(К.prototype, "х"), К.name, К.length, К.call);'
+      )
+    ).toEqual([]);
+    expect(strictErrorsOf('синф К {}\nчоп.сабт(К.ҳарчӣ);')).toEqual([
+      "PROPERTY_NOT_FOUND: Property 'ҳарчӣ' does not exist on class 'К'",
+    ]);
+  });
+
+  test("an enum's initializers see the members of its earlier declarations", () => {
+    // ts-syntax-codegen.test.ts: `В = Б + 1` was UNDEFINED_IDENTIFIER
+    expect(errorsOf('шумориш Э { А, Б }\nшумориш Э { В = Б + 1, Г = А }')).toEqual([]);
+    // TypeScript rejects members declared later (TS2651)
+    expect(errorsOf('шумориш Э { А = 2, Б = В }\nшумориш Э { В = 1 }')).toEqual([
+      "UNDEFINED_IDENTIFIER: Variable 'В' is not defined",
+    ]);
+  });
+
+  test('computed names of class members are checked', () => {
+    // ts-syntax-codegen.test.ts: `[калид] = 1` with an undeclared `калид` passed
+    expect(
+      errorsOf('синф К { [калид] = 1; статикӣ [ном]() {} get [а](): рақам { бозгашт 1; } }')
+    ).toEqual([
+      "UNDEFINED_IDENTIFIER: Variable 'калид' is not defined",
+      "UNDEFINED_IDENTIFIER: Variable 'ном' is not defined",
+      "UNDEFINED_IDENTIFIER: Variable 'а' is not defined",
+    ]);
+    expect(
+      errorsOf(
+        'собит калид = "а";\n' +
+          'синф К { [калид] = 1; [Symbol.iterator]() { бозгашт [][Symbol.iterator](); } }\n' +
+          'тағ к = синф { статикӣ [калид + "б"]() {} };'
+      )
+    ).toEqual([]);
+  });
+});

@@ -223,25 +223,4 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
       'migrate leaves out the type arguments of `reduce<Record<…>>(…)` (with a warning) until ' +
       'the parser reads call type arguments',
   },
-  // BUGs, fixed in the commits after this one
-  'ts-syntax-codegen.test.ts:127': {
-    default: 'typescript-only',
-    strict: 'typescript-only',
-    reason: 'BUG: computed class member names are not checked (undeclared `калид`)',
-  },
-  'ts-syntax-parser.test.ts:780': {
-    default: 'typescript-only',
-    strict: 'typescript-only',
-    reason: 'BUG: computed class member names are not checked (undeclared `калид`, `ном`)',
-  },
-  'ts-syntax-codegen.test.ts:308': {
-    default: 'somon-only',
-    strict: 'somon-only',
-    reason:
-      'BUG: members of a merged enum are unknown in the initializers of its other declarations',
-  },
-  'migrate/61-getters-setters.ts': {
-    strict: 'somon-only',
-    reason: "BUG: the SomonScript checker does not know a class's `prototype`",
-  },
 };
