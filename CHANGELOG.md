@@ -128,6 +128,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * An import of a directory (`ворид { И } аз "./lib"` of `lib/index.som`) compiled to `require("./lib.js")`, which Node.js cannot find when modules are compiled one by one (`somon compile`, `ModuleSystem.compile`); it is `./lib/index.js` when the compiler knows the file (`filePath`), and always for `./lib/`.
 * A default import named like a built-in or one of its members (`ворид маълумот аз "./д.json"`, `рӯйхат`, `навъ`) was a parse error; it binds any name a variable may have.
 * An exported destructuring declaration in a namespace (`номфазо Н { содир собит { а } = о; }`) compiled to nothing: the declaration was left out and `Н.а` was `undefined`. Each name the pattern binds is a member of the namespace.
+* An optional chain after the constructor of `нав` (`нав о?.К()`, `нав К?.()`), a SyntaxError in JavaScript and TypeScript, compiled to `new о()?.К()`, which constructs `о` and fails at run time; it is the parse error "Invalid optional chain from new expression". `нав К()?.а` and `нав (о?.К)()` are unchanged.
 
 ## 0.4.0 (2026-10-09)
 

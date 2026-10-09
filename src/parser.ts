@@ -2736,6 +2736,13 @@ export class Parser {
     }
 
     const typeArguments = this.parseTypeArgumentsInExpression();
+    // `нав а?.Б()` is a SyntaxError in JavaScript (TypeScript's TS1209); `нав а()?.б` is not
+    const chain = this.check(TokenType.OPTIONAL_CHAINING) ? this.peek() : undefined;
+    if (chain) {
+      this.errors.push(
+        `Invalid optional chain from new expression at line ${chain.line}, column ${chain.column}`
+      );
+    }
 
     // Arguments are optional: `нав Сана`
     const args = this.match(TokenType.LEFT_PAREN) ? this.parseArguments() : [];

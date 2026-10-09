@@ -91,6 +91,30 @@ describe('parser: overloads of class methods', () => {
   });
 });
 
+describe('parser: an optional chain in a new expression', () => {
+  test('after the constructor is an error, after its arguments it is not', () => {
+    // JavaScript's SyntaxError, TypeScript's TS1209; it constructed `о` and failed at run time
+    expect(errorsOf('собит о = { К: синф {} };\nтағ а = нав о?.К();')).toEqual([
+      'Invalid optional chain from new expression at line 2, column 14',
+    ]);
+    expect(errorsOf('тағ а = нав о.б?.в;')).toEqual([
+      'Invalid optional chain from new expression at line 1, column 16',
+    ]);
+    expect(errorsOf('тағ а = нав К?.();')).toEqual([
+      'Invalid optional chain from new expression at line 1, column 14',
+    ]);
+    expect(errorsOf('тағ а = нав К<рақам>?.б();')).toEqual([
+      'Invalid optional chain from new expression at line 1, column 21',
+    ]);
+    // An optional chain in parentheses is the constructor
+    expect(
+      run(
+        'синф К { а = 1; }\nсобит о: { К?: нав () => К } = { К };\nчоп.сабт(нав К()?.а, нав (о?.К)!().а, нав (о?.К чун ҳар)().а);'
+      )
+    ).toEqual(['1 1 1']);
+  });
+});
+
 describe('parser: default imports', () => {
   test('bind any name a variable may have, built-in member aliases too', () => {
     for (const name of ['маълумот', 'рӯйхат', 'навъ', 'беқимат']) {
