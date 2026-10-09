@@ -4,6 +4,7 @@ import { compile } from '../src/compiler';
 import {
   ArrayExpression,
   ArrowFunctionExpression,
+  AsExpression,
   AssignmentExpression,
   BinaryExpression,
   CallExpression,
@@ -20,11 +21,14 @@ import {
   ObjectPattern,
   Program,
   Property,
+  PropertyDefinition,
   PropertyPattern,
   SequenceExpression,
   Statement,
   TypeAlias,
+  TypeAssertion,
   UnaryExpression,
+  UpdateExpression,
   VariableDeclaration,
 } from '../src/types';
 
@@ -174,6 +178,230 @@ describe('Parser: operators', () => {
 
   test('operators compile and run', () => {
     expect(run('тағ а = 7; тағ б = 3; чоп.сабт(а дар {7: 1}, 2 ** 3 ** 2);')).toEqual(['true 512']);
+  });
+});
+
+describe('Parser: TypeScript assertions', () => {
+  test('х чун Т binds like a relational operator', () => {
+    const sum = expressionOf<AsExpression>('а + б чун рақам;');
+    expect(sum).toMatchObject({
+      type: 'AsExpression',
+      expression: { type: 'BinaryExpression', operator: '+' },
+      typeAnnotation: { type: 'PrimitiveType', name: 'рақам' },
+    });
+    expect(expressionOf<AsExpression>('а < б чун мантиқӣ;').expression).toMatchObject({
+      operator: '<',
+    });
+    const equality = expressionOf<BinaryExpression>('а == б чун рақам;');
+    expect(equality.operator).toBe('==');
+    expect(equality.right.type).toBe('AsExpression');
+    expect(expressionOf<BinaryExpression>('а чун рақам < б;').left.type).toBe('AsExpression');
+  });
+
+  test('chained, parenthesized and English assertions', () => {
+    const chain = expressionOf<AsExpression>('х чун ношинос чун Т;');
+    expect(chain.typeAnnotation).toMatchObject({ type: 'GenericType', name: { name: 'Т' } });
+    expect(chain.expression).toMatchObject({
+      type: 'AsExpression',
+      expression: { type: 'Identifier', name: 'х' },
+      typeAnnotation: { type: 'PrimitiveType', name: 'ношинос' },
+    });
+    const member = expressionOf<MemberExpression>('(а чун сатр).length;');
+    expect(member.object.type).toBe('AsExpression');
+    expect(expressionOf('а as сатр | рақам;')).toMatchObject({
+      type: 'AsExpression',
+      typeAnnotation: { type: 'UnionType' },
+    });
+  });
+
+  test('чун собит is a const assertion', () => {
+    expect(initOf('собит р = [1, 2] чун собит;')).toMatchObject({
+      type: 'AsExpression',
+      isConst: true,
+      expression: { type: 'ArrayExpression' },
+    });
+    expect(initOf<AsExpression>('собит р = [1] as const;').isConst).toBe(true);
+    expect(initOf<TypeAssertion>('собит р = <собит>["а"];')).toMatchObject({
+      type: 'TypeAssertion',
+      isConst: true,
+    });
+  });
+
+  test('<Т>х is a type assertion with a unary operand', () => {
+    expect(expressionOf('<сатр>а;')).toMatchObject({
+      type: 'TypeAssertion',
+      typeAnnotation: { type: 'PrimitiveType', name: 'сатр' },
+      expression: { type: 'Identifier', name: 'а' },
+    });
+    const member = expressionOf<MemberExpression>('(<сатр>а).length;');
+    expect(member.object.type).toBe('TypeAssertion');
+    expect(expressionOf<TypeAssertion>('<Map<сатр, рақам>>м;').typeAnnotation).toMatchObject({
+      type: 'GenericType',
+    });
+    // `(б)` not followed by '=>' is an operand, so this is no arrow function
+    const conditional = expressionOf<ConditionalExpression>('а ? <Т>(б) : в;');
+    expect(conditional.consequent).toMatchObject({
+      type: 'TypeAssertion',
+      expression: { type: 'Identifier', name: 'б' },
+    });
+    expect(expressionOf<BinaryExpression>('а < б;').operator).toBe('<');
+  });
+
+  test('a type assertion on the left of ** must be parenthesized', () => {
+    const { errors } = parse('<рақам>а ** 2;');
+    expect(errors).toEqual([
+      expect.stringMatching(/Type assertion before '\*\*' must be parenthesized at line 1/),
+    ]);
+    expect(expressionOf<BinaryExpression>('(<рақам>а) ** 2;').operator).toBe('**');
+  });
+
+  test.each([
+    ['<Т>(х: Т): Т => х;', 1, true],
+    ['<Т,>(х: Т) => х;', 1, false],
+    ['<Т мерос сатр, К = рақам>(х: Т, к: К) => х;', 2, false],
+    ['<Т мерос Map<сатр, рақам>>(м: Т) => м;', 1, false],
+  ])('generic arrow function: %s', (source, count, hasReturnType) => {
+    const arrow = expressionOf<ArrowFunctionExpression>(source);
+    expect(arrow.type).toBe('ArrowFunctionExpression');
+    expect(arrow.typeParameters).toHaveLength(count);
+    expect(arrow.typeParameters![0].name.name).toBe('Т');
+    expect(arrow.params[0].name.name).toMatch(/^[хм]$/);
+    expect(Boolean(arrow.returnType)).toBe(hasReturnType);
+  });
+
+  test('generic arrow details: constraint, async and block body', () => {
+    const constrained = initOf<ArrowFunctionExpression>('собит ф = <Т мерос сатр>(х: Т) => х;');
+    expect(constrained.typeParameters![0].constraint).toMatchObject({ name: 'сатр' });
+    const asyncArrow = initOf<ArrowFunctionExpression>('собит ф = ҳамзамон <Т>(х: Т) => х;');
+    expect(asyncArrow).toMatchObject({ isAsync: true, typeParameters: [{ name: { name: 'Т' } }] });
+    const body = initOf<ArrowFunctionExpression>('собит ф = <Т>() => { бозгашт 1; };');
+    expect(body.body.type).toBe('BlockStatement');
+  });
+
+  test.each([
+    ['х!;', 'Identifier'],
+    ['ф()!;', 'CallExpression'],
+    ['м.бозгирифтан("а")!;', 'CallExpression'],
+    ['о.а!;', 'MemberExpression'],
+  ])('non-null assertion %s', (source, inner) => {
+    expect(expressionOf(source)).toMatchObject({
+      type: 'NonNullExpression',
+      expression: { type: inner },
+    });
+  });
+
+  test('non-null assertions inside member chains and operators', () => {
+    const chain = expressionOf<MemberExpression>('а!.б!.в;');
+    expect(chain.object).toMatchObject({
+      type: 'NonNullExpression',
+      expression: { type: 'MemberExpression', object: { type: 'NonNullExpression' } },
+    });
+    expect(expressionOf<MemberExpression>('х![0];')).toMatchObject({
+      computed: true,
+      object: { type: 'NonNullExpression' },
+    });
+    const call = expressionOf<CallExpression>('ф(х!, у!);');
+    expect(call.arguments.map(arg => arg.type)).toEqual(['NonNullExpression', 'NonNullExpression']);
+    expect(expressionOf<BinaryExpression>('х! + 1;').left.type).toBe('NonNullExpression');
+    const update = expressionOf<UpdateExpression>('х!++;');
+    expect(update.argument.type).toBe('NonNullExpression');
+  });
+
+  test('!=, !== and prefix ! are unchanged', () => {
+    expect(expressionOf<BinaryExpression>('а!=б;').operator).toBe('!=');
+    expect(expressionOf<BinaryExpression>('а!==б;').operator).toBe('!==');
+    const negated = expressionOf<BinaryExpression>('а! != б;');
+    expect(negated).toMatchObject({ operator: '!=', left: { type: 'NonNullExpression' } });
+    expect(expressionOf('!а!;')).toMatchObject({
+      type: 'UnaryExpression',
+      operator: '!',
+      argument: { type: 'NonNullExpression' },
+    });
+  });
+
+  test("a '!' on the next line starts a new statement", () => {
+    const statements = parseOk('тағ а = б\n!в;');
+    expect(statements).toHaveLength(2);
+    expect((statements[0] as VariableDeclaration).init?.type).toBe('Identifier');
+    expect((statements[1] as ExpressionStatement).expression.type).toBe('UnaryExpression');
+  });
+
+  test('assertions may wrap an assignment target, satisfies may not', () => {
+    expect(expressionOf<AssignmentExpression>('х! = 1;').left.type).toBe('NonNullExpression');
+    expect(expressionOf<AssignmentExpression>('(х чун ҳар) = 1;').left.type).toBe('AsExpression');
+    expect(expressionOf<AssignmentExpression>('х!.а = 1;').left.type).toBe('MemberExpression');
+    expect(parse('(х бармесоё рақам) = 1;').errors).toEqual([
+      expect.stringMatching(/Invalid left-hand side in assignment at line 1/),
+    ]);
+  });
+
+  test('х бармесоё Т keeps the expression', () => {
+    expect(initOf('собит о = { а: 1 } бармесоё И;')).toMatchObject({
+      type: 'SatisfiesExpression',
+      expression: { type: 'ObjectExpression' },
+      typeAnnotation: { type: 'GenericType', name: { name: 'И' } },
+    });
+    expect(initOf('собит о = х satisfies И;').type).toBe('SatisfiesExpression');
+  });
+
+  test('бармесоё, as and satisfies are still ordinary names', () => {
+    const statements = parseOk(
+      'тағ бармесоё = 1;\nсобит as = бармесоё + 1;\nтағ satisfies = as\nбармесоё = { as, satisfies };'
+    );
+    expect(statements).toHaveLength(4);
+    expect((statements[2] as VariableDeclaration).init).toMatchObject({ name: 'as' });
+    expect((statements[3] as ExpressionStatement).expression).toMatchObject({
+      type: 'AssignmentExpression',
+      left: { name: 'бармесоё' },
+    });
+    expect(run('тағ бармесоё = 2; собит as = 3; чоп.сабт(бармесоё * as);')).toEqual(['6']);
+  });
+
+  test('definite assignment assertions', () => {
+    const declaration = parseOk('тағ х!: рақам;')[0] as VariableDeclaration;
+    expect(declaration).toMatchObject({ definite: true, identifier: { name: 'х' } });
+    expect(declaration.typeAnnotation).toBeDefined();
+    const longForm = parseOk('тағйирёбанда х!: сатр;')[0] as VariableDeclaration;
+    expect(longForm.definite).toBe(true);
+    const classDecl = parseOk(
+      'синф К { х!: рақам; хосусӣ у!: сатр; з = 1; }'
+    )[0] as ClassDeclaration;
+    expect(classDecl.body.body.map(member => (member as PropertyDefinition).definite)).toEqual([
+      true,
+      true,
+      undefined,
+    ]);
+  });
+
+  test.each([
+    ['тағ х!: рақам = 1;', /initializers cannot also have definite assignment assertions/],
+    ['тағ х!;', /definite assignment assertions must also have type annotations/],
+    ['синф К { х!: рақам = 1; }', /initializers cannot also have definite/],
+    ['синф К { статикӣ х!: рақам; }', /'!' is not permitted in this context/],
+    ['барои (тағ и!: рақам; ;) { шикастан; }', /'!' is not permitted in this context/],
+  ])('invalid definite assignment assertion: %s', (source, message) => {
+    const { errors } = parse(source);
+    expect(errors).toEqual([expect.stringMatching(message)]);
+    expect(errors[0]).toMatch(/at line 1, column \d+/);
+  });
+
+  test('mapped type key remapping with чун', () => {
+    const alias = parseOk(
+      'навъ Г<Т> = { [К дар калидҳои Т чун `гир_${К & сатр}`]: () => Т[К] };'
+    )[0] as TypeAlias;
+    expect(alias.typeAnnotation.typeAnnotation).toMatchObject({
+      type: 'MappedType',
+      typeParameter: { name: { name: 'К' } },
+      nameType: { type: 'PrimitiveType', name: 'сатр' },
+    });
+    const english = parseOk('навъ Г<Т> = { [К дар калидҳои Т as К]: Т[К] };')[0] as TypeAlias;
+    expect(english.typeAnnotation.typeAnnotation).toMatchObject({
+      nameType: { name: { name: 'К' } },
+    });
+  });
+
+  test("a type's '[' on the next line starts a new statement", () => {
+    expect(parseOk('тағ х = у чун рақам\n[1].length;')).toHaveLength(2);
   });
 });
 

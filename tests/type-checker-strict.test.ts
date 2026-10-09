@@ -179,6 +179,49 @@ describe('strict null checks', () => {
   });
 });
 
+describe('non-null and type assertions', () => {
+  test.each([
+    ['a nullable parameter with !', 'функсия ф(г: Г | холӣ): рақам { бозгашт г!.қ; }'],
+    [
+      'a nullable field with !',
+      'собит г = нав Г(1); чоп.сабт(г.навбатӣ!.қ, г.навбатӣ!.навбатӣ!.қ);',
+    ],
+    [
+      'Map.get with !',
+      'собит м = нав Map<сатр, Г>(); собит а: Г = м.бозгирифтан("а")!; чоп.сабт(м.бозгирифтан("б")!.қ);',
+    ],
+    ['Array.pop with !', 'собит р: рақам[] = [1]; собит а: рақам = р.баровардан()! + 1;'],
+    ['an optional parameter with !', 'функсия ф(а?: рақам): рақам { бозгашт а! * 2; }'],
+    ['arithmetic assignment through !', 'функсия ф(н: рақам | холӣ) { н! += 1; н!++; }'],
+    ['an assignment through ! narrows', 'тағ г: Г | холӣ = холӣ; г! = нав Г(1); чоп.сабт(г.қ);'],
+    ['a truthiness check of х!', 'функсия ф(г: Г | холӣ) { агар (г!) { чоп.сабт(г.қ); } }'],
+    ['чун to a non-nullable type', 'функсия ф(г: Г | холӣ): рақам { бозгашт (г чун Г).қ; }'],
+    ['<Т> to a non-nullable type', 'функсия ф(г: Г | холӣ): рақам { бозгашт (<Г>г).қ; }'],
+    [
+      'a nullable value asserted for an argument',
+      'функсия ф(г: Г): рақам { бозгашт г.қ; } функсия х(г: Г | холӣ): рақам { бозгашт ф(г чун Г); }',
+    ],
+  ])('%s', (_name, source) => {
+    expectClean(source);
+  });
+
+  test.each([
+    [
+      'чун to a nullable type',
+      'функсия ф(г: Г): рақам { бозгашт (г чун Г | холӣ).қ; }',
+      /POSSIBLY_NULL/,
+    ],
+    ['холӣ asserted to a number', 'собит а = холӣ чун рақам;', /Conversion of type 'холӣ'/],
+    [
+      'satisfies with a nullable value',
+      'функсия ф(г: Г | холӣ) { собит х = г бармесоё Г; }',
+      /does not satisfy the expected type 'Г'/,
+    ],
+  ])('%s is still reported', (_name, source, pattern) => {
+    expectError(source, pattern);
+  });
+});
+
 describe('built-in methods that may return беқимат', () => {
   test.each([
     ['Map.get', 'собит м = нав Map<сатр, рақам>(); собит а: рақам = м.бозгирифтан("а");'],

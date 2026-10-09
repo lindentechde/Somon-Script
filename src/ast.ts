@@ -1,5 +1,5 @@
 // AST Node types
-import type { TypeAnnotation, TypeNode } from './type-system';
+import type { TypeAnnotation, TypeNode, TypeParameter } from './type-system';
 export interface ASTNode {
   type: string;
   line: number;
@@ -21,6 +21,8 @@ export interface VariableDeclaration extends Statement {
   identifier: Identifier | ArrayPattern | ObjectPattern;
   typeAnnotation?: TypeAnnotation;
   init?: Expression;
+  /** Definite assignment assertion `тағ х!: рақам;` (erased in the output). */
+  definite?: boolean;
 }
 
 export interface FunctionDeclaration extends Statement {
@@ -179,6 +181,8 @@ export interface ArrowFunctionExpression extends Expression {
   body: BlockStatement | Expression;
   isAsync?: boolean;
   returnType?: TypeAnnotation;
+  /** Generic arrow function: `<Т>(х: Т) => х` (erased in the output). */
+  typeParameters?: TypeParameter[];
 }
 
 export interface AssignmentExpression extends Expression {
@@ -225,6 +229,44 @@ export interface MemberExpression extends Expression {
  */
 export interface ChainExpression extends Expression {
   type: 'ChainExpression';
+  expression: Expression;
+}
+
+/**
+ * Type assertion `х чун Т` (TypeScript `as`) or const assertion `х чун собит`
+ * (`as const`). Types are erased: only `expression` is emitted.
+ */
+export interface AsExpression extends Expression {
+  type: 'AsExpression';
+  expression: Expression;
+  /** The asserted type; absent for `чун собит`. */
+  typeAnnotation?: TypeNode;
+  /** `чун собит`: literal types are kept and array literals become readonly tuples. */
+  isConst?: boolean;
+}
+
+/** Angle-bracket type assertion `<Т>х` / `<собит>х`, the prefix form of `AsExpression`. */
+export interface TypeAssertion extends Expression {
+  type: 'TypeAssertion';
+  expression: Expression;
+  /** The asserted type; absent for `<собит>`. */
+  typeAnnotation?: TypeNode;
+  isConst?: boolean;
+}
+
+/**
+ * `х бармесоё Т` (TypeScript `satisfies`): `х` must be assignable to `Т` but
+ * keeps its own type. Only `expression` is emitted.
+ */
+export interface SatisfiesExpression extends Expression {
+  type: 'SatisfiesExpression';
+  expression: Expression;
+  typeAnnotation: TypeNode;
+}
+
+/** Non-null assertion `х!`: the value of `х`, typed without `холӣ`/`беқимат`. */
+export interface NonNullExpression extends Expression {
+  type: 'NonNullExpression';
   expression: Expression;
 }
 
@@ -327,6 +369,8 @@ export interface PropertyDefinition extends ASTNode {
   typeAnnotation?: TypeAnnotation;
   /** `ном?: сатр` */
   optional?: boolean;
+  /** Definite assignment assertion `ном!: сатр` (erased in the output). */
+  definite?: boolean;
   static: boolean;
   accessibility?: 'public' | 'private' | 'protected';
 }

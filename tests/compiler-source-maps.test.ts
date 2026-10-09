@@ -67,6 +67,23 @@ describe('source maps', () => {
     expect(log.line).toBe(8);
   });
 
+  test('statements with erased type assertions map to their lines', async () => {
+    const program = [
+      'собит а: ҳар = 1;',
+      'тағ х!: рақам;',
+      'х = (а чун рақам) + <рақам>а;',
+      'собит ф = <Т>(у: Т): Т => у;',
+      'чоп.сабт(ф(х)!, а бармесоё ҳар);',
+    ].join('\n');
+    const result = compile(program, { sourceMap: true, strict: true });
+    expect(result.errors).toEqual([]);
+    const map = JSON.parse(result.sourceMap!) as RawSourceMap;
+    expect(result.code).toContain('let х;');
+    expect(await originalOf(result.code, map, 'х = а + а;')).toMatchObject({ line: 3 });
+    expect(await originalOf(result.code, map, 'const ф = (у) => у;')).toMatchObject({ line: 4 });
+    expect(await originalOf(result.code, map, 'console.log(ф(х), а);')).toMatchObject({ line: 5 });
+  });
+
   test('no source map unless requested', () => {
     expect(compile(source, { typeCheck: false }).sourceMap).toBeUndefined();
   });

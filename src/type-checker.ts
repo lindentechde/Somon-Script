@@ -20,6 +20,7 @@ import {
   ObjectType,
   PrimitiveType,
   Program,
+  Property,
   PropertySignature,
   Statement,
   TupleType,
@@ -32,6 +33,7 @@ import {
   UniqueType,
 } from './types';
 import {
+  AsExpression,
   AssignmentExpression,
   AssignmentPattern,
   AwaitExpression,
@@ -47,16 +49,19 @@ import {
   ImportDeclaration,
   MemberExpression,
   MethodDefinition,
+  NonNullExpression,
   Parameter,
   PropertyDefinition,
   RestElement,
   ReturnStatement,
+  SatisfiesExpression,
   SequenceExpression,
   SpreadElement,
   SwitchStatement,
   TemplateLiteral,
   ThrowStatement,
   TryStatement,
+  TypeAssertion,
   UnaryExpression,
   UpdateExpression,
   WhileStatement,
@@ -136,6 +141,7 @@ export interface Type {
   fromLiteral?: boolean; // Object type inferred from a literal; may gain members later
   staticMembers?: Set<string>; // Static member names of a class
   implicitMembers?: Set<string>; // Undeclared class members assigned through `ин.ном = …`
+  constant?: boolean; // Type of a `чун собит` expression: never widened
 }
 
 /**
@@ -207,6 +213,14 @@ const ARRAY_ELEMENT_OR_UNDEFINED: ReadonlySet<string> = new Set([
 ]);
 
 const RELATIONAL_OPERATORS: ReadonlySet<string> = new Set(['<', '>', '<=', '>=']);
+
+/** Expressions that only assert a type (`х чун Т`, `<Т>х`, `х бармесоё Т`, `х!`). */
+const ASSERTION_TYPES: ReadonlySet<string> = new Set([
+  'AsExpression',
+  'TypeAssertion',
+  'SatisfiesExpression',
+  'NonNullExpression',
+]);
 
 /** Statements an unlabelled `шикастан` leaves. */
 const JUMP_TARGETS: ReadonlySet<string> = new Set([
@@ -404,6 +418,11 @@ export class TypeChecker {
       this.inferFunctionExpressionType(e as unknown as FunctionLike, true),
     FunctionExpression: e => this.inferFunctionExpressionType(e as unknown as FunctionLike, false),
     ThisExpression: () => this.currentFunction()?.thisType ?? UNKNOWN,
+    AsExpression: e => this.inferAssertionType(e as AsExpression),
+    TypeAssertion: e => this.inferAssertionType(e as TypeAssertion),
+    SatisfiesExpression: e => this.inferSatisfiesType(e as SatisfiesExpression),
+    NonNullExpression: e =>
+      this.removeNullish(this.inferExpressionType((e as NonNullExpression).expression)),
     ImportExpression: e => {
       this.inferExpressionType((e as unknown as { source: Expression }).source);
       return UNKNOWN;
@@ -1609,6 +1628,7 @@ export class TypeChecker {
    * object/array members are widened since they stay mutable.
    */
   private widenType(type: Type, keepLiteral = false): Type {
+    if (type.constant) return type;
     switch (type.kind) {
       case 'literal':
         return keepLiteral ? type : this.getBaseType(type);
@@ -1618,10 +1638,7 @@ export class TypeChecker {
         return { kind: 'array', elementType: this.widenType(type.elementType ?? UNKNOWN) };
       case 'union':
         // `Г | холӣ` stays nullable: only a binding of plain `холӣ` is widened
-        return {
-          kind: 'union',
-          types: type.types!.map(t => (this.isNullishType(t) ? t : this.widenType(t))),
-        };
+        return this.unionOf(type.types!.map(t => (this.isNullishType(t) ? t : this.widenType(t))));
       case 'object': {
         const properties = new Map<string, PropertyType>();
         for (const [key, prop] of type.properties ?? []) {
@@ -1682,7 +1699,13 @@ export class TypeChecker {
 
   private isOptionalChain(expression: Expression): boolean {
     let current: Expression | undefined = expression;
-    while (current && (current.type === 'MemberExpression' || current.type === 'CallExpression')) {
+    while (current) {
+      if (current.type === 'NonNullExpression') {
+        // `о?.а!.б` is still one chain
+        current = (current as NonNullExpression).expression;
+        continue;
+      }
+      if (current.type !== 'MemberExpression' && current.type !== 'CallExpression') break;
       if ((current as MemberExpression | CallExpression).optional) return true;
       current =
         current.type === 'MemberExpression'
@@ -1897,6 +1920,9 @@ export class TypeChecker {
 
   private inferAssignmentType(assignment: AssignmentExpression): Type {
     const left = assignment.left;
+    // `х! = 1` and `(х чун Т) = 1` assign to `х`
+    const reference = this.skipAssertions(left);
+    const isReference = reference.type === 'Identifier' || reference.type === 'MemberExpression';
     const isPlain = assignment.operator === '=';
     // The target accepts its declared type, not what an earlier check narrowed it to
     const leftType = this.inferAssignmentTargetType(left);
@@ -1905,7 +1931,7 @@ export class TypeChecker {
     }
     const rightType = this.inferExpressionType(assignment.right, isPlain ? leftType : undefined);
 
-    if (isPlain && (left.type === 'Identifier' || left.type === 'MemberExpression')) {
+    if (isPlain && isReference) {
       this.checkAssignable(assignment.right, rightType, leftType, (source, target) =>
         this.addError(
           TypeCheckErrorCode.TypeMismatch,
@@ -1915,14 +1941,20 @@ export class TypeChecker {
         )
       );
     }
-    if (isPlain) {
-      this.narrowOnAssignment(left, leftType, rightType);
-    } else if (assignment.operator === '??=') {
-      this.narrowOnAssignment(left, leftType, this.removeNullish(leftType));
+    if (isPlain || assignment.operator === '??=') {
+      const assigned = isPlain ? rightType : this.removeNullish(leftType);
+      if (reference === left || left.type === 'NonNullExpression') {
+        // `х! = 1` narrows `х` like `х = 1` does
+        const declared = reference === left ? leftType : this.inferAssignmentTargetType(reference);
+        this.narrowOnAssignment(reference, declared, assigned);
+      } else {
+        // Through `(х чун Т)` the assignment only invalidates what was known about `х`
+        this.invalidate(this.referenceKey(reference));
+      }
     }
     this.forEachNode(left, node => {
       // Destructuring assignment: forget what was known about each target
-      if (left.type !== 'Identifier' && left.type !== 'MemberExpression') {
+      if (!isReference) {
         if (node.type === 'Identifier' || node.type === 'MemberExpression') {
           this.invalidate(this.referenceKey(node as Expression));
         }
@@ -1932,6 +1964,10 @@ export class TypeChecker {
   }
 
   private inferAssignmentTargetType(target: Expression): Type {
+    if (target.type === 'NonNullExpression') {
+      const inner = (target as NonNullExpression).expression;
+      return this.removeNullish(this.inferAssignmentTargetType(inner));
+    }
     if (target.type === 'MemberExpression') {
       return this.inferMemberType(target as MemberExpression, true);
     }
@@ -2031,6 +2067,212 @@ export class TypeChecker {
     if (consequent.kind === 'unknown' || alternate.kind === 'unknown') return UNKNOWN;
     if (this.isExactMatch(consequent, alternate)) return consequent;
     return { kind: 'union', types: [consequent, alternate] };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Type assertions: `х чун Т`, `<Т>х`, `х чун собит`, `х бармесоё Т`, `х!`
+  // ---------------------------------------------------------------------------
+
+  /** The expression an assertion (or several) wraps. */
+  private skipAssertions(expression: Expression): Expression {
+    let current = expression;
+    while (ASSERTION_TYPES.has(current.type)) {
+      current = (current as NonNullExpression).expression;
+    }
+    return current;
+  }
+
+  /**
+   * `х чун Т` / `<Т>х` has type `Т` (in strict mode `х чун Г` removes
+   * `холӣ`). As in TypeScript, it is an error only when neither type is
+   * assignable to the other.
+   */
+  private inferAssertionType(assertion: AsExpression | TypeAssertion): Type {
+    if (assertion.isConst || !assertion.typeAnnotation) {
+      return this.inferConstAssertionType(assertion);
+    }
+    const target = this.resolveTypeNode(assertion.typeAnnotation);
+    const source = this.inferExpressionType(assertion.expression, target);
+    if (!this.isComparable(source, target)) {
+      const sourceName = this.typeToString(this.widenLiterals(source));
+      this.addError(
+        TypeCheckErrorCode.TypeMismatch,
+        `Conversion of type '${sourceName}' to type '${this.typeToString(target)}' may be a mistake because neither type sufficiently overlaps with the other; assert to 'ношинос' first if this is intended`,
+        assertion.line,
+        assertion.column
+      );
+    }
+    return target;
+  }
+
+  /** `type` with its literal types widened, as an assertion compares its operand (`1` → `рақам`). */
+  private widenLiterals(type: Type): Type {
+    switch (type.kind) {
+      case 'literal':
+        return this.getBaseType(type);
+      case 'union':
+        return this.unionOf(type.types!.map(t => this.widenLiterals(t)));
+      case 'tuple':
+        return { ...type, types: type.types?.map(t => this.widenLiterals(t)) };
+      case 'array':
+        return { ...type, elementType: this.widenLiterals(type.elementType ?? UNKNOWN) };
+      case 'object': {
+        const properties = new Map<string, PropertyType>();
+        for (const [key, prop] of type.properties ?? []) {
+          properties.set(key, { ...prop, type: this.widenLiterals(prop.type) });
+        }
+        return { ...type, properties };
+      }
+      default:
+        return type;
+    }
+  }
+
+  /**
+   * TypeScript's comparability of assertions: some member of one type
+   * (literal types widened or not) is assignable to some member of the other.
+   */
+  private isComparable(source: Type, target: Type): boolean {
+    if (this.isAnyLike(source) || this.isAnyLike(target)) return true;
+    const isNever = (t: Type) => t.kind === 'primitive' && t.name === 'never';
+    const sources = [
+      ...this.unionMembers(source),
+      ...this.unionMembers(this.widenLiterals(source)),
+    ];
+    const targets = this.unionMembers(target);
+    return sources.some(s =>
+      targets.some(
+        t =>
+          isNever(s) ||
+          isNever(t) ||
+          this.isAssignable(s, t) ||
+          this.isAssignable(t, s) ||
+          this.hasRequiredMembers(s, t) ||
+          this.hasRequiredMembers(t, s)
+      )
+    );
+  }
+
+  /** `[1] чун { length: рақам }`: a built-in value has every required member of an object type. */
+  private hasRequiredMembers(builtin: Type, objectType: Type): boolean {
+    if (objectType.kind !== 'object' && objectType.kind !== 'interface') return false;
+    const members =
+      this.builtinMembersOf(builtin) ??
+      (builtin.kind === 'function' ? BUILTIN_MEMBERS.function : undefined);
+    if (!members) return false;
+    return [...this.getAllProperties(objectType)].every(
+      ([name, prop]) => prop.optional || members.has(translateMemberName(name))
+    );
+  }
+
+  /**
+   * `х чун собит`: literals keep their literal types, array literals become
+   * readonly tuples, and none of them is widened when bound.
+   */
+  private inferConstAssertionType(assertion: AsExpression | TypeAssertion): Type {
+    const expression = assertion.expression;
+    if (!this.isConstAssertionOperand(expression)) {
+      this.addError(
+        TypeCheckErrorCode.TypeMismatch,
+        `A 'чун собит' assertion can only be applied to string, number, boolean, array or object literals`,
+        assertion.line,
+        assertion.column
+      );
+      return this.inferExpressionType(expression);
+    }
+    return this.constType(expression);
+  }
+
+  /** Operands TypeScript accepts in `as const` (a member expression may name an enum member). */
+  private isConstAssertionOperand(expression: Expression): boolean {
+    switch (expression.type) {
+      case 'Literal':
+        return (expression as Literal).value !== null;
+      case 'TemplateLiteral':
+      case 'ArrayExpression':
+      case 'ObjectExpression':
+      case 'MemberExpression':
+        return true;
+      case 'UnaryExpression': {
+        const unary = expression as UnaryExpression;
+        return (
+          (unary.operator === '-' || unary.operator === '+') &&
+          unary.argument.type === 'Literal' &&
+          typeof (unary.argument as Literal).value === 'number'
+        );
+      }
+      default:
+        return false;
+    }
+  }
+
+  private constType(expression: Expression): Type {
+    switch (expression.type) {
+      case 'ArrayExpression': {
+        const elements = (expression as ArrayExpression).elements;
+        if (elements.some(element => !element || element.type === 'SpreadElement')) {
+          return { ...this.inferExpressionType(expression), constant: true };
+        }
+        return {
+          kind: 'tuple',
+          types: elements.map(element => this.constType(element)),
+          constant: true,
+        };
+      }
+      case 'ObjectExpression': {
+        const objExpr = expression as ObjectExpression;
+        if (objExpr.properties.some(p => p.type === 'SpreadElement' || p.computed)) {
+          return this.inferExpressionType(expression);
+        }
+        const properties = new Map<string, PropertyType>();
+        for (const prop of objExpr.properties as Property[]) {
+          const value = prop.value ?? prop.key;
+          properties.set(this.propertyKeyName(prop.key), {
+            type: this.constType(value),
+            optional: false,
+          });
+        }
+        return { kind: 'object', properties, fromLiteral: true, constant: true };
+      }
+      case 'UnaryExpression': {
+        const unary = expression as UnaryExpression;
+        const value = (unary.argument as Literal).value;
+        if (
+          unary.argument.type === 'Literal' &&
+          typeof value === 'number' &&
+          !/n$/.test((unary.argument as Literal).raw ?? '')
+        ) {
+          return {
+            kind: 'literal',
+            value: unary.operator === '-' ? -value : value,
+            constant: true,
+          };
+        }
+        return this.inferExpressionType(expression);
+      }
+      default: {
+        const type = this.inferExpressionType(expression);
+        return type.kind === 'literal' ? { ...type, constant: true } : type;
+      }
+    }
+  }
+
+  /**
+   * `х бармесоё Т`: `х` must be assignable to `Т` (object literals without
+   * unknown keys, as for `тағ х: Т = …`) and keeps its own type.
+   */
+  private inferSatisfiesType(node: SatisfiesExpression): Type {
+    const target = this.resolveTypeNode(node.typeAnnotation);
+    const type = this.inferExpressionType(node.expression, target);
+    this.checkAssignable(node.expression, type, target, (source, expected) =>
+      this.addError(
+        TypeCheckErrorCode.TypeMismatch,
+        `Type '${source}' does not satisfy the expected type '${expected}'`,
+        node.expression.line ?? node.line,
+        node.expression.column ?? node.column
+      )
+    );
+    return type;
   }
 
   private isNumericType(type: Type): boolean {
@@ -2188,6 +2430,9 @@ export class TypeChecker {
       }
       case 'ThisExpression':
         return 'ин';
+      case 'NonNullExpression':
+        // `х!` refers to `х`, as in TypeScript
+        return this.referenceKey((expression as NonNullExpression).expression);
       case 'MemberExpression': {
         const member = expression as MemberExpression;
         if (member.computed || member.property.type !== 'Identifier') return undefined;
@@ -2239,6 +2484,10 @@ export class TypeChecker {
   private narrowingsFor(test: Expression, assumeTrue: boolean): Facts {
     if (test.type === 'UnaryExpression' && (test as UnaryExpression).operator === '!') {
       return this.narrowingsFor((test as UnaryExpression).argument, !assumeTrue);
+    }
+    if (test.type === 'NonNullExpression') {
+      // `агар (х!)` tests `х` itself
+      return this.narrowingsFor((test as NonNullExpression).expression, assumeTrue);
     }
     if (test.type === 'BinaryExpression') {
       const binary = test as BinaryExpression;
@@ -2434,7 +2683,7 @@ export class TypeChecker {
       });
     this.forEachNode(program, node => {
       if (node.type === 'AssignmentExpression') {
-        const left = (node as AssignmentExpression).left;
+        const left = this.skipAssertions((node as AssignmentExpression).left);
         if (left.type !== 'MemberExpression') addTargets(left);
       } else if (node.type === 'UpdateExpression') {
         addTargets((node as UpdateExpression).argument);
@@ -2611,6 +2860,7 @@ export class TypeChecker {
     const path = (e: Expression): string | undefined => {
       if (e.type === 'Identifier') return (e as Identifier).name;
       if (e.type === 'ThisExpression') return 'ин';
+      if (e.type === 'NonNullExpression') return path((e as NonNullExpression).expression);
       if (e.type === 'MemberExpression' && !(e as MemberExpression).computed) {
         const member = e as MemberExpression;
         const objectPath = path(member.object);
@@ -2723,6 +2973,7 @@ export class TypeChecker {
     return (
       this.isArrayAssignable(source, target) ||
       this.isTupleAssignable(source, target) ||
+      this.isTupleToArrayAssignable(source, target) ||
       this.isArrayToTupleAssignable(source, target) ||
       this.isUnionAssignable(source, target) ||
       this.isIntersectionAssignable(source, target)
@@ -2844,6 +3095,12 @@ export class TypeChecker {
     );
   }
 
+  /** `[1, 2] чун собит` or a `[рақам, сатр]` value where an array is expected. */
+  private isTupleToArrayAssignable(source: Type, target: Type): boolean {
+    if (source.kind !== 'tuple' || target.kind !== 'array' || !source.types) return false;
+    return source.types.every(t => this.isAssignable(t, target.elementType ?? UNKNOWN));
+  }
+
   private isArrayToTupleAssignable(source: Type, target: Type): boolean {
     if (source.kind !== 'array' || target.kind !== 'tuple') {
       return false;
@@ -2952,7 +3209,7 @@ export class TypeChecker {
     },
     union: t => this.typeListToString(t),
     intersection: t => this.typeListToString(t),
-    tuple: t => this.typeListToString(t),
+    tuple: t => `${t.constant ? 'танҳохонӣ ' : ''}${this.typeListToString(t)}`,
     literal: t => (typeof t.value === 'string' ? `"${t.value}"` : String(t.value)),
     unique: t => `беназир ${this.typeToString(t.baseType!)}`,
     object: t => this.objectTypeToString(t),

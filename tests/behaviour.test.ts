@@ -251,6 +251,103 @@ describe('destructuring in for-of and for-in heads', () => {
   });
 });
 
+/**
+ * TypeScript-only expression operators are erased: `х чун Т`, `<Т>х`,
+ * `х чун собит`, `х бармесоё Т`, `х!`, definite assignment `х!: Т` and type
+ * parameters of arrow functions. The programs must compile without type
+ * errors (strict mode included) and run.
+ */
+describe('TypeScript assertion operators', () => {
+  const programs: Array<[string, string, string[]]> = [
+    [
+      'type assertions with чун, as and <Т>',
+      'собит а: ношинос = "салом";\nсобит б: ҳар = 2;\n' +
+        'чоп.сабт((а чун сатр).length, (а as сатр).length, (<сатр>а).length);\n' +
+        'чоп.сабт(б + 1 чун рақам, (б + 1 чун рақам) * 2, а чун ношинос чун сатр, (5 чун рақам).toFixed(1));',
+      ['5 5 5', '3 6 салом 5.0'],
+    ],
+    [
+      'an assertion narrows a caught error',
+      'кӯшиш { партофтан нав Хато("бад"); } гирифтан (е) { чоп.сабт((е чун Хато).message); }',
+      ['бад'],
+    ],
+    [
+      'non-null assertions in every position',
+      'синф Г { қ = 1; н: Г | холӣ = холӣ; р: рақам[] | холӣ = [7]; ф(): Г | холӣ { бозгашт ин; } }\n' +
+        'собит г: Г | холӣ = нав Г();\nсобит м = нав Map<сатр, рақам>();\nм.гузоштан("а", 1);\n' +
+        'собит а: рақам = м.бозгирифтан("а")!;\n' +
+        'чоп.сабт(г!.қ, г!.р![0], г!.ф()!.қ, а + 1, м.бозгирифтан("а")! * 2, (г!), г!.н?.қ);\n' +
+        'чоп.сабт(а != 2, а !== 1, !г, !г!);',
+      ['1 7 1 2 2 [object Object] undefined', 'true false false false'],
+    ],
+    [
+      'non-null assertions as assignment targets',
+      'тағ х: рақам | холӣ = холӣ;\nх! = 5;\nчоп.сабт(х + 1);\n' +
+        'тағ у: рақам | беқимат = 3;\nу!++;\nу! += 2;\nчоп.сабт(у);\n' +
+        'тағ о: ҳар = { а: 1 };\n(о чун { а: рақам }).а = 4;\nчоп.сабт(о.а);',
+      ['6', '6', '4'],
+    ],
+    [
+      'a non-null assertion inside an optional chain keeps the chain',
+      'собит о: ҳар = холӣ;\nчоп.сабт(о?.а!.б);\n' +
+        'кӯшиш { чоп.сабт((о?.а!).б); } гирифтан (х) { чоп.сабт("хато"); }',
+      ['undefined', 'хато'],
+    ],
+    [
+      'as const and satisfies',
+      'интерфейс И { а: рақам; б?: сатр; }\n' +
+        'собит р = [1, 2] чун собит;\nсобит о = { а: 1 } бармесоё И;\n' +
+        'собит т = { н: "а", м: [1, 2] } чун собит;\n' +
+        'чоп.сабт(р.length, р[0] + р[1], о.а, т.н, т.м.length, <собит>["к"]);',
+      ['2 3 1 а 2 к'],
+    ],
+    [
+      'definite assignment assertions',
+      'тағ х!: рақам;\nх = 3;\nтағйирёбанда у!: сатр;\nу = "у";\n' +
+        'синф К { ном!: сатр; конструктор() { ин.насб(); } насб(): беджавоб { ин.ном = "к"; } }\n' +
+        'чоп.сабт(х, у, нав К().ном);',
+      ['3 у к'],
+    ],
+    [
+      'generic arrow functions',
+      'собит ҳамон = <Т>(х: Т): Т => х;\nсобит ҷуфт = <Т, К,>(а: Т, б: К): [Т, К] => [а, б];\n' +
+        'собит дароз = <Т мерос сатр>(х: Т): рақам => х.length;\n' +
+        'собит рӯйхат = <Т>(х: Т) => { бозгашт [х, х]; };\n' +
+        'чоп.сабт(ҳамон(3), ҷуфт(1, "а").join("-"), дароз("абв"), рӯйхат(2).length, 1 < 2, 2 > 1);',
+      ['3 1-а 3 2 true true'],
+    ],
+    [
+      'the contextual keywords stay ordinary names',
+      'тағ бармесоё = 1;\nсобит as = 2;\nсобит satisfies = 3;\n' +
+        'бармесоё = бармесоё + as\nчоп.сабт(бармесоё, satisfies, { as }.as);',
+      ['3 3 2'],
+    ],
+  ];
+
+  test.each(programs)('%s', (_name, source, expected) => {
+    expect(run(source)).toEqual(expected);
+    expect(run(source, { strict: true })).toEqual(expected);
+    expect(run(source, { typeCheck: false })).toEqual(expected);
+  });
+
+  test('async generic arrow functions', async () => {
+    const result = compile(
+      'собит ф = ҳамзамон <Т>(х: Т): Ваъда<Т> => х;\nф(4).then(х => чоп.сабт(х));',
+      {
+        strict: true,
+      }
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.code).toContain('const ф = async (х) => х;');
+    const lines: string[] = [];
+    new Function('console', result.code)({
+      log: (...args: unknown[]) => lines.push(args.join(' ')),
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(lines).toEqual(['4']);
+  });
+});
+
 describe('invalid programs fail instead of emitting wrong code', () => {
   test.each([
     ['a syntax error', 'чоп.сабт(1 +);'],
@@ -331,6 +428,11 @@ describe('JavaScript early errors are compile errors', () => {
       'барои (тағ [а, а] = [1, 2]; а < 2; а++) {}',
       /'а' has already been declared/,
     ],
+    ['an asserted optional chain as target', 'тағ о = {};\nо?.а! = 1;', /left-hand side/],
+    ['a satisfies expression as target', 'тағ а = 1;\n(а бармесоё рақам) = 2;', /left-hand side/],
+    ['an asserted binary expression as target', 'тағ а = 1;\n(а + 1)! = 2;', /left-hand side/],
+    ['a postfix update of an asserted call', 'функсия ф() {}\nф()!++;', /operand/],
+    ['a type assertion before **', 'тағ а = 1;\n<рақам>а ** 2;', /must be parenthesized/],
   ])('%s', (_name, source, message) => {
     for (const typeCheck of [true, false]) {
       const result = compile(source, { typeCheck });

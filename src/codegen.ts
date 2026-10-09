@@ -53,6 +53,7 @@ import {
   SequenceExpression,
   Property,
   RestElement,
+  NonNullExpression,
 } from './types';
 import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
 
@@ -141,6 +142,23 @@ const JS_KEYWORD_EXPRESSIONS: ReadonlySet<string> = new Set([
   'this',
   'super',
 ]);
+
+/** Expressions that only assert a type (`х чун Т`, `<Т>х`, `х бармесоё Т`, `х!`). */
+const ASSERTION_TYPES: ReadonlySet<string> = new Set([
+  'AsExpression',
+  'TypeAssertion',
+  'SatisfiesExpression',
+  'NonNullExpression',
+]);
+
+/** Types are erased: an assertion is emitted as the expression it wraps. */
+function skipAssertions(node: Expression): Expression {
+  let current = node;
+  while (current && ASSERTION_TYPES.has(current.type)) {
+    current = (current as NonNullExpression).expression;
+  }
+  return current;
+}
 
 const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   SequenceExpression: PREC.SEQUENCE,
@@ -570,12 +588,14 @@ export class CodeGenerator {
    * loosely than its context requires. `minPrec` is the lowest precedence
    * (see `getPrecedence`) the context accepts without parentheses.
    */
-  private generateExpression(node: Expression, minPrec: number = 0): string {
+  private generateExpression(expression: Expression, minPrec: number = 0): string {
     // Handle null or undefined node
-    if (!node) {
+    if (!expression) {
       return '';
     }
 
+    // Type assertions are erased; what they wrap is parenthesized by its own precedence
+    const node = skipAssertions(expression);
     const code = this.generateExpressionNode(node);
     return this.getPrecedence(node, code) < minPrec ? `(${code})` : code;
   }
@@ -1190,7 +1210,8 @@ export class CodeGenerator {
   }
 
   /** `??` cannot be combined with an unparenthesised `&&` or `||` operand. */
-  private wrapMixedNullish(parent: BinaryExpression, child: Expression, code: string): string {
+  private wrapMixedNullish(parent: BinaryExpression, operand: Expression, code: string): string {
+    const child = skipAssertions(operand);
     if (parent.operator !== '??' || child.type !== 'BinaryExpression') {
       return code;
     }
@@ -1264,11 +1285,12 @@ export class CodeGenerator {
     node: MemberExpression,
     object: string
   ): { mapped: string; wasMapped: boolean } {
-    if (node.object.type !== 'Identifier') {
+    const objectNode = skipAssertions(node.object);
+    if (objectNode.type !== 'Identifier') {
       return { mapped: object, wasMapped: false };
     }
 
-    const objectName = (node.object as Identifier).name;
+    const objectName = (objectNode as Identifier).name;
     const builtinObjects = ['чоп', 'математика', 'объект', 'Риёзӣ', 'сатр', 'сатрМетодҳо'];
 
     if (!builtinObjects.includes(objectName) || this.isDeclared(objectName)) {
@@ -1314,7 +1336,7 @@ export class CodeGenerator {
   private generateMemberExpression(node: MemberExpression): string {
     let object = this.generateExpression(node.object, PREC.CALL);
     // `5.toFixed()` would read the dot as a decimal point
-    if (node.object.type === 'Literal' && /^\d+$/.test(object)) {
+    if (skipAssertions(node.object).type === 'Literal' && /^\d+$/.test(object)) {
       object = `(${object})`;
     }
     // A property name is not a variable reference: emit it verbatim (subject
@@ -1425,13 +1447,13 @@ export class CodeGenerator {
   }
 
   private chainContainsCall(node: Expression): boolean {
-    let current = node;
+    let current = skipAssertions(node);
     while (current.type === 'MemberExpression') {
       const memberExpr = current as MemberExpression;
       if (memberExpr.optional) {
         return true;
       }
-      current = memberExpr.object;
+      current = skipAssertions(memberExpr.object);
     }
     return current.type === 'CallExpression';
   }

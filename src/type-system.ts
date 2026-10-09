@@ -104,6 +104,8 @@ export interface MappedType extends TypeNode {
   typeAnnotation: TypeAnnotation;
   optional?: boolean;
   readonly?: boolean;
+  /** Key remapping clause (TypeScript `as`): the `Н` of `[К дар калидҳои Т чун Н]`. */
+  nameType?: TypeNode;
 }
 
 export interface IndexedAccessType extends TypeNode {

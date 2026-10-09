@@ -80,6 +80,10 @@ import {
   SwitchCase,
   BreakStatement,
   ContinueStatement,
+  AsExpression,
+  TypeAssertion,
+  SatisfiesExpression,
+  NonNullExpression,
 } from './types';
 import { Lexer } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
@@ -208,12 +212,19 @@ export class Parser {
     throw error;
   }
 
-  public variableDeclaration(): VariableDeclaration {
+  /** `allowDefinite`: false in a `барои (…; …; …)` head, where `х!` is not permitted. */
+  public variableDeclaration(allowDefinite = true): VariableDeclaration {
     const kindToken = this.previous();
     const kind = kindToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
     // Parse pattern (identifier, array destructuring, or object destructuring)
     const identifier = this.parsePattern();
+
+    // Definite assignment assertion: `тағ х!: рақам;`
+    const definite =
+      identifier.type === 'Identifier' && this.check(TokenType.NOT) && !this.hasLineBreakBefore()
+        ? this.advance()
+        : undefined;
 
     // Parse optional type annotation
     let typeAnnotation: TypeAnnotation | undefined;
@@ -228,6 +239,9 @@ export class Parser {
       throw new Error(
         `Missing initializer in constant declaration at line ${kindToken.line}, column ${kindToken.column}`
       );
+    }
+    if (definite) {
+      this.checkDefiniteAssignment(definite, Boolean(init), Boolean(typeAnnotation), allowDefinite);
     }
 
     if (this.check(TokenType.COMMA)) {
@@ -246,9 +260,34 @@ export class Parser {
       identifier,
       typeAnnotation,
       init,
+      ...(definite && { definite: true }),
       line: kindToken.line,
       column: kindToken.column,
     };
+  }
+
+  /**
+   * TypeScript's rules for a definite assignment assertion (`х!: Т`): it needs
+   * a type annotation and no initializer, and only some declarations allow it.
+   */
+  private checkDefiniteAssignment(
+    bang: Token,
+    hasInitializer: boolean,
+    hasType: boolean,
+    permitted: boolean
+  ): void {
+    let problem: string | undefined;
+    if (hasInitializer) {
+      problem = 'Declarations with initializers cannot also have definite assignment assertions';
+    } else if (!hasType) {
+      problem = 'Declarations with definite assignment assertions must also have type annotations';
+    } else if (!permitted) {
+      problem = "A definite assignment assertion '!' is not permitted in this context";
+    }
+    // The declaration itself is well-formed: report and keep parsing
+    if (problem) {
+      this.errors.push(`${problem} at line ${bang.line}, column ${bang.column}`);
+    }
   }
 
   public functionDeclaration(): FunctionDeclaration {
@@ -489,7 +528,7 @@ export class Parser {
   private parseTraditionalForLoop(forToken: Token): ForStatement {
     let init: VariableDeclaration | ExpressionStatement | null = null;
     if (this.match(TokenType.ТАҒЙИРЁБАНДА)) {
-      init = this.variableDeclaration();
+      init = this.variableDeclaration(false);
     } else if (!this.check(TokenType.SEMICOLON)) {
       init = this.expressionStatement();
     }
@@ -646,6 +685,11 @@ export class Parser {
         return true;
       case 'MemberExpression':
         return !(expr as MemberExpression).optional;
+      case 'NonNullExpression':
+      case 'AsExpression':
+      case 'TypeAssertion':
+        // `х! = 1`, `(х чун ҳар) = 1`: the assertion is erased
+        return this.isAssignmentTarget((expr as NonNullExpression).expression, false);
       case 'ArrayPattern':
       case 'ObjectPattern':
         return allowPattern;
@@ -704,8 +748,13 @@ export class Parser {
 
     let params: Parameter[];
     let returnType: TypeAnnotation | undefined;
+    let typeParameters: TypeParameter[] | undefined;
 
-    if (
+    if (head.type === TokenType.LESS_THAN) {
+      const generic = this.tryParseGenericArrowHead(offset);
+      if (!generic) return null;
+      ({ typeParameters, params, returnType } = generic);
+    } else if (
       this.isPlainIdentifierToken(head) &&
       this.tokens[this.current + offset + 1]?.type === TokenType.ARROW
     ) {
@@ -759,7 +808,35 @@ export class Parser {
       column: startToken.column,
     } as ArrowFunctionExpression;
     if (offset) arrow.isAsync = true;
+    if (typeParameters) arrow.typeParameters = typeParameters;
     return arrow;
+  }
+
+  /**
+   * Head of a generic arrow function, `<Т, К мерос сатр,>(х: Т): К =>`, up to
+   * and including '=>'. As in TypeScript (.ts files), a '<' that starts an
+   * expression begins one when a name follows and the rest parses as an arrow
+   * head; otherwise it is the type assertion `<Т>х` (see `unary`), and
+   * nothing is consumed here.
+   */
+  private tryParseGenericArrowHead(
+    offset: number
+  ): { typeParameters: TypeParameter[]; params: Parameter[]; returnType?: TypeAnnotation } | null {
+    const name = this.tokens[this.current + offset + 1];
+    if (!name || !this.isPlainIdentifierToken(name)) return null;
+    // Closing '>>' tokens are split while parsing; undo that if this is no arrow
+    const tokens = this.tokens.slice();
+    const head = this.speculate(() => {
+      this.current += offset;
+      const typeParameters = this.parseTypeParameters()!;
+      this.consume(TokenType.LEFT_PAREN, "Expected '(' after type parameters");
+      const params = this.parseParameterList("Expected ')' after arrow function parameters");
+      const returnType = this.match(TokenType.COLON) ? this.typeAnnotation() : undefined;
+      this.consume(TokenType.ARROW, "Expected '=>' after arrow function parameters");
+      return { typeParameters, params, returnType };
+    });
+    if (!head) this.tokens = tokens;
+    return head;
   }
 
   /** Index of the ')' matching the '(' at `openIndex`, or -1. */
@@ -998,6 +1075,9 @@ export class Parser {
       } else if (this.checkIdentifierValue('instanceof')) {
         this.advance();
         operator = 'instanceof';
+      } else if (this.typeOperator()) {
+        expr = this.parseTypeOperator(expr);
+        continue;
       } else {
         break;
       }
@@ -1014,6 +1094,74 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  /**
+   * The type operator at the current token, if any: `чун` / `as` (type
+   * assertion) or `бармесоё` / `satisfies`. As in TypeScript they bind like
+   * relational operators. `бармесоё`, `as` and `satisfies` are also ordinary
+   * names, so they are operators only on the line of their operand.
+   */
+  private typeOperator(): 'as' | 'satisfies' | undefined {
+    if (this.check(TokenType.ЧУН)) return 'as';
+    if (this.hasLineBreakBefore()) return undefined;
+    if (this.checkIdentifierValue('as')) return 'as';
+    if (this.check(TokenType.БАРМЕСОЁ) || this.checkIdentifierValue('satisfies')) {
+      return 'satisfies';
+    }
+    return undefined;
+  }
+
+  /** `х чун Т`, `х чун собит` (`as const`) or `х бармесоё Т`; types are erased. */
+  private parseTypeOperator(expression: Expression): Expression {
+    const operator = this.typeOperator();
+    this.advance();
+    const position = { line: expression.line, column: expression.column };
+    if (operator === 'satisfies') {
+      return {
+        type: 'SatisfiesExpression',
+        expression,
+        typeAnnotation: this.parseType(),
+        ...position,
+      } as SatisfiesExpression;
+    }
+    if (this.matchConstKeyword()) {
+      return { type: 'AsExpression', expression, isConst: true, ...position } as AsExpression;
+    }
+    return {
+      type: 'AsExpression',
+      expression,
+      typeAnnotation: this.parseType(),
+      ...position,
+    } as AsExpression;
+  }
+
+  /** `собит` (or `const`) in `чун собит` / `<собит>`. */
+  private matchConstKeyword(): boolean {
+    if (this.check(TokenType.СОБИТ) || this.checkIdentifierValue('const')) {
+      this.advance();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * `<Т>х` / `<собит>х`: TypeScript's prefix type assertion. A '<' starting
+   * a generic arrow function never gets here (see `tryParseGenericArrowHead`).
+   */
+  private parseTypeAssertion(): TypeAssertion {
+    const open = this.advance();
+    const isConst = this.peekNext()?.type === TokenType.GREATER_THAN && this.matchConstKeyword();
+    const typeAnnotation = isConst ? undefined : this.parseType();
+    this.consumeTypeArgumentsClose("Expected '>' after the type of a type assertion");
+    const expression = this.unary();
+    return {
+      type: 'TypeAssertion',
+      expression,
+      ...(isConst ? { isConst } : { typeAnnotation }),
+      line: open.line,
+      column: open.column,
+    } as TypeAssertion;
   }
 
   private shift(): Expression {
@@ -1085,12 +1233,15 @@ export class Parser {
       }
 
       if (
-        (left.type === 'UnaryExpression' || left.type === 'AwaitExpression') &&
+        (left.type === 'UnaryExpression' ||
+          left.type === 'AwaitExpression' ||
+          left.type === 'TypeAssertion') &&
         !this.parenthesized.has(left)
       ) {
         const token = this.peek();
+        const operand = left.type === 'TypeAssertion' ? 'Type assertion' : 'Unary operator';
         throw new Error(
-          `Unary operator before '**' must be parenthesized at line ${token.line}, column ${token.column}`
+          `${operand} before '**' must be parenthesized at line ${token.line}, column ${token.column}`
         );
       }
 
@@ -1161,6 +1312,11 @@ export class Parser {
           line: awaitToken.line,
           column: awaitToken.column,
         } as AwaitExpression;
+      }
+
+      // A '<' can only start an operand as the type assertion `<Т>х`
+      if (this.check(TokenType.LESS_THAN)) {
+        return this.parseTypeAssertion();
       }
 
       return this.call();
@@ -1257,6 +1413,8 @@ export class Parser {
         const property = this.expression();
         this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property");
         expr = this.createMemberExpression(expr, property, true);
+      } else if (this.checkNonNullAssertion()) {
+        expr = this.createNonNullExpression(expr);
       } else if (this.match(TokenType.INCREMENT, TokenType.DECREMENT)) {
         // Postfix increment/decrement
         const operator = this.previous();
@@ -1275,6 +1433,24 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  /**
+   * A '!' right after an operand, on its line, is the non-null assertion
+   * `х!` (as in TypeScript); `!=` and `!==` are separate tokens.
+   */
+  private checkNonNullAssertion(): boolean {
+    return this.check(TokenType.NOT) && !this.hasLineBreakBefore();
+  }
+
+  private createNonNullExpression(expression: Expression): NonNullExpression {
+    this.advance(); // '!'
+    return {
+      type: 'NonNullExpression',
+      expression,
+      line: expression.line,
+      column: expression.column,
+    } as NonNullExpression;
   }
 
   private createMemberExpression(
@@ -1490,6 +1666,9 @@ export class Parser {
         const property = this.expression();
         this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property");
         callee = this.createMemberExpression(callee, property, true);
+      } else if (this.checkNonNullAssertion()) {
+        // `нав а!.Б()` constructs `а!.Б`
+        callee = this.createNonNullExpression(callee);
       } else {
         break;
       }
@@ -1647,18 +1826,33 @@ export class Parser {
     return null;
   }
 
-  /** Whether the member/call chain of `expr` has a `?.` link. */
+  /** Whether the member/call chain of `expr` (assertions included) has a `?.` link. */
   private containsOptionalLink(expr: Expression): boolean {
     let current = expr;
-    while (current.type === 'MemberExpression' || current.type === 'CallExpression') {
-      if ((current as MemberExpression | CallExpression).optional) return true;
-      current =
-        current.type === 'MemberExpression'
-          ? (current as MemberExpression).object
-          : (current as CallExpression).callee;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (current.type === 'MemberExpression' || current.type === 'CallExpression') {
+        if ((current as MemberExpression | CallExpression).optional) return true;
+        current =
+          current.type === 'MemberExpression'
+            ? (current as MemberExpression).object
+            : (current as CallExpression).callee;
+      } else if (Parser.ASSERTION_TYPES.has(current.type)) {
+        // `(о?.а чун Т).б` and `(о?.а!).б` end the chain like `(о?.а).б`
+        current = (current as NonNullExpression).expression;
+      } else {
+        return false;
+      }
     }
-    return false;
   }
+
+  /** Expressions that only assert a type: erased in the output. */
+  private static readonly ASSERTION_TYPES: ReadonlySet<string> = new Set([
+    'AsExpression',
+    'TypeAssertion',
+    'SatisfiesExpression',
+    'NonNullExpression',
+  ]);
 
   private primary(): Expression {
     const literal = this.parseLiteralExpression();
@@ -2752,8 +2946,8 @@ export class Parser {
       this.parseObjectType() ??
       this.errorExpectedType();
 
-    // Postfix forms: array `Т[]` and indexed access `Т[К]`
-    while (this.match(TokenType.LEFT_BRACKET)) {
+    // Postfix forms: array `Т[]` and indexed access `Т[К]`, on the line of `Т`
+    while (!this.hasLineBreakBefore() && this.match(TokenType.LEFT_BRACKET)) {
       if (this.match(TokenType.RIGHT_BRACKET)) {
         type = {
           type: 'ArrayType',
@@ -3032,7 +3226,10 @@ export class Parser {
     );
   }
 
-  /** `{ [+|-]танҳохонӣ [К дар Т]+?|-?: Х }` — types are erased, so `+`/`-` only parse. */
+  /**
+   * `{ [+|-]танҳохонӣ [К дар Т чун Н]+?|-?: Х }` — types are erased, so `+`/`-`
+   * only parse.
+   */
   private parseMappedType(leftBrace: Token): TypeNode {
     const removesReadonly = this.match(TokenType.MINUS);
     if (!removesReadonly) this.match(TokenType.PLUS);
@@ -3042,6 +3239,12 @@ export class Parser {
     const nameToken = this.advance();
     this.consume(TokenType.ДАР, "Expected 'дар' in mapped type");
     const constraint = this.parseType();
+    // Key remapping (TypeScript `as`): `[К дар калидҳои Т чун Н]`
+    let nameType: TypeNode | undefined;
+    if (this.check(TokenType.ЧУН) || this.checkIdentifierValue('as')) {
+      this.advance();
+      nameType = this.parseType();
+    }
     this.consume(TokenType.RIGHT_BRACKET, "Expected ']' in mapped type");
 
     let optional = false;
@@ -3069,13 +3272,14 @@ export class Parser {
       typeAnnotation,
       optional,
       readonly,
+      ...(nameType && { nameType }),
       line: leftBrace.line,
       column: leftBrace.column,
     } as MappedType;
   }
 
   /** Consumes one '>' closing type arguments, splitting a `>>` / `>>>` token if needed. */
-  private consumeTypeArgumentsClose(): void {
+  private consumeTypeArgumentsClose(message = "Expected '>' after type parameters"): void {
     const token = this.peek();
     if (token.type === TokenType.RIGHT_SHIFT || token.type === TokenType.UNSIGNED_RIGHT_SHIFT) {
       const rest = token.value.slice(1);
@@ -3091,7 +3295,7 @@ export class Parser {
         }
       );
     }
-    this.consume(TokenType.GREATER_THAN, "Expected '>' after type parameters");
+    this.consume(TokenType.GREATER_THAN, message);
   }
 
   private errorExpectedType(): never {
@@ -3106,6 +3310,8 @@ export class Parser {
 
     const typeParameters: TypeParameter[] = [];
     do {
+      // A trailing comma is allowed: `<Т,>(х: Т) => х`
+      if (typeParameters.length > 0 && this.check(TokenType.GREATER_THAN)) break;
       const paramName = this.parseImportOrExportName('Expected type parameter name');
       const typeParameter: TypeParameter = {
         type: 'TypeParameter',
@@ -3658,6 +3864,8 @@ export class Parser {
 
     // Optional property marker (`ном?: сатр`): the property may be `беқимат`
     const optional = this.match(TokenType.QUESTION);
+    // Definite assignment assertion: `ном!: сатр`
+    const definite = !optional && this.checkNonNullAssertion() ? this.advance() : undefined;
 
     // Optional type annotation
     let typeAnnotation: TypeAnnotation | undefined;
@@ -3669,6 +3877,15 @@ export class Parser {
     let value = undefined;
     if (this.match(TokenType.ASSIGN)) {
       value = this.assignment();
+    }
+
+    if (definite) {
+      this.checkDefiniteAssignment(
+        definite,
+        value !== undefined,
+        typeAnnotation !== undefined,
+        !isStatic
+      );
     }
 
     // Optional semicolon after property declaration
@@ -3685,6 +3902,7 @@ export class Parser {
       value: value,
       typeAnnotation: typeAnnotation,
       ...(optional && { optional }),
+      ...(definite && { definite: true }),
       static: isStatic || false,
       accessibility: accessProp,
       line: nameToken.line,

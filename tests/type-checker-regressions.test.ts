@@ -567,6 +567,156 @@ describe('TypeChecker regressions: false positives found while probing', () => {
   });
 });
 
+describe('TypeChecker: type assertions', () => {
+  const PRELUDE = `
+интерфейс И { а: рақам; б?: сатр; }
+синф Ҳайвон { ном: сатр = "ҳ"; }
+синф Саг мерос Ҳайвон { аккос(): сатр { бозгашт "вав"; } }
+`;
+  const errors = (source: string) => errorsOf(PRELUDE + source);
+
+  test('х чун Т has the type Т', () => {
+    expect(
+      errors('собит а: ношинос = "с"; собит н: рақам = (а чун сатр).length + (<сатр>а).length;')
+    ).toEqual([]);
+    expect(errors('собит б: сатр = "1" чун ҳар чун рақам;')).toEqual([
+      "TYPE_NOT_ASSIGNABLE: Type 'рақам' is not assignable to type 'сатр'",
+    ]);
+  });
+
+  test.each([
+    ['a string to a number', 'собит х = "а" чун рақам;', 'сатр', 'рақам'],
+    [
+      'unrelated object types',
+      'собит х = { а: 1 } чун { б: рақам };',
+      '{ а: рақам }',
+      '{ б: рақам }',
+    ],
+    ['unrelated arrays', 'собит х = [1, 2] чун сатр[];', 'рақам[]', 'сатр[]'],
+    ['a class to an unrelated class', 'собит х = нав Саг() чун И;', 'Саг', 'И'],
+  ])(
+    'an assertion between types that do not overlap is an error: %s',
+    (_name, source, from, to) => {
+      expect(errors(source)).toEqual([
+        `TYPE_NOT_ASSIGNABLE: Conversion of type '${from}' to type '${to}' may be a mistake because neither type sufficiently overlaps with the other; assert to 'ношинос' first if this is intended`,
+      ]);
+    }
+  );
+
+  test.each([
+    ['through ношинос', 'собит х = "а" чун ношинос чун рақам;'],
+    ['through ҳар', 'собит х = "а" чун ҳар чун рақам;'],
+    ['a literal to another literal of its type', 'собит х = 1 чун 2;'],
+    ['a downcast', 'собит ҳ: Ҳайвон = нав Саг(); собит с = (ҳ чун Саг).аккос();'],
+    ['an upcast', 'собит ҳ = нав Саг() чун Ҳайвон;'],
+    ['an empty object', 'собит х = {} чун И;'],
+    ['extra properties', 'собит х = { а: 1, в: 2 } чун И;'],
+    ['a tuple', 'собит х = [1, "а"] чун [рақам, сатр];'],
+    ['one member of a union', 'функсия ф(х: рақам | сатр): рақам { бозгашт х чун рақам; }'],
+    ['an array to an object with its members', 'собит х = [1] чун { length: рақам };'],
+    ['an unresolved type', 'собит х = 1 чун HTMLElement;'],
+    ['to never', 'собит х = 1 чун абадан;'],
+  ])('an assertion between overlapping types is accepted: %s', (_name, source) => {
+    expect(errors(source)).toEqual([]);
+  });
+
+  test('чун собит keeps literal types', () => {
+    expect(
+      errors(`
+собит р = [1, 2] чун собит;
+собит т: [1, 2] = р;
+собит о = { н: "а", м: { к: дуруст } } чун собит;
+собит н: "а" = о.н;
+собит к: дуруст = о.м.к;
+тағ с = "а" чун собит;
+собит ҷ: "а" = с;
+собит у = <собит>[3];
+собит д: [3] = у;
+`)
+    ).toEqual([]);
+    expect(errors('собит р = [1, 2] чун собит; собит т: [1, 3] = р;')).toEqual([
+      "TYPE_NOT_ASSIGNABLE: Type 'танҳохонӣ [1, 2]' is not assignable to type '[1, 3]'",
+    ]);
+    expect(errors('тағ с = "а" чун собит; с = "б";')).toEqual([
+      `TYPE_NOT_ASSIGNABLE: Type '"б"' is not assignable to type '"а"'`,
+    ]);
+  });
+
+  test('чун собит values can be read like arrays and objects', () => {
+    expect(
+      errors(`
+собит р = [1, 2, 3] чун собит;
+тағ ҷамъ: рақам = р.length + р[0];
+барои (собит х аз р) { ҷамъ += х; }
+собит [а, б] = р;
+чоп.сабт(ҷамъ + а + б);
+`)
+    ).toEqual([]);
+  });
+
+  test('a tuple is assignable to an array of its element types', () => {
+    expect(
+      errors('тағ т: [рақам, сатр] = [1, "а"]; собит м: (рақам | сатр)[] = т; чоп.сабт(м);')
+    ).toEqual([]);
+    expect(codesOf('тағ т: [рақам, сатр] = [1, "а"]; собит м: рақам[] = т;')).toEqual([
+      'TYPE_NOT_ASSIGNABLE',
+    ]);
+  });
+
+  test.each([
+    ['a variable', 'тағ в = 5; собит х = в чун собит;'],
+    ['холӣ', 'собит х = холӣ чун собит;'],
+    ['a conditional', 'тағ в = 5; собит х = (в > 1 ? "а" : "б") чун собит;'],
+  ])('чун собит on %s is an error', (_name, source) => {
+    expect(errors(source)).toEqual([
+      "TYPE_NOT_ASSIGNABLE: A 'чун собит' assertion can only be applied to string, number, boolean, array or object literals",
+    ]);
+  });
+
+  test('чун собит on literals, negative numbers, templates and members is accepted', () => {
+    expect(
+      errors(
+        'собит о = { а: 1 }; собит х = [-1 чун собит, `т` чун собит, дуруст чун собит, о.а чун собит];'
+      )
+    ).toEqual([]);
+  });
+
+  test('бармесоё checks the value and keeps its own type', () => {
+    expect(
+      errors(`
+собит о = { а: 1 } бармесоё И;
+собит п = { а: 1, б: "б" } бармесоё { а: рақам; б: сатр | рақам };
+собит с: сатр = п.б;
+собит р = [1, 2] бармесоё рақам[];
+собит н: рақам = о.а + р[0];
+`)
+    ).toEqual([]);
+    expect(errors('собит о = { а: "x" } бармесоё И;')).toEqual([
+      `TYPE_NOT_ASSIGNABLE: Type '{ а: "x" }' does not satisfy the expected type 'И'`,
+    ]);
+    expect(errors('собит о = {} бармесоё И;')).toEqual([
+      "TYPE_NOT_ASSIGNABLE: Type '{}' does not satisfy the expected type 'И'",
+    ]);
+    expect(errors('собит о = { а: 1, в: 2 } бармесоё И;')).toEqual([
+      "TYPE_NOT_ASSIGNABLE: Object literal may only specify known properties, and 'в' does not exist in type 'И'",
+    ]);
+  });
+
+  test('generic arrows, definite assignments and the contextual names check cleanly', () => {
+    expect(
+      errors(`
+собит ҳамон = <Т>(х: Т): Т => х;
+собит н: рақам = ҳамон(1);
+тағ х!: рақам;
+х = н;
+синф К { ном!: сатр; }
+тағ бармесоё = 1;
+собит as = бармесоё + 1;
+`)
+    ).toEqual([]);
+  });
+});
+
 describe('TypeChecker: AST contract nodes', () => {
   const pos = { line: 1, column: 1 };
   const id = (name: string) => ({ type: 'Identifier', name, ...pos });
