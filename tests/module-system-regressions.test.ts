@@ -517,6 +517,49 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('allowJs and resolveJsonModule', () => {
+    beforeEach(() => {
+      write({
+        'util.js': 'exports.У = 1;\n',
+        'jsdir/index.js': 'exports.И = 2;\n',
+        'data.json': '{ "Д": 3 }\n',
+        'node_modules/pkg/package.json': '{ "main": "main.js" }',
+        'node_modules/pkg/main.js': 'exports.П = 4;\n',
+        'node_modules/pkg/data.json': '{}',
+        'main.som': '',
+      });
+    });
+
+    test('false keeps the project’s JavaScript or JSON files from being imported', () => {
+      const from = path.join(root, 'main.som');
+      const noJs = new ModuleResolver({ baseUrl: root, allowJs: false });
+      expect(() => noJs.resolve('./util', from)).toThrow(
+        `Cannot resolve module: ${path.join(root, 'util')}`
+      );
+      expect(() => noJs.resolve('./util.js', from)).toThrow(/Cannot resolve module/);
+      expect(() => noJs.resolve('./jsdir', from)).toThrow(/Cannot resolve module/);
+      expect(noJs.resolve('./data.json', from).extension).toBe('.json');
+      // Packages are not the project's code
+      expect(noJs.resolve('pkg', from).resolvedPath).toBe(
+        path.join(root, 'node_modules', 'pkg', 'main.js')
+      );
+
+      const noJson = new ModuleResolver({ baseUrl: root, resolveJsonModule: false });
+      expect(() => noJson.resolve('./data.json', from)).toThrow(/Cannot resolve module/);
+      expect(() => noJson.resolve('./data', from)).toThrow(/Cannot resolve module/);
+      expect(noJson.resolve('./util', from).extension).toBe('.js');
+      expect(noJson.resolve('pkg/data.json', from).extension).toBe('.json');
+    });
+
+    test('a ModuleSystem with allowJs false reports the import of a .js file', async () => {
+      write({ 'main.som': 'ворид { У } аз "./util";\nчоп.сабт(У);\n' });
+      const result = await createSystem({ resolution: { baseUrl: root, allowJs: false } }).compile(
+        path.join(root, 'main.som')
+      );
+      expect(result.errors.map(error => error.specifier)).toEqual(['./util']);
+    });
+  });
+
   describe('paths patterns', () => {
     test('"lib/*" maps "lib/x" only, not other names that start with "lib"', () => {
       write({

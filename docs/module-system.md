@@ -39,6 +39,9 @@ Notes:
   for `import` only (an ES module package) resolves to that module. A subpath
   that is not exported is an error. Without `exports`, `main` and then `index.*`
   are used.
+- `allowJs: false` and `resolveJsonModule: false` (both default to `true`) keep
+  the project's JavaScript (`.js`, `.cjs`, `.mjs`) and JSON files from being
+  imported; the files of packages stay importable.
 
 Containment policy:
 

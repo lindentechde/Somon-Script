@@ -6,7 +6,9 @@ export interface ModuleResolutionOptions {
   paths?: Record<string, string[]>;
   extensions?: string[];
   moduleDirectories?: string[];
+  /** The project's JavaScript files (.js, .cjs, .mjs) can be imported (default true). */
   allowJs?: boolean;
+  /** The project's JSON files can be imported (default true). */
   resolveJsonModule?: boolean;
 }
 
@@ -24,6 +26,8 @@ const REQUIRE_CONDITIONS: ReadonlySet<string> = new Set(['require', 'node', 'def
  * dependency the host loads (an esm bundle imports it).
  */
 const IMPORT_CONDITIONS: ReadonlySet<string> = new Set(['import', 'node', 'default']);
+
+const JAVASCRIPT_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.cjs', '.mjs']);
 
 const UNIX_SYSTEM_PREFIXES = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
 
@@ -317,20 +321,40 @@ export class ModuleResolver {
     throw new Error(`Cannot resolve module: ${targetPath}`);
   }
 
+  /** `filePath` as a module, when it is a file the options allow importing. */
+  private fileModule(
+    filePath: string,
+    extension: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
+    if (
+      !fs.existsSync(filePath) ||
+      !fs.statSync(filePath).isFile() ||
+      !this.isAllowedFile(filePath, isExternal)
+    ) {
+      return null;
+    }
+    return { resolvedPath: filePath, isExternalLibrary: isExternal, packageName, extension };
+  }
+
+  /**
+   * `allowJs: false` and `resolveJsonModule: false` keep the project's JavaScript and
+   * JSON files from being imported; the files of packages stay importable.
+   */
+  private isAllowedFile(filePath: string, isExternal: boolean): boolean {
+    if (isExternal) return true;
+    const extension = path.extname(filePath).toLowerCase();
+    if (extension === '.json') return this.options.resolveJsonModule;
+    return this.options.allowJs || !JAVASCRIPT_EXTENSIONS.has(extension);
+  }
+
   private tryExactPath(
     targetPath: string,
     isExternal: boolean,
     packageName?: string
   ): ResolvedModule | null {
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
-      return {
-        resolvedPath: targetPath,
-        isExternalLibrary: isExternal,
-        packageName,
-        extension: path.extname(targetPath),
-      };
-    }
-    return null;
+    return this.fileModule(targetPath, path.extname(targetPath), isExternal, packageName);
   }
 
   private tryWithExtensions(
@@ -339,15 +363,8 @@ export class ModuleResolver {
     packageName?: string
   ): ResolvedModule | null {
     for (const ext of this.options.extensions) {
-      const pathWithExt = targetPath + ext;
-      if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-        return {
-          resolvedPath: pathWithExt,
-          isExternalLibrary: isExternal,
-          packageName,
-          extension: ext,
-        };
-      }
+      const resolved = this.fileModule(targetPath + ext, ext, isExternal, packageName);
+      if (resolved) return resolved;
     }
     return null;
   }
@@ -418,14 +435,8 @@ export class ModuleResolver {
   ): ResolvedModule | null {
     for (const ext of this.options.extensions) {
       const indexPath = path.join(targetPath, `index${ext}`);
-      if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
-        return {
-          resolvedPath: indexPath,
-          isExternalLibrary: isExternal,
-          packageName,
-          extension: ext,
-        };
-      }
+      const resolved = this.fileModule(indexPath, ext, isExternal, packageName);
+      if (resolved) return resolved;
     }
     return null;
   }
