@@ -71,8 +71,9 @@ export interface ConfigValidationError {
 }
 
 type UnknownRecord = Record<string, unknown>;
+/** A JSON object: not null, and not an array. */
 function isObject(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rejectUnknownKeys(
@@ -299,7 +300,7 @@ function validateResolutionSection(resolution: unknown, basePath: string): Confi
   const errors: ConfigValidationError[] = [];
   if (resolution === undefined) return errors;
 
-  if (typeof resolution !== 'object' || resolution === null) {
+  if (!isObject(resolution)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 
@@ -327,7 +328,7 @@ function validateResolutionBaseUrl(baseUrl: unknown, basePath: string): ConfigVa
 function validateResolutionPaths(paths: unknown, basePath: string): ConfigValidationError[] {
   if (paths === undefined) return [];
 
-  if (typeof paths !== 'object' || paths === null) {
+  if (!isObject(paths)) {
     return [{ path: `${basePath}.paths`, message: 'must be an object' }];
   }
 
@@ -387,7 +388,7 @@ function validateLoadingSection(loading: unknown, basePath: string): ConfigValid
   const errors: ConfigValidationError[] = [];
   if (loading === undefined) return errors;
 
-  if (typeof loading !== 'object' || loading === null) {
+  if (!isObject(loading)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 

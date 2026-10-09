@@ -88,6 +88,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * When TypeScript 5.4 crashes while it lowers valid code for a target (its checker overflows the stack on a few programs), the compile error says so and names the TypeScript version, instead of passing on the raw `Maximum call stack size exceeded`. TypeScript 5.6 and later no longer type-check the code they lower.
 * A `/` after an object literal or a block comment in a template interpolation (`` `${{} / 2}` ``, `` `${а / /* … */ б}` ``) is a division; it was read as the start of a regular expression, a parse error.
 * `somon compile --declaration -o x.mjs` wrote `x.d.ts`, which TypeScript does not read for `x.mjs`; it writes `x.d.mts`, and `x.d.cts` for `x.cjs`.
+* `somon.config.json` accepted an array where an object belongs (`"compilerOptions": []`, also for the file itself, `moduleSystem` and its sections, `paths`, `bundle` and `fmt`) and ignored it; it is a configuration error (`compilerOptions: must be an object`).
 
 ## 0.4.0 (2026-10-09)
 

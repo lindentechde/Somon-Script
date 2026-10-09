@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as ts from 'typescript';
 
+import { ConfigError, loadConfig } from '../src/config';
 import { runInProcess, writeFiles } from './helpers/cli-in-process';
 import { canonicalTmpDir } from './helpers/paths';
 
@@ -63,5 +64,44 @@ describe('compile --declaration names the file TypeScript looks for', () => {
       .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
     // The declarations are found: the only error is the deliberate one.
     expect(messages).toEqual(["Type 'number' is not assignable to type 'string'."]);
+  });
+});
+
+describe('somon.config.json rejects arrays where an object belongs', () => {
+  // Arrays passed the "must be an object" checks: `"compilerOptions": []` was
+  // silently ignored, and `"compilerOptions": ["strict"]` reported "compilerOptions.0".
+  test.each([
+    [[], 'root', 'configuration must be an object'],
+    [{ compilerOptions: [] }, 'compilerOptions', 'must be an object'],
+    [{ compilerOptions: ['strict'] }, 'compilerOptions', 'must be an object'],
+    [{ moduleSystem: [] }, 'moduleSystem', 'must be an object'],
+    [{ moduleSystem: { compilation: [] } }, 'moduleSystem.compilation', 'must be an object'],
+    [{ moduleSystem: { resolution: [] } }, 'moduleSystem.resolution', 'must be an object'],
+    [
+      { moduleSystem: { resolution: { paths: [['./*']] } } },
+      'moduleSystem.resolution.paths',
+      'must be an object',
+    ],
+    [{ moduleSystem: { loading: [] } }, 'moduleSystem.loading', 'must be an object'],
+    [{ bundle: [] }, 'bundle', 'must be an object'],
+    [{ fmt: [] }, 'fmt', 'must be an object'],
+  ])('%j', (config, where, message) => {
+    fs.writeFileSync(path.join(dir, 'somon.config.json'), JSON.stringify(config));
+    expect.assertions(2);
+    try {
+      loadConfig(dir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).details).toEqual([{ path: where, message }]);
+    }
+  });
+
+  test('the CLI reports it', async () => {
+    writeFiles(dir, { 'a.som': 'чоп.сабт(1);\n' });
+    fs.writeFileSync(path.join(dir, 'somon.config.json'), '{ "compilerOptions": [] }');
+    const result = await runInProcess(['compile', 'a.som'], { cwd: dir });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('  compilerOptions: must be an object');
+    expect(fs.existsSync(path.join(dir, 'a.js'))).toBe(false);
   });
 });
