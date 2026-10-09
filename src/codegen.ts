@@ -54,6 +54,7 @@ import {
   Property,
   RestElement,
 } from './types';
+import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
 
 /** Precedence levels of non-binary expressions; binary levels live in `operatorPrecedence`. */
 const PREC = {
@@ -166,177 +167,6 @@ export class CodeGenerator {
   /** Whether statements are prefixed with position markers (`generateWithMappings`). */
   private trackPositions = false;
 
-  // Static — allocated once for the class, not rebuilt per member expression.
-  // O(1) membership test via Set replaces the previous O(n) Array.includes.
-  private static readonly COMMON_METHODS: ReadonlySet<string> = new Set([
-    // Console methods
-    'сабт',
-    'хато',
-    'огоҳӣ',
-    'маълумот',
-    'исфти',
-    'тасдиқ',
-    'ҷадвал',
-    'гуруҳ',
-    'гуруҳОхир',
-    'гуруҳПӯшида',
-    'вақт',
-    'вақтОхир',
-    'вақтСабт',
-    'қайд',
-    'қайдАсл',
-    'полиз',
-    'феҳрист',
-    'xmlФеҳрист',
-    'пайҷо',
-    // Array methods
-    'дарозӣ',
-    'дар',
-    'пайвастан',
-    'нусхаДарДохил',
-    'воридот',
-    'ҳама',
-    'пурКардан',
-    'филтр',
-    'кофтан',
-    'индексиЁфтан',
-    'охиринЁфтан',
-    'индексиОхиринЁфтан',
-    'ҳамвор',
-    'ҳамворХарита',
-    'бароиҲар',
-    'аз',
-    'дорад',
-    'индекси',
-    'рӯйхатАст',
-    'пайвастКардан',
-    'калидҳо',
-    'индексиОхирин',
-    'харита',
-    'азАргументҳо',
-    'баровардан',
-    'илова',
-    'пуш',
-    'ҷамъбаст',
-    'ҷамъбастАзРост',
-    'баргардон',
-    'ҳазфиАввал',
-    'буридан',
-    'баъзе',
-    'тартиб',
-    'пайваст',
-    'баСатриМаҳаллӣ',
-    'баБаргардон',
-    'баТартиб',
-    'баПайваст',
-    'баСатр',
-    'иловаБаАввал',
-    'қиматҳо',
-    'бо',
-    // String methods
-    'дарозииСатр',
-    'аломатДар',
-    'кодиАломатДар',
-    'нуқтаиКодДар',
-    'анҷомБо',
-    'азКодиАломат',
-    'азНуқтаиКод',
-    'муқоисаиМаҳаллӣ',
-    'мувофиқат',
-    'мувофиқатҲама',
-    'муқаррарӣ',
-    'пурКарданОхир',
-    'пурКарданАввал',
-    'хоми',
-    'такрор',
-    'ҷойивазкунӣ',
-    'ҷойгузин',
-    'ҷойивазкунӣҲама',
-    'ҷустуҷӯ',
-    'ҷудокунӣ',
-    'оғозБо',
-    'қисмат',
-    'хурдМаҳаллӣ',
-    'калонМаҳаллӣ',
-    'хурд',
-    'калон',
-    'тозаКардан',
-    'тозаКарданОхир',
-    'тозаКарданАввал',
-    'қиматиАслӣ',
-    // Math methods
-    'Е',
-    'ЛН10',
-    'ЛН2',
-    'ЛОГ10Е',
-    'ЛОГ2Е',
-    'ПИ',
-    'РЕША1_2',
-    'РЕША2',
-    'мутлақ',
-    'арккосинус',
-    'арккосинусГиперболӣ',
-    'арксинус',
-    'арксинусГиперболӣ',
-    'арктангенс',
-    'арктангенс2',
-    'арктангенсГиперболӣ',
-    'решаиКубӣ',
-    'боло',
-    'clz32',
-    'косинус',
-    'косинусГиперболӣ',
-    'экспонента',
-    'expm1',
-    'поён',
-    'fround',
-    'гипотенуза',
-    'imul',
-    'логарифм',
-    'логарифм10',
-    'логарифм1п',
-    'логарифм2',
-    'ҳаддиАксар',
-    'ҳаддиАқал',
-    'қувват',
-    'тасодуфӣ',
-    'дузкунӣ',
-    'аломат',
-    'синус',
-    'синусГиперболӣ',
-    'дуръшака',
-    'тангенс',
-    'тангенсГиперболӣ',
-    'бириданАдад',
-    // Object methods
-    'таъин',
-    'сохтан',
-    'муайянХосиятҳо',
-    'муайянХосият',
-    'яхКардан',
-    'азВоридот',
-    'тавсифиХосият',
-    'тавсифиХосиятҳо',
-    'номҳоиХосият',
-    'рамзҳоиХосият',
-    'прототип',
-    'гурӯҳбандӣ',
-    'дорадХосият',
-    'аст',
-    'васеъшаванда',
-    'яхшуда',
-    'мӯҳршуда',
-    'манъиВасеъшавӣ',
-    'мӯҳр',
-    'танзимиПрототип',
-    // Map / Set methods
-    'бозгирифтан',
-    'гузоштан',
-    'дорадКалид',
-    'ҳаҷм',
-    'нобудКардан',
-  ]);
-
   /**
    * Return diagnostics collected during generation. Codegen follows the same
    * never-throw contract as the rest of the pipeline — unknown AST nodes are
@@ -345,220 +175,6 @@ export class CodeGenerator {
   getErrors(): string[] {
     return [...this.errors];
   }
-
-  // Mapping of Tajik built-in functions to JavaScript equivalents
-  private readonly builtinMappings: Map<string, string> = new Map([
-    // Console functions
-    ['чоп', 'console'],
-    ['сабт', 'log'],
-    ['хато', 'error'],
-    ['огоҳӣ', 'warn'],
-    ['маълумот', 'info'],
-    ['исфти', 'debug'],
-    ['ҷадвал', 'table'],
-    ['гуруҳ', 'group'],
-    ['гуруҳОхир', 'groupEnd'],
-    ['гуруҳПӯшида', 'groupCollapsed'],
-    ['вақт', 'time'],
-    ['вақтОхир', 'timeEnd'],
-    ['вақтСабт', 'timeLog'],
-    ['қайд', 'count'],
-    ['қайдАсл', 'countReset'],
-    ['тасдиқ', 'assert'],
-    ['полиз', 'clear'],
-    ['феҳрист', 'dir'],
-    ['xmlФеҳрист', 'dirxml'],
-    ['пайҷо', 'trace'],
-
-    // Error handling
-    ['Хато', 'Error'],
-
-    // Map / Set methods
-    ['бозгирифтан', 'get'],
-    ['гузоштан', 'set'],
-    ['дорадКалид', 'has'],
-    ['ҳаҷм', 'size'],
-    ['нобудКардан', 'delete'],
-
-    // Array methods
-    ['рӯйхат', 'Array'],
-    ['дарозӣ', 'length'],
-    ['дар', 'at'],
-    ['пайвастан', 'concat'],
-    ['нусхаДарДохил', 'copyWithin'],
-    ['воридот', 'entries'],
-    ['ҳама', 'every'],
-    ['пурКардан', 'fill'],
-    ['филтр', 'filter'],
-    ['кофтан', 'find'],
-    ['индексиЁфтан', 'findIndex'],
-    ['охиринЁфтан', 'findLast'],
-    ['индексиОхиринЁфтан', 'findLastIndex'],
-    ['ҳамвор', 'flat'],
-    ['ҳамворХарита', 'flatMap'],
-    ['бароиҲар', 'forEach'],
-    ['аз', 'from'],
-    ['дорад', 'includes'],
-    ['индекси', 'indexOf'],
-    ['рӯйхатАст', 'isArray'],
-    ['пайвастКардан', 'join'],
-    ['калидҳо', 'keys'],
-    ['индексиОхирин', 'lastIndexOf'],
-    ['харита', 'map'],
-    ['азАргументҳо', 'of'],
-    ['баровардан', 'pop'],
-    ['илова', 'push'],
-    ['пуш', 'push'],
-    ['ҷамъбаст', 'reduce'],
-    ['ҷамъбастАзРост', 'reduceRight'],
-    ['баргардон', 'reverse'],
-    ['ҳазфиАввал', 'shift'],
-    ['буридан', 'slice'],
-    ['баъзе', 'some'],
-    ['тартиб', 'sort'],
-    ['пайваст', 'splice'],
-    ['баСатриМаҳаллӣ', 'toLocaleString'],
-    ['баБаргардон', 'toReversed'],
-    ['баТартиб', 'toSorted'],
-    ['баПайваст', 'toSpliced'],
-    ['баСатр', 'toString'],
-    ['иловаБаАввал', 'unshift'],
-    ['қиматҳо', 'values'],
-    ['бо', 'with'],
-
-    // String methods
-    ['сатр', 'String'], // String type/constructor
-    ['сатрМетодҳо', 'String'], // String methods object
-    ['дарозииСатр', 'length'],
-    ['дар', 'at'],
-    ['аломатДар', 'charAt'],
-    ['кодиАломатДар', 'charCodeAt'],
-    ['нуқтаиКодДар', 'codePointAt'],
-    ['пайвастан', 'concat'],
-    ['анҷомБо', 'endsWith'],
-    ['азКодиАломат', 'fromCharCode'],
-    ['азНуқтаиКод', 'fromCodePoint'],
-    ['дорад', 'includes'],
-    ['индекси', 'indexOf'],
-    ['индексиОхирин', 'lastIndexOf'],
-    ['муқоисаиМаҳаллӣ', 'localeCompare'],
-    ['мувофиқат', 'match'],
-    ['мувофиқатҲама', 'matchAll'],
-    ['муқаррарӣ', 'normalize'],
-    ['пурКарданОхир', 'padEnd'],
-    ['пурКарданАввал', 'padStart'],
-    ['хоми', 'raw'],
-    ['такрор', 'repeat'],
-    ['ҷойивазкунӣ', 'replace'],
-    ['ҷойгузин', 'replace'],
-    ['ҷойивазкунӣҲама', 'replaceAll'],
-    ['ҷустуҷӯ', 'search'],
-    ['буридан', 'slice'],
-    ['ҷудокунӣ', 'split'],
-    ['оғозБо', 'startsWith'],
-    ['қисмат', 'substring'],
-    ['хурдМаҳаллӣ', 'toLocaleLowerCase'],
-    ['калонМаҳаллӣ', 'toLocaleUpperCase'],
-    ['хурд', 'toLowerCase'],
-    ['баСатр', 'toString'],
-    ['калон', 'toUpperCase'],
-    ['тозаКардан', 'trim'],
-    ['тозаКарданОхир', 'trimEnd'],
-    ['тозаКарданАввал', 'trimStart'],
-    ['қиматиАслӣ', 'valueOf'],
-
-    // Object methods
-    ['объект', 'Object'],
-    ['таъин', 'assign'],
-    ['сохтан', 'create'],
-    ['муайянХосиятҳо', 'defineProperties'],
-    ['муайянХосият', 'defineProperty'],
-    ['воридот', 'entries'],
-    ['яхКардан', 'freeze'],
-    ['азВоридот', 'fromEntries'],
-    ['тавсифиХосият', 'getOwnPropertyDescriptor'],
-    ['тавсифиХосиятҳо', 'getOwnPropertyDescriptors'],
-    ['номҳоиХосият', 'getOwnPropertyNames'],
-    ['рамзҳоиХосият', 'getOwnPropertySymbols'],
-    ['прототип', 'getPrototypeOf'],
-    ['гурӯҳбандӣ', 'groupBy'],
-    ['дорадХосият', 'hasOwn'],
-    ['аст', 'is'],
-    ['васеъшаванда', 'isExtensible'],
-    ['яхшуда', 'isFrozen'],
-    ['мӯҳршуда', 'isSealed'],
-    ['калидҳо', 'keys'],
-    ['манъиВасеъшавӣ', 'preventExtensions'],
-    ['мӯҳр', 'seal'],
-    ['танзимиПрототип', 'setPrototypeOf'],
-    ['қиматҳо', 'values'],
-
-    // Math
-    ['математика', 'Math'],
-    ['Риёзӣ', 'Math'],
-    ['Е', 'E'],
-    ['ЛН10', 'LN10'],
-    ['ЛН2', 'LN2'],
-    ['ЛОГ10Е', 'LOG10E'],
-    ['ЛОГ2Е', 'LOG2E'],
-    ['ПИ', 'PI'],
-    ['РЕША1_2', 'SQRT1_2'],
-    ['РЕША2', 'SQRT2'],
-    ['мутлақ', 'abs'],
-    ['арккосинус', 'acos'],
-    ['арккосинусГиперболӣ', 'acosh'],
-    ['арксинус', 'asin'],
-    ['арксинусГиперболӣ', 'asinh'],
-    ['арктангенс', 'atan'],
-    ['арктангенс2', 'atan2'],
-    ['арктангенсГиперболӣ', 'atanh'],
-    ['решаиКубӣ', 'cbrt'],
-    ['боло', 'ceil'],
-    ['clz32', 'clz32'],
-    ['косинус', 'cos'],
-    ['косинусГиперболӣ', 'cosh'],
-    ['экспонента', 'exp'],
-    ['expm1', 'expm1'],
-    ['поён', 'floor'],
-    ['fround', 'fround'],
-    ['гипотенуза', 'hypot'],
-    ['imul', 'imul'],
-    ['логарифм', 'log'],
-    ['логарифм10', 'log10'],
-    ['логарифм1п', 'log1p'],
-    ['логарифм2', 'log2'],
-    ['ҳаддиАксар', 'max'],
-    ['ҳаддиАқал', 'min'],
-    ['қувват', 'pow'],
-    ['тасодуфӣ', 'random'],
-    ['дузкунӣ', 'round'],
-    ['аломат', 'sign'],
-    ['синус', 'sin'],
-    ['синусГиперболӣ', 'sinh'],
-    ['дуръшака', 'sqrt'],
-    ['тангенс', 'tan'],
-    ['тангенсГиперболӣ', 'tanh'],
-    ['бириданАдад', 'trunc'],
-
-    // Control flow
-    ['шикастан', 'break'],
-    ['давом', 'continue'],
-    ['кӯшиш', 'try'],
-
-    // Async/Promise
-    ['ваъда', 'Promise'],
-    ['Ваъда', 'Promise'],
-    ['гирифтан', 'catch'],
-    ['ниҳоят', 'finally'],
-    ['партофтан', 'throw'],
-
-    // Async
-    ['ҳамзамон', 'async'],
-    ['интизор', 'await'],
-    ['ваъда', 'Promise'],
-
-    // Note: 'хато' is handled specially in generateIdentifier
-  ]);
 
   // Operator precedence table (higher number = higher precedence = evaluated first)
   // Based on JavaScript operator precedence: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_precedence
@@ -723,7 +339,8 @@ export class CodeGenerator {
       case 'FunctionDeclaration':
         return this.generateFunctionDeclaration(node as FunctionDeclaration);
       case 'BlockStatement':
-        return this.generateBlockStatement(node as BlockStatement);
+        // A bare block opens on its own line, at the statement's indentation
+        return this.indent(this.generateBlockStatement(node as BlockStatement));
       case 'ReturnStatement':
         return this.generateReturnStatement(node as ReturnStatement);
       case 'IfStatement':
@@ -732,15 +349,21 @@ export class CodeGenerator {
         return this.withJumpTarget('loops', () =>
           this.generateWhileStatement(node as WhileStatement)
         );
+      // A loop head binding one name twice (`барои (собит [а, а] аз …)`) is an early error
       case 'ForStatement':
+        if ((node as ForStatement).init) {
+          this.checkRedeclarations([(node as ForStatement).init as Statement]);
+        }
         return this.withScope(this.declaredNames([(node as ForStatement).init as Statement]), () =>
           this.withJumpTarget('loops', () => this.generateForStatement(node as ForStatement))
         );
       case 'ForInStatement':
+        this.checkRedeclarations([(node as ForInStatement).left]);
         return this.withScope(this.declaredNames([(node as ForInStatement).left]), () =>
           this.withJumpTarget('loops', () => this.generateForInStatement(node as ForInStatement))
         );
       case 'ForOfStatement':
+        this.checkRedeclarations([(node as ForOfStatement).left]);
         return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
           this.withJumpTarget('loops', () => this.generateForOfStatement(node as ForOfStatement))
         );
@@ -840,6 +463,10 @@ export class CodeGenerator {
   }
 
   /**
+   * A block as it follows a header on the same line (`if (…) `, `try `, a
+   * function signature): it starts with `{` itself, its statements one level
+   * deeper than the current indentation and the closing `}` at it.
+   *
    * `scopeNames` are bound in the block's scope (a catch parameter); a function
    * body passes its `paramNames` instead, which it may redeclare as functions.
    */
@@ -872,26 +499,32 @@ export class CodeGenerator {
     return this.indent(`return${argument};`);
   }
 
+  /**
+   * The body of an `if` branch or a loop, emitted after its header: a block
+   * as is, a single statement braced and indented one level deeper.
+   */
+  private generateBody(node: Statement): string {
+    if (node.type === 'BlockStatement') {
+      return this.generateBlockStatement(node as BlockStatement);
+    }
+    this.indentLevel++;
+    const statement = this.generateStatement(node);
+    this.indentLevel--;
+    return statement.length > 0 ? `{\n${statement}\n${this.getIndent()}}` : '{}';
+  }
+
   private generateIfStatement(node: IfStatement): string {
     const test = this.generateExpression(node.test);
-    const consequent = this.generateStatement(node.consequent);
-
-    let result = this.indent(`if (${test}) `);
-
-    if (node.consequent.type === 'BlockStatement') {
-      result += consequent.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${consequent}\n${this.getIndent()}}`;
-    }
+    let result = this.indent(`if (${test}) `) + this.generateBody(node.consequent);
 
     if (node.alternate) {
       result += ' else ';
-      if (node.alternate.type === 'BlockStatement') {
-        result += this.generateStatement(node.alternate).replace(this.getIndent(), '');
-      } else if (node.alternate.type === 'IfStatement') {
-        result += this.generateStatement(node.alternate).replace(this.getIndent(), '');
+      if (node.alternate.type === 'IfStatement') {
+        // `else if` continues this line: drop the nested statement's indentation
+        // (but keep its position marker, which follows the indentation)
+        result += this.generateStatement(node.alternate).slice(this.getIndent().length);
       } else {
-        result += `{\n${this.generateStatement(node.alternate)}\n${this.getIndent()}}`;
+        result += this.generateBody(node.alternate);
       }
     }
 
@@ -900,66 +533,26 @@ export class CodeGenerator {
 
   private generateWhileStatement(node: WhileStatement): string {
     const test = this.generateExpression(node.test);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`while (${test}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`while (${test}) `) + this.generateBody(node.body);
   }
 
   private generateForStatement(node: ForStatement): string {
     const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
     const test = node.test ? this.generateExpression(node.test) : '';
     const update = node.update ? this.generateExpression(node.update) : '';
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${init}; ${test}; ${update}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${init}; ${test}; ${update}) `) + this.generateBody(node.body);
   }
 
   private generateForInStatement(node: ForInStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
     const right = this.generateExpression(node.right);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${left} in ${right}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${left} in ${right}) `) + this.generateBody(node.body);
   }
 
   private generateForOfStatement(node: ForOfStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
     const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
-    const body = this.generateStatement(node.body);
-
-    let result = this.indent(`for (${left} of ${right}) `);
-
-    if (node.body.type === 'BlockStatement') {
-      result += body.replace(this.getIndent(), '');
-    } else {
-      result += `{\n${body}\n${this.getIndent()}}`;
-    }
-
-    return result;
+    return this.indent(`for (${left} of ${right}) `) + this.generateBody(node.body);
   }
 
   private generateExpressionStatement(node: ExpressionStatement): string {
@@ -1214,7 +807,7 @@ export class CodeGenerator {
       const destructuring = namedImports
         .map(spec => {
           // Exported names are member names: `содир функсия илова` exports `push`
-          const imported = this.mapMemberName(spec.imported.name);
+          const imported = translateMemberName(spec.imported.name);
           const local = this.generateIdentifier(spec.local, true);
           return imported === local ? imported : `${imported}: ${local}`;
         })
@@ -1263,7 +856,7 @@ export class CodeGenerator {
 
     const commonjsExports = node.default
       ? [`module.exports.default = ${exportNames[0]};`]
-      : exportNames.map(name => `module.exports.${this.mapMemberName(name)} = ${name};`);
+      : exportNames.map(name => `module.exports.${translateMemberName(name)} = ${name};`);
 
     return [code.replace(/\n+$/, ''), ...commonjsExports.map(line => this.indent(line))].join('\n');
   }
@@ -1293,8 +886,8 @@ export class CodeGenerator {
     results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     for (const spec of node.specifiers!) {
-      const exported = this.mapMemberName(spec.exported.name);
-      const local = this.mapMemberName(spec.local.name);
+      const exported = translateMemberName(spec.exported.name);
+      const local = translateMemberName(spec.local.name);
       results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
     }
 
@@ -1304,7 +897,7 @@ export class CodeGenerator {
   private generateDirectExportSpecifiers(node: ExportDeclaration): string {
     return node
       .specifiers!.map(spec => {
-        const exported = this.mapMemberName(spec.exported.name);
+        const exported = translateMemberName(spec.exported.name);
         const local = this.generateIdentifier(spec.local);
         return this.indent(`module.exports.${exported} = ${local};`);
       })
@@ -1388,7 +981,7 @@ export class CodeGenerator {
       'ваъда',
       'Ваъда',
     ];
-    return builtinConstructors.includes(name) ? this.builtinMappings.get(name) : undefined;
+    return builtinConstructors.includes(name) ? BUILTIN_MAPPINGS.get(name) : undefined;
   }
 
   private isDeclared(name: string): boolean {
@@ -1682,7 +1275,7 @@ export class CodeGenerator {
       return { mapped: object, wasMapped: false };
     }
 
-    const mappedObject = this.builtinMappings.get(objectName);
+    const mappedObject = BUILTIN_MAPPINGS.get(objectName);
     if (mappedObject) {
       return { mapped: mappedObject, wasMapped: true };
     }
@@ -1703,7 +1296,7 @@ export class CodeGenerator {
     }
 
     const propertyName = (node.property as Identifier).name;
-    const mappedProperty = this.builtinMappings.get(propertyName);
+    const mappedProperty = BUILTIN_MAPPINGS.get(propertyName);
     if (!mappedProperty) {
       return property;
     }
@@ -1714,7 +1307,7 @@ export class CodeGenerator {
     // method declared as `илова` emits `push`, but a call on `list_name.илова`
     // would not — runtime "not a function". Consistency beats the heuristic:
     // if the user names a class method after a builtin, both sides rewrite.
-    const shouldMap = objectMapped || CodeGenerator.COMMON_METHODS.has(propertyName);
+    const shouldMap = objectMapped || MEMBER_ALIASES.has(propertyName);
     return shouldMap ? mappedProperty : property;
   }
 
@@ -1781,28 +1374,17 @@ export class CodeGenerator {
   /**
    * Non-computed key of an object literal, class member or destructuring
    * pattern. Identifier keys go through the same Tajik→JS member-name mapping
-   * as `о.ном` accesses (`mapMemberName`), so user objects round-trip.
+   * as `о.ном` accesses (`translateMemberName`), so user objects round-trip.
    */
   private generatePropertyKey(key: Identifier | Literal): string {
     if (key.type === 'Identifier') {
-      return this.mapMemberName((key as Identifier).name);
+      return translateMemberName((key as Identifier).name);
     }
     return this.generateLiteral(key as Literal);
   }
 
-  /**
-   * Built-in method/property names (`дарозӣ` → `length`, `илова` → `push`, …)
-   * are rewritten wherever a member name appears — `о.дарозӣ`, `{дарозӣ: 1}`,
-   * class members and destructuring keys alike — so a user-defined member with
-   * such a name stays consistent between declaration and use.
-   */
-  private mapMemberName(name: string): string {
-    return CodeGenerator.COMMON_METHODS.has(name) ? (this.builtinMappings.get(name) ?? name) : name;
-  }
-
   private generateTryStatement(node: TryStatement): string {
-    let result =
-      this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
+    let result = this.indent('try ') + this.generateBlockStatement(node.block);
 
     if (node.handler) {
       const param = node.handler.param;
@@ -1811,15 +1393,12 @@ export class CodeGenerator {
       result += param
         ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param, true))}) `
         : ' catch ';
-      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []).replace(
-        this.getIndent(),
-        ''
-      );
+      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []);
     }
 
     if (node.finalizer) {
       result += ' finally ';
-      result += this.generateBlockStatement(node.finalizer).replace(this.getIndent(), '');
+      result += this.generateBlockStatement(node.finalizer);
     }
 
     return result;
@@ -1908,7 +1487,7 @@ export class CodeGenerator {
     this.indentLevel--;
     result += this.indent('})();\n');
     if (node.exported) {
-      result += this.indent(`module.exports.${this.mapMemberName(name)} = ${name};\n`);
+      result += this.indent(`module.exports.${translateMemberName(name)} = ${name};\n`);
     }
 
     return result;
@@ -1937,7 +1516,7 @@ export class CodeGenerator {
         result += '\n';
       }
       result += this.indent(
-        `${namespaceName}.${this.mapMemberName(memberName)} = ${memberName};\n`
+        `${namespaceName}.${translateMemberName(memberName)} = ${memberName};\n`
       );
     }
     return result;
@@ -1962,7 +1541,7 @@ export class CodeGenerator {
         ? nestedCode.substring(assignmentStart + 2) // Skip "= "
         : nestedCode;
 
-    return this.indent(`${parentName}.${this.mapMemberName(memberName)} = ${nestedIIFE}`);
+    return this.indent(`${parentName}.${translateMemberName(memberName)} = ${nestedIIFE}`);
   }
 
   private getMemberName(stmt: Statement): string | null {
@@ -1993,8 +1572,9 @@ export class CodeGenerator {
 
     let classBody = '';
 
-    // Generate class members
+    // Generate class members, one level deeper than the class
     if (node.body && node.body.body) {
+      this.indentLevel++;
       const members = node.body.body
         .map(member => {
           switch (member.type) {
@@ -2007,11 +1587,10 @@ export class CodeGenerator {
           }
         })
         .filter((member: string) => member.length > 0);
+      this.indentLevel--;
 
       if (members.length > 0) {
-        this.indentLevel++;
         classBody = '\n' + members.join('\n') + '\n' + this.getIndent();
-        this.indentLevel--;
       }
     }
 
@@ -2020,9 +1599,9 @@ export class CodeGenerator {
 
   private generateMethodDefinition(node: MethodDefinition): string {
     // Method names follow the same member-name mapping as `obj.маълумот()`
-    // call sites (`mapMemberName`), so declaration and use agree.
+    // call sites (`translateMemberName`), so declaration and use agree.
     const methodName =
-      node.kind === 'constructor' ? 'constructor' : this.mapMemberName(node.key.name);
+      node.kind === 'constructor' ? 'constructor' : translateMemberName(node.key.name);
     const isStatic = node.static ? 'static ' : '';
     const isAsync = node.value?.async ? 'async ' : '';
 
@@ -2043,7 +1622,7 @@ export class CodeGenerator {
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
-    const propertyName = this.mapMemberName(node.key.name);
+    const propertyName = translateMemberName(node.key.name);
     const isStatic = node.static ? 'static ' : '';
     const initializer = node.value
       ? ` = ${this.generateExpression(node.value, PREC.ASSIGNMENT)}`
@@ -2055,21 +1634,19 @@ export class CodeGenerator {
   private generateSwitchStatement(node: SwitchStatement): string {
     const discriminant = this.generateExpression(node.discriminant);
 
+    // Case labels one level deeper than `switch`, their statements two
     this.indentLevel++;
     const cases = node.cases
       .map((switchCase: SwitchCase) => {
-        if (!switchCase.test) {
-          const consequent = switchCase.consequent
-            .map(stmt => this.generateStatement(stmt))
-            .join('\n');
-          return this.indent(`default:\n${consequent}`);
-        } else {
-          const test = this.generateExpression(switchCase.test);
-          const consequent = switchCase.consequent
-            .map(stmt => this.generateStatement(stmt))
-            .join('\n');
-          return this.indent(`case ${test}:\n${consequent}`);
-        }
+        const label = switchCase.test
+          ? `case ${this.generateExpression(switchCase.test)}:`
+          : 'default:';
+        this.indentLevel++;
+        const consequent = switchCase.consequent
+          .map(stmt => this.generateStatement(stmt))
+          .filter(stmt => stmt.length > 0);
+        this.indentLevel--;
+        return [this.indent(label), ...consequent].join('\n');
       })
       .join('\n');
     this.indentLevel--;

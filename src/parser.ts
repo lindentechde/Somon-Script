@@ -385,16 +385,43 @@ export class Parser {
     ) {
       lookaheadIndex++;
       const nextToken = this.tokens[lookaheadIndex];
+      let afterBinding = -1;
       if (this.isTypeKeywordOrIdentifier(nextToken?.type)) {
-        lookaheadIndex++;
-        if (this.tokens[lookaheadIndex]?.type === TokenType.АЗ) {
-          isForOf = true;
-        } else if (this.tokens[lookaheadIndex]?.type === TokenType.ДАР) {
-          isForIn = true;
-        }
+        afterBinding = lookaheadIndex + 1;
+      } else if (this.isPatternStart(nextToken?.type)) {
+        // `[к, в]` / `{ а, б }`: skip the whole pattern, defaults included
+        const close = this.findMatchingBracket(lookaheadIndex);
+        if (close !== -1) afterBinding = close + 1;
       }
+      const keyword = afterBinding === -1 ? undefined : this.tokens[afterBinding]?.type;
+      isForOf = keyword === TokenType.АЗ;
+      isForIn = keyword === TokenType.ДАР;
     }
     return { isForOf, isForIn };
+  }
+
+  private isPatternStart(type: TokenType | undefined): boolean {
+    return type === TokenType.LEFT_BRACKET || type === TokenType.LEFT_BRACE;
+  }
+
+  /** Index of the bracket closing the `(`, `[` or `{` at `openIndex`, or -1. */
+  private findMatchingBracket(openIndex: number): number {
+    let depth = 0;
+    for (let i = openIndex; i < this.tokens.length; i++) {
+      switch (this.tokens[i].type) {
+        case TokenType.LEFT_PAREN:
+        case TokenType.LEFT_BRACKET:
+        case TokenType.LEFT_BRACE:
+          depth++;
+          break;
+        case TokenType.RIGHT_PAREN:
+        case TokenType.RIGHT_BRACKET:
+        case TokenType.RIGHT_BRACE:
+          if (--depth === 0) return i;
+          break;
+      }
+    }
+    return -1;
   }
 
   private isTypeKeywordOrIdentifier(type: TokenType | undefined): boolean {
@@ -413,16 +440,22 @@ export class Parser {
     const varToken = this.advance();
     const kind = varToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
-    const nameToken = this.isTypeKeywordOrIdentifier(this.peek().type)
-      ? this.advance()
-      : this.consume(TokenType.IDENTIFIER, 'Expected variable name');
+    let id: Identifier | ArrayPattern | ObjectPattern;
+    if (this.isPatternStart(this.peek().type)) {
+      // Destructuring, as in a declaration: `[к, в = 0]`, `{ а, ...боқӣ }`
+      id = this.parsePattern();
+    } else {
+      const nameToken = this.isTypeKeywordOrIdentifier(this.peek().type)
+        ? this.advance()
+        : this.consume(TokenType.IDENTIFIER, 'Expected variable name');
 
-    const id: Identifier = {
-      type: 'Identifier',
-      name: nameToken.value,
-      line: nameToken.line,
-      column: nameToken.column,
-    };
+      id = {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column,
+      };
+    }
 
     if (isForOf) {
       this.consume(TokenType.АЗ, "Expected 'аз' in for-of loop");
@@ -1462,8 +1495,7 @@ export class Parser {
       }
     }
 
-    // Skip generic type parameters if present (e.g., new Class<T>(args))
-    this.skipGenericTypeArguments();
+    const typeArguments = this.parseNewTypeArguments();
 
     // Arguments are optional: `нав Сана`
     const args = this.match(TokenType.LEFT_PAREN) ? this.parseArguments() : [];
@@ -1471,9 +1503,38 @@ export class Parser {
       type: 'NewExpression',
       callee,
       arguments: args,
+      ...(typeArguments && { typeArguments }),
       line: token.line,
       column: token.column,
     } as NewExpression;
+  }
+
+  /**
+   * Type arguments of `нав Map<сатр, рақам>()`. When the tokens after '<' are
+   * not a type argument list, they are skipped the way they were before type
+   * arguments were kept.
+   */
+  private parseNewTypeArguments(): TypeNode[] | undefined {
+    if (!this.check(TokenType.LESS_THAN)) return undefined;
+    const start = this.current;
+    const tokens = [...this.tokens];
+    const errorCount = this.errors.length;
+    try {
+      this.advance();
+      const typeArguments: TypeNode[] = [];
+      do {
+        typeArguments.push(this.parseType());
+      } while (this.match(TokenType.COMMA));
+      this.consumeTypeArgumentsClose();
+      if (this.errors.length === errorCount) return typeArguments;
+    } catch {
+      // Not a type argument list
+    }
+    this.tokens = tokens;
+    this.current = start;
+    this.errors.length = errorCount;
+    this.skipGenericTypeArguments();
+    return undefined;
   }
 
   private parseDynamicImport(importToken: Token): ImportExpression {
@@ -3595,8 +3656,8 @@ export class Parser {
         ? accessibility
         : undefined;
 
-    // Optional property marker (`ном?: сатр`); types are erased, so it only affects parsing
-    this.match(TokenType.QUESTION);
+    // Optional property marker (`ном?: сатр`): the property may be `беқимат`
+    const optional = this.match(TokenType.QUESTION);
 
     // Optional type annotation
     let typeAnnotation: TypeAnnotation | undefined;
@@ -3623,6 +3684,7 @@ export class Parser {
       },
       value: value,
       typeAnnotation: typeAnnotation,
+      ...(optional && { optional }),
       static: isStatic || false,
       accessibility: accessProp,
       line: nameToken.line,

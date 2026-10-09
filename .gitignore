@@ -77,6 +77,7 @@ Thumbs.db
 
 # Compiled JavaScript files in examples directory
 examples/*.js
+examples/leetcode/*.js
 
 # Temporary compilation artifacts
 *.temp.js

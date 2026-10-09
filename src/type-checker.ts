@@ -61,6 +61,7 @@ import {
   UpdateExpression,
   WhileStatement,
 } from './ast';
+import { translateMemberName } from './builtin-names';
 
 /**
  * Represents a type checking error or warning
@@ -85,9 +86,25 @@ export const TypeCheckErrorCode = {
   UndefinedIdentifier: 'UNDEFINED_IDENTIFIER',
   ArgumentCountMismatch: 'ARGUMENT_COUNT_MISMATCH',
   ArgumentTypeMismatch: 'ARGUMENT_TYPE_MISMATCH',
+  PropertyNotFound: 'PROPERTY_NOT_FOUND',
+  PossiblyNull: 'POSSIBLY_NULL',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
+
+/**
+ * Options of the type checker.
+ */
+export interface TypeCheckOptions {
+  /**
+   * TypeScript-style strict checking: `холӣ` and `беқимат` are only
+   * assignable to types that include them, a value that may be `холӣ` or
+   * `беқимат` cannot be dereferenced or used in arithmetic until a check
+   * narrows it, and reading a member a type doesn't have is an error (without
+   * `strict` it is a warning).
+   */
+  strict?: boolean;
+}
 
 /**
  * Result of type checking operation
@@ -116,6 +133,9 @@ export interface Type {
   hasRestParam?: boolean; // Last parameter is a rest parameter (`...а`)
   indexType?: Type; // Index signature value type (`[калид: сатр]: Т`)
   open?: boolean; // Members may be incomplete; skip excess-property checks
+  fromLiteral?: boolean; // Object type inferred from a literal; may gain members later
+  staticMembers?: Set<string>; // Static member names of a class
+  implicitMembers?: Set<string>; // Undeclared class members assigned through `ин.ном = …`
 }
 
 /**
@@ -144,6 +164,59 @@ type FunctionLike = {
 };
 
 const UNKNOWN: Type = { kind: 'unknown' };
+const NULL_TYPE: Type = { kind: 'primitive', name: 'null' };
+const UNDEFINED_TYPE: Type = { kind: 'primitive', name: 'undefined' };
+const NUMBER_TYPE: Type = { kind: 'primitive', name: 'number' };
+const STRING_TYPE: Type = { kind: 'primitive', name: 'string' };
+
+/** Narrowed types of references (`х`, `ин.сар.пас`) at the current point of the flow. */
+type Facts = Map<string, Type>;
+
+/** Every property name readable on values with the given prototype. */
+function prototypeMembers(prototype: object): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (let p: object | null = prototype; p; p = Object.getPrototypeOf(p)) {
+    Object.getOwnPropertyNames(p).forEach(name => names.add(name));
+  }
+  return names;
+}
+
+/**
+ * Members of built-in types, taken from the running JavaScript engine so the
+ * lists match what the compiled program can call.
+ */
+const BUILTIN_MEMBERS = {
+  object: prototypeMembers(Object.prototype),
+  array: prototypeMembers(Array.prototype),
+  string: prototypeMembers(String.prototype),
+  number: prototypeMembers(Number.prototype),
+  boolean: prototypeMembers(Boolean.prototype),
+  function: prototypeMembers(Function.prototype),
+  Map: prototypeMembers(Map.prototype),
+  Set: prototypeMembers(Set.prototype),
+  Promise: prototypeMembers(Promise.prototype),
+} as const;
+
+/** Array methods that return an element or `undefined` when there is none. */
+const ARRAY_ELEMENT_OR_UNDEFINED: ReadonlySet<string> = new Set([
+  'pop',
+  'shift',
+  'at',
+  'find',
+  'findLast',
+]);
+
+const RELATIONAL_OPERATORS: ReadonlySet<string> = new Set(['<', '>', '<=', '>=']);
+
+/** Statements an unlabelled `шикастан` leaves. */
+const JUMP_TARGETS: ReadonlySet<string> = new Set([
+  'WhileStatement',
+  'DoWhileStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'SwitchStatement',
+]);
 
 /** Key the parser gives index signatures (`[калид: сатр]: Т`) in interface bodies. */
 const INDEX_SIGNATURE_KEY = '__computed__';
@@ -249,8 +322,20 @@ export class TypeChecker {
 
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
+  private readonly strict: boolean;
   /** Lexical scope chain; index 0 is the global scope. */
   private scopes: Map<string, Type>[] = [];
+  /** Unique id of each scope in `scopes`, so narrowing facts survive shadowing. */
+  private scopeIds: number[] = [];
+  private nextScopeId = 0;
+  /** Reference keys of `собит` bindings; their narrowing carries into closures. */
+  private constKeys: Set<string> = new Set();
+  /** Names assigned anywhere after their declaration (`х = …`, `х++`, …). */
+  private reassignedNames: Set<string> = new Set();
+  /** Narrowed types of references at the current point (see `referenceKey`). */
+  private narrowed: Facts = new Map();
+  /** While positive, diagnostics are dropped (expressions re-inferred for narrowing). */
+  private silent = 0;
   private interfaceTable: Map<string, Type> = new Map();
   private typeAliasTable: Map<string, Type> = new Map();
   private functionStack: FunctionContext[] = [];
@@ -298,7 +383,7 @@ export class TypeChecker {
     AssignmentExpression: e => this.inferAssignmentType(e as AssignmentExpression),
     BinaryExpression: e => this.inferBinaryType(e as BinaryExpression),
     UnaryExpression: e => this.inferUnaryType(e as UnaryExpression),
-    UpdateExpression: e => this.inferNumericOperand((e as UpdateExpression).argument),
+    UpdateExpression: e => this.inferNumericOperand((e as UpdateExpression).argument, true),
     TemplateLiteral: e => {
       (e as TemplateLiteral).expressions.forEach(part => this.inferExpressionType(part));
       return { kind: 'primitive', name: 'string' };
@@ -325,8 +410,9 @@ export class TypeChecker {
     },
   };
 
-  constructor(source?: string) {
+  constructor(source?: string, options: TypeCheckOptions = {}) {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
+    this.strict = Boolean(options.strict);
   }
 
   /**
@@ -352,6 +438,10 @@ export class TypeChecker {
     this.errors = [];
     this.warnings = [];
     this.scopes = [new Map()];
+    this.scopeIds = [this.nextScopeId++];
+    this.constKeys = new Set();
+    this.reassignedNames = this.collectReassignedNames(program);
+    this.narrowed = new Map();
     this.interfaceTable = new Map();
     this.typeAliasTable = new Map();
     this.functionStack = [];
@@ -374,23 +464,32 @@ export class TypeChecker {
   // ---------------------------------------------------------------------------
 
   private lookup(name: string): Type | undefined {
+    const index = this.scopeIndexOf(name);
+    return index === -1 ? undefined : this.scopes[index].get(name);
+  }
+
+  /** Index in `scopes` of the innermost scope declaring `name`, or -1. */
+  private scopeIndexOf(name: string): number {
     for (let i = this.scopes.length - 1; i >= 0; i--) {
-      const type = this.scopes[i].get(name);
-      if (type) return type;
+      if (this.scopes[i].has(name)) return i;
     }
-    return undefined;
+    return -1;
   }
 
   private declare(name: string, type: Type): void {
     this.scopes[this.scopes.length - 1].set(name, type);
+    // A (re)declaration starts with the declared type
+    this.invalidate(this.bindingKey(this.scopes.length - 1, name));
   }
 
   private withScope(body: () => void): void {
     this.scopes.push(new Map());
+    this.scopeIds.push(this.nextScopeId++);
     try {
       body();
     } finally {
       this.scopes.pop();
+      this.scopeIds.pop();
     }
   }
 
@@ -565,7 +664,7 @@ export class TypeChecker {
         if (!properties.has(key)) properties.set(key, prop);
       }
       interfaceType.indexType ??= parent.indexType;
-      interfaceType.open ||= parent.open;
+      interfaceType.open ||= parent.open || !['interface', 'object', 'class'].includes(parent.kind);
     }
 
     this.collectPropertySignatures(interfaceDecl.body.properties, interfaceType);
@@ -595,24 +694,77 @@ export class TypeChecker {
   private collectClass(classDecl: ClassDeclaration): void {
     const classType = this.lookup(classDecl.name.name)!;
     const properties = classType.properties!;
+    classType.staticMembers = new Set();
 
     for (const member of classDecl.body.body) {
-      if (member.static) continue;
+      if (member.static) {
+        const key = (member as PropertyDefinition | MethodDefinition).key;
+        if (key?.name) classType.staticMembers.add(key.name);
+        continue;
+      }
       if (member.type === 'PropertyDefinition') {
         const prop = member as PropertyDefinition;
         const propType = prop.typeAnnotation
           ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
           : UNKNOWN;
-        properties.set(prop.key.name, { type: propType, optional: false });
+        properties.set(prop.key.name, { type: propType, optional: Boolean(prop.optional) });
       } else if (member.type === 'MethodDefinition') {
         this.collectMethod(member as MethodDefinition, properties);
       }
     }
 
+    classType.implicitMembers = this.collectImplicitMembers(classDecl);
+
     if (classDecl.superClass) {
       const parent = this.lookup(classDecl.superClass.name);
-      if (parent?.kind === 'class') classType.baseType = parent;
+      if (parent?.kind === 'class') {
+        classType.baseType = parent;
+      } else {
+        // A built-in or imported base: its members are unknown
+        classType.open = true;
+      }
     }
+  }
+
+  /**
+   * Members a class creates by assignment (`ин.ном = ном;`) without declaring
+   * them, as JavaScript classes do.
+   */
+  private collectImplicitMembers(classDecl: ClassDeclaration): Set<string> {
+    const names = new Set<string>();
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+        return;
+      }
+      const record = node as Record<string, unknown>;
+      // Nested functions and classes have their own `ин`
+      if (record.type === 'FunctionExpression' || record.type === 'FunctionDeclaration') return;
+      if (record.type === 'ClassDeclaration') return;
+      if (record.type === 'AssignmentExpression') {
+        const left = (record as unknown as AssignmentExpression).left as MemberExpression;
+        if (
+          left.type === 'MemberExpression' &&
+          left.object.type === 'ThisExpression' &&
+          !left.computed &&
+          left.property.type === 'Identifier'
+        ) {
+          names.add((left.property as Identifier).name);
+        }
+      }
+      Object.values(record).forEach(value => {
+        if (value && typeof value === 'object') visit(value);
+      });
+    };
+    for (const member of classDecl.body.body) {
+      if (member.type === 'MethodDefinition') {
+        visit((member as MethodDefinition).value.body);
+      } else if (member.type === 'PropertyDefinition') {
+        visit((member as PropertyDefinition).value);
+      }
+    }
+    return names;
   }
 
   private collectMethod(method: MethodDefinition, properties: Map<string, PropertyType>): void {
@@ -657,13 +809,43 @@ export class TypeChecker {
 
   private checkIfStatement(statement: IfStatement): void {
     this.inferExpressionType(statement.test);
+    const whenTrue = this.narrowingsFor(statement.test, true);
+    const whenFalse = this.narrowingsFor(statement.test, false);
+    const before = this.narrowed;
+
+    this.narrowed = new Map(before);
+    this.applyFacts(whenTrue);
     this.checkBody(statement.consequent);
+    const afterThen = this.narrowed;
+
+    this.narrowed = new Map(before);
+    this.applyFacts(whenFalse);
     this.checkBody(statement.alternate);
+    const afterElse = this.narrowed;
+
+    // A branch that always leaves (`бозгашт`, `партофтан`, …) doesn't reach the code after the `агар`
+    const thenExits = this.alwaysExits(statement.consequent);
+    const elseExits = this.alwaysExits(statement.alternate);
+    if (thenExits && !elseExits) {
+      this.narrowed = afterElse;
+    } else if (elseExits && !thenExits) {
+      this.narrowed = afterThen;
+    } else {
+      this.narrowed = this.joinNarrowed(afterThen, afterElse);
+    }
   }
 
   private checkWhileStatement(statement: WhileStatement): void {
+    // Assignments in the body may run before the test is evaluated again
+    this.invalidateAssignedIn(statement.test, statement.body);
+    const entry = new Map(this.narrowed);
     this.inferExpressionType(statement.test);
+    this.applyFacts(this.narrowingsFor(statement.test, true));
     this.checkBody(statement.body);
+    this.narrowed = entry;
+    if (!this.containsLoopExit(statement.body)) {
+      this.applyFacts(this.narrowingsFor(statement.test, false));
+    }
   }
 
   private checkForStatement(statement: ForStatement): void {
@@ -676,9 +858,18 @@ export class TypeChecker {
           this.inferExpressionType(init);
         }
       }
-      if (statement.test) this.inferExpressionType(statement.test);
-      if (statement.update) this.inferExpressionType(statement.update);
+      this.invalidateAssignedIn(statement.test, statement.update, statement.body);
+      const entry = new Map(this.narrowed);
+      if (statement.test) {
+        this.inferExpressionType(statement.test);
+        this.applyFacts(this.narrowingsFor(statement.test, true));
+      }
       this.checkBody(statement.body);
+      if (statement.update) this.inferExpressionType(statement.update);
+      this.narrowed = entry;
+      if (statement.test && !this.containsLoopExit(statement.body)) {
+        this.applyFacts(this.narrowingsFor(statement.test, false));
+      }
     });
   }
 
@@ -688,6 +879,8 @@ export class TypeChecker {
   ): void {
     this.withScope(() => {
       const iterated = this.inferExpressionType(statement.right);
+      this.invalidateAssignedIn(statement.left, statement.body);
+      const entry = new Map(this.narrowed);
       const left = statement.left;
       if (left.type === 'VariableDeclaration') {
         const varDecl = left as VariableDeclaration;
@@ -702,6 +895,7 @@ export class TypeChecker {
         this.inferExpressionType(left);
       }
       this.checkBody(statement.body);
+      this.narrowed = entry;
     });
   }
 
@@ -716,26 +910,53 @@ export class TypeChecker {
 
   private checkSwitchStatement(statement: SwitchStatement): void {
     this.inferExpressionType(statement.discriminant);
+    // Cases may fall through, so none of them narrows the code after the switch
+    this.invalidateAssignedIn(statement.cases);
+    const entry = new Map(this.narrowed);
     // All cases share one block scope
     this.withScope(() => {
       this.hoistDeclarations(statement.cases.flatMap(c => c.consequent));
       for (const switchCase of statement.cases) {
+        this.narrowed = new Map(entry);
         if (switchCase.test) this.inferExpressionType(switchCase.test);
         switchCase.consequent.forEach(s => this.checkStatement(s));
       }
     });
+    this.narrowed = entry;
   }
 
   private checkTryStatement(statement: TryStatement): void {
+    const entry = new Map(this.narrowed);
     this.checkStatement(statement.block);
+    let after = this.narrowed;
     const handler = statement.handler;
     if (handler) {
+      // The handler may start anywhere in the block
+      this.narrowed = new Map(entry);
+      this.invalidateAssignedIn(statement.block);
+      const handlerEntry = this.narrowed;
       this.withScope(() => {
         if (handler.param) this.bindPatternTypes(handler.param, UNKNOWN);
         this.checkStatements(handler.body.body);
       });
+      if (!this.alwaysExits(handler.body)) {
+        after = this.alwaysExits(statement.block)
+          ? this.narrowed
+          : this.joinNarrowed(after, this.narrowed);
+      }
+      this.narrowed = handlerEntry;
     }
-    if (statement.finalizer) this.checkStatement(statement.finalizer);
+    if (statement.finalizer) {
+      this.narrowed = new Map(entry);
+      this.invalidateAssignedIn(statement.block, handler);
+      this.checkStatement(statement.finalizer);
+      const afterFinally = this.narrowed;
+      this.narrowed = after;
+      this.invalidateAssignedIn(statement.finalizer);
+      this.applyFacts(afterFinally);
+      return;
+    }
+    this.narrowed = after;
   }
 
   private checkReturnStatement(statement: ReturnStatement): void {
@@ -785,6 +1006,17 @@ export class TypeChecker {
       declaredType ??
       (inferredType ? this.widenType(inferredType, varDecl.kind === 'СОБИТ') : UNKNOWN);
     this.bindPatternTypes(varDecl.identifier, finalType);
+
+    if (varDecl.identifier.type === 'Identifier') {
+      const key = this.referenceKey(varDecl.identifier);
+      if (key && varDecl.kind === 'СОБИТ') this.constKeys.add(key);
+      // `тағ х: Г | холӣ = нав Г();` starts out as a Г
+      const narrowed =
+        key && declaredType && inferredType
+          ? this.assignmentNarrowing(declaredType, inferredType)
+          : undefined;
+      if (key && narrowed) this.narrowed.set(key, narrowed);
+    }
   }
 
   private bindPatternTypes(
@@ -864,12 +1096,23 @@ export class TypeChecker {
    * Checks parameters (defaults, destructuring) and the body of a function in
    * a new scope, with `бозгашт` checked against the declared return type.
    */
-  private checkFunctionBody(fn: FunctionLike, functionType: Type, thisType?: Type): void {
+  private checkFunctionBody(
+    fn: FunctionLike,
+    functionType: Type,
+    thisType?: Type,
+    closure = false
+  ): void {
     const isAsync = Boolean(fn.async ?? fn.isAsync);
     this.functionStack.push({
       returnType: this.expectedReturnType(functionType.returnType, isAsync),
       thisType,
     });
+    // The body may run at any later time: a closure only keeps what is known
+    // about variables that are never reassigned.
+    const outer = this.narrowed;
+    this.narrowed = new Map(
+      closure ? [...outer].filter(([key]) => this.isNeverReassigned(key)) : []
+    );
     this.withScope(() => {
       fn.params.forEach((param, index) =>
         this.bindParameter(param, functionType.paramTypes?.[index] ?? UNKNOWN)
@@ -885,6 +1128,7 @@ export class TypeChecker {
         } as ReturnStatement);
       }
     });
+    this.narrowed = outer;
     this.functionStack.pop();
   }
 
@@ -901,10 +1145,13 @@ export class TypeChecker {
         )
       );
     }
+    // `а?: рақам` is `рақам | беқимат` inside the function
+    const boundType =
+      param.optional && !param.defaultValue ? this.optionalType(paramType) : paramType;
     if (param.pattern) {
-      this.bindPatternTypes(param.pattern, paramType);
+      this.bindPatternTypes(param.pattern, boundType);
     } else {
-      if (param.name) this.declare(param.name.name, paramType);
+      if (param.name) this.declare(param.name.name, boundType);
     }
   }
 
@@ -1247,7 +1494,11 @@ export class TypeChecker {
 
   private inferIdentifierType(identifier: Identifier): Type {
     const sym = this.lookup(identifier.name);
-    if (sym) return sym;
+    if (sym) {
+      const key = this.referenceKey(identifier);
+      return (key ? this.narrowed.get(key) : undefined) ?? sym;
+    }
+    if (identifier.name === 'беқимат' || identifier.name === 'undefined') return UNDEFINED_TYPE;
     // Empty names are parser error-recovery placeholders
     if (!identifier.name || this.isBuiltinValueName(identifier.name)) {
       return UNKNOWN;
@@ -1314,8 +1565,7 @@ export class TypeChecker {
     // With a contextual array type, keep each element's own type so that
     // assignability checks every element against the target element type
     if (elementTarget) {
-      const elementType =
-        elementTypes.length === 1 ? elementTypes[0] : { kind: 'union', types: elementTypes };
+      const elementType = elementTypes.length === 1 ? elementTypes[0] : this.unionOf(elementTypes);
       return { kind: 'array', elementType };
     }
 
@@ -1367,13 +1617,22 @@ export class TypeChecker {
       case 'array':
         return { kind: 'array', elementType: this.widenType(type.elementType ?? UNKNOWN) };
       case 'union':
-        return { kind: 'union', types: type.types!.map(t => this.widenType(t)) };
+        // `Г | холӣ` stays nullable: only a binding of plain `холӣ` is widened
+        return {
+          kind: 'union',
+          types: type.types!.map(t => (this.isNullishType(t) ? t : this.widenType(t))),
+        };
       case 'object': {
         const properties = new Map<string, PropertyType>();
         for (const [key, prop] of type.properties ?? []) {
           properties.set(key, { type: this.widenType(prop.type), optional: prop.optional });
         }
-        return { kind: 'object', properties };
+        return {
+          kind: 'object',
+          properties,
+          ...(type.open && { open: true }),
+          ...(type.fromLiteral && { fromLiteral: true }),
+        };
       }
       default:
         return type;
@@ -1405,7 +1664,8 @@ export class TypeChecker {
       }
     }
 
-    return open ? UNKNOWN : { kind: 'object', properties };
+    // Like JavaScript objects, those built from a literal may gain members later
+    return open ? UNKNOWN : { kind: 'object', properties, fromLiteral: true };
   }
 
   private propertyKeyName(key: Identifier | Literal): string {
@@ -1416,7 +1676,7 @@ export class TypeChecker {
     const functionType = this.buildFunctionType(undefined, fn);
     // Arrow functions keep the enclosing `ин`
     const thisType = isArrow ? this.currentFunction()?.thisType : undefined;
-    this.checkFunctionBody(fn, functionType, thisType);
+    this.checkFunctionBody(fn, functionType, thisType, true);
     return functionType;
   }
 
@@ -1432,21 +1692,198 @@ export class TypeChecker {
     return false;
   }
 
-  private inferMemberType(member: MemberExpression): Type {
-    const objectType = this.inferExpressionType(member.object);
+  private inferMemberType(member: MemberExpression, ignoreNarrowing = false): Type {
+    const rawObjectType = this.inferExpressionType(member.object);
+    // `а?.б` is fine when `а` is `холӣ`; `а.б` is not
+    const objectType = member.optional
+      ? this.removeNullish(rawObjectType)
+      : this.checkNotNullish(member.object, rawObjectType);
+    const inOptionalChain = this.isOptionalChain(member);
     if (member.computed) {
       const indexType = this.inferExpressionType(member.property);
-      if (this.isOptionalChain(member)) return UNKNOWN;
+      if (inOptionalChain) return UNKNOWN;
       return this.indexedAccessType(objectType, indexType);
     }
-    if (this.isOptionalChain(member)) return UNKNOWN;
     if (member.property.type !== 'Identifier') return UNKNOWN;
-    const name = (member.property as Identifier).name;
+    const memberType = this.namedMemberType(member, objectType, member.property as Identifier);
+    if (inOptionalChain) return UNKNOWN;
+    const key = ignoreNarrowing ? undefined : this.referenceKey(member);
+    return (key ? this.narrowed.get(key) : undefined) ?? memberType;
+  }
 
-    if (name === 'length' && (this.isStringType(objectType) || objectType.kind === 'array')) {
-      return { kind: 'primitive', name: 'number' };
+  /**
+   * Type of `object.name` (`name` as written, possibly a Tajik alias such as
+   * `дарозӣ`); reports members the object's type doesn't have.
+   */
+  private namedMemberType(member: MemberExpression, objectType: Type, property: Identifier): Type {
+    const name = property.name;
+    const jsName = translateMemberName(name);
+    // `Синф.статикӣ`: the class itself, not an instance
+    if (
+      member.object.type === 'Identifier' &&
+      objectType.kind === 'class' &&
+      objectType.name === (member.object as Identifier).name
+    ) {
+      if (!this.hasStaticMember(objectType, name, jsName)) {
+        this.reportMissingMember(property, name, jsName, objectType, true);
+      }
+      return UNKNOWN;
     }
-    return this.getAllProperties(objectType).get(name)?.type ?? UNKNOWN;
+
+    const members = this.unionMembers(objectType);
+    const lookups = members.map(t => this.lookupMember(t, name, jsName));
+    // Without discriminant narrowing a member of some union members is accepted
+    const missing = lookups.every(l => l.known && !l.exists);
+    if (missing && lookups.length > 0) {
+      this.reportMissingMember(property, name, jsName, objectType, false);
+      return UNKNOWN;
+    }
+    return lookups.length === 1 ? lookups[0].type : UNKNOWN;
+  }
+
+  /**
+   * Looks up a member on one (non-union) type. `known` is false when the
+   * type's members can't be listed (unresolved types, `ҳар`, open object
+   * types, …), so a missing member must not be reported.
+   */
+  private lookupMember(
+    type: Type,
+    name: string,
+    jsName: string
+  ): { known: boolean; exists: boolean; type: Type } {
+    const builtin = this.builtinMembersOf(type);
+    if (builtin) {
+      return {
+        known: true,
+        exists: builtin.has(jsName),
+        type: this.builtinMemberType(type, jsName),
+      };
+    }
+    if (!['class', 'interface', 'object'].includes(type.kind) || !type.properties) {
+      return {
+        known: false,
+        exists: true,
+        type: this.getAllProperties(type).get(name)?.type ?? UNKNOWN,
+      };
+    }
+    const prop = this.findProperty(this.getAllProperties(type), name, jsName);
+    const exists =
+      Boolean(prop) ||
+      BUILTIN_MEMBERS.object.has(jsName) ||
+      this.hasImplicitMember(type, name, jsName);
+    const known = !this.isOpenType(type) && !type.fromLiteral;
+    let propType = prop?.type ?? UNKNOWN;
+    if (prop?.optional) propType = this.optionalType(propType);
+    return { known, exists, type: propType };
+  }
+
+  /** Property named `name` or, for built-in aliases, its translation (`дарозӣ` ≡ `length`). */
+  private findProperty(
+    properties: Map<string, PropertyType>,
+    name: string,
+    jsName: string
+  ): PropertyType | undefined {
+    const direct = properties.get(name) ?? properties.get(jsName);
+    if (direct) return direct;
+    for (const [key, prop] of properties) {
+      if (translateMemberName(key) === jsName) return prop;
+    }
+    return undefined;
+  }
+
+  /** Whether an object type may have members the checker doesn't know about. */
+  private isOpenType(type: Type): boolean {
+    for (let t: Type | undefined = type, depth = 0; t && depth < 100; t = t.baseType, depth++) {
+      if (t.open || t.indexType) return true;
+    }
+    return false;
+  }
+
+  private hasImplicitMember(type: Type, name: string, jsName: string): boolean {
+    for (let t: Type | undefined = type, depth = 0; t && depth < 100; t = t.baseType, depth++) {
+      if (t.implicitMembers?.has(name) || t.implicitMembers?.has(jsName)) return true;
+    }
+    return false;
+  }
+
+  private hasStaticMember(classType: Type, name: string, jsName: string): boolean {
+    if (BUILTIN_MEMBERS.function.has(jsName) || this.isOpenType(classType)) return true;
+    for (
+      let t: Type | undefined = classType, depth = 0;
+      t && depth < 100;
+      t = t.baseType, depth++
+    ) {
+      for (const member of t.staticMembers ?? []) {
+        if (member === name || translateMemberName(member) === jsName) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Member names of a built-in type, or undefined for other types. */
+  private builtinMembersOf(type: Type): ReadonlySet<string> | undefined {
+    if (type.kind === 'array' || type.kind === 'tuple') return BUILTIN_MEMBERS.array;
+    if (this.isStringType(type)) return BUILTIN_MEMBERS.string;
+    if (this.isNumericType(type)) return BUILTIN_MEMBERS.number;
+    const base = this.getBaseType(type);
+    if (base.kind === 'primitive' && base.name === 'boolean') return BUILTIN_MEMBERS.boolean;
+    if (
+      type.kind === 'generic' &&
+      (['Map', 'Set', 'Promise'] as const).includes(type.name as 'Map')
+    ) {
+      return BUILTIN_MEMBERS[type.name as 'Map' | 'Set' | 'Promise'];
+    }
+    return undefined;
+  }
+
+  /** Types of the built-in members the checker knows more about than "exists". */
+  private builtinMemberType(type: Type, jsName: string): Type {
+    if (type.kind === 'generic') return this.collectionMemberType(type, jsName);
+    const isArray = type.kind === 'array' || type.kind === 'tuple';
+    if (jsName === 'length' && (isArray || this.isStringType(type))) return NUMBER_TYPE;
+    if (isArray && ARRAY_ELEMENT_OR_UNDEFINED.has(jsName)) {
+      return this.methodReturning(this.orUndefined(this.iterationElementType(type)));
+    }
+    if (this.isStringType(type) && jsName === 'at') {
+      return this.methodReturning(this.orUndefined(STRING_TYPE));
+    }
+    return UNKNOWN;
+  }
+
+  /** Members of `Map<К, В>` / `Set<Т>` with known types. */
+  private collectionMemberType(type: Type, jsName: string): Type {
+    if ((type.name === 'Map' || type.name === 'Set') && jsName === 'size') return NUMBER_TYPE;
+    if (type.name === 'Map' && jsName === 'get') {
+      return this.methodReturning(this.orUndefined(type.typeParameters?.[1] ?? UNKNOWN));
+    }
+    return UNKNOWN;
+  }
+
+  /** A method whose arguments aren't checked and whose result has type `returnType`. */
+  private methodReturning(returnType: Type): Type {
+    return returnType.kind === 'unknown' ? UNKNOWN : { kind: 'function', returnType };
+  }
+
+  private reportMissingMember(
+    property: Identifier,
+    name: string,
+    jsName: string,
+    objectType: Type,
+    isStatic: boolean
+  ): void {
+    const shown = jsName === name ? `'${name}'` : `'${name}' (${jsName})`;
+    const owner = isStatic
+      ? `class '${objectType.name}'`
+      : `type '${this.typeToString(objectType)}'`;
+    let message = `Property ${shown} does not exist on ${owner}`;
+    const isMapOrSet = this.unionMembers(objectType).some(
+      t => t.kind === 'generic' && (t.name === 'Map' || t.name === 'Set')
+    );
+    if (isMapOrSet && jsName === 'includes') {
+      message += `; use 'дорадКалид' (has) to test membership`;
+    }
+    const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
+    report(TypeCheckErrorCode.PropertyNotFound, message, property.line, property.column);
   }
 
   private indexedAccessType(objectType: Type, indexType: Type): Type {
@@ -1460,8 +1897,12 @@ export class TypeChecker {
 
   private inferAssignmentType(assignment: AssignmentExpression): Type {
     const left = assignment.left;
-    const leftType = this.inferExpressionType(left);
     const isPlain = assignment.operator === '=';
+    // The target accepts its declared type, not what an earlier check narrowed it to
+    const leftType = this.inferAssignmentTargetType(left);
+    if (this.isArithmeticAssignment(assignment.operator, leftType)) {
+      this.checkNotNullish(left, leftType);
+    }
     const rightType = this.inferExpressionType(assignment.right, isPlain ? leftType : undefined);
 
     if (isPlain && (left.type === 'Identifier' || left.type === 'MemberExpression')) {
@@ -1474,13 +1915,52 @@ export class TypeChecker {
         )
       );
     }
+    if (isPlain) {
+      this.narrowOnAssignment(left, leftType, rightType);
+    } else if (assignment.operator === '??=') {
+      this.narrowOnAssignment(left, leftType, this.removeNullish(leftType));
+    }
+    this.forEachNode(left, node => {
+      // Destructuring assignment: forget what was known about each target
+      if (left.type !== 'Identifier' && left.type !== 'MemberExpression') {
+        if (node.type === 'Identifier' || node.type === 'MemberExpression') {
+          this.invalidate(this.referenceKey(node as Expression));
+        }
+      }
+    });
     return rightType;
   }
 
+  private inferAssignmentTargetType(target: Expression): Type {
+    if (target.type === 'MemberExpression') {
+      return this.inferMemberType(target as MemberExpression, true);
+    }
+    if (target.type === 'Identifier') {
+      const declared = this.lookup((target as Identifier).name);
+      if (declared) return declared;
+    }
+    return this.inferExpressionType(target);
+  }
+
+  /** `х -= 1`, `х += 1` on a non-string, … — operators that compute with the old value. */
+  private isArithmeticAssignment(operator: string, targetType: Type): boolean {
+    if (operator === '+=') return !this.isStringType(this.removeNullish(targetType));
+    return NUMERIC_BINARY_OPERATORS.has(operator.slice(0, -1)) && operator !== '==';
+  }
+
   private inferBinaryType(binary: BinaryExpression): Type {
-    const left = this.inferExpressionType(binary.left);
-    const right = this.inferExpressionType(binary.right);
     const op = binary.operator;
+    let left = this.inferExpressionType(binary.left);
+    let right = this.inferRightOperand(binary);
+
+    if (op === '??') {
+      if (this.isAnyLike(left) || this.isAnyLike(right)) return UNKNOWN;
+      return this.unionOf([this.removeNullish(left), right]);
+    }
+    if (this.computesWithOperands(op, left, right)) {
+      left = this.checkNotNullish(binary.left, left);
+      right = this.checkNotNullish(binary.right, right);
+    }
 
     if (BOOLEAN_BINARY_OPERATORS.has(op)) return { kind: 'primitive', name: 'boolean' };
     const bothNumeric = this.isNumericType(left) && this.isNumericType(right);
@@ -1496,6 +1976,25 @@ export class TypeChecker {
     return UNKNOWN;
   }
 
+  /** `х !== холӣ && х.ном`: the right operand of `&&`/`||` only runs when the left one allows it. */
+  private inferRightOperand(binary: BinaryExpression): Type {
+    if (binary.operator !== '&&' && binary.operator !== '||') {
+      return this.inferExpressionType(binary.right);
+    }
+    const facts = this.narrowingsFor(binary.left, binary.operator === '&&');
+    return this.withFacts(facts, () => this.inferExpressionType(binary.right));
+  }
+
+  /** Operators that compute with their operands' values, so `холӣ`/`беқимат` are mistakes. */
+  private computesWithOperands(op: string, left: Type, right: Type): boolean {
+    if (NUMERIC_BINARY_OPERATORS.has(op) || RELATIONAL_OPERATORS.has(op)) return true;
+    return (
+      op === '+' &&
+      !this.isStringType(this.removeNullish(left)) &&
+      !this.isStringType(this.removeNullish(right))
+    );
+  }
+
   private inferUnaryType(unary: UnaryExpression): Type {
     const argument = this.inferExpressionType(unary.argument);
     switch (unary.operator) {
@@ -1506,22 +2005,29 @@ export class TypeChecker {
         return { kind: 'primitive', name: 'string' };
       case '-':
       case '+':
-      case '~':
-        return this.isNumericType(argument) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+      case '~': {
+        const operand = this.checkNotNullish(unary.argument, argument);
+        return this.isNumericType(operand) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+      }
       default:
         return UNKNOWN;
     }
   }
 
-  private inferNumericOperand(argument: Expression): Type {
-    const type = this.inferExpressionType(argument);
+  private inferNumericOperand(argument: Expression, checkNullish = false): Type {
+    let type = this.inferExpressionType(argument);
+    if (checkNullish) type = this.checkNotNullish(argument, type);
     return this.isNumericType(type) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
   }
 
   private inferConditionalType(conditional: ConditionalExpression, targetType?: Type): Type {
     this.inferExpressionType(conditional.test);
-    const consequent = this.inferExpressionType(conditional.consequent, targetType);
-    const alternate = this.inferExpressionType(conditional.alternate, targetType);
+    const consequent = this.withFacts(this.narrowingsFor(conditional.test, true), () =>
+      this.inferExpressionType(conditional.consequent, targetType)
+    );
+    const alternate = this.withFacts(this.narrowingsFor(conditional.test, false), () =>
+      this.inferExpressionType(conditional.alternate, targetType)
+    );
     if (consequent.kind === 'unknown' || alternate.kind === 'unknown') return UNKNOWN;
     if (this.isExactMatch(consequent, alternate)) return consequent;
     return { kind: 'union', types: [consequent, alternate] };
@@ -1600,12 +2106,17 @@ export class TypeChecker {
     const restElementType = restType?.kind === 'array' ? restType.elementType : undefined;
     args.forEach((argNode, i) => {
       // Positions after a spread argument are unknown
-      const paramType =
+      const declaredType =
         spreadIndex !== -1 && i >= spreadIndex
           ? undefined
           : i < fixedCount
             ? paramTypes[i]
             : restElementType;
+      // An optional or defaulted parameter also accepts `беқимат`
+      const paramType =
+        declaredType && i < fixedCount && optional[i]
+          ? this.optionalType(declaredType)
+          : declaredType;
       const argType = this.inferExpressionType(argNode, paramType);
       if (!paramType) return;
       this.checkAssignable(argNode, argType, paramType, (source, target) =>
@@ -1625,22 +2136,21 @@ export class TypeChecker {
     if (newExpr.callee && newExpr.callee.type === 'Identifier') {
       const className = (newExpr.callee as Identifier).name;
 
-      // Handle built-in generic types: Map and Set
+      // Handle built-in generic types: Map and Set (`нав Map<сатр, рақам>()`)
+      const typeArguments = (newExpr.typeArguments ?? []).map(t => this.resolveTypeNode(t));
+      const any: Type = { kind: 'primitive', name: 'any' };
       if (className === 'Map') {
         return {
           kind: 'generic',
           name: 'Map',
-          typeParameters: [
-            { kind: 'primitive', name: 'any' },
-            { kind: 'primitive', name: 'any' },
-          ],
+          typeParameters: typeArguments.length === 2 ? typeArguments : [any, any],
         };
       }
       if (className === 'Set') {
         return {
           kind: 'generic',
           name: 'Set',
-          typeParameters: [{ kind: 'primitive', name: 'any' }],
+          typeParameters: typeArguments.length === 1 ? typeArguments : [any],
         };
       }
 
@@ -1653,6 +2163,464 @@ export class TypeChecker {
       this.inferExpressionType(newExpr.callee);
     }
     return UNKNOWN;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Narrowing
+  //
+  // References (`х`, `ин.сар.пас`) get a narrower type than their declared one
+  // after checks such as `агар (х !== холӣ)`, early exits (`агар (!х) бозгашт;`)
+  // and assignments. Facts are keyed by `referenceKey` and dropped when the
+  // reference (or an object on its path) is assigned.
+  // ---------------------------------------------------------------------------
+
+  private bindingKey(scopeIndex: number, name: string): string {
+    return `${this.scopeIds[scopeIndex]}:${name}`;
+  }
+
+  /** Key identifying a narrowable reference: a variable, `ин`, or a member path on them. */
+  private referenceKey(expression: Expression): string | undefined {
+    switch (expression.type) {
+      case 'Identifier': {
+        const name = (expression as Identifier).name;
+        const index = this.scopeIndexOf(name);
+        return index === -1 ? undefined : this.bindingKey(index, name);
+      }
+      case 'ThisExpression':
+        return 'ин';
+      case 'MemberExpression': {
+        const member = expression as MemberExpression;
+        if (member.computed || member.property.type !== 'Identifier') return undefined;
+        const objectKey = this.referenceKey(member.object);
+        return objectKey && `${objectKey}.${(member.property as Identifier).name}`;
+      }
+      default:
+        return undefined;
+    }
+  }
+
+  /** Forgets what is known about `key` and every member path below it. */
+  private invalidate(key: string | undefined): void {
+    if (!key) return;
+    for (const narrowedKey of [...this.narrowed.keys()]) {
+      if (narrowedKey === key || narrowedKey.startsWith(`${key}.`)) {
+        this.narrowed.delete(narrowedKey);
+      }
+    }
+  }
+
+  private applyFacts(facts: Facts): void {
+    facts.forEach((type, key) => this.narrowed.set(key, type));
+  }
+
+  /** Runs `body` with `facts` added; narrowing changes made by `body` are discarded. */
+  private withFacts<T>(facts: Facts, body: () => T): T {
+    const saved = this.narrowed;
+    this.narrowed = new Map(saved);
+    this.applyFacts(facts);
+    try {
+      return body();
+    } finally {
+      this.narrowed = saved;
+    }
+  }
+
+  /** Infers a type without reporting diagnostics (they were reported on the first pass). */
+  private quietType(expression: Expression): Type {
+    this.silent++;
+    try {
+      return this.inferExpressionType(expression);
+    } finally {
+      this.silent--;
+    }
+  }
+
+  /** What is known when `test` evaluates to `assumeTrue`. */
+  private narrowingsFor(test: Expression, assumeTrue: boolean): Facts {
+    if (test.type === 'UnaryExpression' && (test as UnaryExpression).operator === '!') {
+      return this.narrowingsFor((test as UnaryExpression).argument, !assumeTrue);
+    }
+    if (test.type === 'BinaryExpression') {
+      const binary = test as BinaryExpression;
+      switch (binary.operator) {
+        case '&&':
+          return assumeTrue
+            ? this.sequenceFacts(binary.left, true, binary.right, true)
+            : this.joinFacts(
+                this.narrowingsFor(binary.left, false),
+                this.sequenceFacts(binary.left, true, binary.right, false)
+              );
+        case '||':
+          return assumeTrue
+            ? this.joinFacts(
+                this.narrowingsFor(binary.left, true),
+                this.sequenceFacts(binary.left, false, binary.right, true)
+              )
+            : this.sequenceFacts(binary.left, false, binary.right, false);
+        case '===':
+        case '!==':
+        case '==':
+        case '!=':
+          return this.equalityFacts(binary, assumeTrue);
+        case 'instanceof':
+          return assumeTrue ? this.instanceofFacts(binary) : new Map();
+        default:
+          return new Map();
+      }
+    }
+    return this.truthinessFacts(test, assumeTrue);
+  }
+
+  /** Facts of `first` being `firstValue` and then `second` being `secondValue`. */
+  private sequenceFacts(
+    first: Expression,
+    firstValue: boolean,
+    second: Expression,
+    secondValue: boolean
+  ): Facts {
+    const firstFacts = this.narrowingsFor(first, firstValue);
+    const secondFacts = this.withFacts(firstFacts, () => this.narrowingsFor(second, secondValue));
+    return new Map([...firstFacts, ...secondFacts]);
+  }
+
+  /** Facts that hold on either of two paths. */
+  private joinFacts(a: Facts, b: Facts): Facts {
+    const joined: Facts = new Map();
+    a.forEach((type, key) => {
+      const other = b.get(key);
+      if (other) joined.set(key, this.unionOf([type, other]));
+    });
+    return joined;
+  }
+
+  private truthinessFacts(expression: Expression, assumeTrue: boolean): Facts {
+    const key = this.referenceKey(expression);
+    if (!key || !assumeTrue) return new Map();
+    const current = this.quietType(expression);
+    if (this.isAnyLike(current) || this.nullishNames(current).length === 0) return new Map();
+    return new Map([[key, this.removeNullish(current)]]);
+  }
+
+  private equalityFacts(binary: BinaryExpression, assumeTrue: boolean): Facts {
+    const equal = (binary.operator === '===' || binary.operator === '==') === assumeTrue;
+    const loose = binary.operator === '==' || binary.operator === '!=';
+    for (const [typeofSide, literalSide] of [
+      [binary.left, binary.right],
+      [binary.right, binary.left],
+    ]) {
+      if (this.isTypeofExpression(typeofSide) && literalSide.type === 'Literal') {
+        return this.typeofFacts(typeofSide as UnaryExpression, literalSide as Literal, equal);
+      }
+    }
+    const comparison = this.nullComparison(binary);
+    const key = comparison && this.referenceKey(comparison.reference);
+    if (!comparison || !key) return new Map();
+    const { reference, nullish } = comparison;
+    const current = this.quietType(reference);
+    if (this.isAnyLike(current)) return new Map();
+    const names = loose ? ['null', 'undefined'] : [nullish];
+    if (equal) {
+      const present = this.nullishNames(current).filter(name => names.includes(name));
+      const kept = present.length > 0 ? present : [nullish];
+      return new Map([[key, this.unionOf(kept.map(name => this.nullishType(name)))]]);
+    }
+    const rest = this.unionMembers(current).filter(
+      t => !(t.kind === 'primitive' && names.includes(t.name!))
+    );
+    return new Map([[key, rest.length > 0 ? this.unionOf(rest) : UNKNOWN]]);
+  }
+
+  /** The reference compared in `х === холӣ` / `беқимат !== х`, and which value it is compared with. */
+  private nullComparison(
+    binary: BinaryExpression
+  ): { reference: Expression; nullish: 'null' | 'undefined' } | undefined {
+    const right = this.nullishLiteral(binary.right);
+    if (right) return { reference: binary.left, nullish: right };
+    const left = this.nullishLiteral(binary.left);
+    return left ? { reference: binary.right, nullish: left } : undefined;
+  }
+
+  private isTypeofExpression(expression: Expression): boolean {
+    return (
+      expression.type === 'UnaryExpression' && (expression as UnaryExpression).operator === 'typeof'
+    );
+  }
+
+  /** `навъи х === "string"` keeps the union members of that JavaScript type. */
+  private typeofFacts(typeofExpr: UnaryExpression, literal: Literal, equal: boolean): Facts {
+    const key = this.referenceKey(typeofExpr.argument);
+    if (!key || typeof literal.value !== 'string') return new Map();
+    const current = this.quietType(typeofExpr.argument);
+    if (current.kind !== 'union' || this.isAnyLike(current)) return new Map();
+    const members = this.unionMembers(current);
+    const kept = members.filter(t => (this.typeofName(t) === literal.value) === equal);
+    if (kept.length === 0 || kept.length === members.length) return new Map();
+    return new Map([[key, this.unionOf(kept)]]);
+  }
+
+  /** The `typeof` result of values of a type, when one is determined. */
+  private typeofName(type: Type): string | undefined {
+    const base = this.getBaseType(type);
+    if (base.kind === 'primitive') {
+      if (base.name === 'null') return 'object';
+      return ['string', 'number', 'boolean', 'undefined'].includes(base.name!)
+        ? base.name
+        : undefined;
+    }
+    if (type.kind === 'function') return 'function';
+    return ['object', 'interface', 'array', 'tuple', 'generic'].includes(type.kind)
+      ? 'object'
+      : undefined;
+  }
+
+  private instanceofFacts(binary: BinaryExpression): Facts {
+    const key = this.referenceKey(binary.left);
+    if (!key || binary.right.type !== 'Identifier') return new Map();
+    const classType = this.lookup((binary.right as Identifier).name);
+    return classType?.kind === 'class' ? new Map([[key, classType]]) : new Map();
+  }
+
+  /** `холӣ` → 'null', `беқимат` → 'undefined', anything else → undefined. */
+  private nullishLiteral(expression: Expression): 'null' | 'undefined' | undefined {
+    if (expression.type === 'Literal' && (expression as Literal).value === null) return 'null';
+    if (expression.type === 'Identifier') {
+      const name = (expression as Identifier).name;
+      if ((name === 'беқимат' || name === 'undefined') && !this.lookup(name)) return 'undefined';
+    }
+    return undefined;
+  }
+
+  /**
+   * Type of a reference right after `= value`: a value that can't be
+   * `холӣ`/`беқимат` removes them from the declared type, and `холӣ` itself
+   * narrows to `холӣ`. Returns undefined when the declared type applies.
+   */
+  private assignmentNarrowing(declared: Type, assigned: Type): Type | undefined {
+    if (this.isAnyLike(declared) || this.isAnyLike(assigned)) return undefined;
+    const declaredNullish = this.nullishNames(declared);
+    const assignedNullish = this.nullishNames(assigned);
+    if (assignedNullish.length === 0) {
+      return declaredNullish.length > 0 ? this.removeNullish(declared) : undefined;
+    }
+    const onlyNullish = this.unionMembers(assigned).every(t => this.isNullishType(t));
+    return onlyNullish ? assigned : undefined;
+  }
+
+  private narrowOnAssignment(target: Expression, declared: Type, assigned: Type): void {
+    const key = this.referenceKey(target);
+    if (!key) return;
+    this.invalidate(key);
+    const narrowed = this.assignmentNarrowing(declared, assigned);
+    if (narrowed) this.narrowed.set(key, narrowed);
+  }
+
+  /** Facts after two branches meet: a reference keeps only what both agree on. */
+  private joinNarrowed(a: Facts, b: Facts): Facts {
+    return this.joinFacts(a, b);
+  }
+
+  /** Whether the variable a reference key starts with can't change after being narrowed. */
+  private isNeverReassigned(key: string): boolean {
+    if (key.includes('.')) return false;
+    if (this.constKeys.has(key)) return true;
+    return !this.reassignedNames.has(key.slice(key.indexOf(':') + 1));
+  }
+
+  private collectReassignedNames(program: Program): Set<string> {
+    const names = new Set<string>();
+    const addTargets = (target: unknown): void =>
+      this.forEachNode(target, node => {
+        if (node.type === 'Identifier') names.add((node as Identifier).name);
+      });
+    this.forEachNode(program, node => {
+      if (node.type === 'AssignmentExpression') {
+        const left = (node as AssignmentExpression).left;
+        if (left.type !== 'MemberExpression') addTargets(left);
+      } else if (node.type === 'UpdateExpression') {
+        addTargets((node as UpdateExpression).argument);
+      } else if (node.type === 'ForInStatement' || node.type === 'ForOfStatement') {
+        const left = (node as ForInStatement | ForOfStatement).left;
+        if (left.type !== 'VariableDeclaration') addTargets(left);
+      }
+    });
+    return names;
+  }
+
+  /** Forgets facts about every reference assigned somewhere inside `nodes` (loop bodies, …). */
+  private invalidateAssignedIn(...nodes: Array<object | null | undefined>): void {
+    const invalidateTarget = (target: unknown): void => {
+      this.forEachNode(target, node => {
+        if (node.type === 'Identifier' || node.type === 'MemberExpression') {
+          this.invalidate(this.referenceKey(node as Expression));
+        }
+      });
+    };
+    for (const root of nodes) {
+      this.forEachNode(root, node => {
+        if (node.type === 'AssignmentExpression') {
+          invalidateTarget((node as AssignmentExpression).left);
+        } else if (node.type === 'ForInStatement' || node.type === 'ForOfStatement') {
+          const left = (node as ForInStatement | ForOfStatement).left;
+          if (left.type !== 'VariableDeclaration') invalidateTarget(left);
+        }
+      });
+    }
+  }
+
+  /** Calls `visit` for every AST node below `node` (type annotations excluded). */
+  private forEachNode(node: unknown, visit: (_node: { type: string }) => void): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(child => this.forEachNode(child, visit));
+      return;
+    }
+    const record = node as Record<string, unknown>;
+    if (typeof record.type === 'string') visit(record as { type: string });
+    for (const [key, value] of Object.entries(record)) {
+      if (key === 'typeAnnotation' || key === 'returnType' || key === 'typeArguments') continue;
+      if (value && typeof value === 'object') this.forEachNode(value, visit);
+    }
+  }
+
+  /** Whether `body` contains a `шикастан` that can leave the loop owning `body`. */
+  private containsLoopExit(body: Statement): boolean {
+    const visit = (node: unknown, nested: boolean): boolean => {
+      if (!node || typeof node !== 'object') return false;
+      if (Array.isArray(node)) return node.some(child => visit(child, nested));
+      const record = node as Record<string, unknown>;
+      const type = String(record.type ?? '');
+      // An unlabelled `шикастан` in a nested loop or `интихоб` only leaves that one
+      if (type === 'BreakStatement') return !nested || Boolean(record.label);
+      if (/Function|ClassDeclaration/.test(type)) return false;
+      const nestsJump = nested || JUMP_TARGETS.has(type);
+      return Object.values(record).some(value => visit(value, nestsJump));
+    };
+    return visit(body, false);
+  }
+
+  /** Whether control never continues after `statement` (it returns, throws, breaks or continues). */
+  private alwaysExits(statement: Statement | undefined): boolean {
+    if (!statement) return false;
+    switch (statement.type) {
+      case 'ReturnStatement':
+      case 'ThrowStatement':
+      case 'BreakStatement':
+      case 'ContinueStatement':
+        return true;
+      case 'BlockStatement':
+        return (statement as BlockStatement).body.some(s => this.alwaysExits(s));
+      case 'IfStatement': {
+        const ifStatement = statement as IfStatement;
+        return this.alwaysExits(ifStatement.consequent) && this.alwaysExits(ifStatement.alternate);
+      }
+      case 'TryStatement': {
+        const tryStatement = statement as TryStatement;
+        if (tryStatement.finalizer && this.alwaysExits(tryStatement.finalizer)) return true;
+        return (
+          this.alwaysExits(tryStatement.block) &&
+          (!tryStatement.handler || this.alwaysExits(tryStatement.handler.body))
+        );
+      }
+      default:
+        return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Nullability
+  // ---------------------------------------------------------------------------
+
+  /** Members of a union (nested unions flattened); a single type for anything else. */
+  private unionMembers(type: Type): Type[] {
+    if (type.kind !== 'union' || !type.types) return [type];
+    return type.types.flatMap(t => this.unionMembers(t));
+  }
+
+  /** Union of `types` without duplicates; a single type stays itself. */
+  private unionOf(types: Type[]): Type {
+    // Members that print the same are the same type
+    const byName = new Map<string, Type>();
+    for (const member of types.flatMap(t => this.unionMembers(t))) {
+      const name = this.typeToString(member);
+      if (!byName.has(name)) byName.set(name, member);
+    }
+    const members = [...byName.values()];
+    return members.length === 1 ? members[0] : { kind: 'union', types: members };
+  }
+
+  private isNullishType(type: Type): boolean {
+    return type.kind === 'primitive' && (type.name === 'null' || type.name === 'undefined');
+  }
+
+  private nullishType(name: string): Type {
+    return name === 'null' ? NULL_TYPE : UNDEFINED_TYPE;
+  }
+
+  /** Which of 'null' / 'undefined' the values of `type` may be. */
+  private nullishNames(type: Type): string[] {
+    const names = this.unionMembers(type)
+      .filter(t => this.isNullishType(t))
+      .map(t => t.name!);
+    return [...new Set(names)];
+  }
+
+  private removeNullish(type: Type): Type {
+    const rest = this.unionMembers(type).filter(t => !this.isNullishType(t));
+    if (rest.length === 0) return UNKNOWN;
+    return rest.length === 1 ? rest[0] : { kind: 'union', types: rest };
+  }
+
+  /** Types that turn checking off: unresolved, `ҳар`, `ношинос`, or unions containing them. */
+  private isAnyLike(type: Type): boolean {
+    return this.unionMembers(type).some(
+      t => t.kind === 'unknown' || (t.kind === 'primitive' && ['any', 'unknown'].includes(t.name!))
+    );
+  }
+
+  /** `type | беқимат`, or unknown when `type` itself is unknown. */
+  private orUndefined(type: Type): Type {
+    return this.isAnyLike(type) ? UNKNOWN : this.unionOf([type, UNDEFINED_TYPE]);
+  }
+
+  /** Type of an optional slot (`а?: Т`): `Т | беқимат` in strict mode. */
+  private optionalType(type: Type): Type {
+    return this.strict ? this.orUndefined(type) : type;
+  }
+
+  /**
+   * In strict mode reports a value that may be `холӣ`/`беқимат` where it is
+   * dereferenced or computed with; returns the type without them.
+   */
+  private checkNotNullish(expression: Expression, type: Type): Type {
+    const nullish = this.nullishNames(type);
+    if (nullish.length === 0) return type;
+    if (this.strict && !this.isAnyLike(type)) {
+      const possible = nullish.map(name => `'${this.mapPrimitiveToTajik(name)}'`).join(' or ');
+      this.addError(
+        TypeCheckErrorCode.PossiblyNull,
+        `${this.describeReference(expression)} is possibly ${possible}`,
+        expression.line,
+        expression.column
+      );
+    }
+    return this.removeNullish(type);
+  }
+
+  /** `'х'`, `'ин.сар'` for references, 'Object' for any other expression. */
+  private describeReference(expression: Expression): string {
+    const path = (e: Expression): string | undefined => {
+      if (e.type === 'Identifier') return (e as Identifier).name;
+      if (e.type === 'ThisExpression') return 'ин';
+      if (e.type === 'MemberExpression' && !(e as MemberExpression).computed) {
+        const member = e as MemberExpression;
+        const objectPath = path(member.object);
+        const property = member.property as Identifier;
+        return objectPath && property.name ? `${objectPath}.${property.name}` : undefined;
+      }
+      return undefined;
+    };
+    const text = path(expression);
+    return text ? `'${text}'` : 'Object';
   }
 
   // ---------------------------------------------------------------------------
@@ -1677,13 +2645,28 @@ export class TypeChecker {
       sourceType.kind === 'union' &&
       (sourceExpr.type === 'Identifier' || sourceExpr.type === 'MemberExpression');
     const assignable = narrowable
-      ? sourceType.types!.some(t => this.isAssignable(t, targetType))
+      ? this.isNarrowableUnionAssignable(sourceType, targetType)
       : this.isAssignable(sourceType, targetType);
     if (!assignable) {
       report(this.typeToString(sourceType), this.typeToString(targetType));
       return;
     }
     this.checkExcessProperties(sourceExpr, targetType);
+  }
+
+  /**
+   * A union-typed reference fits when one member does. In strict mode
+   * `холӣ`/`беқимат` members must fit as well: null checks *are* tracked.
+   */
+  private isNarrowableUnionAssignable(sourceType: Type, targetType: Type): boolean {
+    if (!this.strict) return sourceType.types!.some(t => this.isAssignable(t, targetType));
+    const members = this.unionMembers(sourceType);
+    const nullish = members.filter(t => this.isNullishType(t));
+    const rest = members.filter(t => !this.isNullishType(t));
+    return (
+      nullish.every(t => this.isAssignable(t, targetType)) &&
+      (rest.length === 0 || rest.some(t => this.isAssignable(t, targetType)))
+    );
   }
 
   private checkExcessProperties(expr: Expression, targetType: Type): void {
@@ -1756,8 +2739,10 @@ export class TypeChecker {
 
   /**
    * Top-type rules: anything goes to `ҳар`/`ношинос`, `ҳар` goes anywhere,
-   * and unresolved types are never reported. `холӣ`/`беқимат` are accepted
-   * everywhere since nullability isn't tracked.
+   * and unresolved types are never reported. Without strict mode
+   * `холӣ`/`беқимат` are accepted everywhere, like TypeScript without
+   * `strictNullChecks`; in strict mode only by types that include them
+   * (and `беқимат` by `беджавоб`).
    */
   private isTopTypeAssignable(source: Type, target: Type): boolean {
     if (source === target || source.kind === 'unknown' || target.kind === 'unknown') return true;
@@ -1765,7 +2750,11 @@ export class TypeChecker {
       return true;
     }
     if (source.kind === 'primitive') {
-      return source.name === 'any' || source.name === 'null' || source.name === 'undefined';
+      if (source.name === 'any') return true;
+      if (source.name === 'null' || source.name === 'undefined') {
+        if (!this.strict) return true;
+        return source.name === 'undefined' && target.kind === 'primitive' && target.name === 'void';
+      }
     }
     return false;
   }
@@ -1955,7 +2944,12 @@ export class TypeChecker {
 
   private readonly typePrinters: Record<string, (_type: Type) => string> = {
     primitive: t => this.mapPrimitiveToTajik(t.name ?? 'unknown'),
-    array: t => `${this.typeToString(t.elementType ?? UNKNOWN)}[]`,
+    array: t => {
+      const element = this.typeToString(t.elementType ?? UNKNOWN);
+      return ['union', 'intersection', 'function'].includes(t.elementType?.kind ?? '')
+        ? `(${element})[]`
+        : `${element}[]`;
+    },
     union: t => this.typeListToString(t),
     intersection: t => this.typeListToString(t),
     tuple: t => this.typeListToString(t),
@@ -2032,7 +3026,10 @@ export class TypeChecker {
         if (
           sourceProp &&
           sourceProp.type.kind !== 'function' &&
-          !this.isAssignable(sourceProp.type, targetProp.type)
+          !this.isAssignable(
+            sourceProp.type,
+            targetProp.optional ? this.optionalType(targetProp.type) : targetProp.type
+          )
         ) {
           return false;
         }
@@ -2071,6 +3068,7 @@ export class TypeChecker {
   }
 
   private addError(code: TypeCheckErrorCode, message: string, line: number, column: number): void {
+    if (this.silent > 0) return;
     this.errors.push({
       code,
       message,
@@ -2078,6 +3076,23 @@ export class TypeChecker {
       column,
       snippet: this.getSnippet(line),
       severity: 'error',
+    });
+  }
+
+  private addWarning(
+    code: TypeCheckErrorCode,
+    message: string,
+    line: number,
+    column: number
+  ): void {
+    if (this.silent > 0) return;
+    this.warnings.push({
+      code,
+      message,
+      line,
+      column,
+      snippet: this.getSnippet(line),
+      severity: 'warning',
     });
   }
 }

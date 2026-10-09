@@ -1,4 +1,4 @@
-import { compile } from '../src/compiler';
+import { compile, CompileOptions } from '../src/compiler';
 
 /**
  * End-to-end behaviour: each program is compiled with the default options
@@ -6,8 +6,8 @@ import { compile } from '../src/compiler';
  * values JavaScript would print. Most cases are repros from the project
  * review where the compiler used to emit wrong code without any error.
  */
-function run(source: string): string[] {
-  const result = compile(source);
+function run(source: string, options: CompileOptions = {}): string[] {
+  const result = compile(source, options);
   expect(result.errors).toEqual([]);
   const lines: string[] = [];
   const log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
@@ -167,6 +167,90 @@ describe('compiled programs behave like the source says', () => {
   });
 });
 
+/**
+ * Destructuring loop heads bind every name of the pattern: the program must
+ * compile without "not defined" errors in strict mode too, and run.
+ */
+describe('destructuring in for-of and for-in heads', () => {
+  const loops: Array<[string, string, string[]]> = [
+    [
+      'entries of an object',
+      'собит о = { а: 1, б: 2 };\nбарои (тағ [к, в] аз объект.воридот(о)) { чоп.сабт(к, в); }',
+      ['а 1', 'б 2'],
+    ],
+    [
+      'an array of arrays, reassigning a тағйирёбанда binding',
+      'барои (тағйирёбанда [н, ном] аз [[1, "як"], [2, "ду"]]) { ном = ном + "!"; чоп.сабт(н, ном); }',
+      ['1 як!', '2 ду!'],
+    ],
+    [
+      'a Map',
+      'собит м = нав Map([["x", 10], ["y", 20]]);\nбарои (собит [к, в] аз м) { чоп.сабт(к, в * 2); }',
+      ['x 20', 'y 40'],
+    ],
+    [
+      'a typed Map',
+      'собит м: Map<сатр, рақам> = нав Map([["x", 1]]);\n' +
+        'барои (собит [к, в] аз м.entries()) { чоп.сабт(к.toUpperCase(), в + 1); }',
+      ['X 2'],
+    ],
+    [
+      'typed tuples',
+      'собит ҷуфтҳо: [рақам, сатр][] = [[1, "а"], [2, "б"]];\n' +
+        'барои (собит [н, с] аз ҷуфтҳо) { собит х: рақам = н; собит й: сатр = с; чоп.сабт(х + й); }',
+      ['1а', '2б'],
+    ],
+    [
+      'an object pattern with a default',
+      'барои (собит { ном, син = 0 } аз [{ ном: "Алӣ", син: 30 }, { ном: "Вали" }]) {\n' +
+        '  чоп.сабт(ном, син);\n}',
+      ['Алӣ 30', 'Вали 0'],
+    ],
+    [
+      'array defaults and holes',
+      'барои (собит [к, в = 0] аз [["а"], ["б", 5]]) чоп.сабт(к, в);\n' +
+        'барои (собит [, дуюм] аз [[1, 2]]) чоп.сабт(дуюм);',
+      ['а 0', 'б 5', '2'],
+    ],
+    [
+      'rest elements',
+      'барои (собит [сар, ...боқӣ] аз [[1, 2, 3], [4]]) { чоп.сабт(сар, боқӣ.length); }\n' +
+        'барои (собит { а, ...боқӣ } аз [{ а: 1, б: 2, в: 3 }]) {\n' +
+        '  чоп.сабт(а, объект.калидҳо(боқӣ).join(","));\n}',
+      ['1 2', '4 0', '1 б,в'],
+    ],
+    [
+      'nested patterns',
+      'барои (собит [а, [б, { в }]] аз [[1, [2, { в: 3 }]]]) { чоп.сабт(а + б + в); }\n' +
+        'барои (собит { а: { б: [в = 9, г] } } аз [{ а: { б: [беқимат, 7] } }]) { чоп.сабт(в, г); }',
+      ['6', '9 7'],
+    ],
+    [
+      'for-in with array and object patterns',
+      'барои (собит [аввал, ...боқӣ] дар { абв: 1, гд: 2 }) { чоп.сабт(аввал, боқӣ.join("")); }\n' +
+        'барои (тағ { length } дар { абв: 1 }) { чоп.сабт(length); }',
+      ['а бв', 'г д', '3'],
+    ],
+    [
+      'names of built-ins shadowed by the pattern',
+      'барои (собит [объект, сатр] аз [[1, 2]]) { чоп.сабт(объект + сатр); }\n' +
+        'чоп.сабт(объект.калидҳо({ к: 1 }).join(""));',
+      ['3', 'к'],
+    ],
+    [
+      'a loop body may redeclare a destructured name',
+      'барои (собит [к] аз [[1]]) { собит к = 2; чоп.сабт(к); }',
+      ['2'],
+    ],
+  ];
+
+  test.each(loops)('%s', (_name, source, expected) => {
+    expect(run(source)).toEqual(expected);
+    expect(run(source, { strict: true })).toEqual(expected);
+    expect(run(source, { typeCheck: false })).toEqual(expected);
+  });
+});
+
 describe('invalid programs fail instead of emitting wrong code', () => {
   test.each([
     ['a syntax error', 'чоп.сабт(1 +);'],
@@ -231,6 +315,22 @@ describe('JavaScript early errors are compile errors', () => {
       /'Н' has already been declared/,
     ],
     ['an import and a let', 'ворид { а } аз "./м";\nтағ а = 1;', /'а' has already been declared/],
+    ['a name bound twice in a pattern', 'собит [а, а] = [1, 2];', /'а' has already been declared/],
+    [
+      'a name bound twice in a for-of pattern',
+      'барои (собит [а, { б: а }] аз []) {}',
+      /'а' has already been declared/,
+    ],
+    [
+      'a name bound twice in a for-in pattern',
+      'барои (тағ { а, ...а } дар {}) {}',
+      /'а' has already been declared/,
+    ],
+    [
+      'a name bound twice in a for-loop pattern',
+      'барои (тағ [а, а] = [1, 2]; а < 2; а++) {}',
+      /'а' has already been declared/,
+    ],
   ])('%s', (_name, source, message) => {
     for (const typeCheck of [true, false]) {
       const result = compile(source, { typeCheck });

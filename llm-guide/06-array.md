@@ -40,6 +40,9 @@
 | `қиматҳо()`            | `values()`        |
 | `бо()`                 | `with()`          |
 
+`дорад()` (includes) exists on arrays and strings only; for `Map` and `Set` use
+`дорадКалид()` (has) — see [Map and Set](13-map-set.md).
+
 ## Static Methods
 
 | Tajik                   | JavaScript        |

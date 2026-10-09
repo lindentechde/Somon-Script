@@ -47,7 +47,10 @@
 барои (тағ і = 0; і < 10; і++) { }      // for (let i = 0; i < 10; i++) { }
 барои (тағ к дар obj) { }               // for (let k in obj) { }
 барои (тағ в аз arr) { }                // for (let v of arr) { }
+барои (собит [к, в] аз объект.воридот(obj)) { }  // for (const [k, v] of Object.entries(obj)) { }
 ```
+
+There is no `do … while` loop.
 
 ---
 

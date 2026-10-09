@@ -125,7 +125,7 @@ function runTypeCheckStage(
   warnings: string[]
 ): boolean {
   if (options.typeCheck === false) return false;
-  const result = runTypeCheck(source, ast);
+  const result = runTypeCheck(source, ast, Boolean(options.strict));
   errors.push(...result.errors);
   warnings.push(...result.warnings);
   return Boolean(options.strict) && result.errors.length > 0;
@@ -179,8 +179,8 @@ function parseSource(source: string) {
   return { ast, parserErrors };
 }
 
-function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>) {
-  const checker = new TypeChecker(source);
+function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: boolean) {
+  const checker = new TypeChecker(source, { strict });
   const result = checker.check(ast);
   return {
     errors: result.errors.map(

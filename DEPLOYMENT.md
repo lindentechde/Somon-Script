@@ -76,7 +76,7 @@ Command-line flags override values from the config file.
 # Compile one file (writes app.js next to app.som unless -o/--out-dir is given)
 somon compile src/app.som -o dist/app.js
 
-# Fail on type errors instead of emitting code
+# Fail on type errors instead of emitting code, with null checks
 somon compile src/app.som -o dist/app.js --strict
 
 # Bundle an entry point and its imports into a single CommonJS file
@@ -115,7 +115,9 @@ console.log(result.code); // console.log("Салом, ҷаҳон!");
 ```
 
 `compile()` returns `{ code, sourceMap?, errors, warnings }`. Parse errors
-always produce empty `code`; with `strict: true` type errors do too.
+always produce empty `code`; with `strict: true` type errors do too. Strict mode
+also checks for `холӣ`/`беқимат` values and reports unknown members as errors
+instead of warnings.
 
 ## Continuous Integration
 

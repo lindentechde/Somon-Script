@@ -160,4 +160,63 @@ names: `навъи а === "сатр"` is always false.
 
 ---
 
+## Strict Mode (`--strict`)
+
+`somon compile --strict`, `somon run --strict` and
+`compile(source, { strict: true })` make every type error fatal and turn on
+TypeScript-style checks:
+
+- **Null checks.** `холӣ` and `беқимат` are only assignable to types that
+  include them (`Г | холӣ`), and a value that may be `холӣ`/`беқимат` cannot be
+  dereferenced or used in arithmetic or comparisons until a check narrows it.
+- **Built-ins that may return `беқимат`.** `.баровардан()` (pop),
+  `.ҳазфиАввал()` (shift), `.дар()` (at), `.кофтан()` (find), `.охиринЁфтан()`
+  (findLast) and `Map` `.бозгирифтан()` (get) return `Т | беқимат`. Optional
+  parameters (`а?: рақам`) and optional properties include `беқимат` too.
+- **Unknown members.** Reading a member that an array, string, number, `Map`,
+  `Set`, class, interface or object type doesn't have is an error (without
+  `--strict` it is a warning). Objects built from a literal (`тағ о = {}`) may
+  still gain members later, as in JavaScript.
+
+The checker follows the control flow, so these checks narrow a variable or a
+member path such as `ин.сар.навбатӣ`:
+
+```som
+синф Гиреҳ {
+    қимат: рақам;
+    навбатӣ: Гиреҳ | холӣ = холӣ;
+    конструктор(қимат: рақам) {
+        ин.қимат = қимат;
+    }
+}
+
+функсия ҷамъ(сар: Гиреҳ | холӣ): рақам {
+    тағ натиҷа = 0;
+    тағ ҷорӣ = сар;
+    то (ҷорӣ !== холӣ) {            // ҷорӣ is a Гиреҳ inside the loop
+        натиҷа += ҷорӣ.қимат;
+        ҷорӣ = ҷорӣ.навбатӣ;
+    }
+    бозгашт натиҷа;
+}
+
+функсия аввал(сар: Гиреҳ | холӣ): рақам {
+    агар (сар === холӣ) {
+        бозгашт 0;                   // after this, сар is a Гиреҳ
+    }
+    бозгашт сар.қимат;
+}
+
+собит ҳисобҳо = нав Map<сатр, рақам>();
+собит ҳисоб = ҳисобҳо.бозгирифтан("а") ?? 0;   // рақам, not рақам | беқимат
+```
+
+Narrowing checks: `!== холӣ`, `=== холӣ`, `!= холӣ` (also excludes `беқимат`),
+`=== беқимат`, truthiness (`агар (х)`), `!`, `&&`, `||`, `? :`,
+`навъи х === "number"`, `instanceof`, early `бозгашт`/`партофтан`/`шикастан`/
+`давом`, and assignments. `х?.ном` and `х ?? пешфарз` accept a nullable `х`.
+There is no non-null assertion (`х!`) or cast (`as`): use one of the checks.
+
+---
+
 **Next**: [Console Methods](04-console.md)

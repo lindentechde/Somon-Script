@@ -124,7 +124,11 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
   });
 
   describe('New Examples (26-33)', () => {
+    // Top-level files only: examples/leetcode/0032-… is LeetCode problem 32, not example 32
     const newExamples = exampleFiles.filter(f => {
+      if (path.dirname(f) !== '.') {
+        return false;
+      }
       const basename = path.basename(f);
       const match = basename.match(/^(\d+)-/);
       return match && Number.parseInt(match[1]) >= 26 && Number.parseInt(match[1]) <= 33;
