@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { syncJsrVersion } = require('./sync-jsr-version');
 
 // Validate Node.js version
 const nodeVersion = Number.parseInt(process.version.match(/^v(\d+)/)[1]);
@@ -63,16 +64,8 @@ try {
 
   console.log(`🚀 New version: ${newVersion}`);
 
-  // Sync jsr.json version
-  const jsrPath = path.join(__dirname, '..', 'jsr.json');
-  if (fs.existsSync(jsrPath)) {
-    const jsrJson = JSON.parse(fs.readFileSync(jsrPath, 'utf8'));
-    jsrJson.version = newVersion;
-    fs.writeFileSync(jsrPath, JSON.stringify(jsrJson, null, 2) + '\n');
-    console.log(`📄 Synced jsr.json to version ${newVersion}`);
-  } else {
-    console.warn(`⚠️  jsr.json not found (JSR publish may fail)`);
-  }
+  // Sync jsr.json version (also done by the npm `version` lifecycle script)
+  syncJsrVersion();
 
   // Create git commit with version changes
   try {
