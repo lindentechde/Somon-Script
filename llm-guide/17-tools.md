@@ -48,7 +48,9 @@ inside and around them:
 - every statement ends with `;` (inserted where the parser accepted a line break
   instead);
 - at most one blank line in a row, none right after `{` or before `}`; the file
-  ends with one newline; trailing spaces, tabs and `\r\n` are gone;
+  ends with one newline; trailing spaces and tabs are gone;
+- line endings follow the file's first line break: when it is `\r\n` (as Git
+  checks files out on Windows) every line ends with `\r\n`, otherwise with `\n`;
 - every comment stays where it is; JSDoc comments (`/** … */`) are re-indented,
   and trailing `//` comments of consecutive lines that were aligned stay
   aligned.

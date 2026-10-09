@@ -234,10 +234,20 @@ describe('format: source details', () => {
     expect(format('#!/usr/bin/env somon')).toBe('#!/usr/bin/env somon\n');
   });
 
-  test('turns CRLF and tabs into LF and spaces, but leaves strings and templates alone', () => {
-    expect(fmt('агар (а) {\r\n\tб();\r\n}\r\n')).toBe('агар (а) {\n    б();\n}\n');
+  test('turns tabs into spaces, but leaves strings and templates alone', () => {
+    expect(fmt('агар (а) {\n\tб();\n}\n')).toBe('агар (а) {\n    б();\n}\n');
     const multiline = 'тағ с = `сатр\n  дуюм ${а +\n б} сеюм`;\nтағ т = "а\\\nб";\n';
     expect(fmt(multiline)).toBe(multiline);
+  });
+
+  test('keeps the line ending of the first line break', () => {
+    expect(fmt('агар (а) {\r\n\tб()\r\n}')).toBe('агар (а) {\r\n    б();\r\n}\r\n');
+    // A stray LF or a template literal's line break in a CRLF file becomes CRLF too
+    const crlf = 'тағ т = 1;\r\nтағ с = `а\nб`;\nтағ у = 2;';
+    expect(fmt(crlf)).toBe('тағ т = 1;\r\nтағ с = `а\r\nб`;\r\nтағ у = 2;\r\n');
+    expect(fmt('тағ а = 1;\nтағ б = 2;\r\n')).toBe('тағ а = 1;\nтағ б = 2;\n');
+    expect(fmt('#!/usr/bin/env somon\r\nтағ а = 1')).toBe('#!/usr/bin/env somon\r\nтағ а = 1;\r\n');
+    expect(isFormatted('тағ а = 1;\r\nтағ б = 2;\r\n')).toBe(true);
   });
 
   test('isFormatted', () => {

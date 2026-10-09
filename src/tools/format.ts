@@ -69,7 +69,7 @@ export function format(source: string, options: FormatOptions = {}): string {
   joinLines(items);
   const formatted = render(new Layout(indent).run(items));
   checkSameProgram(body, formatted);
-  return prologue + formatted;
+  return withLineEndings(prologue + formatted, lineEnding(source));
 }
 
 /** Whether `source` is already formatted (throws like {@link format}). */
@@ -95,6 +95,23 @@ function splitPrologue(source: string): { prologue: string; body: string } {
     body = match ? body.slice(end + match[0].length) : '';
   }
   return { prologue, body };
+}
+
+/**
+ * The file's line ending, decided by its first line break (as rustfmt's
+ * `Auto`): a file checked out with CRLF, as Git does on Windows, stays CRLF.
+ */
+function lineEnding(source: string): '\n' | '\r\n' {
+  return /\r\n|\n|\r/.exec(source)?.[0] === '\r\n' ? '\r\n' : '\n';
+}
+
+/**
+ * The formatted code is built with LF; a CRLF file gets CRLF everywhere. That
+ * includes line breaks inside template literals, which JavaScript reads as LF
+ * either way, so the program does not change.
+ */
+function withLineEndings(code: string, ending: '\n' | '\r\n'): string {
+  return ending === '\n' ? code : code.replace(/\r?\n/g, ending);
 }
 
 function errorMessage(error: unknown): string {
