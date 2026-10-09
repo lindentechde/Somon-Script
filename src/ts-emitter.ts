@@ -870,6 +870,14 @@ export class TsEmitter extends CodeGenerator {
       const keyType = this.typeAnnotationText(property.indexSignature.typeAnnotation);
       return `${readonly}[${keyName}${keyType}]: ${this.typeText(valueType)}`;
     }
+    if (property.signature) {
+      // `<Т>(х: Т): Т`, `new (х: number): К`
+      const fn = valueType as FunctionType | ConstructorType;
+      const typeParameters = this.typeParametersText(property.typeParameters);
+      const params = this.signatureParams(fn.parameters, (fn as FunctionType).thisType);
+      const prefix = property.signature === 'construct' ? 'new ' : '';
+      return `${prefix}${typeParameters}(${params}): ${this.typeText(fn.returnType)}`;
+    }
     const key = property.computedKey
       ? `[${this.generateExpression(property.computedKey, PREC.ASSIGNMENT)}]`
       : this.generatePropertyKey(property.key);

@@ -417,6 +417,7 @@ namespace keeps its usual output.
 | `[A, B?]`, `[A, ...B[]]`, `[x: A]`   | same                                           |
 | `asserts this`, `asserts this is T`  | `тасдиқ ин`, `тасдиқ ин аст Т`                 |
 | `{ get x(): T; set x(v: T); }`       | same (accessor signatures)                     |
+| `{ (x: A): B }`, `{ new (x: A): B }` | same (call and construct signatures)           |
 | `{ [k]: T }` with `k: unique symbol` | same (computed member names)                   |
 | `new (a: A) => T`                    | `нав (а: А) => Т`                              |
 | `abstract new () => T`               | `мавҳум нав () => Т`                           |
@@ -427,6 +428,14 @@ namespace keeps its usual output.
 навъ Самт =
     | "чап"
     | "рост";
+
+интерфейс Формат {
+    (қимат: рақам): сатр;          // call signature: a Формат can be called
+    пешванд: сатр;
+}
+интерфейс Созанда {
+    нав (ном: сатр): { ном: сатр }; // construct signature: `нав с("…")`
+}
 
 функсия сатрАст(х: ношинос): х аст сатр {
     бозгашт навъи х === "string";

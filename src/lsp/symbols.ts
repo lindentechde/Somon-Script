@@ -402,6 +402,8 @@ class SymbolCollector {
     const declaration = this.declare(node.name as AnyNode, 'interface', [this.offsetOf(node), end]);
     this.withContainer(declaration, () => {
       for (const property of ((node.body as AnyNode).properties as AnyNode[]) ?? []) {
+        // Call and construct signatures have no name
+        if (property.signature) continue;
         const kind: DeclarationKind = property.method ? 'method' : 'property';
         this.member(property.key as AnyNode, kind, [
           this.offsetOf(property),

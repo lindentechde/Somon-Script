@@ -528,3 +528,103 @@ describe('English keywords', () => {
     );
   });
 });
+
+describe('call and construct signatures', () => {
+  const declarations = [
+    'интерфейс Формат {',
+    '    (қимат: рақам): сатр;',
+    '    пешванд: сатр;',
+    '}',
+    'интерфейс Нуқта { х: рақам; }',
+    'интерфейс СозандаиНуқта {',
+    '    нав (х: рақам): Нуқта;',
+    '}',
+    'навъ Ҷамъ = { (а: рақам, б: рақам): рақам };',
+    'навъ Ҳамон = { <Т>(қимат: Т): Т };',
+    'интерфейс Дубора {',
+    '    (х: рақам): рақам;',
+    '    (х: сатр): сатр;',
+    '}',
+    'интерфейс ФорматиДароз мерос Формат { дарозӣ: рақам; }',
+  ];
+
+  test('make interfaces and object types callable and constructable', async () => {
+    expect(
+      await run(
+        [
+          ...declarations,
+          'функсия формат(пешванд: сатр): Формат {',
+          '    бозгашт Object.assign((қимат: рақам) => `${пешванд}${қимат}`, { пешванд });',
+          '}',
+          'синф НуқтаиОддӣ татбиқ Нуқта {',
+          '    конструктор(ҷамъиятӣ х: рақам) {}',
+          '}',
+          'функсия соз(созанда: СозандаиНуқта, х: рақам): Нуқта {',
+          '    бозгашт нав созанда(х);',
+          '}',
+          'собит ф = формат("#");',
+          'собит ҷамъ: Ҷамъ = (а, б) => а + б;',
+          'собит ҳамон: Ҳамон = қимат => қимат;',
+          'собит дубора = ((х: ҳар) => х + х) чун Дубора;',
+          'собит н: сатр = ф(5);',
+          'чоп.сабт(н, ф.пешванд, ҷамъ(2, 3), ҳамон("ҳамон"), ҳамон<рақам>(7), соз(НуқтаиОддӣ, 4).х);',
+          'чоп.сабт(дубора(2), дубора("а"));',
+        ].join('\n')
+      )
+    ).toEqual(['#5 # 5 ҳамон 7 4', '4 аа']);
+  });
+
+  test('calls are checked against them, and only matching values are accepted', () => {
+    const source = (...lines: string[]): string => [...declarations, ...lines].join('\n');
+    expect(check(source('собит ҷ: Ҷамъ = (а, б) => а + б;', 'собит н: рақам = ҷ(1, 2);'))).toEqual(
+      []
+    );
+    expect(check(source('собит ҷ: Ҷамъ = (а, б) => а + б;', 'собит с: сатр = ҷ(1, 2);'))).toEqual([
+      "TYPE_NOT_ASSIGNABLE 17:17 Type 'рақам' is not assignable to type 'сатр'",
+    ]);
+    expect(check(source('собит ҷ: Ҷамъ = (а, б) => а + б;', 'ҷ(1);'))[0]).toContain(
+      'ARGUMENT_COUNT_MISMATCH'
+    );
+    expect(check(source('собит д: Дубора = (х: ҳар) => х;', 'д(дуруст);'))[0]).toContain(
+      'NO_MATCHING_OVERLOAD'
+    );
+    // `Формат` also needs `пешванд`; a type without a call signature is not callable
+    expect(check(source('собит ф: Формат = (қ: рақам) => "";'))[0]).toContain(
+      'TYPE_NOT_ASSIGNABLE'
+    );
+    expect(check(source('собит ф: Ҷамъ = { х: 1 };'))[0]).toContain('TYPE_NOT_ASSIGNABLE');
+    expect(
+      check(
+        source(
+          'синф Н { конструктор(ҷамъиятӣ х: рақам) {} }',
+          'собит с: СозандаиНуқта = Н;',
+          'собит н: сатр = нав с(1);'
+        )
+      )
+    ).toEqual(["TYPE_NOT_ASSIGNABLE 18:17 Type 'Нуқта' is not assignable to type 'сатр'"]);
+    expect(
+      check(source('функсия ф(ф: ФорматиДароз): сатр { бозгашт ф(1) + ф.пешванд + ф.дарозӣ; }'))
+    ).toEqual([]);
+  });
+
+  test('the TypeScript emitter prints them', () => {
+    expect(
+      typescriptOf(
+        'интерфейс И { (х: рақам): сатр; нав (х: сатр): И; <Т>(х: Т, у?: Т): Т; ном: сатр; }\nнавъ Т = { (ин: И): беджавоб };'
+      )
+    ).toBe(
+      'interface И {\n  (х: number): string;\n  new (х: string): И;\n  <Т>(х: Т, у?: Т): Т;\n  ном: string;\n}\ntype Т = { (this: И): void };'
+    );
+  });
+
+  test('`нав` is a construct signature only before `(` or `<`', () => {
+    const [iface] = parseOk('интерфейс И { нав: рақам; нав?(): рақам; нав(): И; }') as Array<{
+      body: { properties: Array<{ signature?: string; key: { name: string } }> };
+    }>;
+    expect(iface.body.properties.map(property => property.signature ?? property.key.name)).toEqual([
+      'нав',
+      'нав',
+      'construct',
+    ]);
+  });
+});

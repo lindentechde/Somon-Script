@@ -5352,6 +5352,51 @@ export class Parser {
     return { ...signature, computed: true, computedKey };
   }
 
+  /**
+   * A call signature `<Т>(х: Т): Т;` or construct signature `нав (х: рақам): К;`
+   * of an interface or object type, after `нав`: a member named
+   * `__call__` / `__new__` whose type is the function or constructor type. A
+   * missing return type is `ҳар`, as in TypeScript.
+   */
+  private parseCallSignature(kind: 'call' | 'construct', start: Token): PropertySignature {
+    const typeParameters = this.parseTypeParametersOrSkip();
+    this.checkTypeParameterModifiers(typeParameters, 'function');
+    const open = this.consume(TokenType.LEFT_PAREN, "Expected '(' in a call signature");
+    const { params: parameters, thisType } = this.parseParametersWithThis(
+      "Expected ')' after signature parameters"
+    );
+    const returnType: TypeNode = this.match(TokenType.COLON)
+      ? this.parseReturnType()
+      : ({ type: 'PrimitiveType', name: 'ҳар', line: open.line, column: open.column } as TypeNode);
+    this.consumeMemberSeparator("Expected ';' after a signature");
+    const position = { line: start.line, column: start.column };
+    const signatureType: FunctionType | ConstructorType =
+      kind === 'call'
+        ? {
+            type: 'FunctionType',
+            parameters,
+            returnType,
+            ...(thisType && { thisType: thisType.typeAnnotation }),
+            ...position,
+          }
+        : { type: 'ConstructorType', parameters, returnType, ...position };
+    return {
+      type: 'PropertySignature',
+      // The placeholder name sits at the `(`: `нав` stays a keyword for the formatter
+      key: {
+        type: 'Identifier',
+        name: kind === 'call' ? '__call__' : '__new__',
+        line: open.line,
+        column: open.column,
+      },
+      typeAnnotation: { type: 'TypeAnnotation', typeAnnotation: signatureType, ...position },
+      optional: false,
+      signature: kind,
+      ...(typeParameters && { typeParameters }),
+      ...position,
+    };
+  }
+
   /** `get ном(): Т;` / `set ном(қ: Т);`: a property, read-only with a getter alone. */
   private parseAccessorSignature(accessor: 'get' | 'set', keyName: Token): PropertySignature {
     this.consume(TokenType.LEFT_PAREN, `Expected '(' after the name of a '${accessor}' accessor`);
@@ -5453,6 +5498,18 @@ export class Parser {
     this.skipTypeMemberModifiers();
     // `танҳохонӣ ном: Т;` — a member may itself be named `танҳохонӣ`
     const readonly = this.check(TokenType.ТАНҲОХОНӢ) && this.modifierApplies() && !!this.advance();
+
+    // Call and construct signatures: `(х: рақам): сатр;`, `нав (х: рақам): К;`
+    if (this.check(TokenType.LEFT_PAREN) || this.check(TokenType.LESS_THAN)) {
+      return this.parseCallSignature('call', this.peek());
+    }
+    const afterNew = this.peekNext()?.type;
+    if (
+      this.check(TokenType.НАВ) &&
+      (afterNew === TokenType.LEFT_PAREN || afterNew === TokenType.LESS_THAN)
+    ) {
+      return this.parseCallSignature('construct', this.advance());
+    }
 
     // Index signatures `[калид: сатр]: Т;`
     if (this.isIndexSignatureStart()) {

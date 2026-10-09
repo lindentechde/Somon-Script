@@ -182,6 +182,8 @@ export interface Type {
   minLength?: number; // Tuples: elements before the first optional one (`[рақам, сатр?]` → 1)
   restType?: Type; // Tuples: element type of a trailing rest element (`[рақам, ...сатр[]]`)
   predicate?: PredicateInfo; // Functions returning `х аст Т` or asserting `тасдиқ х [аст Т]`
+  callSignatures?: Type[]; // Interfaces and object types with `(х: рақам): сатр;`: how calls are checked
+  constructSignatures?: Type[]; // … with `нав (х: рақам): К;`: what `нав` creates
   overloads?: Type[]; // Overload signatures (`функсия ф(х: рақам): рақам;`): what calls are checked against
   typeOnly?: boolean; // A name imported with `ворид навъ`: not usable as a value
   abstract?: boolean; // `мавҳум синф`: `нав` cannot create instances
@@ -1202,6 +1204,8 @@ export class TypeChecker {
         if (!properties.has(key)) properties.set(key, prop);
       }
       interfaceType.indexType ??= parent.indexType;
+      interfaceType.callSignatures ??= parent.callSignatures?.slice();
+      interfaceType.constructSignatures ??= parent.constructSignatures?.slice();
       interfaceType.open ||= parent.open || !['interface', 'object', 'class'].includes(parent.kind);
     }
 
@@ -1257,6 +1261,15 @@ export class TypeChecker {
       const type = this.withTypeParameters(prop.typeParameters, () =>
         this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
       );
+      if (prop.signature) {
+        // `(х: рақам): сатр;`, `нав (х: рақам): К;`: the type is callable or constructable
+        const signatures =
+          prop.signature === 'call'
+            ? (target.callSignatures ??= [])
+            : (target.constructSignatures ??= []);
+        signatures.push(type);
+        continue;
+      }
       const name = TypeChecker.signatureName(prop);
       if (name === INDEX_SIGNATURE_KEY) {
         target.indexType = type;
@@ -3618,7 +3631,7 @@ export class TypeChecker {
     const callee = callExpr.callee;
     // Route identifiers through inferIdentifierType so undefined callees
     // produce a single UndefinedIdentifier diagnostic.
-    const functionType = callee ? this.inferExpressionType(callee) : UNKNOWN;
+    const functionType = this.callableType(callee ? this.inferExpressionType(callee) : UNKNOWN);
     this.calleeTypes.set(callExpr, functionType);
     if (functionType.kind === 'function' && !this.isOptionalChain(callExpr)) {
       if (functionType.overloads) return this.inferOverloadedCall(callExpr, functionType);
@@ -3628,6 +3641,23 @@ export class TypeChecker {
     // Still evaluate args so nested undefined identifiers are flagged.
     callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
     return UNKNOWN;
+  }
+
+  /**
+   * The function type a call of a value of `type` is checked against: its
+   * call signatures (`интерфейс Ф { (х: рақам): сатр; }`, overloads when
+   * there are several) or the type itself.
+   */
+  private callableType(type: Type): Type {
+    const signatures = type.kind === 'function' ? undefined : type.callSignatures;
+    if (!signatures || signatures.length === 0) return type;
+    return signatures.length === 1 ? signatures[0] : { ...signatures[0], overloads: signatures };
+  }
+
+  /** What `нав` of a value of `type` creates, by its construct signature. */
+  private constructedType(type: Type | undefined): Type | undefined {
+    const signature = type?.constructSignatures?.[0];
+    return signature ? (signature.returnType ?? UNKNOWN) : undefined;
   }
 
   /**
@@ -3787,10 +3817,15 @@ export class TypeChecker {
       }
       // A value of a constructor type: `нав (а: рақам) => Т`
       if (classType?.kind === 'constructor') return classType.returnType ?? UNKNOWN;
+      // A value of a type with a construct signature: `{ нав (а: рақам): Т }`
+      const constructed = this.constructedType(classType);
+      if (constructed) return constructed;
     } else if (newExpr.callee) {
       // `нав (синф { … })()` constructs an instance of the class
       const calleeType = this.inferExpressionType(newExpr.callee);
       if (calleeType.kind === 'class') return calleeType;
+      const constructed = this.constructedType(calleeType);
+      if (constructed) return constructed;
     }
     return UNKNOWN;
   }
@@ -4508,7 +4543,11 @@ export class TypeChecker {
       this.isClassAssignable(source, target) ||
       this.isUniqueAssignable(source, target) ||
       // A class (or a function) is a value of a constructor type
-      (target.kind === 'constructor' && ['class', 'constructor', 'function'].includes(source.kind))
+      (target.kind === 'constructor' &&
+        ['class', 'constructor', 'function'].includes(source.kind)) ||
+      // A value with call signatures is a function
+      (target.kind === 'function' && Boolean(source.callSignatures?.length)) ||
+      (target.kind === 'constructor' && Boolean(source.constructSignatures?.length))
     );
   }
 
@@ -4679,10 +4718,28 @@ export class TypeChecker {
     if (target.kind !== 'interface' && target.kind !== 'object') {
       return false;
     }
+    if (this.isSignatureAssignable(source, target)) return true;
     if (['interface', 'object', 'class'].includes(source.kind)) {
+      // A type with call signatures needs a callable value
+      if (target.callSignatures?.length && !source.callSignatures?.length) return false;
       return this.isStructurallyCompatible(source, target);
     }
     return false;
+  }
+
+  /**
+   * A function is a value of a type with call signatures, and a class (or a
+   * constructor) one of a type with construct signatures, when the type's
+   * other members are optional; signatures are not compared, like functions.
+   */
+  private isSignatureAssignable(source: Type, target: Type): boolean {
+    const callable = source.kind === 'function' && Boolean(target.callSignatures?.length);
+    const constructable =
+      (source.kind === 'class' || source.kind === 'constructor') &&
+      Boolean(target.constructSignatures?.length);
+    if (constructable) return true;
+    if (!callable) return false;
+    return [...this.getAllProperties(target).values()].every(property => property.optional);
   }
 
   /**

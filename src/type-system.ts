@@ -75,6 +75,13 @@ export interface PropertySignature extends ASTNode {
    */
   kind?: 'get' | 'set';
   /**
+   * A call signature `(х: рақам): сатр;` or construct signature
+   * `нав (х: рақам): К;`: `key` is the placeholder `__call__` / `__new__`,
+   * `typeAnnotation` the function or constructor type and `typeParameters`
+   * its own type parameters.
+   */
+  signature?: 'call' | 'construct';
+  /**
    * A computed name, `[калид]: Т;`, known only at run time: `key` is a
    * placeholder and `computedKey` the expression.
    */
