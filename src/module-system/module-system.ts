@@ -1419,10 +1419,8 @@ export class ModuleSystem {
       // A shebang is only valid on the bundle's first line; its line stays, empty
       const code = moduleData.code.replace(/^#![^\n\r]*/, '');
       const rewritten = this.rewriteRequiresForModule(moduleId, code, context);
-      const key = moduleIdMapping.get(moduleId);
-      if (!key) {
-        continue;
-      }
+      // The mapping has a key for every module of the result
+      const key = moduleIdMapping.get(moduleId)!;
       modules.push({ id: moduleId, key, ...rewritten, map: moduleData.map });
     }
 
