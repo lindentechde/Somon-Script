@@ -58,7 +58,7 @@ export class ModuleRegistry {
     };
 
     this.modules.set(module.id, metadata);
-    this.updateDependencyGraph(module.id, module.dependencies);
+    this.updateDependencyGraph(module.id, module.dependencies, module.resolvedDependencies);
   }
 
   /**
@@ -106,7 +106,8 @@ export class ModuleRegistry {
   }
 
   /**
-   * Get topological sort of modules
+   * Get topological sort of modules (dependencies first). Back edges of circular
+   * dependencies are skipped; use findCircularDependencies() to report cycles.
    */
   getTopologicalSort(): string[] {
     const visited = new Set<string>();
@@ -114,10 +115,7 @@ export class ModuleRegistry {
     const result: string[] = [];
 
     const visit = (moduleId: string) => {
-      if (visited.has(moduleId)) return;
-      if (visiting.has(moduleId)) {
-        throw new Error(`Circular dependency detected: ${moduleId}`);
-      }
+      if (visited.has(moduleId) || visiting.has(moduleId)) return;
 
       visiting.add(moduleId);
       const deps = this.getResolvedDependencies(moduleId);
@@ -233,27 +231,39 @@ export class ModuleRegistry {
     return removed;
   }
 
-  private updateDependencyGraph(moduleId: string, dependencies: string[]): void {
-    // Resolve raw dependency specifiers to module IDs
-    const module = this.modules.get(moduleId);
-    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
-
-    const resolvedDeps: string[] = [];
-    for (const dep of dependencies) {
-      // Try to resolve the raw specifier to a module ID
-      const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
-      if (resolvedDepId) {
-        resolvedDeps.push(resolvedDepId);
-      } else {
-        // Keep raw specifier if we can't resolve it yet
-        resolvedDeps.push(dep);
+  private updateDependencyGraph(
+    moduleId: string,
+    dependencies: string[],
+    resolvedDependencies?: string[]
+  ): void {
+    // Prefer the ids the loader resolved; fall back to matching registered modules
+    // for hand-built LoadedModule objects. Unresolvable specifiers are not added.
+    let resolvedDeps: string[];
+    if (resolvedDependencies) {
+      resolvedDeps = [...resolvedDependencies];
+    } else {
+      const module = this.modules.get(moduleId);
+      const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+      resolvedDeps = [];
+      for (const dep of dependencies) {
+        const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
+        if (resolvedDepId) {
+          resolvedDeps.push(resolvedDepId);
+        }
       }
     }
+    resolvedDeps = Array.from(new Set(resolvedDeps));
 
     // Create or update node
     let node = this.dependencyGraph.get(moduleId);
     if (node) {
-      // Update existing node
+      // Update existing node, dropping it from dependencies it no longer has
+      for (const oldDep of node.dependencies) {
+        const oldNode = this.dependencyGraph.get(oldDep);
+        if (oldNode && !resolvedDeps.includes(oldDep)) {
+          oldNode.dependents = oldNode.dependents.filter(id => id !== moduleId);
+        }
+      }
       node.dependencies = resolvedDeps;
     } else {
       // Create new node

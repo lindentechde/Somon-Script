@@ -23,141 +23,172 @@ on:
         default: true
         type: boolean
 
+# Shares the group with automated-release.yml so two releases never interleave
+concurrency:
+  group: release-process
+  cancel-in-progress: false
+
+permissions: {}
+
 jobs:
   manual-release:
     name: Manual Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write # Required for JSR OIDC authentication
-    
+      id-token: write # Required for JSR OIDC authentication and npm provenance
+    # Inputs are only ever read from the environment, never interpolated into scripts.
+    env:
+      VERSION: ${{ inputs.version }}
+      CREATE_TAG: ${{ inputs.create_tag }}
+      PUBLISH_NPM: ${{ inputs.publish_npm }}
+      PUBLISH_JSR: ${{ inputs.publish_jsr }}
+      PACKAGE_NAME: '@lindentech/somon-script'
+      JSR_PACKAGE: '@lindentechde/somon-script'
+
+    # Order: validate → build/test → publish npm → publish JSR → commit/tag →
+    # GitHub release. Every publish/commit/tag step skips work that already
+    # happened, so a failed run can simply be re-run with the same version.
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
-        
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-        cache: 'npm'
-        registry-url: 'https://registry.npmjs.org'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Update version in package.json
-      run: |
-        echo "Updating version to ${{ inputs.version }}"
-        npm version ${{ inputs.version }} --no-git-tag-version
-        
-    - name: Build and test
-      run: |
-        npm run build
-        npm run test:ci
-        
-    - name: Create package
-      run: npm pack
-      
-    - name: Commit version update
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add package.json package-lock.json jsr.json
-        git commit -m "chore: bump version to ${{ inputs.version }}"
-        git push
-        
-    - name: Create and push tag
-      if: inputs.create_tag == true
-      run: |
-        git tag v${{ inputs.version }}
-        git push origin v${{ inputs.version }}
-        
-    - name: Update JSR version
-      if: inputs.publish_jsr == true
-      run: |
-        if [ -f "jsr.json" ]; then
-          echo "Updating JSR version to ${{ inputs.version }}"
-          node -e "
-            const jsr = require('./jsr.json');
-            jsr.version = '${{ inputs.version }}';
-            require('fs').writeFileSync('jsr.json', JSON.stringify(jsr, null, 2));
-          "
-          git add jsr.json
+      - name: Validate version input
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version '$VERSION' (expected MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Branch tip rather than the triggering SHA, so a re-run sees an
+          # already pushed version commit instead of conflicting with it.
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version in package.json and jsr.json
+        run: |
+          echo "Updating version to $VERSION"
+          # The npm `version` lifecycle script syncs jsr.json.
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Build and test
+        run: npm run test:ci
+
+      # Packed outside the checkout: `npm publish` rebuilds via prepublishOnly,
+      # and the clean step of that build deletes *.tgz from the repository root.
+      - name: Create package
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          npm pack --pack-destination "$RUNNER_TEMP/package"
+
+      - name: Publish to NPM
+        if: env.PUBLISH_NPM == 'true'
+        run: |
+          if npm view "${PACKAGE_NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "${PACKAGE_NAME}@${VERSION} is already on npm, skipping publish"
+          else
+            npm publish --access public --provenance
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to JSR
+        if: env.PUBLISH_JSR == 'true'
+        run: |
+          if curl -fsS "https://jsr.io/${JSR_PACKAGE}/meta.json" | jq -e --arg v "$VERSION" '.versions[$v]' >/dev/null 2>&1; then
+            echo "${JSR_PACKAGE}@${VERSION} is already on JSR, skipping publish"
+          else
+            # `npm version` has modified the version files, which are committed
+            # only after publishing; without --allow-dirty JSR refuses the tree.
+            npx jsr publish --allow-dirty
+          fi
+
+      - name: Commit version update
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add package.json package-lock.json jsr.json
           if git diff --cached --quiet; then
-            echo "JSR version already aligned with package.json"
+            echo "Version files already at $VERSION, nothing to commit"
           else
-            git commit --amend --no-edit
-            git push --force-with-lease
-          fi
-        fi
-        
-    - name: Publish to NPM
-      if: inputs.publish_npm == true
-      run: |
-        echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
-        npm publish --access public
-      env:
-        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        
-    - name: Publish to JSR
-      if: inputs.publish_jsr == true
-      run: |
-        git status --short
-        npx jsr publish
-
-    - name: Generate changelog
-      id: release_notes
-      run: |
-        NOTES="$RUNNER_TEMP/release_notes.md"
-        {
-          echo "## 🎉 SomonScript v${{ inputs.version }}";
-          echo "";
-          echo "### ✨ What's New";
-          echo "";
-
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "");
-          if [ -n "$LAST_TAG" ]; then
-            echo "Changes since $LAST_TAG:";
-            git log --pretty=format:"- %s" "$LAST_TAG"..HEAD^;
-          else
-            echo "- Manual release v${{ inputs.version }}";
+            git commit -m "chore: bump version to $VERSION"
+            git push
           fi
 
-          echo "";
-          echo "### 📦 Installation";
-          echo '```bash';
-          echo 'npm install -g @lindentech/somon-script';
-          echo '```';
-        } > "$NOTES"
-        echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+      - name: Create and push tag
+        if: env.CREATE_TAG == 'true'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists, skipping"
+          else
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git push origin "v$VERSION"
+          fi
 
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ inputs.version }}
-        name: "SomonScript v${{ inputs.version }}"
-        body_path: ${{ steps.release_notes.outputs.path }}
-        files: |
-          *.tgz
-        draft: false
-        prerelease: false
+      - name: Generate changelog
+        id: release_notes
+        run: |
+          NOTES="$RUNNER_TEMP/release_notes.md"
+          {
+            echo "## 🎉 SomonScript v${VERSION}";
+            echo "";
+            echo "### ✨ What's New";
+            echo "";
 
-    - name: Summary
-      run: |
-        echo "🎉 Manual Release v${{ inputs.version }} completed!"
-        echo "✅ Version metadata committed"
-        echo "✅ Git tag created: v${{ inputs.version }}"
-        echo "✅ GitHub release created"
-        if [ "${{ inputs.publish_npm }}" == "true" ]; then
-          echo "✅ NPM package published"
-        else
-          echo "⏸️ NPM publish skipped"
-        fi
-        if [ "${{ inputs.publish_jsr }}" == "true" ]; then
-          echo "✅ JSR package published"
-        else
-          echo "⏸️ JSR publish skipped"
-        fi
+            # Previous release tag, ignoring the tag of this release if it already exists
+            LAST_TAG=$(git describe --tags --abbrev=0 --exclude "v${VERSION}" HEAD 2>/dev/null || echo "");
+            if [ -n "$LAST_TAG" ]; then
+              echo "Changes since $LAST_TAG:";
+              git log --pretty=format:"- %s" "$LAST_TAG"..HEAD;
+            else
+              echo "- Manual release v${VERSION}";
+            fi
+
+            echo "";
+            echo "### 📦 Installation";
+            echo '```bash';
+            echo 'npm install -g @lindentech/somon-script';
+            echo '```';
+          } > "$NOTES"
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: 'SomonScript v${{ env.VERSION }}'
+          body_path: ${{ steps.release_notes.outputs.path }}
+          files: |
+            ${{ runner.temp }}/package/*.tgz
+          draft: false
+          prerelease: false
+
+      - name: Summary
+        run: |
+          echo "🎉 Manual Release v${VERSION} completed!"
+          echo "✅ Version metadata committed"
+          if [ "$CREATE_TAG" == "true" ]; then
+            echo "✅ Git tag created: v${VERSION}"
+          fi
+          echo "✅ GitHub release created"
+          if [ "$PUBLISH_NPM" == "true" ]; then
+            echo "✅ NPM package published"
+          else
+            echo "⏸️ NPM publish skipped"
+          fi
+          if [ "$PUBLISH_JSR" == "true" ]; then
+            echo "✅ JSR package published"
+          else
+            echo "⏸️ JSR publish skipped"
+          fi

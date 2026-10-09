@@ -74,6 +74,16 @@ describe('SomonScript Examples - Comprehensive Tests', () => {
     return developmentFeatures.some(feature => source.includes(feature));
   }
 
+  describe('Every example parses', () => {
+    // Parse errors are fatal, so a top-level example must never contain one
+    const topLevelExamples = exampleFiles.filter(f => !f.includes(path.sep) && !f.includes('/'));
+    test.each(topLevelExamples)('%s has no parse errors', exampleFile => {
+      const source = fs.readFileSync(path.join(examplesDir, exampleFile), 'utf-8');
+      const result = compile(source);
+      expect(result.errors.filter(error => !error.startsWith('Type error'))).toEqual([]);
+    });
+  });
+
   describe('Basic Examples (01-09)', () => {
     test.each(basicExamples)('should compile %s', exampleFile => {
       const filePath = path.join(examplesDir, exampleFile);

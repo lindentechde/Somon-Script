@@ -1,15 +1,14 @@
 # Module System
 
-SomonScript includes a production-ready module system with resolution, loading,
-registration, validation, bundling, and comprehensive production features for
-enterprise deployments.
+SomonScript includes a module system with resolution, loading, registration,
+validation and CommonJS bundling.
 
 ## Overview
 
 - Resolver: resolves specifiers to absolute file paths (`.som`, `.js`, `.json`,
   directories with `index.*`, and `node_modules`).
 - Loader: reads and parses modules, extracts dependencies, caches modules, and
-  handles circular references.
+  handles circular references according to `circularDependencyStrategy`.
 - Registry: stores module metadata and provides a resolved dependency graph,
   topological ordering, statistics, and cycle detection.
 - System: high-level API to load/compile/bundle/validate modules.
@@ -32,7 +31,23 @@ Notes:
 
 - `fromFile` may be a file path or a directory path; the resolver infers the
   proper base.
-- Supports path mapping (`paths`) and `node_modules` with `package.json#main`.
+- A relative `fromFile` is resolved against the current working directory.
+- Supports path mapping (`paths`) and `node_modules` packages. For packages,
+  `package.json#exports` is used when present, like Node's `require()`: a
+  string, `"."` and subpath keys (including `"./dir/*"` patterns) and the
+  `require`, `node` and `default` conditions. A subpath that is not exported is
+  an error. Without `exports`, `main` and then `index.*` are used.
+
+Containment policy:
+
+- Relative imports (`./`, `../`, any depth) and OS-absolute paths (`/home/…`,
+  `/tmp/…`, `C:\…`, or anything inside `baseUrl`) are allowed and not confined —
+  SomonScript sources are trusted code.
+- Project-relative absolute imports (`/lib/utils`) resolve against `baseUrl` and
+  must stay inside it; `paths` mappings and a package's `main`/`exports` targets
+  must stay inside `baseUrl` / the package directory. These checks follow
+  symlinks.
+- Bare specifiers (`pkg/sub`) must not contain `..` segments.
 
 ## Loader
 
@@ -46,11 +61,20 @@ const mod = loader.loadSync('./main.som', '/project/src');
 
 Behavior:
 
-- Parses `.som` files and extracts `ImportDeclaration` dependencies.
-- Caches in-memory; re-entrant loads warn/error/ignore on cycles per
-  configuration.
-- Parser errors throw with context; partially loaded modules are exposed via
-  cache.
+- Parses `.som` files and extracts dependencies from imports and re-exports.
+  Local `.js` files contribute their static relative `require('./x')` calls;
+  `.json` files are validated.
+- `module.dependencies` holds the specifiers as written,
+  `module.resolvedDependencies` the module ids they resolved to.
+- Caches in-memory. A cache hit is re-validated against the file's mtime and
+  size (and those of its dependencies); `invalidate(path)` evicts a module and
+  everything that imports it. `maxCacheSize`/`maxCacheMemory` are enforced
+  between loads and never evict a module that the load just completed needs.
+- Re-entrant loads warn/error/ignore on cycles per configuration.
+- Failures throw a `ModuleLoadError` with `filePath` (the broken file, or the
+  importer whose specifier failed), `line`/`column`, `importer` and `specifier`.
+  Invalid specifiers (empty, longer than 500 characters, containing a backslash)
+  are errors.
 
 ## Registry
 
@@ -65,8 +89,10 @@ const stats = registry.getStatistics();
 
 Behavior:
 
-- Keeps original specifiers in metadata for UX, but resolves to absolute IDs for
-  graph traversal.
+- Keeps original specifiers in metadata for UX; the graph uses the module ids
+  the loader resolved.
+- `getTopologicalSort()` orders dependencies first and skips the back edges of
+  cycles; `findCircularDependencies()` reports them.
 - Provides dependents, entry points, dead-code candidates, and dependency trees.
 
 ## System (High-Level API)
@@ -86,18 +112,44 @@ Compilation:
 
 - `compile(entry)` loads dependencies, registers modules, topologically orders
   them, and codegens to JS per module.
+- Errors are returned in `errors` (and not logged): each has the `filePath` it
+  is in, `line`/`column`, and for loading errors the `importer` and `specifier`.
+- Circular dependencies follow `loading.circularDependencyStrategy`: `'warn'`
+  (default) compiles and adds one warning, `'ignore'` compiles silently,
+  `'error'` fails. Cyclic modules behave like CommonJS cycles at runtime: a
+  namespace import (`ворид * чун М аз …`) sees bindings once the other module
+  has finished, a named import taken during the cycle may be `undefined`.
+- `invalidate(path)` drops a changed file and its dependents from the caches;
+  `watch()` does this automatically for every change (new files clear the whole
+  cache, since they can change how specifiers resolve).
 
 Bundling:
 
 - CommonJS: produces a self-contained module map + simple loader, then executes
   the entry (currently the only supported bundle target).
+- Local `.js` dependencies are included verbatim (their relative requires are
+  rewritten too) and `.json` dependencies as `module.exports = <json>`. Packages
+  from `node_modules` and `externals` stay `require()` calls resolved by the
+  host at runtime, relative to the bundle file. A relative `require()` in a
+  local `.js` file that does not resolve at build time (an optional dependency
+  in `try`/`catch`, say) is left to the runtime as well; requires in comments
+  are ignored.
+- Bundles are relocatable: they contain no absolute paths of the build machine,
+  and every bundled module sees the bundle file's `__filename` and `__dirname`.
+  `somon run` instead bundles with `modulePaths: true`: each module gets its
+  original absolute path as `__filename`/`__dirname`, and requires that are not
+  bundled (packages, optional or `.cjs` files, `require.resolve`) resolve from
+  that module's own location, as under plain Node. Such a bundle only works on
+  the machine that built it.
+- `minify` (or `compilerOptions.minify`) minifies the finished bundle once.
 - Internal require rewrite maps `require("./x")` or compiled `require("./x.js")`
   to the correct module map entry (`.js` is mapped back to `.som` internally
   when needed).
-- Source maps emitted from bundles use module IDs relative to the entry
-  directory so build paths remain private. Opt in to embedding original
-  SomonScript text by setting `inlineSources: true` (or `--inline-sources` in
-  the CLI) when generating bundles.
+- Source maps emitted from bundles name sources by relative paths so build paths
+  remain private: relative to the map file when `outputPath` is given (as the
+  CLI does), otherwise relative to the entry directory. Opt in to embedding
+  original SomonScript text by setting `inlineSources: true` (or
+  `--inline-sources` in the CLI) when generating bundles.
 
 ## Dynamic Imports
 
@@ -121,100 +173,24 @@ const bundle = await ms.bundle({
 `validate()` returns `{ isValid, errors }` where errors include cycles and
 missing dependencies detected via resolution from each registered module.
 
-## Production Features
+## Graceful Shutdown
 
-The module system includes enterprise-grade production capabilities:
-
-### Circuit Breakers
-
-Automatic fault isolation protects against cascading failures:
+`shutdown()` stops all watchers created with `watch()`:
 
 ```ts
-const ms = new ModuleSystem({
-  circuitBreakers: true,
-  circuitBreakerOptions: {
-    failureThreshold: 5,
-    recoveryTimeout: 30000,
-    halfOpenMaxAttempts: 3,
-  },
-});
-```
-
-### Resource Management
-
-Prevent resource exhaustion with configurable limits:
-
-```ts
-const ms = new ModuleSystem({
-  resourceLimits: {
-    maxMemory: 512, // MB
-    maxModules: 1000,
-    maxCacheSize: 100, // MB
-    compilationTimeout: 5000, // ms
-  },
-});
-```
-
-### Operational Visibility
-
-Built-in management server with health checks and metrics:
-
-```bash
-# Start management server
-somon serve --port 8080
-
-# Access endpoints
-curl http://localhost:8080/health   # Health status
-curl http://localhost:8080/metrics  # Prometheus metrics
-curl http://localhost:8080/ready    # Readiness probe
-curl http://localhost:8080/config   # Runtime configuration
-```
-
-### Prometheus Metrics
-
-Export module system metrics in Prometheus format:
-
-- `somon_script_modules_loaded` - Number of loaded modules
-- `somon_script_compilation_time_seconds` - Compilation duration
-- `somon_script_cache_hits_total` - Cache hit count
-- `somon_script_cache_misses_total` - Cache miss count
-- `somon_script_errors_total` - Error count by type
-- `somon_script_circuit_breaker_state` - Circuit breaker states
-
-### Structured Logging
-
-Production-ready logging with JSON format:
-
-```ts
-const ms = new ModuleSystem({
-  logger: true,
-  logLevel: 'info', // debug, info, warn, error
-});
-```
-
-### Graceful Shutdown
-
-Proper cleanup and connection draining:
-
-```ts
-// Handle shutdown signals
 process.on('SIGTERM', async () => {
   await ms.shutdown();
   process.exit(0);
 });
 ```
 
-### Production Mode
+## Timeout helpers
 
-Enable all production features with a single flag:
-
-```bash
-# CLI production mode
-somon compile app.som --production
-NODE_ENV=production somon run app.som
-
-# Programmatic API
-const ms = new ModuleSystem({
-  production: true // Enables metrics, circuit breakers, logging, etc.
-});
-```
+`withTimeout`, `createTimeoutWrapper` and `allWithTimeout` (exported from the
+package) stop _waiting_ for a promise after a deadline and reject with a
+`TimeoutError`. They cannot cancel the underlying work: a timed-out operation
+keeps running, and synchronous (blocking) work cannot be interrupted at all
+because the timer only fires once the event loop is free. `allWithTimeout`
+rejects with `AggregateTimeoutError` only when every failure was a timeout;
+otherwise it rejects with a standard `AggregateError` holding the original
+errors.

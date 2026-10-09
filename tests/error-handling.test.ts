@@ -24,7 +24,7 @@ describe('Error Handling Tests', () => {
     });
 
     test('should handle invalid numbers', () => {
-      const invalidNumber = 'тағйирёбанда рақам = 123.456.789;';
+      const invalidNumber = 'тағйирёбанда рақам = 123_.456;';
       const lexer = new Lexer(invalidNumber);
 
       expect(() => {
@@ -59,7 +59,8 @@ describe('Error Handling Tests', () => {
     });
 
     test('should handle missing semicolons', () => {
-      const missingSemicolon = 'тағйирёбанда ном = "test"';
+      // A line break, '}' or the end of input ends a statement; two on one line do not
+      const missingSemicolon = 'тағйирёбанда ном = "test" чоп.сабт(ном);';
       const lexer = new Lexer(missingSemicolon);
       const tokens = lexer.tokenize();
       const parser = new Parser(tokens);
@@ -374,5 +375,20 @@ describe('Error Handling Tests', () => {
       );
       expect(argErrors).toEqual([]);
     });
+  });
+});
+
+describe('Compiler: parse errors are fatal', () => {
+  test('compile() emits no code when parsing fails', () => {
+    const result = compile('тағ а = 1;\nчоп.сабт(а б);\nчоп.сабт("ok");');
+    expect(result.code).toBe('');
+    expect(result.errors).toEqual([expect.stringMatching(/^Parse error: .*line 2/)]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  test('also with type checking disabled', () => {
+    const result = compile('тағ а = ;', { typeCheck: false });
+    expect(result.code).toBe('');
+    expect(result.errors).toHaveLength(1);
   });
 });

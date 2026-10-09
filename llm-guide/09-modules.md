@@ -75,5 +75,8 @@
 
 ```som
 ворид { func } аз "./module.som";    // Resolves to ./module.js
+```
+
+```som
 ворид { func } аз "./module";        // Resolves to ./module.js
 ```

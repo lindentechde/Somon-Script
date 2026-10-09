@@ -19,6 +19,7 @@ import {
   UnaryExpression,
   UpdateExpression,
   CallExpression,
+  ChainExpression,
   ArrowFunctionExpression,
   AssignmentExpression,
   MemberExpression,
@@ -42,19 +43,128 @@ import {
   PropertyDefinition,
   SwitchStatement,
   SpreadElement,
-  Property,
   SwitchCase,
   ArrayPattern,
+  AssignmentPattern,
   ObjectPattern,
   PropertyPattern,
   TemplateLiteral,
+  ConditionalExpression,
+  SequenceExpression,
+  Property,
+  RestElement,
 } from './types';
+
+/** Precedence levels of non-binary expressions; binary levels live in `operatorPrecedence`. */
+const PREC = {
+  SEQUENCE: 1,
+  ASSIGNMENT: 2,
+  CONDITIONAL: 3,
+  UNARY: 16,
+  POSTFIX: 17,
+  CALL: 19,
+  PRIMARY: 20,
+} as const;
+
+/** One generated → original position pair recorded by `generateWithMappings`. */
+export interface CodeMapping {
+  generated: { line: number; column: number };
+  original: { line: number; column: number };
+}
+
+const POSITION_MARKER = '\0';
+
+type PatternNode =
+  | Identifier
+  | ArrayPattern
+  | ObjectPattern
+  | AssignmentPattern
+  | SpreadElement
+  | RestElement;
+
+/** Words that are not valid JavaScript identifiers (strict mode, CommonJS output). */
+const JS_RESERVED_WORDS: ReadonlySet<string> = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'null',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'return',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+]);
+
+/** Reserved words that are themselves complete JavaScript expressions. */
+const JS_KEYWORD_EXPRESSIONS: ReadonlySet<string> = new Set([
+  'null',
+  'true',
+  'false',
+  'this',
+  'super',
+]);
+
+const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
+  SequenceExpression: PREC.SEQUENCE,
+  AssignmentExpression: PREC.ASSIGNMENT,
+  ArrowFunctionExpression: PREC.ASSIGNMENT,
+  ConditionalExpression: PREC.CONDITIONAL,
+  UnaryExpression: PREC.UNARY,
+  AwaitExpression: PREC.UNARY,
+  CallExpression: PREC.CALL,
+  MemberExpression: PREC.CALL,
+  NewExpression: PREC.CALL,
+  ImportExpression: PREC.CALL,
+};
 
 export class CodeGenerator {
   private indentLevel: number = 0;
   private readonly indentSize: number = 2;
   private importCounter: number = 0;
   private readonly errors: string[] = [];
+  /** Names declared by the program, innermost scope last (see `withScope`). */
+  private readonly scopes: Set<string>[] = [];
+  /** Enclosing loops and `интихоб` statements of the current function, for `шикастан`/`давом`. */
+  private jumpTargets = { loops: 0, switches: 0 };
+  /** Whether statements are prefixed with position markers (`generateWithMappings`). */
+  private trackPositions = false;
 
   // Static — allocated once for the class, not rebuilt per member expression.
   // O(1) membership test via Set replaces the previous O(n) Array.includes.
@@ -531,16 +641,78 @@ export class CodeGenerator {
     return this.generateProgram(ast);
   }
 
+  /**
+   * Generate code and record, for every emitted statement, where it starts in
+   * the output and in the SomonScript source (`line` 1-based, `column`
+   * 0-based, as in source maps).
+   */
+  generateWithMappings(ast: Program): { code: string; mappings: CodeMapping[] } {
+    this.trackPositions = true;
+    try {
+      return CodeGenerator.extractPositionMarkers(this.generateProgram(ast));
+    } finally {
+      this.trackPositions = false;
+    }
+  }
+
+  /**
+   * Position markers (`\0line,column\0`) are placed in front of statements
+   * while generating, since statement text is still re-indented and spliced
+   * afterwards. NUL never occurs otherwise: literals escape it.
+   */
+  private static extractPositionMarkers(marked: string): {
+    code: string;
+    mappings: CodeMapping[];
+  } {
+    const parts = marked.split(POSITION_MARKER);
+    const mappings: CodeMapping[] = [];
+    let code = '';
+    let line = 1;
+    let column = 0;
+    parts.forEach((part, index) => {
+      if (index % 2 === 1) {
+        const [originalLine, originalColumn] = part.split(',').map(Number);
+        mappings.push({
+          generated: { line, column },
+          original: { line: originalLine, column: originalColumn },
+        });
+        return;
+      }
+      code += part;
+      const lastNewline = part.lastIndexOf('\n');
+      if (lastNewline === -1) {
+        column += part.length;
+      } else {
+        line += part.split('\n').length - 1;
+        column = part.length - lastNewline - 1;
+      }
+    });
+    return { code, mappings };
+  }
+
   private generateProgram(node: Program): string {
-    const statements = node.body
-      .map(stmt => this.generateStatement(stmt))
-      .filter(stmt => stmt.length > 0);
+    this.checkRedeclarations(node.body ?? []);
+    const statements = this.withScope(this.declaredNames(node.body ?? []), () =>
+      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
+    );
 
     return statements.join('\n');
   }
 
-  // eslint-disable-next-line complexity
   private generateStatement(node: Statement): string {
+    const code = this.generateStatementNode(node);
+    if (!this.trackPositions || code.length === 0 || node.type === 'BlockStatement') {
+      return code;
+    }
+    if (typeof node.line !== 'number' || typeof node.column !== 'number') {
+      return code;
+    }
+    const marker = `${POSITION_MARKER}${node.line},${Math.max(node.column - 1, 0)}${POSITION_MARKER}`;
+    return code.replace(/^ */, indentation => indentation + marker);
+  }
+
+  // eslint-disable-next-line complexity
+  private generateStatementNode(node: Statement): string {
     switch (node.type) {
       case 'ImportDeclaration':
         return this.generateImportDeclaration(node as ImportDeclaration);
@@ -557,13 +729,21 @@ export class CodeGenerator {
       case 'IfStatement':
         return this.generateIfStatement(node as IfStatement);
       case 'WhileStatement':
-        return this.generateWhileStatement(node as WhileStatement);
+        return this.withJumpTarget('loops', () =>
+          this.generateWhileStatement(node as WhileStatement)
+        );
       case 'ForStatement':
-        return this.generateForStatement(node as ForStatement);
+        return this.withScope(this.declaredNames([(node as ForStatement).init as Statement]), () =>
+          this.withJumpTarget('loops', () => this.generateForStatement(node as ForStatement))
+        );
       case 'ForInStatement':
-        return this.generateForInStatement(node as ForInStatement);
+        return this.withScope(this.declaredNames([(node as ForInStatement).left]), () =>
+          this.withJumpTarget('loops', () => this.generateForInStatement(node as ForInStatement))
+        );
       case 'ForOfStatement':
-        return this.generateForOfStatement(node as ForOfStatement);
+        return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
+          this.withJumpTarget('loops', () => this.generateForOfStatement(node as ForOfStatement))
+        );
       case 'ExpressionStatement':
         return this.generateExpressionStatement(node as ExpressionStatement);
       case 'TryStatement':
@@ -578,11 +758,29 @@ export class CodeGenerator {
         return this.generateNamespaceDeclaration(node as NamespaceDeclaration);
       case 'ClassDeclaration':
         return this.generateClassDeclaration(node as ClassDeclaration);
-      case 'SwitchStatement':
-        return this.generateSwitchStatement(node as SwitchStatement);
+      case 'SwitchStatement': {
+        // All `ҳолат` arms share one scope
+        const consequents = (node as SwitchStatement).cases.flatMap(c => c.consequent);
+        this.checkRedeclarations(consequents);
+        return this.withScope(this.declaredNames(consequents), () =>
+          this.withJumpTarget('switches', () =>
+            this.generateSwitchStatement(node as SwitchStatement)
+          )
+        );
+      }
       case 'BreakStatement':
+        if (this.jumpTargets.loops + this.jumpTargets.switches === 0) {
+          this.errors.push(
+            `Illegal break statement at line ${node.line}, column ${node.column}: 'шикастан' must be inside a loop or 'интихоб'`
+          );
+        }
         return this.indent('break;');
       case 'ContinueStatement':
+        if (this.jumpTargets.loops === 0) {
+          this.errors.push(
+            `Illegal continue statement at line ${node.line}, column ${node.column}: 'давом' must be inside a loop`
+          );
+        }
         return this.indent('continue;');
       default: {
         const unknown = node as { type?: string };
@@ -595,42 +793,75 @@ export class CodeGenerator {
   private generateVariableDeclaration(node: VariableDeclaration): string {
     const kind = node.kind === 'СОБИТ' ? 'const' : 'let';
     const pattern = this.generatePattern(node.identifier);
-    const init = node.init ? ` = ${this.generateExpression(node.init)}` : '';
+    const init = node.init ? ` = ${this.generateExpression(node.init, PREC.ASSIGNMENT)}` : '';
 
     return this.indent(`${kind} ${pattern}${init};`);
   }
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
-    const async = (node as FunctionDeclaration & { async?: boolean }).async ? 'async ' : '';
-    const name = this.generateIdentifier(node.name);
-
-    // Handle new Parameter type or legacy Identifier type
-    const params = node.params
-      .map(param => {
-        if (param.type === 'Parameter') {
-          const p = param as Parameter;
-          return this.generateIdentifier(p.name);
-        } else {
-          // Legacy Identifier type
-          return this.generateIdentifier((param as Parameter).name);
-        }
-      })
-      .join(', ');
-
-    const body = this.generateBlockStatement(node.body);
+    const async = node.async ? 'async ' : '';
+    const name = this.generateIdentifier(node.name, true);
+    const { params, body } = this.generateFunctionParts(node.params, node.body);
 
     return this.indent(`${async}function ${name}(${params}) ${body}`);
   }
 
-  private generateBlockStatement(node: BlockStatement): string {
+  /**
+   * Parameter list shared by every function form: `а = 1`, `...а` and
+   * destructuring patterns. Legacy ASTs may still use bare Identifiers.
+   */
+  private generateParams(params: Parameter[] | undefined): string {
+    return (params ?? [])
+      .map(param => {
+        if ((param as { type: string }).type === 'Identifier') {
+          return this.generateIdentifier(param as unknown as Identifier, true);
+        }
+        const target = param.pattern
+          ? this.generatePattern(param.pattern)
+          : this.generateIdentifier(param.name, true);
+        const defaultValue = param.defaultValue
+          ? ` = ${this.generateExpression(param.defaultValue, PREC.ASSIGNMENT)}`
+          : '';
+        return `${param.rest ? '...' : ''}${target}${defaultValue}`;
+      })
+      .join(', ');
+  }
+
+  /** Parameter list and body of a function, with the parameters in scope. */
+  private generateFunctionParts(
+    params: Parameter[] | undefined,
+    body: BlockStatement
+  ): { params: string; body: string } {
+    const paramNames = this.paramNames(params);
+    return this.withScope(paramNames, () => ({
+      params: this.generateParams(params),
+      body: this.withFunctionBoundary(() => this.generateBlockStatement(body, [], paramNames)),
+    }));
+  }
+
+  /**
+   * `scopeNames` are bound in the block's scope (a catch parameter); a function
+   * body passes its `paramNames` instead, which it may redeclare as functions.
+   */
+  private generateBlockStatement(
+    node: BlockStatement,
+    scopeNames: string[] = [],
+    paramNames?: string[]
+  ): string {
     if (node.body.length === 0) {
       return '{}';
     }
 
+    if (paramNames) {
+      this.checkRedeclarations(node.body, paramNames, true);
+    } else {
+      this.checkRedeclarations(node.body, scopeNames);
+    }
+
     this.indentLevel++;
-    const statements = node.body
-      .map(stmt => this.generateStatement(stmt))
-      .filter(stmt => stmt.length > 0);
+    const statements = this.withScope([...scopeNames, ...this.declaredNames(node.body)], () =>
+      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
+    );
     this.indentLevel--;
 
     return `{\n${statements.join('\n')}\n${this.getIndent()}}`;
@@ -717,7 +948,7 @@ export class CodeGenerator {
 
   private generateForOfStatement(node: ForOfStatement): string {
     const left = this.generateStatement(node.left).trim().replace(/;$/, '');
-    const right = this.generateExpression(node.right);
+    const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
     const body = this.generateStatement(node.body);
 
     let result = this.indent(`for (${left} of ${right}) `);
@@ -732,46 +963,51 @@ export class CodeGenerator {
   }
 
   private generateExpressionStatement(node: ExpressionStatement): string {
-    const expr = node.expression;
-
-    // Special handling: Skip orphaned method signatures that should not generate executable code
-    // This happens when interface method signatures escape the interface context due to parsing issues
-    if (expr.type === 'CallExpression') {
-      const callExpr = expr as CallExpression;
-
-      // Check if this looks like an orphaned method signature (function call with single parameter
-      // that looks like it should be a type parameter)
-      if (
-        callExpr.callee.type === 'Identifier' &&
-        callExpr.arguments.length === 1 &&
-        callExpr.arguments[0].type === 'Identifier'
-      ) {
-        const calleeName = (callExpr.callee as Identifier).name;
-        const argName = (callExpr.arguments[0] as Identifier).name;
-
-        // Skip if this looks like a method signature pattern
-        // Common patterns: танзим_кардан(нави_қимат), ғайр_танзим(параметр), etc.
-        if (
-          calleeName.includes('_') ||
-          argName.includes('_') ||
-          calleeName.length > 8 ||
-          argName.length > 8
-        ) {
-          return ''; // Skip generating this statement
-        }
-      }
+    let expr = this.generateExpression(node.expression);
+    // A statement starting with these tokens would parse as a block or a declaration
+    if (/^(?:\{|function\b|async\s+function\b|class\b|let\s*\[)/.test(expr)) {
+      expr = `(${expr})`;
     }
-
-    return this.indent(`${this.generateExpression(node.expression)};`);
+    return this.indent(`${expr};`);
   }
 
   // eslint-disable-next-line complexity
-  private generateExpression(node: Expression): string {
+  /**
+   * Generate an expression, wrapping it in parentheses when it binds more
+   * loosely than its context requires. `minPrec` is the lowest precedence
+   * (see `getPrecedence`) the context accepts without parentheses.
+   */
+  private generateExpression(node: Expression, minPrec: number = 0): string {
     // Handle null or undefined node
     if (!node) {
       return '';
     }
 
+    const code = this.generateExpressionNode(node);
+    return this.getPrecedence(node, code) < minPrec ? `(${code})` : code;
+  }
+
+  /**
+   * JavaScript precedence of an expression node: 1 sequence, 2 assignment and
+   * arrow, 3 conditional, 4-15 binary operators (`operatorPrecedence`), 16
+   * prefix unary/await, 17 postfix update, 19 call/member/new, 20 primary.
+   */
+  private getPrecedence(node: Expression, code: string): number {
+    switch (node.type) {
+      case 'BinaryExpression':
+        return this.operatorPrecedence.get((node as BinaryExpression).operator) ?? 0;
+      case 'UpdateExpression':
+        return (node as UpdateExpression).prefix ? PREC.UNARY : PREC.POSTFIX;
+      case 'Literal':
+        // A negative number is emitted with a leading minus, like a unary expression
+        return code.startsWith('-') ? PREC.UNARY : PREC.PRIMARY;
+      default:
+        return NODE_PRECEDENCE[node.type] ?? PREC.PRIMARY;
+    }
+  }
+
+  // eslint-disable-next-line complexity
+  private generateExpressionNode(node: Expression): string {
     // Use a more direct delegation approach
     const simpleExpressions = [
       'Identifier',
@@ -784,12 +1020,23 @@ export class CodeGenerator {
       return this.generateSimpleExpression(node);
     }
 
-    const operatorExpressions = ['BinaryExpression', 'UnaryExpression', 'UpdateExpression'];
+    const operatorExpressions = [
+      'BinaryExpression',
+      'UnaryExpression',
+      'UpdateExpression',
+      'ConditionalExpression',
+      'SequenceExpression',
+    ];
     if (operatorExpressions.includes(node.type)) {
       return this.generateOperatorExpression(node);
     }
 
-    const callExpressions = ['CallExpression', 'AssignmentExpression', 'MemberExpression'];
+    const callExpressions = [
+      'CallExpression',
+      'AssignmentExpression',
+      'MemberExpression',
+      'ChainExpression',
+    ];
     if (callExpressions.includes(node.type)) {
       return this.generateCallAssignmentExpression(node);
     }
@@ -838,6 +1085,12 @@ export class CodeGenerator {
         return this.generateUnaryExpression(node as UnaryExpression);
       case 'UpdateExpression':
         return this.generateUpdateExpression(node as UpdateExpression);
+      case 'ConditionalExpression':
+        return this.generateConditionalExpression(node as ConditionalExpression);
+      case 'SequenceExpression':
+        return (node as SequenceExpression).expressions
+          .map(expr => this.generateExpression(expr, PREC.ASSIGNMENT))
+          .join(', ');
       default:
         return this.handleUnknownExpression(node);
     }
@@ -851,6 +1104,9 @@ export class CodeGenerator {
         return this.generateAssignmentExpression(node as AssignmentExpression);
       case 'MemberExpression':
         return this.generateMemberExpression(node as MemberExpression);
+      case 'ChainExpression':
+        // The parentheses end the optional chain: `(о?.а).б`, `(о?.ф)()`
+        return `(${this.generateExpression((node as ChainExpression).expression)})`;
       default:
         return this.handleUnknownExpression(node);
     }
@@ -887,47 +1143,36 @@ export class CodeGenerator {
   }
 
   private generateFunctionExpression(node: FunctionExpression): string {
-    // Handle new Parameter type or legacy Identifier type
-    const params = node.params
-      .map(p => {
-        if ('name' in p && typeof p.name === 'object' && 'name' in p.name) {
-          return p.name.name;
-        } else if ('name' in p && typeof p.name === 'string') {
-          return p.name;
-        }
-        return '';
-      })
-      .join(', ');
-
-    const body = this.generateBlockStatement(node.body);
-    return `function(${params}) ${body}`;
+    const async = node.async ? 'async ' : '';
+    const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
+    const { params, body } = this.generateFunctionParts(node.params, node.body);
+    return `${async}function${name}(${params}) ${body}`;
   }
 
   private generateArrowFunctionExpression(node: ArrowFunctionExpression): string {
-    const params = node.params.map(p => p.name.name).join(', ');
+    const async = node.isAsync ? 'async ' : '';
 
     if (node.body.type === 'BlockStatement') {
       // Block body
-      const body = this.generateBlockStatement(node.body as BlockStatement);
-      return `(${params}) => ${body}`;
-    } else {
-      // Expression body
-      const body = this.generateExpression(node.body as Expression);
-      return `(${params}) => ${body}`;
+      const { params, body } = this.generateFunctionParts(node.params, node.body as BlockStatement);
+      return `${async}(${params}) => ${body}`;
     }
+
+    return this.withScope(this.paramNames(node.params), () => {
+      const params = this.generateParams(node.params);
+      // Expression body; a leading `{` would be parsed as a block
+      let body = this.generateExpression(node.body as Expression, PREC.ASSIGNMENT);
+      if (body.startsWith('{')) {
+        body = `(${body})`;
+      }
+      return `${async}(${params}) => ${body}`;
+    });
   }
 
   private generateImportExpression(node: ImportExpression): string {
     // Dynamic import: ворид(specifier) -> import(specifier)
-    let source = this.generateExpression(node.source);
-
-    // Handle .som extension conversion for dynamic imports
-    if (source.includes('.som')) {
-      source = source.replaceAll('.som', '.js');
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
-      // For relative imports without extension, add .js
-      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
-    }
+    // Handle .som extension conversion for dynamic imports (string specifiers only)
+    const source = this.convertSourcePath(this.generateExpression(node.source, PREC.ASSIGNMENT));
 
     return `import(${source})`;
   }
@@ -940,15 +1185,8 @@ export class CodeGenerator {
 
   private generateImportDeclaration(node: ImportDeclaration): string {
     const specifiers = node.specifiers;
-    let source = this.generateLiteral(node.source);
-
     // Module resolution: convert .som extensions to .js
-    if (source.includes('.som')) {
-      source = source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
-      // For relative imports without extension, add .js
-      source = source.replace(/["']$/, '.js"').replace(/^'/, '"');
-    }
+    const source = this.convertSourcePath(this.generateLiteral(node.source));
 
     const results: string[] = [];
     const tmpVar = `__somon_import_${this.importCounter++}`;
@@ -957,7 +1195,7 @@ export class CodeGenerator {
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      const localName = defaultImports[0].local.name;
+      const localName = this.generateIdentifier(defaultImports[0].local, true);
       results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
     }
 
@@ -965,7 +1203,9 @@ export class CodeGenerator {
       | ImportNamespaceSpecifier
       | undefined;
     if (namespaceImport) {
-      results.push(this.indent(`const ${namespaceImport.local.name} = ${tmpVar};`));
+      results.push(
+        this.indent(`const ${this.generateIdentifier(namespaceImport.local, true)} = ${tmpVar};`)
+      );
     }
 
     // Handle named imports
@@ -973,8 +1213,9 @@ export class CodeGenerator {
     if (namedImports.length > 0) {
       const destructuring = namedImports
         .map(spec => {
-          const imported = spec.imported.name;
-          const local = spec.local.name;
+          // Exported names are member names: `содир функсия илова` exports `push`
+          const imported = this.mapMemberName(spec.imported.name);
+          const local = this.generateIdentifier(spec.local, true);
           return imported === local ? imported : `${imported}: ${local}`;
         })
         .join(', ');
@@ -1001,33 +1242,40 @@ export class CodeGenerator {
   }
 
   private generateExportWithDeclaration(node: ExportDeclaration): string {
-    const declaration = this.generateStatement(node.declaration!);
-    const exportName = this.extractExportName(node.declaration!);
+    const declaration = node.declaration!;
+
+    // `содир пешфарз <expression>;`
+    if (node.default && declaration.type === 'ExpressionStatement') {
+      const value = this.generateExpression(
+        (declaration as ExpressionStatement).expression,
+        PREC.ASSIGNMENT
+      );
+      return this.indent(`module.exports.default = ${value};`);
+    }
+
+    const code = this.generateStatement(declaration);
+    const exportNames = this.extractExportNames(declaration);
 
     // Type-only declarations don't generate runtime exports
-    if (!exportName) {
-      return declaration;
+    if (exportNames.length === 0) {
+      return code;
     }
 
-    const commonjsExport = node.default
-      ? `module.exports.default = ${exportName};`
-      : `module.exports.${exportName} = ${exportName};`;
+    const commonjsExports = node.default
+      ? [`module.exports.default = ${exportNames[0]};`]
+      : exportNames.map(name => `module.exports.${this.mapMemberName(name)} = ${name};`);
 
-    return declaration + '\n' + this.indent(commonjsExport);
+    return [code.replace(/\n+$/, ''), ...commonjsExports.map(line => this.indent(line))].join('\n');
   }
 
-  private extractExportName(declaration: Statement): string {
-    if (declaration.type === 'FunctionDeclaration') {
-      return (declaration as FunctionDeclaration).name.name;
-    }
-    if (declaration.type === 'VariableDeclaration') {
-      return ((declaration as VariableDeclaration).identifier as Identifier).name;
-    }
-    if (declaration.type === 'ClassDeclaration') {
-      return (declaration as ClassDeclaration).name.name;
-    }
+  private extractExportNames(declaration: Statement): string[] {
     // Interfaces and TypeAlias don't generate runtime code
-    return '';
+    if (declaration.type === 'InterfaceDeclaration' || declaration.type === 'TypeAlias') {
+      return [];
+    }
+    const names: string[] = [];
+    this.collectDeclaredNames(declaration, names);
+    return names;
   }
 
   private generateExportWithSpecifiers(node: ExportDeclaration): string {
@@ -1045,8 +1293,8 @@ export class CodeGenerator {
     results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     for (const spec of node.specifiers!) {
-      const exported = spec.exported.name;
-      const local = spec.local.name;
+      const exported = this.mapMemberName(spec.exported.name);
+      const local = this.mapMemberName(spec.local.name);
       results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
     }
 
@@ -1056,8 +1304,8 @@ export class CodeGenerator {
   private generateDirectExportSpecifiers(node: ExportDeclaration): string {
     return node
       .specifiers!.map(spec => {
-        const exported = spec.exported.name;
-        const local = spec.local.name;
+        const exported = this.mapMemberName(spec.exported.name);
+        const local = this.generateIdentifier(spec.local);
         return this.indent(`module.exports.${exported} = ${local};`);
       })
       .join('\n');
@@ -1078,42 +1326,204 @@ export class CodeGenerator {
     return results.join('\n');
   }
 
+  /**
+   * Rewrite a quoted module specifier for the emitted CommonJS: a trailing
+   * `.som` becomes `.js`, and a relative specifier without a JavaScript/JSON
+   * extension gets `.js` appended. Anything else is returned unchanged.
+   */
   private convertSourcePath(source: string): string {
-    if (source.includes('.som')) {
-      return source.replaceAll('.som"', '.js"').replaceAll(".som'", ".js'");
-    } else if (source.match(/^["']\.\.?\/[^"']*["']$/) && !source.includes('.js')) {
+    const match = /^(["'])(.*)\1$/s.exec(source);
+    if (!match) {
+      return source;
+    }
+    const [, quote, specifier] = match;
+    if (specifier.endsWith('.som')) {
+      return `${quote}${specifier.slice(0, -'.som'.length)}.js${quote}`;
+    }
+    if (/^\.\.?\//.test(specifier) && !/\.(?:[cm]?js|json)$/.test(specifier)) {
       // For relative imports without extension, add .js
-      return source.replace(/["']$/, '.js"').replace(/^'/, '"');
+      return `${quote}${specifier}.js${quote}`;
     }
     return source;
   }
 
-  private generateIdentifier(node: Identifier): string {
-    // Only map specific built-in identifiers, not general variable names
-    // This prevents variable names like 'рӯйхат' from being mapped to 'Array'
+  /** `binding`: the identifier declares a name rather than referencing one. */
+  private generateIdentifier(node: Identifier, binding: boolean = false): string {
+    // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
+    // when the program does not declare a binding of that name in scope;
+    // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
+    const mapped = this.isDeclared(node.name) ? undefined : this.mapBuiltinIdentifier(node.name);
+    if (mapped) {
+      return mapped;
+    }
 
+    // `null`, `true`, `this`, … are fine as values, but never as declared names
+    if (JS_RESERVED_WORDS.has(node.name) && (binding || !JS_KEYWORD_EXPRESSIONS.has(node.name))) {
+      this.errors.push(
+        `'${node.name}' is a reserved word in JavaScript and cannot be used as an identifier at line ${node.line}, column ${node.column}`
+      );
+    }
+    return node.name;
+  }
+
+  private mapBuiltinIdentifier(name: string): string | undefined {
     // Map built-in literals
-    if (node.name === 'беқимат') {
+    if (name === 'беқимат') {
       return 'undefined';
     }
 
     // Handle Хато (capitalized) as Error constructor
-    if (node.name === 'Хато') {
+    if (name === 'Хато') {
       return 'Error';
     }
 
     // Map built-in constructors/objects (when used as identifiers)
-    const builtinConstructors = ['сатр', 'рӯйхат', 'объект', 'математика', 'Риёзӣ', 'сатрМетодҳо'];
-    if (builtinConstructors.includes(node.name)) {
-      const mapped = this.builtinMappings.get(node.name);
-      if (mapped) {
-        return mapped;
+    const builtinConstructors = [
+      'сатр',
+      'рӯйхат',
+      'объект',
+      'математика',
+      'Риёзӣ',
+      'сатрМетодҳо',
+      'ваъда',
+      'Ваъда',
+    ];
+    return builtinConstructors.includes(name) ? this.builtinMappings.get(name) : undefined;
+  }
+
+  private isDeclared(name: string): boolean {
+    return this.scopes.some(scope => scope.has(name));
+  }
+
+  /** Run `generate` with `names` declared in a new innermost scope. */
+  private withScope<T>(names: Iterable<string>, generate: () => T): T {
+    this.scopes.push(new Set(names));
+    try {
+      return generate();
+    } finally {
+      this.scopes.pop();
+    }
+  }
+
+  /** Run `generate` inside one more loop or `интихоб`. */
+  private withJumpTarget<T>(kind: 'loops' | 'switches', generate: () => T): T {
+    this.jumpTargets[kind]++;
+    try {
+      return generate();
+    } finally {
+      this.jumpTargets[kind]--;
+    }
+  }
+
+  /** Run `generate` for a function body: loops around the function are not jump targets. */
+  private withFunctionBoundary<T>(generate: () => T): T {
+    const outer = this.jumpTargets;
+    this.jumpTargets = { loops: 0, switches: 0 };
+    try {
+      return generate();
+    } finally {
+      this.jumpTargets = outer;
+    }
+  }
+
+  /**
+   * Report a name declared twice in one scope, an early SyntaxError in
+   * JavaScript (every SomonScript variable is `let`/`const`). `bound` holds
+   * names the scope already binds: parameters (`functionBody`), which a
+   * function declaration may reuse, or a catch parameter, which nothing may.
+   * Two function declarations of one name are rejected as well: sloppy-mode
+   * JavaScript would let the second replace the first, but strict code
+   * (ES modules, bundles) rejects it, and it is almost always a mistake.
+   */
+  private checkRedeclarations(
+    statements: Statement[],
+    bound: string[] = [],
+    functionBody = false
+  ): void {
+    const declared = new Set<string>();
+    for (const stmt of statements) {
+      const names: string[] = [];
+      this.collectDeclaredNames(stmt, names);
+      const declaration =
+        stmt.type === 'ExportDeclaration' ? (stmt as ExportDeclaration).declaration : stmt;
+      const reusesParam = functionBody && declaration?.type === 'FunctionDeclaration';
+      for (const name of names) {
+        if (declared.has(name) || (bound.includes(name) && !reusesParam)) {
+          this.errors.push(
+            `Identifier '${name}' has already been declared at line ${stmt.line}, column ${stmt.column}`
+          );
+        }
+        declared.add(name);
       }
     }
+  }
 
-    // Don't map variable names that could conflict with JS built-ins
-    // Only map in specific contexts (handled in generateMemberExpression)
-    return node.name;
+  /** Names bound by the statements of one block (lexical declarations are hoisted to it). */
+  private declaredNames(statements: Statement[]): string[] {
+    const names: string[] = [];
+    for (const stmt of statements) {
+      this.collectDeclaredNames(stmt, names);
+    }
+    return names;
+  }
+
+  private collectDeclaredNames(stmt: Statement | null | undefined, names: string[]): void {
+    switch (stmt?.type) {
+      case 'VariableDeclaration':
+        this.collectPatternNames((stmt as VariableDeclaration).identifier, names);
+        break;
+      case 'FunctionDeclaration':
+      case 'ClassDeclaration':
+      case 'NamespaceDeclaration':
+        names.push(
+          (stmt as FunctionDeclaration | ClassDeclaration | NamespaceDeclaration).name.name
+        );
+        break;
+      case 'ImportDeclaration':
+        names.push(...(stmt as ImportDeclaration).specifiers.map(spec => spec.local.name));
+        break;
+      case 'ExportDeclaration':
+        this.collectDeclaredNames((stmt as ExportDeclaration).declaration, names);
+        break;
+    }
+  }
+
+  private paramNames(params: Parameter[] | undefined): string[] {
+    const names: string[] = [];
+    for (const param of params ?? []) {
+      if ((param as { type: string }).type === 'Identifier') {
+        names.push((param as unknown as Identifier).name);
+      } else {
+        this.collectPatternNames(param.pattern ?? param.name, names);
+      }
+    }
+    return names;
+  }
+
+  private collectPatternNames(pattern: PatternNode | null | undefined, names: string[]): void {
+    switch (pattern?.type) {
+      case 'Identifier':
+        names.push(pattern.name);
+        break;
+      case 'AssignmentPattern':
+        this.collectPatternNames(pattern.left, names);
+        break;
+      case 'SpreadElement':
+      case 'RestElement':
+        this.collectPatternNames(pattern.argument as PatternNode, names);
+        break;
+      case 'ArrayPattern':
+        pattern.elements.forEach(element => this.collectPatternNames(element, names));
+        break;
+      case 'ObjectPattern':
+        for (const prop of pattern.properties) {
+          this.collectPatternNames(
+            prop.type === 'PropertyPattern' ? (prop.value ?? (prop.key as Identifier)) : prop,
+            names
+          );
+        }
+        break;
+    }
   }
 
   private generateLiteral(node: Literal): string {
@@ -1124,13 +1534,27 @@ export class CodeGenerator {
         .replaceAll('"', '\\"') // Escape quotes
         .replaceAll('\n', '\\n') // Escape newlines
         .replaceAll('\t', '\\t') // Escape tabs
-        .replaceAll('\r', '\\r'); // Escape carriage returns
+        .replaceAll('\r', '\\r') // Escape carriage returns
+        .replaceAll('\0', '\\x00'); // Keep NUL out of the output
       return `"${escaped}"`;
     }
     if (node.value === null) {
       return 'null';
     }
+    if (typeof node.value === 'number' && CodeGenerator.isNumericLiteralText(node.raw)) {
+      // Keep the literal as written: `0xFF`, `1e3`, `.5`, `10n`
+      return node.raw;
+    }
     return String(node.value);
+  }
+
+  private static isNumericLiteralText(raw: unknown): raw is string {
+    return (
+      typeof raw === 'string' &&
+      /^(?:0[xX][0-9a-fA-F]+n?|0[oO][0-7]+n?|0[bB][01]+n?|\d+n|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)$/.test(
+        raw
+      )
+    );
   }
 
   private generateTemplateLiteral(node: TemplateLiteral): string {
@@ -1139,8 +1563,13 @@ export class CodeGenerator {
     for (let i = 0; i < node.quasis.length; i++) {
       const quasi = node.quasis[i];
 
-      // Add the text part
-      result += quasi.value.raw;
+      // Emit the decoded text, re-escaping whatever would end or reinterpret
+      // the template: `\`, a backtick, `${`, and CR (which JS normalises to LF).
+      const text = quasi.value.cooked ?? quasi.value.raw;
+      result += text
+        .replace(/\\|`|\$\{/g, match => `\\${match}`)
+        .replaceAll('\r', '\\r')
+        .replaceAll('\0', '\\x00');
 
       // Add the expression part if it exists
       if (i < node.expressions.length) {
@@ -1154,35 +1583,47 @@ export class CodeGenerator {
     return result;
   }
 
-  private generateBinaryExpression(node: BinaryExpression, parentOperator?: string): string {
-    // Generate left and right operands, passing parent operator context for proper precedence
-    const left =
-      node.left.type === 'BinaryExpression'
-        ? this.generateBinaryExpression(node.left as BinaryExpression, node.operator)
-        : this.generateExpression(node.left);
+  private generateBinaryExpression(node: BinaryExpression): string {
+    const precedence = this.operatorPrecedence.get(node.operator) ?? 0;
+    // `**` is right-associative, and `-а ** б` is a SyntaxError, so its left
+    // operand must bind tighter than a unary expression. Every other binary
+    // operator is left-associative: an equal-precedence right operand needs
+    // parentheses (`а - (б - в)`).
+    const isExponent = node.operator === '**';
+    const left = this.generateExpression(node.left, isExponent ? PREC.UNARY + 1 : precedence);
+    const right = this.generateExpression(node.right, isExponent ? precedence : precedence + 1);
 
-    const right =
-      node.right.type === 'BinaryExpression'
-        ? this.generateBinaryExpression(node.right as BinaryExpression, node.operator)
-        : this.generateExpression(node.right);
+    return `${this.wrapMixedNullish(node, node.left, left)} ${node.operator} ${this.wrapMixedNullish(node, node.right, right)}`;
+  }
 
-    const expr = `${left} ${node.operator} ${right}`;
-
-    // Add parentheses if this expression has lower precedence than its parent
-    if (parentOperator && this.needsParentheses(node.operator, parentOperator)) {
-      return `(${expr})`;
+  /** `??` cannot be combined with an unparenthesised `&&` or `||` operand. */
+  private wrapMixedNullish(parent: BinaryExpression, child: Expression, code: string): string {
+    if (parent.operator !== '??' || child.type !== 'BinaryExpression') {
+      return code;
     }
+    const operator = (child as BinaryExpression).operator;
+    return operator === '&&' || operator === '||' ? `(${code})` : code;
+  }
 
-    return expr;
+  private generateConditionalExpression(node: ConditionalExpression): string {
+    const test = this.generateExpression(node.test, PREC.CONDITIONAL + 1);
+    const consequent = this.generateExpression(node.consequent, PREC.ASSIGNMENT);
+    const alternate = this.generateExpression(node.alternate, PREC.ASSIGNMENT);
+    return `${test} ? ${consequent} : ${alternate}`;
   }
 
   private generateUnaryExpression(node: UnaryExpression): string {
-    const argument = this.generateExpression(node.argument);
-    return `${node.operator}${argument}`;
+    const argument = this.generateExpression(node.argument, PREC.UNARY);
+    // Word operators (`typeof`, `void`, `delete`) need a space, and so does
+    // `- -а` / `+ +а`, which would otherwise read as `--а` / `++а`.
+    const needsSpace =
+      /^[a-z]/.test(node.operator) ||
+      ((node.operator === '-' || node.operator === '+') && argument.startsWith(node.operator));
+    return `${node.operator}${needsSpace ? ' ' : ''}${argument}`;
   }
 
   private generateUpdateExpression(node: UpdateExpression): string {
-    const argument = this.generateExpression(node.argument);
+    const argument = this.generateExpression(node.argument, PREC.POSTFIX + 1);
     if (node.prefix) {
       return `${node.operator}${argument}`;
     } else {
@@ -1191,20 +1632,35 @@ export class CodeGenerator {
   }
 
   private generateCallExpression(node: CallExpression): string {
-    let callee = this.generateExpression(node.callee);
+    let callee = this.generateExpression(node.callee, PREC.CALL);
 
     // Special handling for нишондиҳӣ function
     if (callee === 'нишондиҳӣ') {
       callee = 'console.log';
     }
 
-    const args = node.arguments.map(arg => this.generateExpression(arg)).join(', ');
-    return `${callee}(${args})`;
+    const args = this.generateArguments(node.arguments);
+    return `${callee}${node.optional ? '?.' : ''}(${args})`;
+  }
+
+  /** Call/new argument list; elements may be `SpreadElement`s. */
+  private generateArguments(args: Expression[] | undefined): string {
+    return (args ?? [])
+      .map(arg =>
+        arg.type === 'SpreadElement'
+          ? this.generateSpreadElement(arg as SpreadElement)
+          : this.generateExpression(arg, PREC.ASSIGNMENT)
+      )
+      .join(', ');
   }
 
   private generateAssignmentExpression(node: AssignmentExpression): string {
-    const left = this.generateExpression(node.left);
-    const right = this.generateExpression(node.right);
+    const target = node.left as Expression | ArrayPattern | ObjectPattern;
+    const left =
+      target.type === 'ArrayPattern' || target.type === 'ObjectPattern'
+        ? this.generatePattern(target as ArrayPattern | ObjectPattern)
+        : this.generateExpression(node.left);
+    const right = this.generateExpression(node.right, PREC.ASSIGNMENT);
     return `${left} ${node.operator} ${right}`;
   }
 
@@ -1222,7 +1678,7 @@ export class CodeGenerator {
     const objectName = (node.object as Identifier).name;
     const builtinObjects = ['чоп', 'математика', 'объект', 'Риёзӣ', 'сатр', 'сатрМетодҳо'];
 
-    if (!builtinObjects.includes(objectName)) {
+    if (!builtinObjects.includes(objectName) || this.isDeclared(objectName)) {
       return { mapped: object, wasMapped: false };
     }
 
@@ -1263,8 +1719,17 @@ export class CodeGenerator {
   }
 
   private generateMemberExpression(node: MemberExpression): string {
-    let object = this.generateExpression(node.object);
-    let property = this.generateExpression(node.property);
+    let object = this.generateExpression(node.object, PREC.CALL);
+    // `5.toFixed()` would read the dot as a decimal point
+    if (node.object.type === 'Literal' && /^\d+$/.test(object)) {
+      object = `(${object})`;
+    }
+    // A property name is not a variable reference: emit it verbatim (subject
+    // to the member-name mapping below), never as a mapped/checked identifier.
+    let property =
+      !node.computed && node.property.type === 'Identifier'
+        ? (node.property as Identifier).name
+        : this.generateExpression(node.property);
 
     const { mapped: mappedObject, wasMapped: objectMapped } = this.mapBuiltinObject(node, object);
     object = mappedObject;
@@ -1276,26 +1741,63 @@ export class CodeGenerator {
       property = 'error';
     }
 
-    return node.computed ? `${object}[${property}]` : `${object}.${property}`;
+    if (node.computed) {
+      return `${object}${node.optional ? '?.' : ''}[${property}]`;
+    }
+    return `${object}${node.optional ? '?.' : '.'}${property}`;
   }
 
   private generateArrayExpression(node: ArrayExpression): string {
-    const elements = node.elements.map(element => this.generateExpression(element));
-    return `[${elements.join(', ')}]`;
+    return `[${this.generateArguments(node.elements)}]`;
   }
 
   private generateObjectExpression(node: ObjectExpression): string {
     const properties = node.properties
-      .map((prop: Property) => {
-        const key = prop.computed
-          ? `[${this.generateExpression(prop.key)}]`
-          : this.generateExpression(prop.key);
-        const value = this.generateExpression(prop.value);
-        return `${key}: ${value}`;
+      .map(prop => {
+        if (prop.type === 'SpreadElement') {
+          return this.generateSpreadElement(prop);
+        }
+        return this.generateProperty(prop);
       })
       .join(', ');
 
     return `{${properties}}`;
+  }
+
+  private generateProperty(prop: Property): string {
+    const key = prop.computed
+      ? `[${this.generateExpression(prop.key, PREC.ASSIGNMENT)}]`
+      : this.generatePropertyKey(prop.key);
+    if (prop.method && prop.value.type === 'FunctionExpression') {
+      const fn = prop.value as FunctionExpression;
+      const asyncPrefix = fn.async ? 'async ' : '';
+      const { params, body } = this.generateFunctionParts(fn.params, fn.body);
+      return `${asyncPrefix}${key}(${params}) ${body}`;
+    }
+    const value = this.generateExpression(prop.value, PREC.ASSIGNMENT);
+    return `${key}: ${value}`;
+  }
+
+  /**
+   * Non-computed key of an object literal, class member or destructuring
+   * pattern. Identifier keys go through the same Tajik→JS member-name mapping
+   * as `о.ном` accesses (`mapMemberName`), so user objects round-trip.
+   */
+  private generatePropertyKey(key: Identifier | Literal): string {
+    if (key.type === 'Identifier') {
+      return this.mapMemberName((key as Identifier).name);
+    }
+    return this.generateLiteral(key as Literal);
+  }
+
+  /**
+   * Built-in method/property names (`дарозӣ` → `length`, `илова` → `push`, …)
+   * are rewritten wherever a member name appears — `о.дарозӣ`, `{дарозӣ: 1}`,
+   * class members and destructuring keys alike — so a user-defined member with
+   * such a name stays consistent between declaration and use.
+   */
+  private mapMemberName(name: string): string {
+    return CodeGenerator.COMMON_METHODS.has(name) ? (this.builtinMappings.get(name) ?? name) : name;
   }
 
   private generateTryStatement(node: TryStatement): string {
@@ -1303,14 +1805,16 @@ export class CodeGenerator {
       this.indent('try ') + this.generateBlockStatement(node.block).replace(this.getIndent(), '');
 
     if (node.handler) {
-      result += ' catch ';
-      if (node.handler.param) {
-        // Don't map catch parameter names - preserve original
-        result += `(${node.handler.param.name}) `;
-      } else {
-        result += '(error) ';
-      }
-      result += this.generateBlockStatement(node.handler.body).replace(this.getIndent(), '');
+      const param = node.handler.param;
+      // A parameterless catch stays parameterless (ES2019) so it cannot shadow
+      // an outer variable such as `error`.
+      result += param
+        ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param, true))}) `
+        : ' catch ';
+      result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []).replace(
+        this.getIndent(),
+        ''
+      );
     }
 
     if (node.finalizer) {
@@ -1327,44 +1831,63 @@ export class CodeGenerator {
   }
 
   private generateAwaitExpression(node: AwaitExpression): string {
-    const argument = this.generateExpression(node.argument);
+    const argument = this.generateExpression(node.argument, PREC.UNARY);
     return `await ${argument}`;
   }
 
   private generateNewExpression(node: NewExpression): string {
-    const callee = this.generateExpression(node.callee);
-    const args = node.arguments
-      ? node.arguments.map((arg: Expression) => this.generateExpression(arg)).join(', ')
-      : '';
-    return `new ${callee}(${args})`;
+    let callee = this.generateExpression(node.callee, PREC.CALL);
+    // `new f().К()` would call `new f()`; a call or optional link anywhere in
+    // the callee's member chain needs parentheses: `new (f().К)()`.
+    if (this.chainContainsCall(node.callee)) {
+      callee = `(${callee})`;
+    }
+    return `new ${callee}(${this.generateArguments(node.arguments)})`;
+  }
+
+  private chainContainsCall(node: Expression): boolean {
+    let current = node;
+    while (current.type === 'MemberExpression') {
+      const memberExpr = current as MemberExpression;
+      if (memberExpr.optional) {
+        return true;
+      }
+      current = memberExpr.object;
+    }
+    return current.type === 'CallExpression';
   }
 
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
     // They should NOT generate any executable code at all
-    const name = this.generateIdentifier(node.name);
+    const name = node.name.name;
 
     return this.indent(`// Interface: ${name}\n`);
   }
 
   private generateTypeAlias(node: TypeAlias): string {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
-    const name = this.generateIdentifier(node.name);
+    const name = node.name.name;
     return this.indent(`// Type alias: ${name}\n`);
   }
 
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
     // Generate namespace as an IIFE (Immediately Invoked Function Expression)
-    const name = this.generateIdentifier(node.name);
-    const exported = node.exported ? 'exports.' : '';
+    const name = this.generateIdentifier(node.name, true);
 
-    let result = this.indent(`${exported}${name} = (function() {\n`);
+    // A local binding, so the namespace never leaks into (or, in strict code,
+    // fails on) the global scope
+    let result = this.indent(`const ${name} = (function() {\n`);
     this.indentLevel++;
     result += this.indent(`const ${name} = {};\n`);
 
     // Generate namespace body
-    if (node.body && node.body.statements) {
-      for (const stmt of node.body.statements) {
+    const statements = node.body?.statements ?? [];
+    // The body shares the IIFE's scope with the `const ${name} = {}` above
+    this.checkRedeclarations(statements, [node.name.name]);
+    this.scopes.push(new Set(this.declaredNames(statements)));
+    this.withFunctionBoundary(() => {
+      for (const stmt of statements) {
         const isExported = (stmt as Statement & { exported?: boolean }).exported;
 
         // Skip interface declarations and type aliases - they don't generate runtime code
@@ -1373,15 +1896,20 @@ export class CodeGenerator {
           continue;
         }
 
-        result += isExported
+        const code = isExported
           ? this.generateExportedNamespaceMember(stmt, name)
           : this.generateStatement(stmt);
+        result += code && !code.endsWith('\n') ? `${code}\n` : code;
       }
-    }
+    });
+    this.scopes.pop();
 
     result += this.indent(`return ${name};\n`);
     this.indentLevel--;
     result += this.indent('})();\n');
+    if (node.exported) {
+      result += this.indent(`module.exports.${this.mapMemberName(name)} = ${name};\n`);
+    }
 
     return result;
   }
@@ -1408,7 +1936,9 @@ export class CodeGenerator {
       if (!stmtCode.endsWith('\n')) {
         result += '\n';
       }
-      result += this.indent(`${namespaceName}.${memberName} = ${memberName};\n`);
+      result += this.indent(
+        `${namespaceName}.${this.mapMemberName(memberName)} = ${memberName};\n`
+      );
     }
     return result;
   }
@@ -1432,7 +1962,7 @@ export class CodeGenerator {
         ? nestedCode.substring(assignmentStart + 2) // Skip "= "
         : nestedCode;
 
-    return this.indent(`${parentName}.${memberName} = ${nestedIIFE}`);
+    return this.indent(`${parentName}.${this.mapMemberName(memberName)} = ${nestedIIFE}`);
   }
 
   private getMemberName(stmt: Statement): string | null {
@@ -1455,7 +1985,7 @@ export class CodeGenerator {
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {
-    const className = this.generateIdentifier(node.name);
+    const className = this.generateIdentifier(node.name, true);
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
       : '';
@@ -1489,68 +2019,37 @@ export class CodeGenerator {
   }
 
   private generateMethodDefinition(node: MethodDefinition): string {
-    // Keep symmetry with `mapPropertyName`: a call-site `obj.маълумот()` may rewrite
-    // to `obj.info()` via the builtin map, so the declaration must agree. Without
-    // this, the class emits `маълумот()` while every call emits `info()` and the
-    // runtime hits "not a function". Bug covered examples 10/11/12/13/17/20/24/27/36.
-    const rawName = this.generateIdentifier(node.key);
-    const mappedMethodName =
-      CodeGenerator.COMMON_METHODS.has(rawName) && this.builtinMappings.has(rawName)
-        ? (this.builtinMappings.get(rawName) as string)
-        : rawName;
-    const methodName = node.kind === 'constructor' ? 'constructor' : mappedMethodName;
+    // Method names follow the same member-name mapping as `obj.маълумот()`
+    // call sites (`mapMemberName`), so declaration and use agree.
+    const methodName =
+      node.kind === 'constructor' ? 'constructor' : this.mapMemberName(node.key.name);
     const isStatic = node.static ? 'static ' : '';
-    // Note: JavaScript doesn't support abstract methods, so we skip them entirely
-
-    // Generate parameters
-    const params = node.value.params
-      ? node.value.params.map(param => this.generateIdentifier(param.name)).join(', ')
-      : '';
+    const isAsync = node.value?.async ? 'async ' : '';
 
     // Skip abstract methods - they don't exist in JavaScript
-    if ((node as MethodDefinition & { abstract?: boolean }).abstract) {
-      // Abstract methods should not generate any code in JavaScript
+    if (node.abstract) {
       return '';
-    } else {
-      // Regular methods have a body
-      // Handle cases where body might be null or undefined
-      if (!node.value || !node.value.body) {
-        return this.indent(`${isStatic}${methodName}(${params}) {}`);
-      }
-      const body = this.generateBlockStatement(node.value.body);
-      return this.indent(`${isStatic}${methodName}(${params}) ${body}`);
     }
+
+    // Handle cases where body might be null or undefined
+    if (!node.value || !node.value.body) {
+      const params = this.withScope(this.paramNames(node.value?.params), () =>
+        this.generateParams(node.value?.params)
+      );
+      return this.indent(`${isStatic}${isAsync}${methodName}(${params}) {}`);
+    }
+    const { params, body } = this.generateFunctionParts(node.value.params, node.value.body);
+    return this.indent(`${isStatic}${isAsync}${methodName}(${params}) ${body}`);
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {
-    const propertyName = this.generateIdentifier(node.key);
+    const propertyName = this.mapMemberName(node.key.name);
     const isStatic = node.static ? 'static ' : '';
-    const initializer = node.value ? ` = ${this.generateExpression(node.value)}` : '';
+    const initializer = node.value
+      ? ` = ${this.generateExpression(node.value, PREC.ASSIGNMENT)}`
+      : '';
 
     return this.indent(`${isStatic}${propertyName}${initializer};`);
-  }
-
-  private needsParentheses(operator: string, parentOperator: string): boolean {
-    // Get precedence values (default to 0 if not found)
-    const opPrecedence = this.operatorPrecedence.get(operator) || 0;
-    const parentPrecedence = this.operatorPrecedence.get(parentOperator) || 0;
-
-    // Parentheses are needed if:
-    // 1. Current operator has lower precedence than parent (evaluated later)
-    // 2. Same precedence but parent is not left-associative (for right-associative like **)
-
-    if (opPrecedence < parentPrecedence) {
-      return true;
-    }
-
-    // Special case: exponentiation is right-associative
-    // a ** b ** c means a ** (b ** c), so we need parens for left operand
-    // This is handled by parser, so we just need to preserve them
-    if (opPrecedence === parentPrecedence && parentOperator === '**') {
-      return operator !== '**'; // Add parens if operators differ at same level under **
-    }
-
-    return false;
   }
 
   private generateSwitchStatement(node: SwitchStatement): string {
@@ -1579,14 +2078,19 @@ export class CodeGenerator {
   }
 
   // Pattern generation methods
-  private generatePattern(node: Identifier | ArrayPattern | ObjectPattern): string {
+  private generatePattern(node: PatternNode): string {
     switch (node.type) {
       case 'Identifier':
-        return this.generateIdentifier(node);
+        return this.generateIdentifier(node, true);
+      case 'AssignmentPattern':
+        return `${this.generatePattern(node.left)} = ${this.generateExpression(node.right, PREC.ASSIGNMENT)}`;
       case 'ArrayPattern':
         return this.generateArrayPattern(node);
       case 'ObjectPattern':
         return this.generateObjectPattern(node);
+      case 'SpreadElement':
+      case 'RestElement':
+        return `...${this.generatePattern(node.argument as PatternNode)}`;
       default: {
         const unknown = node as { type?: string };
         this.errors.push(`Unknown pattern type: ${unknown.type ?? 'unknown'}`);
@@ -1598,13 +2102,7 @@ export class CodeGenerator {
   private generateArrayPattern(node: ArrayPattern): string {
     const elements = node.elements
       .map(element => {
-        if (element === null) {
-          return '';
-        } else if (element.type === 'SpreadElement') {
-          return this.generateSpreadElement(element);
-        } else {
-          return this.generatePattern(element);
-        }
+        return element === null ? '' : this.generatePattern(element);
       })
       .join(', ');
 
@@ -1614,11 +2112,9 @@ export class CodeGenerator {
   private generateObjectPattern(node: ObjectPattern): string {
     const properties = node.properties
       .map(prop => {
-        if (prop.type === 'SpreadElement') {
-          return this.generateSpreadElement(prop);
-        } else {
-          return this.generatePropertyPattern(prop as PropertyPattern);
-        }
+        return prop.type === 'SpreadElement'
+          ? this.generatePattern(prop)
+          : this.generatePropertyPattern(prop as PropertyPattern);
       })
       .join(', ');
 
@@ -1627,23 +2123,17 @@ export class CodeGenerator {
 
   private generatePropertyPattern(node: PropertyPattern): string {
     const key = node.computed
-      ? `[${this.generateExpression(node.key as Expression)}]`
-      : this.generateIdentifier(node.key as Identifier);
+      ? `[${this.generateExpression(node.key as Expression, PREC.ASSIGNMENT)}]`
+      : this.generatePropertyKey(node.key);
+    // Shorthand `{ п }` binds a variable named like the key
+    const value = node.value ?? (node.key as Identifier);
 
-    if (
-      node.key.type === 'Identifier' &&
-      node.value.type === 'Identifier' &&
-      node.key.name === node.value.name
-    ) {
-      return key;
-    } else {
-      const value = this.generatePattern(node.value);
-      return `${key}: ${value}`;
-    }
+    const local = this.generatePattern(value);
+    return !node.computed && local === key ? key : `${key}: ${local}`;
   }
 
   private generateSpreadElement(node: SpreadElement): string {
-    const argument = this.generateExpression(node.argument);
+    const argument = this.generateExpression(node.argument, PREC.ASSIGNMENT);
     return `...${argument}`;
   }
 

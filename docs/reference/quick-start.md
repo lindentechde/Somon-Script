@@ -10,7 +10,7 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 // Variables (mutable)
 тағ ном = "Аҳмад";
 тағ синну_сол = 25;
-тағ фаъол = рост;
+тағ фаъол = дуруст;
 
 // Constants (immutable)
 собит ПИ = 3.14159;
@@ -29,10 +29,10 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 | `сатр`     | string    | `string`    |
 | `рақам`    | number    | `number`    |
 | `мантиқӣ`  | boolean   | `boolean`   |
-| `рост`     | true      | `true`      |
+| `дуруст`   | true      | `true`      |
 | `нодуруст` | false     | `false`     |
-| `ҳеҷ`      | null      | `null`      |
-| `номуайян` | undefined | `undefined` |
+| `холӣ`     | null      | `null`      |
+| `беқимат`  | undefined | `undefined` |
 
 ## Functions
 
@@ -56,7 +56,7 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 }
 
 // Default parameters
-функсия пешфарз(ном: сатр, салом: сатр = "Салом"): сатр {
+функсия бо_пешфарз(ном: сатр, салом: сатр = "Салом"): сатр {
     бозгашт салом + ", " + ном;
 }
 
@@ -75,7 +75,7 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 // Rest parameters
 функсия ҷамъи_ҳама(...рақамҳо: рақам[]): рақам {
     тағ натиҷа = 0;
-    барои тағ рақам аз рақамҳо {
+    барои (тағ рақам аз рақамҳо) {
         натиҷа += рақам;
     }
     бозгашт натиҷа;
@@ -88,25 +88,25 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 
 ```som
 // If-else
-агар шарт {
+агар (шарт) {
     // код
-} вагарна агар дигар_шарт {
+} вагарна агар (дигар_шарт) {
     // код
 } вагарна {
     // код
 }
 
 // Ternary operator
-тағ натиҷа = шарт ? "рост" : "нодуруст";
+тағ натиҷа = шарт ? "дуруст" : "нодуруст";
 
-// Switch equivalent
-мувофиқи (қимат) {
-    ҳолати "A":
+// Switch
+интихоб (қимат) {
+    ҳолат "A":
         чоп.сабт("Алиф");
-        пайваст;
-    ҳолати "B":
+        шикастан;
+    ҳолат "B":
         чоп.сабт("Бо");
-        пайваст;
+        шикастан;
     пешфарз:
         чоп.сабт("Номаълум");
 }
@@ -116,29 +116,24 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 
 ```som
 // For loop
-барои тағ и = 0; и < 10; и++ {
+барои (тағ и = 0; и < 10; и++) {
     чоп.сабт(и);
 }
 
-// For-in loop (arrays)
-барои тағ элемент аз массив {
+// For-of loop (arrays)
+барои (тағ элемент аз массив) {
     чоп.сабт(элемент);
 }
 
 // For-in loop (objects)
-барои тағ калид дар объект {
-    чоп.сабт(калид + ": " + объект[калид]);
+барои (тағ калид дар корбар) {
+    чоп.сабт(калид + ": " + корбар[калид]);
 }
 
 // While loop
-то шарт {
+то (шарт) {
     // код
 }
-
-// Do-while loop
-анҷом {
-    // код
-} то шарт;
 ```
 
 ## Data Structures
@@ -192,7 +187,7 @@ A comprehensive cheat sheet for SomonScript syntax and common patterns.
 корбар["вазифа"] = "барномасоз";
 
 // Delete properties
-ҳазф корбар.вазифа;
+delete корбар.вазифа;
 
 // Object methods
 Object.keys(корбар);           // Get keys
@@ -222,7 +217,7 @@ Object.entries(корбар);        // Get key-value pairs
         бозгашт ин.синну_сол;
     }
 
-    ҷамъиятӣ синну_сол_гузоштан(синну_сол: рақам): ҳеҷ {
+    ҷамъиятӣ синну_сол_гузоштан(синну_сол: рақам): холӣ {
         ин.синну_сол = синну_сол;
     }
 }
@@ -243,7 +238,7 @@ Object.entries(корбар);        // Get key-value pairs
     }
 }
 
-синф Саг мерос_мебарад Ҳайвон {
+синф Саг мерос Ҳайвон {
     хосусӣ зот: сатр;
 
     конструктор(ном: сатр, зот: сатр) {
@@ -266,13 +261,13 @@ Object.entries(корбар);        // Get key-value pairs
     email?: сатр;  // Optional property
 }
 
-интерфейс Админ мерос_мебарад Корбар {
+интерфейс Админ мерос Корбар {
     сатҳи_дастрасӣ: рақам;
     иҷозатҳо: сатр[];
 }
 
 // Implementing interface
-синф КорбариАсосӣ мерос_мебарад Корбар {
+синф КорбариАсосӣ татбиқ Корбар {
     ном: сатр;
     синну_сол: рақам;
     email?: сатр;
@@ -294,7 +289,7 @@ Object.entries(корбар);        // Get key-value pairs
 тағ статус: "барқарор" | "хомӯш" | "дар_интизор" = "барқарор";
 
 функсия коркард_кардан(маълумот: сатр | рақам): сатр {
-    агар typeof маълумот === "сатр" {
+    агар (typeof маълумот === "string") {
         бозгашт маълумот.toUpperCase();
     } вагарна {
         бозгашт маълумот.toString();
@@ -325,7 +320,7 @@ Object.entries(корбар);        // Get key-value pairs
 
 ```som
 тағ координата: [рақам, рақам] = [41.2, 69.1];
-тағ корбар_маълумот: [сатр, рақам, мантиқӣ] = ["Анвар", 25, рост];
+тағ корбар_маълумот: [сатр, рақам, мантиқӣ] = ["Анвар", 25, дуруст];
 
 // Named tuple
 тағ нуқта: [х: рақам, у: рақам, номи_шаҳр: сатр] = [41.2, 69.1, "Душанбе"];
@@ -346,14 +341,14 @@ Object.entries(корбар);        // Get key-value pairs
 
 // Throwing errors
 функсия тақсим(а: рақам, б: рақам): рақам {
-    агар б === 0 {
+    агар (б === 0) {
         партофтан нав Хато("Тақсим ба сифр");
     }
     бозгашт а / б;
 }
 
 // Custom error types
-синф ХатоиТанзим мерос_мебарад Хато {
+синф ХатоиТанзим мерос Хато {
     конструктор(паём: сатр) {
         супер(паём);
         ин.ном = "ХатоиТанзим";
@@ -378,7 +373,7 @@ Object.entries(корбар);        // Get key-value pairs
 }
 
 // Default export
-содир пешфарз функсия асосӣ(): ҳеҷ {
+содир пешфарз функсия асосӣ(): холӣ {
     чоп.сабт("Функсияи асосӣ");
 }
 ```
@@ -394,7 +389,9 @@ Object.entries(корбар);        // Get key-value pairs
 
 // Namespace import
 ворид * чун Math аз "./math";
+```
 
+```som
 // Mixed imports
 ворид асосӣ, { ҷамъ, ПИ } аз "./math";
 
@@ -411,14 +408,14 @@ Object.entries(корбар);        // Get key-value pairs
 
 ```som
 // Promise creation
-тағ ваъда = нав Promise<сатр>((ҳал_кардан, рад_кардан) => {
+тағ ваъдаи_ман = нав Promise<сатр>((ҳал_кардан, рад_кардан) => {
     setTimeout(() => {
         ҳал_кардан("Муваффақият");
     }, 1000);
 });
 
 // Promise usage
-ваъда.then(натиҷа => {
+ваъдаи_ман.then(натиҷа => {
     чоп.сабт(натиҷа);
 }).catch(хато => {
     чоп.хато(хато);
@@ -483,7 +480,7 @@ Object.entries(корбар);        // Get key-value pairs
 
 ### Arithmetic
 
-```som
+```text
 + // Addition
 - // Subtraction
 * // Multiplication
@@ -496,7 +493,7 @@ Object.entries(корбар);        // Get key-value pairs
 
 ### Comparison
 
-```som
+```text
 === // Strict equality
 !== // Strict inequality
 == // Loose equality
@@ -509,7 +506,7 @@ Object.entries(корбар);        // Get key-value pairs
 
 ### Logical
 
-```som
+```text
 && // AND
 || // OR
 ! // NOT
@@ -519,7 +516,7 @@ Object.entries(корбар);        // Get key-value pairs
 
 ### Assignment
 
-```som
+```text
 = // Assignment
 += // Add and assign
 -= // Subtract and assign
@@ -543,17 +540,17 @@ Object.entries(корбар);        // Get key-value pairs
 // Console table and grouping
 чоп.ҷадвал(маълумот);          // console.table
 чоп.гуруҳ("Гуруҳ");           // console.group
-чоп.гуруҳ_охир();              // console.groupEnd
-чоп.гуруҳ_пӯшида("Пӯшида");  // console.groupCollapsed
+чоп.гуруҳОхир();               // console.groupEnd
+чоп.гуруҳПӯшида("Пӯшида");   // console.groupCollapsed
 
 // Console timing
 чоп.вақт("timer");            // console.time
-чоп.вақт_сабт("timer");       // console.timeLog
-чоп.вақт_охир("timer");       // console.timeEnd
+чоп.вақтСабт("timer");        // console.timeLog
+чоп.вақтОхир("timer");        // console.timeEnd
 
 // Console counting and misc
 чоп.қайд("counter");          // console.count
-чоп.қайд_асл("counter");      // console.countReset
+чоп.қайдАсл("counter");       // console.countReset
 чоп.тасдиқ(шарт, "паём");     // console.assert
 чоп.полиз();                   // console.clear
 чоп.феҳрист(объект);          // console.dir
@@ -649,7 +646,7 @@ Object.entries(корбар);        // Get key-value pairs
     // Handle success
 } гирифтан (хато) {
     // Handle specific error types
-    агар хато instanceof ХатоиШабака {
+    агар (хато instanceof ХатоиШабака) {
         чоп.хато("Хатои шабака:", хато.паём);
     } вагарна {
         чоп.хато("Хатои номаълум:", хато);

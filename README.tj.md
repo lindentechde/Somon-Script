@@ -166,7 +166,6 @@ init my-project
 bundle src/main.som
 module-info src/main.som
 resolve "./utils"
-serve --port 8080
 ```
 
 </td>
@@ -179,7 +178,6 @@ serve --port 8080
 баста src/main.som
 маълумоти-модул src/main.som
 ҳал "./utils"
-хидмат --port 8080
 ```
 
 </td>
@@ -192,7 +190,6 @@ serve --port 8080
 пакет src/main.som
 информация-модуля src/main.som
 разрешить "./utils"
-сервер --port 8080
 ```
 
 </td>
@@ -252,19 +249,15 @@ somon bundle src/main.som -o dist/bundle.js --source-map
 `inlineSources: true` дар конфиг) матни SomonScript-ро ба `.map` замим мекунад,
 агар ба шумо ниёз бошад, ки манбаъ дар артефакт мавҷуд бошад.
 
-### **Омодагӣ барои истеҳсолот**
+### **Истифода дар сохтан ва CI**
 
-СомонСкрипт **барои истеҳсолот омода аст** бо хусусиятҳои амалиётии ҳамаҷониба:
+СомонСкрипт компилятор аст: файлҳои `.som` бо CLI-и `somon` ё функсияи
+`compile()` ба JavaScript-и оддӣ табдил дода мешаванд ва ин JavaScript мисли
+дигар коди Node.js ҷойгир карда мешавад. Ҳангоми хатои компилятсия CLI бо рамзи
+ғайрисифрӣ анҷом меёбад, бинобар ин онро мустақиман дар CI истифода бурдан
+мумкин аст.
 
-- ✅ **Татбиқи пурраи забон** - Ҳамаи хусусиятҳои синтаксиси тоҷикӣ кор мекунанд
-- ✅ **Коркарди хатоҳо** - Деградатсияи боадаб ва гузоришдиҳии ҳамаҷониба
-- ✅ **Мониторинг ва мушоҳида** - Санҷишҳои саломатӣ, метрикаҳо, логгинги
-  сохторӣ
-- ✅ **Идораи захираҳо** - Маҳдудиятҳои хотира, таймаутҳо, хомӯшкунии боадаб
-- ✅ **Тоқат ба хатоҳо** - Circuit breaker-ҳо, барқарорсозӣ аз хатоҳо
-- ✅ **Дастгирии ҷойгиркунӣ** - Docker, Kubernetes, systemd, PM2
-
-📖 **Тафсилот**: [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)
+📖 **Тафсилот**: [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -299,75 +292,18 @@ somon bundle src/main.som -o dist/bundle.js --source-map
 }
 ```
 
-## 🚀 Ҷойгиркунӣ барои истеҳсолот
+## 🚀 Ҷойгиркунӣ
 
-### **Режими истеҳсолот**
-
-СомонСкрипт дорои хусусиятҳои ҳамаҷонибаи истеҳсолот аст, ки бо флаги
-`--production` фаъол мешаванд:
+СомонСкрипт сервер ё раванди доимӣ надорад: JavaScript-и компилятсияшуда ҷойгир
+карда мешавад.
 
 ```bash
-# Компилятсия дар режими истеҳсолот
-somon compile app.som --production
-
-# Иҷро дар режими истеҳсолот
-somon run app.som --production
-
-# Бандл дар режими истеҳсолот
-somon bundle app.som --production
-
-# Ё тавассути тағйирёбандаи муҳит
-NODE_ENV=production somon compile app.som
+somon compile src/main.som -o dist/main.js --strict
+node dist/main.js
 ```
 
-**Режими истеҳсолот худкор фаъол мекунад:**
-
-- ✅ Санҷиши муҳит (версияи Node, иҷозатҳо)
-- ✅ Circuit breaker-ҳо барои тоқат ба хатоҳо
-- ✅ Маҳдудиятҳои захираҳо (хотира, дастгираҳои файл)
-- ✅ Логгинги сохтории JSON
-- ✅ Ҷамъоварии метрикаҳо
-- ✅ Коркарди хомӯшкунии боадаб
-
-### **Вариантҳои ҷойгиркунӣ**
-
-#### **Docker**
-
-```bash
-docker run -d \
-  --name somon \
-  -p 8080:8080 \
-  -e NODE_ENV=production \
-  somon-script:latest
-```
-
-#### **Kubernetes**
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: somon-script
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-        - name: somon
-          image: somon-script:latest
-          env:
-            - name: NODE_ENV
-              value: production
-```
-
-#### **Systemd**
-
-```bash
-# Насби хидмат
-sudo cp somon-script.service /etc/systemd/system/
-sudo systemctl enable somon-script
-sudo systemctl start somon-script
-```
+Флаги `--production` кӯҳна шудааст ва ҳеҷ таъсир надорад; он танҳо барои
+мувофиқат бо скриптҳои кӯҳна қабул карда мешавад.
 
 📖 **Дастури пурра**: [DEPLOYMENT.md](DEPLOYMENT.md)
 

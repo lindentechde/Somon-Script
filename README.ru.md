@@ -167,7 +167,6 @@ init my-project
 bundle src/main.som
 module-info src/main.som
 resolve "./utils"
-serve --port 8080
 ```
 
 </td>
@@ -180,7 +179,6 @@ serve --port 8080
 баста src/main.som
 маълумоти-модул src/main.som
 ҳал "./utils"
-хидмат --port 8080
 ```
 
 </td>
@@ -193,7 +191,6 @@ serve --port 8080
 пакет src/main.som
 информация-модуля src/main.som
 разрешить "./utils"
-сервер --port 8080
 ```
 
 </td>
@@ -253,20 +250,14 @@ somon bundle src/main.som -o dist/bundle.js --source-map
 `inlineSources: true` в конфигурации) встраивает текст SomonScript в `.map`,
 если вам нужно иметь исходный код прямо в артефакте.
 
-### **Готовность к производственной эксплуатации**
+### **Использование в сборках**
 
-SomonScript **готов к производственной эксплуатации** с комплексными
-операционными функциями:
+SomonScript — это компилятор: исходники `.som` компилируются в обычный
+JavaScript с помощью CLI `somon` или функции `compile()`, и этот JavaScript
+разворачивается как любой другой код Node.js. При ошибках компиляции CLI
+завершается с ненулевым кодом, поэтому его можно напрямую использовать в CI.
 
-- ✅ **Полная реализация языка** - Все функции таджикского синтаксиса работают
-- ✅ **Обработка ошибок** - Изящная деградация и комплексная отчетность
-- ✅ **Мониторинг и наблюдаемость** - Проверки здоровья, метрики,
-  структурированное логирование
-- ✅ **Управление ресурсами** - Ограничения памяти, таймауты, изящное завершение
-- ✅ **Отказоустойчивость** - Circuit breakers, восстановление после ошибок
-- ✅ **Поддержка развертывания** - Docker, Kubernetes, systemd, PM2
-
-📖 **Подробности**: [PRODUCTION-READINESS.md](PRODUCTION-READINESS.md)
+📖 **Подробности**: [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ---
 
@@ -301,75 +292,18 @@ SomonScript **готов к производственной эксплуата�
 }
 ```
 
-## 🚀 Развертывание в производственной среде
+## 🚀 Развертывание
 
-### **Производственный режим**
-
-SomonScript включает комплексные производственные функции, активируемые флагом
-`--production`:
+У SomonScript нет сервера или фонового процесса: разворачивается
+скомпилированный JavaScript.
 
 ```bash
-# Компиляция в производственном режиме
-somon compile app.som --production
-
-# Запуск в производственном режиме
-somon run app.som --production
-
-# Сборка в производственном режиме
-somon bundle app.som --production
-
-# Или через переменную окружения
-NODE_ENV=production somon compile app.som
+somon compile src/main.som -o dist/main.js --strict
+node dist/main.js
 ```
 
-**Производственный режим автоматически включает:**
-
-- ✅ Проверка окружения (версия Node, разрешения)
-- ✅ Circuit breakers для отказоустойчивости
-- ✅ Ограничения ресурсов (память, файловые дескрипторы)
-- ✅ Структурированное логирование JSON
-- ✅ Сбор метрик
-- ✅ Изящное завершение работы
-
-### **Варианты развертывания**
-
-#### **Docker**
-
-```bash
-docker run -d \
-  --name somon \
-  -p 8080:8080 \
-  -e NODE_ENV=production \
-  somon-script:latest
-```
-
-#### **Kubernetes**
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: somon-script
-spec:
-  replicas: 3
-  template:
-    spec:
-      containers:
-        - name: somon
-          image: somon-script:latest
-          env:
-            - name: NODE_ENV
-              value: production
-```
-
-#### **Systemd**
-
-```bash
-# Установка сервиса
-sudo cp somon-script.service /etc/systemd/system/
-sudo systemctl enable somon-script
-sudo systemctl start somon-script
-```
+Флаг `--production` устарел и ни на что не влияет; он принимается только для
+совместимости со старыми скриптами.
 
 📖 **Полное руководство**: [DEPLOYMENT.md](DEPLOYMENT.md)
 

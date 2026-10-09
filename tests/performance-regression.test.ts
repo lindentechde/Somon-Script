@@ -8,7 +8,13 @@ import * as os from 'os';
 import { compile as compileSource } from '../src/compiler';
 import { ModuleSystem } from '../src/module-system';
 
-describe.skip('Performance Regression Tests', () => {
+// Wall-clock and heap assertions depend on the machine, its load and the garbage
+// collector, so they are flaky on shared CI runners and in parallel local runs.
+// The suite therefore only runs when explicitly requested: `SOMON_PERF=1 npx jest
+// tests/performance-regression.test.ts` (ideally with `node --expose-gc`).
+const describePerf = process.env.SOMON_PERF === '1' ? describe : describe.skip;
+
+describePerf('Performance Regression Tests', () => {
   let tempDir: string;
   let moduleSystem: ModuleSystem;
 
@@ -17,7 +23,6 @@ describe.skip('Performance Regression Tests', () => {
     moduleSystem = new ModuleSystem({
       resolution: { baseUrl: tempDir },
       loading: { circularDependencyStrategy: 'warn' },
-      metrics: true,
     });
   });
 
@@ -143,9 +148,12 @@ describe.skip('Performance Regression Tests', () => {
       const result = await moduleSystem.compile(path.join(tempDir, 'a.som'));
       const duration = performance.now() - start;
 
-      // Should handle circular dependency without hanging
+      // Should handle circular dependency without hanging, compile both modules and
+      // report the cycle as a warning under the 'warn' strategy
       expect(duration).toBeLessThan(500);
-      expect(result.warnings.length).toBeGreaterThan(0); // Should warn about circular dep
+      expect(result.errors).toHaveLength(0);
+      expect(result.modules.size).toBe(2);
+      expect(result.warnings.some(w => w.includes('Circular dependencies detected'))).toBe(true);
     });
   });
 
@@ -207,7 +215,7 @@ describe.skip('Performance Regression Tests', () => {
           };
         }
         
-        интерфейс Admin мерос_мебарад User {
+        интерфейс Admin мерос User {
           role: сатр;
           permissions: сатр[];
         }

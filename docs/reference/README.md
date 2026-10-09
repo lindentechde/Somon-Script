@@ -59,9 +59,9 @@ Essential syntax reference and cheat sheet for rapid development.
 тағйирёбанда мояИдентификатор = "қимат";
 
 // Keywords
-тағйирёбанда собит функсия синф интерфейс
-агар вагарна барои то кӯшиш гирифтан
-ворид содор аз пешфарз
+// тағйирёбанда собит функсия синф интерфейс
+// агар вагарна барои то кӯшиш гирифтан
+// ворид содир аз пешфарз
 ```
 
 #### Type System
@@ -71,8 +71,8 @@ Essential syntax reference and cheat sheet for rapid development.
 - `сатр` (string)
 - `рақам` (number)
 - `мантиқӣ` (boolean)
-- `ҳеҷ` (null)
-- `номуайян` (undefined)
+- `холӣ` (null)
+- `беқимат` (undefined)
 
 **Complex Types:**
 
@@ -81,7 +81,7 @@ Essential syntax reference and cheat sheet for rapid development.
 тағйирёбанда рўйхат: рақам[] = [1, 2, 3];
 
 // Objects
-тағйирёбанда объект: { ном: сатр; синну: рақам } = {
+тағйирёбанда шахс: { ном: сатр; синну: рақам; } = {
     ном: "Анвар",
     синну: 30
 };
@@ -97,7 +97,7 @@ Essential syntax reference and cheat sheet for rapid development.
 тағйирёбанда маълумот: сатр | рақам = "test";
 
 // Intersection types
-тағйирёбанда комбинатсия: ТипА & ТипБ = { ... };
+тағйирёбанда комбинатсия: ТипА & ТипБ = { /* ... */ };
 ```
 
 #### Built-in Objects
@@ -123,10 +123,10 @@ Essential syntax reference and cheat sheet for rapid development.
 **Global Functions**
 
 ```som
-тақсим_кардан(сатр);          // parseInt
-рақам_кардан(сатр);           // parseFloat
-сатр_кардан(рақам);           // toString
-навъ_муайян_кардан(қимат);    // typeof
+parseInt(матн);               // parseInt
+parseFloat(матн);             // parseFloat
+адад.баСатр();                // toString
+typeof қимат;                 // typeof
 ```
 
 ### Syntax Reference
@@ -137,7 +137,7 @@ Essential syntax reference and cheat sheet for rapid development.
 // Mutable variables
 тағйирёбанда ном: сатр = "Анвар";
 тағйирёбанда синну: рақам = 25;
-тағйирёбанда фаъол: мантиқӣ = рост;
+тағйирёбанда фаъол: мантиқӣ = дуруст;
 
 // Constants
 собит ПИ: рақам = 3.14159;
@@ -198,13 +198,13 @@ Essential syntax reference and cheat sheet for rapid development.
     }
 
     // Setter
-    ҷамъиятӣ синну_сол_гузоштан(синну_сол: рақам): ҳеҷ {
+    ҷамъиятӣ синну_сол_гузоштан(синну_сол: рақам): холӣ {
         ин.синну_сол = синну_сол;
     }
 }
 
 // Inheritance
-синф Админ мерос_мебарад Корбар {
+синф Админ мерос Корбар {
     хосусӣ сатҳи_дастрасӣ: рақам;
 
     конструктор(ном: сатр, синну_сол: рақам, сатҳи_дастрасӣ: рақам) {
@@ -214,8 +214,8 @@ Essential syntax reference and cheat sheet for rapid development.
 }
 
 // Abstract classes
-мухтасар синф Шакл {
-    мухтасар масоҳат_ҳисоб_кардан(): рақам;
+мавҳум синф Шакл {
+    мавҳум масоҳат_ҳисоб_кардан(): рақам;
 }
 ```
 
@@ -230,7 +230,7 @@ Essential syntax reference and cheat sheet for rapid development.
 }
 
 // Extended interface
-интерфейс Админ мерос_мебарад Корбар {
+интерфейс Админ мерос Корбар {
     сатҳи_дастрасӣ: рақам;
     иҷозатҳо: сатр[];
 }
@@ -241,58 +241,52 @@ Essential syntax reference and cheat sheet for rapid development.
     андоза(): рақам;
 }
 
-// Function interface
-интерфейс ҲисобкунакФунксия {
-    (а: рақам, б: рақам): рақам;
-}
+// Function type
+навъ ҲисобкунакФунксия = (а: рақам, б: рақам) => рақам;
 ```
 
 #### Control Flow
 
 ```som
 // Conditionals
-агар шарт {
+агар (шарт) {
     // код
-} вагарна агар дигар_шарт {
+} вагарна агар (дигар_шарт) {
     // код
 } вагарна {
     // код
 }
 
 // Ternary operator
-тағйирёбанда натиҷа = шарт ? "рост" : "нодуруст";
+тағйирёбанда натиҷа = шарт ? "дуруст" : "нодуруст";
 
-// Switch equivalent
-мувофиқи (қимат) {
-    ҳолати "A":
+// Switch
+интихоб (қимат) {
+    ҳолат "A":
         чоп.сабт("Алиф");
-        пайваст;
-    ҳолати "B":
+        шикастан;
+    ҳолат "B":
         чоп.сабт("Бо");
-        пайваст;
+        шикастан;
     пешфарз:
         чоп.сабт("Номаълум");
 }
 
 // Loops
-барои тағйирёбанда и = 0; и < 10; и++ {
+барои (тағйирёбанда и = 0; и < 10; и++) {
     чоп.сабт(и);
 }
 
-то шарт {
+то (шарт) {
     // код
 }
 
-анҷом {
-    // код
-} то шарт;
-
-барои тағйирёбанда элемент аз массив {
+барои (тағйирёбанда элемент аз массив) {
     чоп.сабт(элемент);
 }
 
-барои тағйирёбанда калид дар объект {
-    чоп.сабт(калид, объект[калид]);
+барои (тағйирёбанда калид дар шахс) {
+    чоп.сабт(калид, шахс[калид]);
 }
 ```
 
@@ -311,7 +305,7 @@ Essential syntax reference and cheat sheet for rapid development.
 партофтан нав Хато("Паёми хато");
 
 // Custom error types
-синф ХатоиМаҳсус мерос_мебарад Хато {
+синф ХатоиМаҳсус мерос Хато {
     конструктор(паём: сатр) {
         супер(паём);
         ин.ном = "ХатоиМаҳсус";
@@ -323,16 +317,18 @@ Essential syntax reference and cheat sheet for rapid development.
 
 ```som
 // Exports
-содор функсия ҷамъ(а: рақам, б: рақам): рақам {
+содир функсия ҷамъ(а: рақам, б: рақам): рақам {
     бозгашт а + б;
 }
 
-содор собит ПИ = 3.14159;
+содир собит ПИ = 3.14159;
 
-содор пешфарз синф Асосӣ {
+содир пешфарз синф Асосӣ {
     // implementation
 }
+```
 
+```som
 // Imports
 ворид { ҷамъ, ПИ } аз "./math";
 ворид Асосӣ аз "./main";
@@ -341,7 +337,7 @@ Essential syntax reference and cheat sheet for rapid development.
 // Dynamic imports
 ҳамзамон функсия loadModule() {
     собит модул = интизор ворид("./dynamic-module");
-    бозгашт модул.функсия();
+    бозгашт модул.иҷро();
 }
 ```
 
@@ -398,7 +394,7 @@ program        → declaration* EOF ;
 
 declaration    → classDecl | funDecl | varDecl | statement ;
 
-classDecl      → "синф" IDENTIFIER ( "мерос_мебарад" IDENTIFIER )? "{" function* "}" ;
+classDecl      → "синф" IDENTIFIER ( "мерос" IDENTIFIER )? "{" function* "}" ;
 funDecl        → "функсия" IDENTIFIER "(" parameters? ")" ( ":" type )? block ;
 varDecl        → ( "тағйирёбанда" | "собит" ) IDENTIFIER ( ":" type )? ( "=" expression )? ";" ;
 
@@ -414,7 +410,7 @@ term           → factor ( ( "-" | "+" ) factor )* ;
 factor         → unary ( ( "/" | "*" ) unary )* ;
 unary          → ( "!" | "-" ) unary | call ;
 call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
-primary        → "рост" | "нодуруст" | "ҳеҷ" | "ин"
+primary        → "дуруст" | "нодуруст" | "холӣ" | "ин"
                | NUMBER | STRING | IDENTIFIER | "(" expression ")" ;
 ```
 
@@ -425,7 +421,6 @@ primary        → "рост" | "нодуруст" | "ҳеҷ" | "ин"
 вагарна       else
 барои         for
 то            while
-анҷом         do
 кӯшиш         try
 гирифтан      catch
 ниҳоят        finally
@@ -433,7 +428,7 @@ primary        → "рост" | "нодуруст" | "ҳеҷ" | "ин"
 синф          class
 интерфейс     interface
 ворид         import
-содор         export
+содир         export
 аз            from
 пешфарз       default
 тағйирёбанда  let/var
@@ -443,14 +438,14 @@ primary        → "рост" | "нодуруст" | "ҳеҷ" | "ин"
 нав           new
 ин            this
 супер         super
-рост          true
+дуруст        true
 нодуруст      false
-ҳеҷ           null
-номуайян      undefined
-мерос_мебарад extends
+холӣ          null
+беқимат       undefined
+мерос         extends
 хосусӣ        private
 ҷамъиятӣ      public
-мухтасар      abstract
+мавҳум        abstract
 ```
 
 ## API Documentation

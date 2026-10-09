@@ -14,7 +14,7 @@ const translations: Translations = {
         input: 'Файли вурудии .som',
       },
       options: {
-        output: 'Файли баромад (бо нобаёнӣ: ҳамон ном бо васеъшавии .js)',
+        output: 'Файли баромад (бо нобаёнӣ: вуруд бо .som ба .js иваз шуда, вагарна <вуруд>.js)',
         outDir: 'Феҳристи баромад',
         target: 'Ҳадафи компилятсия',
         sourceMap: 'Харитаи манбаъҳоро эҷод кардан',
@@ -24,7 +24,6 @@ const translations: Translations = {
         noTypeCheck: 'Тафтиши навъҳоро хомӯш кардан',
         strict: 'Тафтиши қатъии навъҳоро фаъол кардан',
         watch: 'Дар тағйирёбии файл аз нав компайл кардан',
-        production: 'Режими истеҳсолиро бо тасдиқи қатъӣ фаъол кардан',
       },
       messages: {
         fileNotFound: (file: string) => `Хато: Файли '${file}' ёфт нашуд`,
@@ -36,31 +35,28 @@ const translations: Translations = {
         recompiling: (file: string) => `'${file}'-ро аз нав компайл мекунем...`,
         configChanged: (file: string) =>
           `Тағйири конфигуратсия дар '${file}' муайян шуд. Аз нав компайл мекунем...`,
+        sourceRemoved: (file: string) =>
+          `Файли манбаи '${file}' нест карда шуд. Интизори пайдо шудани он...`,
+        configRemoved: (file: string) =>
+          `Файли конфигуратсияи '${file}' нест карда шуд. Интихобҳои пешина истифода мешаванд.`,
+        stoppingWatcher: (signal: string) => `${signal} қабул шуд, назоратро қатъ мекунем...`,
         watchError: 'Хатои назорат:',
+        watchCloseFailed: 'Қатъ кардани назорат сар назад:',
       },
     },
     run: {
       name: 'иҷро',
       alias: 'и',
       description: 'Файли СомонСкриптро компайл ва иҷро кардан',
-      usage: '[вуруд] [интихобҳо]',
+      usage: '<вуруд> [интихобҳо] [-- аргументҳо...]',
       args: {
         input: 'Файли вурудии .som',
-      },
-      options: {
-        target: 'Ҳадафи компилятсия',
-        sourceMap: 'Харитаи манбаъҳоро эҷод кардан',
-        noSourceMap: 'Харитаи манбаъҳоро хомӯш кардан',
-        minify: 'Баромадро минималӣ кардан',
-        noMinify: 'Минимализатсияро хомӯш кардан',
-        noTypeCheck: 'Тафтиши навъҳоро хомӯш кардан',
-        strict: 'Тафтиши қатъии навъҳоро фаъол кардан',
-        production: 'Режими истеҳсолиро бо тасдиқи қатъӣ фаъол кардан',
+        args: 'Аргументҳо барои барнома (пеш аз аргументҳое, ки бо - оғоз мешаванд, -- нависед)',
       },
       messages: {
         failedToExecute: 'Иҷрои Node сар назад:',
         terminatedWithSignal: (signal: string) => `Раванд бо сигнали ${signal} қатъ шуд`,
-        productionValidationFailed: 'Тасдиқи истеҳсолӣ сар назад:',
+        cleanupFailed: 'Огоҳӣ: файлҳои муваққатиро тоза кардан нашуд:',
       },
     },
     init: {
@@ -86,11 +82,8 @@ const translations: Translations = {
       options: {
         output: 'Роҳи файли баромад',
         format: "Формати баста (танҳо 'commonjs' дастгирӣ мешавад)",
-        minify: 'Баромадро минималӣ кардан',
-        sourceMap: 'Харитаи манбаъҳоро эҷод кардан',
         inlineSources: 'Манбаъҳои аслиро дар харитаи манбаъҳо ҷойгир кардан',
         externals: 'Модулҳои берунӣ (бо вергул ҷудошуда)',
-        production: 'Режими истеҳсолиро бо тасдиқи қатъӣ фаъол кардан',
       },
       messages: {
         bundling: (input: string) => `📦 ${input}-ро баста мекунем...`,
@@ -150,29 +143,18 @@ const translations: Translations = {
         resolveError: 'Хатои ҳалкунӣ:',
       },
     },
-    serve: {
-      name: 'хидмат',
-      description: 'Сервери идоравиро барои санҷиши саломатӣ ва метрикаҳо оғоз кардан',
-      options: {
-        port: 'Порт барои гӯш кардан',
-        config: 'Роҳ ба файли конфигуратсия',
-        production: 'Режими истеҳсолиро бо ҳамаи хусусиятҳои бехатарӣ фаъол кардан',
-        json: 'Сабти сохторшудаи JSON истифода кардан',
-      },
-    },
-    help: {
-      name: 'кӯмак',
-      description: 'кӯмак барои фармон нишон додан',
-    },
   },
   common: {
     version: 'рақами версияро баровардан',
     help: 'кӯмак барои фармон нишон додан',
-    displayHelp: 'кӯмак барои фармон нишон додан',
     error: 'Хато:',
     configError: 'Хатои конфигуратсия:',
-    productionValidationFailed: 'Тасдиқи истеҳсолӣ сар назад:',
     languageOption: 'Забони интерфейсро муқаррар кунед (en, tj, ru)',
+    invalidLanguage: (value: string) =>
+      `Хато: забони '${value}' дастгирӣ намешавад. Забонҳои дастгиришаванда: en, tj, ru`,
+    outputEqualsInput: (file: string) =>
+      `Хато: роҳи баромади '${file}' бо файли вурудӣ якхела аст; бо -o роҳи дигар интихоб кунед`,
+    productionDeprecated: 'Огоҳӣ: --production кӯҳна шудааст ва ҳеҷ таъсир надорад',
   },
 };
 

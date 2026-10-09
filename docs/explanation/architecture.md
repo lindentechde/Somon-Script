@@ -274,7 +274,7 @@ Strong type checking prevents common runtime errors:
 ```som
 // Union types for safe API design
 функсия коркард(маълумот: сатр | рақам): сатр {
-    агар typeof маълумот === "сатр" {
+    агар (typeof маълумот === "string") {
         бозгашт маълумот.toUpperCase();
     } вагарна {
         бозгашт маълумот.toString();
@@ -413,7 +413,7 @@ class TypeInference {
 **Intersection Types**:
 
 ```som
-тағйирёбанда корбар: Корбар & Админ = { ... };
+тағйирёбанда корбар: Корбар & Админ = { /* ... */ };
 ```
 
 **Tuple Types**:

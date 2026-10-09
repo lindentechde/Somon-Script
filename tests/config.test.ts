@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ConfigError, loadConfig } from '../src/config';
+import { ConfigError, loadConfig, loadConfigWithPath } from '../src/config';
 
 describe('somon.config.json loader/validation', () => {
   let tempDir: string;
@@ -116,6 +116,48 @@ describe('somon.config.json loader/validation', () => {
       if (error instanceof ConfigError) {
         expect(error.details.some(detail => detail.path === 'bundle.inlineSources')).toBe(true);
       }
+    }
+  });
+  test('reports the directory the config file was found in', () => {
+    fs.writeFileSync(
+      path.join(tempDir, 'somon.config.json'),
+      JSON.stringify({ compilerOptions: { outDir: 'dist' } })
+    );
+    const nested = path.join(tempDir, 'src', 'deep');
+    fs.mkdirSync(nested, { recursive: true });
+
+    const found = loadConfigWithPath(nested);
+    expect(found.configDir).toBe(path.resolve(tempDir));
+    expect(found.configPath).toBe(path.join(path.resolve(tempDir), 'somon.config.json'));
+    expect(found.config.compilerOptions?.outDir).toBe('dist');
+    expect(loadConfig(nested)).toEqual(found.config);
+  });
+
+  test('reports no config directory when no config file exists', () => {
+    const found = loadConfigWithPath(tempDir);
+    // A config file may exist in an ancestor of the temp dir only on odd machines.
+    if (found.configPath === undefined) {
+      expect(found.configDir).toBeUndefined();
+      expect(found.config).toEqual({});
+    }
+  });
+
+  test.each([
+    ['bundle', { bundle: { sourceMap: true } }, 'bundle.sourceMap'],
+    [
+      'moduleSystem.resolution',
+      { moduleSystem: { resolution: { bogus: 1 } } },
+      'moduleSystem.resolution.bogus',
+    ],
+    ['moduleSystem.loading', { moduleSystem: { loading: { foo: 1 } } }, 'moduleSystem.loading.foo'],
+  ])('rejects unknown keys in %s', (_section, config, expectedPath) => {
+    fs.writeFileSync(path.join(tempDir, 'somon.config.json'), JSON.stringify(config));
+    expect.assertions(2);
+    try {
+      loadConfig(tempDir);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).details.map(detail => detail.path)).toContain(expectedPath);
     }
   });
 });

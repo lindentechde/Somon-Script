@@ -14,7 +14,7 @@ const translations: Translations = {
         input: 'Input .som file',
       },
       options: {
-        output: 'Output file (default: same name with .js extension)',
+        output: 'Output file (default: input with .som replaced by .js, otherwise <input>.js)',
         outDir: 'Output directory',
         target: 'Compilation target',
         sourceMap: 'Generate source maps',
@@ -24,7 +24,6 @@ const translations: Translations = {
         noTypeCheck: 'Disable type checking',
         strict: 'Enable strict type checking',
         watch: 'Recompile on file changes',
-        production: 'Enable production mode with strict validation',
       },
       messages: {
         fileNotFound: (file: string) => `Error: File '${file}' not found`,
@@ -36,31 +35,28 @@ const translations: Translations = {
         recompiling: (file: string) => `Recompiling '${file}'...`,
         configChanged: (file: string) =>
           `Configuration change detected in '${file}'. Recompiling...`,
+        sourceRemoved: (file: string) =>
+          `Source file '${file}' was removed. Waiting for it to reappear...`,
+        configRemoved: (file: string) =>
+          `Configuration file '${file}' was removed. Using previous options.`,
+        stoppingWatcher: (signal: string) => `Received ${signal}, stopping watcher...`,
         watchError: 'Watch error:',
+        watchCloseFailed: 'Failed to close watcher:',
       },
     },
     run: {
       name: 'run',
       alias: 'r',
       description: 'Compile and run SomonScript file',
-      usage: '[input] [options]',
+      usage: '<input> [options] [-- args...]',
       args: {
         input: 'Input .som file',
-      },
-      options: {
-        target: 'Compilation target',
-        sourceMap: 'Generate source maps',
-        noSourceMap: 'Disable source maps',
-        minify: 'Minify output',
-        noMinify: 'Disable minification',
-        noTypeCheck: 'Disable type checking',
-        strict: 'Enable strict type checking',
-        production: 'Enable production mode with strict validation',
+        args: 'Arguments passed to the program (use -- before arguments that start with -)',
       },
       messages: {
         failedToExecute: 'Failed to execute Node:',
         terminatedWithSignal: (signal: string) => `Process terminated with signal ${signal}`,
-        productionValidationFailed: 'Production validation failed:',
+        cleanupFailed: 'Warning: unable to clean temporary files:',
       },
     },
     init: {
@@ -86,11 +82,8 @@ const translations: Translations = {
       options: {
         output: 'Output file path',
         format: "Bundle format (only 'commonjs' is supported)",
-        minify: 'Minify the output',
-        sourceMap: 'Generate source maps',
         inlineSources: 'Inline original sources into emitted source maps',
         externals: 'External modules (comma-separated)',
-        production: 'Enable production mode with strict validation',
       },
       messages: {
         bundling: (input: string) => `📦 Bundling ${input}...`,
@@ -150,29 +143,18 @@ const translations: Translations = {
         resolveError: 'Resolve error:',
       },
     },
-    serve: {
-      name: 'serve',
-      description: 'Start the management server for health checks and metrics',
-      options: {
-        port: 'Port to listen on',
-        config: 'Path to configuration file',
-        production: 'Enable production mode with all safety features',
-        json: 'Use structured JSON logging',
-      },
-    },
-    help: {
-      name: 'help',
-      description: 'display help for command',
-    },
   },
   common: {
     version: 'output the version number',
     help: 'display help for command',
-    displayHelp: 'display help for command',
     error: 'Error:',
     configError: 'Configuration error:',
-    productionValidationFailed: 'Production validation failed:',
     languageOption: 'Set interface language (en, tj, ru)',
+    invalidLanguage: (value: string) =>
+      `Error: unsupported language '${value}'. Supported languages: en, tj, ru`,
+    outputEqualsInput: (file: string) =>
+      `Error: output path '${file}' is the same as the input file; use -o to choose another path`,
+    productionDeprecated: 'Warning: --production is deprecated and has no effect',
   },
 };
 

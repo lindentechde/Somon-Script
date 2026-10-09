@@ -125,7 +125,10 @@ describe('Cross-Platform Compatibility Tests', () => {
       const initialMemory = process.memoryUsage();
 
       // Compile a moderately complex program
-      const complexCode = new Array(100).fill('тағйирёбанда тест = "value";').join('\n');
+      const complexCode = Array.from(
+        { length: 100 },
+        (_, i) => `тағйирёбанда тест${i} = "value";`
+      ).join('\n');
 
       const result = compile(complexCode);
 

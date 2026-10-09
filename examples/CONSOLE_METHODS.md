@@ -4,27 +4,27 @@ Complete reference guide for all console methods in SomonScript.
 
 ## Quick Reference Table
 
-| JavaScript                 | SomonScript          | Tajik (Тоҷикӣ) | Purpose                   |
-| -------------------------- | -------------------- | -------------- | ------------------------- |
-| `console.log()`            | `чоп.сабт()`         | Ҷойи дохил     | General output to console |
-| `console.error()`          | `чоп.хато()`         | Хатоҳо         | Error messages            |
-| `console.warn()`           | `чоп.огоҳӣ()`        | Огоҳиҳо        | Warning messages          |
-| `console.info()`           | `чоп.маълумот()`     | Маълумот       | Informational messages    |
-| `console.debug()`          | `чоп.исфти()`        | Исфти          | Debug information         |
-| `console.assert()`         | `чоп.тасдиқ()`       | Тасдиқ         | Assertion testing         |
-| `console.count()`          | `чоп.қайд()`         | Ҳисоб          | Count occurrences         |
-| `console.countReset()`     | `чоп.қайд_асл()`     | Ҳисоб асл      | Reset counter             |
-| `console.time()`           | `чоп.вақт()`         | Вақт           | Start timer               |
-| `console.timeLog()`        | `чоп.вақт_сабт()`    | Вақт сабт      | Log elapsed time          |
-| `console.timeEnd()`        | `чоп.вақт_охир()`    | Вақт охир      | End timer                 |
-| `console.table()`          | `чоп.ҷадвал()`       | Ҷадвал         | Table format output       |
-| `console.dir()`            | `чоп.феҳрист()`      | Феҳрист        | List object properties    |
-| `console.dirxml()`         | `чоп.xml_феҳрист()`  | XML феҳрист    | XML/DOM structure         |
-| `console.trace()`          | `чоп.пайҷо()`        | Пайҷо          | Stack trace               |
-| `console.clear()`          | `чоп.полиз()`        | Полиз          | Clear console             |
-| `console.group()`          | `чоп.гуруҳ()`        | Гуруҳ          | Start output group        |
-| `console.groupEnd()`       | `чоп.гуруҳ_охир()`   | Гуруҳ охир     | End output group          |
-| `console.groupCollapsed()` | `чоп.гуруҳ_пӯшида()` | Гуруҳ пӯшида   | Collapsed group           |
+| JavaScript                 | SomonScript         | Tajik (Тоҷикӣ) | Purpose                   |
+| -------------------------- | ------------------- | -------------- | ------------------------- |
+| `console.log()`            | `чоп.сабт()`        | Ҷойи дохил     | General output to console |
+| `console.error()`          | `чоп.хато()`        | Хатоҳо         | Error messages            |
+| `console.warn()`           | `чоп.огоҳӣ()`       | Огоҳиҳо        | Warning messages          |
+| `console.info()`           | `чоп.маълумот()`    | Маълумот       | Informational messages    |
+| `console.debug()`          | `чоп.исфти()`       | Исфти          | Debug information         |
+| `console.assert()`         | `чоп.тасдиқ()`      | Тасдиқ         | Assertion testing         |
+| `console.count()`          | `чоп.қайд()`        | Ҳисоб          | Count occurrences         |
+| `console.countReset()`     | `чоп.қайдАсл()`     | Ҳисоб асл      | Reset counter             |
+| `console.time()`           | `чоп.вақт()`        | Вақт           | Start timer               |
+| `console.timeLog()`        | `чоп.вақтСабт()`    | Вақт сабт      | Log elapsed time          |
+| `console.timeEnd()`        | `чоп.вақтОхир()`    | Вақт охир      | End timer                 |
+| `console.table()`          | `чоп.ҷадвал()`      | Ҷадвал         | Table format output       |
+| `console.dir()`            | `чоп.феҳрист()`     | Феҳрист        | List object properties    |
+| `console.dirxml()`         | `чоп.xmlФеҳрист()`  | XML феҳрист    | XML/DOM structure         |
+| `console.trace()`          | `чоп.пайҷо()`       | Пайҷо          | Stack trace               |
+| `console.clear()`          | `чоп.полиз()`       | Полиз          | Clear console             |
+| `console.group()`          | `чоп.гуруҳ()`       | Гуруҳ          | Start output group        |
+| `console.groupEnd()`       | `чоп.гуруҳОхир()`   | Гуруҳ охир     | End output group          |
+| `console.groupCollapsed()` | `чоп.гуруҳПӯшида()` | Гуруҳ пӯшида   | Collapsed group           |
 
 ---
 
@@ -139,14 +139,14 @@ Assertion failed: Ин нодуруст аст
 
 ```somonscript
 функсия функсия_фиалӣ() {
-  чоп.ҳисоб('вызов');
+  чоп.қайд('вызов');
 }
 
 функсия_фиалӣ();  // вызов: 1
 функсия_фиалӣ();  // вызов: 2
 функсия_фиалӣ();  // вызов: 3
 
-чоп.қайд_асл('вызов');  // Reset counter
+чоп.қайдАсл('вызов');  // Reset counter
 ```
 
 ---
@@ -160,14 +160,14 @@ Assertion failed: Ин нодуруст аст
   // Operations
 }
 
-чоп.вақт_охир('шумора');
+чоп.вақтОхир('шумора');
 // Output: ҳисоб: 123.45ms
 
 // Or with intermediate logging
 чоп.вақт('эҳсоскунӣ');
-чоп.вақт_сабт('эҳсоскунӣ', 'Марҳалаи 1 иҷро');
+чоп.вақтСабт('эҳсоскунӣ', 'Марҳалаи 1 иҷро');
 // More operations
-чоп.вақт_охир('эҳсоскунӣ');
+чоп.вақтОхир('эҳсоскунӣ');
 ```
 
 ---
@@ -214,7 +214,7 @@ Assertion failed: Ин нодуруст аст
 чоп.феҳрист(объект);
 
 // For DOM elements (if supported)
-// чоп.xml_феҳрист(document.body);
+// чоп.xmlФеҳрист(document.body);
 ```
 
 ---
@@ -254,12 +254,12 @@ Assertion failed: Ин нодуруст аст
 чоп.гуруҳ('Фасли 1');
 чоп.сабт('Даромади 1.1');
 чоп.сабт('Даромади 1.2');
-чоп.гуруҳ_охир();
+чоп.гуруҳОхир();
 
-чоп.гуруҳ_пӯшида('Фасли 2 (қалаб)');
+чоп.гуруҳПӯшида('Фасли 2 (қалаб)');
 чоп.сабт('Даромади 2.1');
 чоп.сабт('Даромади 2.2');
-чоп.гуруҳ_охир();
+чоп.гуруҳОхир();
 
 чоп.сабт('Ҷалали муаллиф');
 ```
@@ -315,9 +315,9 @@ Assertion failed: Ин нодуруст аст
   };
 
   чоп.ҷадвал(натиҷа);
-  чоп.вақт_охир('раҳгирӣ');
+  чоп.вақтОхир('раҳгирӣ');
 
-  чоп.гуруҳ_охир();
+  чоп.гуруҳОхир();
 }
 
 раҳгирӣ_веб_сохӣ('https://example.com');

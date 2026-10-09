@@ -10,4 +10,4 @@ npm run type-check
 # Run final format check to ensure everything is properly formatted
 npm run format:check
 
-echo "✅ Patch version incremented and formatted successfully"
+echo "✅ Pre-commit checks passed (lint-staged, type-check, format)"

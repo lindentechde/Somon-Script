@@ -5,7 +5,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": {
     "name": "LindenTech IT Consulting",
     "email": "info@lindentech.de",
@@ -27,6 +27,11 @@
       "CHANGELOG.md",
       "AUTHORS.md"
     ],
-    "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]
+    "exclude": [
+      "src/**/*.test.ts",
+      "src/**/*.spec.ts",
+      "src/cli.ts",
+      "src/cli/**"
+    ]
   }
 }

@@ -15,7 +15,7 @@ const translations: Translations = {
         input: 'Входной файл .som',
       },
       options: {
-        output: 'Выходной файл (по умолчанию: то же имя с расширением .js)',
+        output: 'Выходной файл (по умолчанию: вход с .som, заменённым на .js, иначе <вход>.js)',
         outDir: 'Выходная директория',
         target: 'Цель компиляции',
         sourceMap: 'Генерировать исходные карты',
@@ -25,7 +25,6 @@ const translations: Translations = {
         noTypeCheck: 'Отключить проверку типов',
         strict: 'Включить строгую проверку типов',
         watch: 'Перекомпилировать при изменении файлов',
-        production: 'Включить производственный режим со строгой валидацией',
       },
       messages: {
         fileNotFound: (file: string) => `Ошибка: Файл '${file}' не найден`,
@@ -37,31 +36,27 @@ const translations: Translations = {
         recompiling: (file: string) => `Перекомпилируем '${file}'...`,
         configChanged: (file: string) =>
           `Обнаружено изменение конфигурации в '${file}'. Перекомпилируем...`,
+        sourceRemoved: (file: string) => `Исходный файл '${file}' удалён. Ждём его появления...`,
+        configRemoved: (file: string) =>
+          `Файл конфигурации '${file}' удалён. Используем прежние опции.`,
+        stoppingWatcher: (signal: string) => `Получен ${signal}, останавливаем отслеживание...`,
         watchError: 'Ошибка отслеживания:',
+        watchCloseFailed: 'Не удалось остановить отслеживание:',
       },
     },
     run: {
       name: 'запустить',
       alias: 'з',
       description: 'Компилировать и запустить файл СомонСкрипт',
-      usage: '[вход] [опции]',
+      usage: '<вход> [опции] [-- аргументы...]',
       args: {
         input: 'Входной файл .som',
-      },
-      options: {
-        target: 'Цель компиляции',
-        sourceMap: 'Генерировать исходные карты',
-        noSourceMap: 'Отключить исходные карты',
-        minify: 'Минифицировать вывод',
-        noMinify: 'Отключить минификацию',
-        noTypeCheck: 'Отключить проверку типов',
-        strict: 'Включить строгую проверку типов',
-        production: 'Включить производственный режим со строгой валидацией',
+        args: 'Аргументы для программы (используйте -- перед аргументами, начинающимися с -)',
       },
       messages: {
         failedToExecute: 'Не удалось выполнить Node:',
         terminatedWithSignal: (signal: string) => `Процесс завершён сигналом ${signal}`,
-        productionValidationFailed: 'Валидация производства не удалась:',
+        cleanupFailed: 'Предупреждение: не удалось удалить временные файлы:',
       },
     },
     init: {
@@ -87,11 +82,8 @@ const translations: Translations = {
       options: {
         output: 'Путь к выходному файлу',
         format: "Формат пакета (поддерживается только 'commonjs')",
-        minify: 'Минифицировать вывод',
-        sourceMap: 'Генерировать исходные карты',
         inlineSources: 'Встроить оригинальные источники в карты источников',
         externals: 'Внешние модули (через запятую)',
-        production: 'Включить производственный режим со строгой валидацией',
       },
       messages: {
         bundling: (input: string) => `📦 Собираем ${input}...`,
@@ -151,29 +143,18 @@ const translations: Translations = {
         resolveError: 'Ошибка разрешения:',
       },
     },
-    serve: {
-      name: 'сервер',
-      description: 'Запустить управляющий сервер для проверки работоспособности и метрик',
-      options: {
-        port: 'Порт для прослушивания',
-        config: 'Путь к файлу конфигурации',
-        production: 'Включить производственный режим со всеми функциями безопасности',
-        json: 'Использовать структурированное JSON логирование',
-      },
-    },
-    help: {
-      name: 'помощь',
-      description: 'показать справку по команде',
-    },
   },
   common: {
     version: 'вывести номер версии',
     help: 'показать справку по команде',
-    displayHelp: 'показать справку по команде',
     error: 'Ошибка:',
     configError: 'Ошибка конфигурации:',
-    productionValidationFailed: 'Валидация производства не удалась:',
     languageOption: 'Установить язык интерфейса (en, tj, ru)',
+    invalidLanguage: (value: string) =>
+      `Ошибка: неподдерживаемый язык '${value}'. Поддерживаемые языки: en, tj, ru`,
+    outputEqualsInput: (file: string) =>
+      `Ошибка: выходной путь '${file}' совпадает с входным файлом; укажите другой путь через -o`,
+    productionDeprecated: 'Предупреждение: --production устарел и ни на что не влияет',
   },
 };
 

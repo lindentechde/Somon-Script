@@ -22,17 +22,17 @@ writing clean, maintainable, and efficient SomonScript code.
 
 ```som
 // ✅ Good: Consistent indentation (2 spaces)
-агар шарт {
+агар (шарт) {
   тағйирёбанда натиҷа = ҳисоб_кардан();
-  агар натиҷа > 0 {
+  агар (натиҷа > 0) {
     чоп.сабт("Мусбат");
   }
 }
 
 // ❌ Bad: Inconsistent indentation
-агар шарт {
+агар (шарт) {
     тағйирёбанда натиҷа = ҳисоб_кардан();
-      агар натиҷа > 0 {
+      агар (натиҷа > 0) {
       чоп.сабт("Мусбат");
     }
 }
@@ -56,7 +56,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ): Корбар {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Too long line
 тағйирёбанда паёми_дароз = "Ин паёми хеле дароз аст ва бояд ба якчанд сатр тақсим шавад то хондан осон бошад ва стандарти кодгузорӣ риоя шавад.";
 ```
@@ -70,7 +72,9 @@ writing clean, maintainable, and efficient SomonScript code.
 агар (х > 0 && у < 10) {
   тағйирёбанда ҷавоб = ҳисоб_кардан(х, у);
 }
+```
 
+```som
 // ❌ Bad: Inconsistent spacing
 тағйирёбанда натиҷа=(а+б)*с;
 
@@ -134,7 +138,7 @@ writing clean, maintainable, and efficient SomonScript code.
   // implementation
 }
 
-синф МудириМаҳсулот мерос_мебарад КорбариАсосӣ {
+синф МудириМаҳсулот мерос КорбариАсосӣ {
   // implementation
 }
 
@@ -149,7 +153,7 @@ writing clean, maintainable, and efficient SomonScript code.
   // implementation
 }
 
-синф mngr мерос_мебарад корбар {
+синф mngr мерос корбар {
   // implementation
 }
 ```
@@ -164,10 +168,12 @@ writing clean, maintainable, and efficient SomonScript code.
   бозгашт маблағ * (фоиз / 100);
 }
 
-функсия корбар_ёфтан(идентификатор: сатр): Promise<Корбар | ҳеҷ> {
+функсия корбар_ёфтан(идентификатор: сатр): Promise<Корбар | холӣ> {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Missing types
 функсия ҳисоби_фоиз(маблағ, фоиз) {
   бозгашт маблағ * (фоиз / 100);
@@ -183,18 +189,20 @@ writing clean, maintainable, and efficient SomonScript code.
 функсия коркарди_маълумот(
   маълумот: сатр | рақам | мантиқӣ
 ): сатр {
-  агар typeof маълумот === "сатр" {
+  агар (typeof маълумот === "string") {
     бозгашт маълумот.toUpperCase();
-  } вагарна агар typeof маълумот === "рақам" {
+  } вагарна агар (typeof маълумот === "number") {
     бозгашт маълумот.toString();
   } вагарна {
     бозгашт маълумот ? "рост" : "нодуруст";
   }
 }
+```
 
+```som
 // ❌ Bad: Overly broad types
-тағйирёбанда статус: ҳамаи_ҷур = "барқарор";
-функсия коркарди_маълумот(маълумот: ҳамаи_ҷур): ҳамаи_ҷур {
+тағйирёбанда статус: ҳар = "барқарор";
+функсия коркарди_маълумот(маълумот: ҳар): ҳар {
   // implementation
 }
 ```
@@ -219,7 +227,7 @@ writing clean, maintainable, and efficient SomonScript code.
 
 // ✅ Acceptable: Type aliases for unions or computed types
 навъ ИдентификаторИ_корбар = сатр | рақам;
-навъ ХусусиятҳоиКорбар = keyof Корбар;
+навъ ХусусиятҳоиКорбар = калидҳои Корбар;
 ```
 
 ## Function Design
@@ -229,7 +237,7 @@ writing clean, maintainable, and efficient SomonScript code.
 ```som
 // ✅ Good: Each function has one clear purpose
 функсия тасдиқи_email(email: сатр): мантиқӣ {
-  собит намуна = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  собит намуна = нав RegExp("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
   бозгашт намуна.test(email);
 }
 
@@ -250,7 +258,7 @@ writing clean, maintainable, and efficient SomonScript code.
   email: сатр
 ): Promise<Корбар> {
   // Validation
-  собит намунаи_email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  собит намунаи_email = нав RegExp("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
   агар (!намунаи_email.test(email)) {
     партофтан нав Хато("Email нодуруст аст");
   }
@@ -277,8 +285,7 @@ writing clean, maintainable, and efficient SomonScript code.
 }
 
 функсия форматкунии_ном(ном: сатр): сатр {
-  бозгашт ном.trim().toLowerCase()
-    .replace(/\b\w/g, ҳарф => ҳарф.toUpperCase());
+  бозгашт ном.trim().toLowerCase().replace(нав RegExp("\\b\\w", "g"), ҳарф => ҳарф.toUpperCase());
 }
 
 // ❌ Bad: Function with side effects
@@ -316,7 +323,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ): Promise<Корбар> {
   // implementation
 }
+```
 
+```som
 // ❌ Bad: Too many parameters
 функсия корбар_эҷод_кардан(
   ном: сатр,
@@ -349,7 +358,7 @@ writing clean, maintainable, and efficient SomonScript code.
     ин.баланс = 0;
   }
 
-  ҷамъиятӣ пул_гузоштан(маблағ: рақам): ҳеҷ {
+  ҷамъиятӣ пул_гузоштан(маблағ: рақам): холӣ {
     агар (маблағ <= 0) {
       партофтан нав Хато("Маблағ бояд мусбат бошад");
     }
@@ -364,7 +373,9 @@ writing clean, maintainable, and efficient SomonScript code.
     бозгашт маблағ > 0 && маблағ <= ин.баланс;
   }
 }
+```
 
+```som
 // ❌ Bad: All properties public
 синф Ҳисобдор {
   ҷамъиятӣ баланс: рақам;
@@ -423,14 +434,14 @@ writing clean, maintainable, and efficient SomonScript code.
 
 ```som
 // ✅ Good: Custom error types
-синф ХатоиТасдиқ мерос_мебарад Хато {
-  конструктор(майдон: сатр, қимат: ҳамаи_ҷур) {
+синф ХатоиТасдиқ мерос Хато {
+  конструктор(майдон: сатр, қимат: ҳар) {
     супер(`Қимати "${қимат}" барои майдони "${майдон}" нодуруст аст`);
     ин.ном = "ХатоиТасдиқ";
   }
 }
 
-синф ХатоиШабака мерос_мебарад Хато {
+синф ХатоиШабака мерос Хато {
   ҷамъиятӣ кодиСтатус: рақам;
 
   конструктор(паём: сатр, кодиСтатус: рақам) {
@@ -441,7 +452,7 @@ writing clean, maintainable, and efficient SomonScript code.
 }
 
 // Usage
-функсия тасдиқи_синну_сол(синну_сол: рақам): ҳеҷ {
+функсия тасдиқи_синну_сол(синну_сол: рақам): холӣ {
   агар (синну_сол < 0 || синну_сол > 150) {
     партофтан нав ХатоиТасдиқ("синну_сол", синну_сол);
   }
@@ -477,14 +488,16 @@ writing clean, maintainable, and efficient SomonScript code.
     }
   }
 }
+```
 
+```som
 // ❌ Bad: Catching and ignoring errors
-ҳамзамон функсия корбар_гирифтан(идентификатор: сатр): Promise<Корбар | ҳеҷ> {
+ҳамзамон функсия корбар_гирифтан(идентификатор: сатр): Promise<Корбар | холӣ> {
   кӯшиш {
     бозгашт интизор database.корбар_ёфтан(идентификатор);
   } гирифтан (хато) {
     // Silently ignoring errors is bad practice
-    бозгашт ҳеҷ;
+    бозгашт холӣ;
   }
 }
 ```
@@ -501,7 +514,7 @@ writing clean, maintainable, and efficient SomonScript code.
   }
 
   тағйирёбанда ҷамъ = 0;
-  барои тағйирёбанда қимат аз қиматҳо {
+  барои (тағйирёбанда қимат аз қиматҳо) {
     ҷамъ += қимат;
   }
 
@@ -519,7 +532,7 @@ writing clean, maintainable, and efficient SomonScript code.
   собит андоза = қиматҳо.length;
 
   // Use for loop for better performance with large arrays
-  барои тағйирёбанда и = 0; и < андоза; и++ {
+  барои (тағйирёбанда и = 0; и < андоза; и++) {
     ҷамъ += қиматҳо[и];
   }
 
@@ -533,16 +546,15 @@ writing clean, maintainable, and efficient SomonScript code.
 // ✅ Good: Efficient array operations
 функсия коркарди_маълумоти_калон(маълумот: рақам[]): рақам[] {
   // Use map for transformations
-  бозгашт маълумот
-    .filter(қ => қ > 0)
-    .map(қ => қ * 2)
-    .slice(0, 1000); // Limit result size
+  бозгашт маълумот.filter(қ => қ > 0).map(қ => қ * 2).slice(0, 1000); // Limit result size
 }
+```
 
+```som
 // ❌ Bad: Creating unnecessary intermediate arrays
 функсия коркарди_маълумоти_калон(маълумот: рақам[]): рақам[] {
   тағйирёбанда натиҷа = [];
-  барои тағйирёбанда элемент аз маълумот {
+  барои (тағйирёбанда элемент аз маълумот) {
     агар (элемент > 0) {
       натиҷа.push(элемент * 2);
     }
@@ -561,18 +573,18 @@ writing clean, maintainable, and efficient SomonScript code.
  * Mathematical utility functions
  */
 
-содор собит ПИ = 3.14159265359;
-содор собит E = 2.71828182846;
+содир собит ПИ = 3.14159265359;
+содир собит E = 2.71828182846;
 
-содор функсия ҷамъ(а: рақам, б: рақам): рақам {
+содир функсия ҷамъ(а: рақам, б: рақам): рақам {
   бозгашт а + б;
 }
 
-содор функсия қувват(асос: рақам, нишондоди: рақам): рақам {
+содир функсия қувват(асос: рақам, нишондоди: рақам): рақам {
   бозгашт Math.pow(асос, нишондоди);
 }
 
-содор функсия дуръшака(рақам: рақам): рақам {
+содир функсия дуръшака(рақам: рақам): рақам {
   агар (рақам < 0) {
     партофтан нав Хато("Дуръшакаи рақами манфӣ вуҷуд надорад");
   }
@@ -580,9 +592,9 @@ writing clean, maintainable, and efficient SomonScript code.
 }
 
 // Default export for main functionality
-содор пешфарз синф РиёзӣКунҷ {
-  собити ПИ = ПИ;
-  собити E = E;
+содир пешфарз синф РиёзӣКунҷ {
+  статикӣ ПИ = ПИ;
+  статикӣ E = E;
 
   ҷамъ = ҷамъ;
   қувват = қувват;
@@ -603,7 +615,9 @@ writing clean, maintainable, and efficient SomonScript code.
 ворид * чун path аз "path";
 
 ворид РиёзӣКунҷ аз "./math";
+```
 
+```som
 // ❌ Bad: Mixed import styles and unclear grouping
 ворид { ПИ } аз "./math";
 ворид * чун fs аз "fs";
@@ -647,9 +661,9 @@ writing clean, maintainable, and efficient SomonScript code.
 }
 
 // Supporting pure function (easy to unit test)
-содор функсия тасдиқи_маълумоти_корбар(
+содир функсия тасдиқи_маълумоти_корбар(
   маълумот: МаълумотиКорбар
-): ҳеҷ {
+): холӣ {
   агар (!маълумот.ном || маълумот.ном.trim().length === 0) {
     партофтан нав ХатоиТасдиқ("ном", "Ном хеҷ буда наметавонад");
   }
@@ -714,14 +728,14 @@ describe("ХидматиКорбар", () => {
  * чоп.сабт(миёна); // 3
  * ```
  */
-содор функсия ҳисоби_миёна(қиматҳо: рақам[]): рақам {
+содир функсия ҳисоби_миёна(қиматҳо: рақам[]): рақам {
   агар (қиматҳо.length === 0) {
     партофтан нав ХатоиПараметр("Рўйхат барои ҳисоби миёна холӣ буда наметавонад");
   }
 
   // Ҷамъ кардани ҳамаи қиматҳо
   тағйирёбанда ҷамъ = 0;
-  барои тағйирёбанда қимат аз қиматҳо {
+  барои (тағйирёбанда қимат аз қиматҳо) {
     ҷамъ += қимат;
   }
 

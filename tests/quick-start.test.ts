@@ -104,6 +104,7 @@ describe('Quick Start Reference Tests', () => {
   describe('Control Flow', () => {
     test('should handle if-else statements', () => {
       const source = `
+        тағйирёбанда x = 1;
         агар (x > 0) {
           чоп.сабт("Мусбат");
         } вагарна агар (x < 0) {
@@ -134,6 +135,7 @@ describe('Quick Start Reference Tests', () => {
 
     test('should handle while loops', () => {
       const source = `
+        тағйирёбанда шарт = нодуруст;
         то (шарт) {
           чоп.сабт("Давом");
         }
@@ -248,7 +250,7 @@ describe('Quick Start Reference Tests', () => {
 
   describe('Template Literals', () => {
     test('should handle template literals', () => {
-      const source = 'тағйирёбанда паём = `Салом, ${ном}!`;';
+      const source = 'тағйирёбанда ном = "Аҳмад"; тағйирёбанда паём = `Салом, ${ном}!`;';
       const result = compile(source);
 
       expect(result.errors).toHaveLength(0);

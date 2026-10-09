@@ -5,18 +5,24 @@
  * Licensed under the MIT License. See the LICENSE file for details.
  */
 
-import { spawnSync } from 'node:child_process';
-import { Command } from 'commander';
+import { spawn } from 'node:child_process';
+import { Command, Option } from 'commander';
 import chokidar from 'chokidar';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
-import { createRequire } from 'node:module';
-import type { Module as NodeModuleType } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
-import type { CompileResult } from '../compiler';
-import type { SomonConfig } from '../config';
+import { compile, type CompileResult } from '../compiler';
+import {
+  ConfigError,
+  loadConfigWithPath,
+  type CompilerOptions,
+  type LoadedConfig,
+  type SomonConfig,
+} from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
-import { i18n, t, type Language } from './i18n';
+import { LANGUAGES, t, type Translations } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
   let currentDir = __dirname;
@@ -37,28 +43,10 @@ function findPackageJson(): { name: string; version: string } {
 }
 const pkg = findPackageJson();
 
-type CompilerModule = typeof import('../compiler');
-type ConfigModule = typeof import('../config');
+const TARGETS = ['es5', 'es2015', 'es2020', 'esnext'] as const;
 
-let tsRuntimeRegistered = false;
-
-const localRequire = createRequire(__filename);
-const compiledCompilerModuleId = '../compiler';
-const sourceCompilerModuleId = '../../src/compiler.ts';
-const compiledConfigModuleId = '../config';
-const sourceConfigModuleId = '../../src/config.ts';
-
-const { compile } = loadCompiler();
-const { loadConfig, ConfigError } = loadConfigModule();
-
-type ConfigErrorInstance = InstanceType<typeof ConfigError>;
-
-function isConfigError(error: unknown): error is ConfigErrorInstance {
-  return error instanceof ConfigError;
-}
-
-function logConfigError(error: ConfigErrorInstance): void {
-  console.error('Configuration error:');
+function logConfigError(error: ConfigError): void {
+  console.error(t().common.configError);
   console.error(`  ${error.message}`);
   if (error.details.length > 0) {
     for (const detail of error.details) {
@@ -68,7 +56,7 @@ function logConfigError(error: ConfigErrorInstance): void {
 }
 
 function handleCliFailure(error: unknown, fallbackPrefix: string): void {
-  if (isConfigError(error)) {
+  if (error instanceof ConfigError) {
     logConfigError(error);
   } else {
     console.error(fallbackPrefix, error instanceof Error ? error.message : error);
@@ -92,39 +80,109 @@ type BufferEncoding =
   | 'binary'
   | 'hex';
 
-interface BundleOptions {
+/** Compiler flags shared by compile, run and bundle (as parsed by commander). */
+interface CliCompilerFlags {
+  target?: CompilerOptions['target'];
+  sourceMap?: boolean;
+  minify?: boolean;
+  /** `--no-type-check` is stored by commander as `typeCheck: false`. */
+  typeCheck?: boolean;
+  strict?: boolean;
+  production?: boolean;
+}
+
+interface BundleOptions extends CliCompilerFlags {
   output?: string;
   format?: string;
-  minify?: boolean;
-  sourceMap?: boolean;
-  externals?: string;
   inlineSources?: boolean;
-  production?: boolean;
+  externals?: string;
+}
+
+type RunOptions = CliCompilerFlags;
+
+/** Translate commander's compiler flags into config-style compiler options. */
+function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
+  const overrides: CompilerOptions = {};
+  if (flags.target !== undefined) overrides.target = flags.target;
+  if (flags.sourceMap !== undefined) overrides.sourceMap = flags.sourceMap;
+  if (flags.minify !== undefined) overrides.minify = flags.minify;
+  if (flags.typeCheck === false) overrides.noTypeCheck = true;
+  if (flags.strict !== undefined) overrides.strict = flags.strict;
+  return overrides;
+}
+
+/**
+ * Compiler options for the module system: config compilerOptions, then the more
+ * specific moduleSystem.compilation section, then the command-line flags.
+ */
+function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags): CompilerOptions {
+  // Output paths and watch settings in compilerOptions only apply to `compile`.
+  const { target, sourceMap, minify, noTypeCheck, strict } = config.compilerOptions ?? {};
+  const fromConfig = Object.fromEntries(
+    Object.entries({ target, sourceMap, minify, noTypeCheck, strict }).filter(
+      ([, value]) => value !== undefined
+    )
+  ) as CompilerOptions;
+  return {
+    ...fromConfig,
+    ...config.moduleSystem?.compilation,
+    ...cliCompilerOverrides(flags),
+  };
+}
+
+/** Resolve a path from the config file relative to the directory of that file. */
+function resolveFromConfig(loaded: LoadedConfig, value: string, fallbackDir: string): string {
+  return path.resolve(loaded.configDir ?? fallbackDir, value);
+}
+
+/** `x.som` → `x<suffix>`, anything else → `x.ext<suffix>` so the input is never overwritten. */
+function replaceSomExtension(file: string, suffix: string): string {
+  return /\.som$/i.test(file) ? file.replace(/\.som$/i, suffix) : `${file}${suffix}`;
+}
+
+/** Report and refuse an output path that would overwrite the input file. */
+function isOutputSameAsInput(input: string, output: string): boolean {
+  if (path.resolve(output) !== path.resolve(input)) return false;
+  console.error(t().common.outputEqualsInput(output));
+  process.exitCode = 1;
+  return true;
 }
 
 async function executeBundleCommand(input: string, options: BundleOptions): Promise<void> {
   try {
-    const baseDir = path.dirname(path.resolve(input));
-    const config = loadConfig(baseDir);
+    const loaded = loadConfigWithPath(path.dirname(path.resolve(input)));
 
-    const isProduction = options.production || process.env.NODE_ENV === 'production';
+    const moduleSystem = await createModuleSystem(
+      input,
+      loaded,
+      moduleCompilationOptions(loaded.config, options)
+    );
 
-    const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
+    const bundleOptions = createBundleOptions(input, options, loaded);
+    const outputPath = bundleOptions.outputPath ?? replaceSomExtension(input, '.bundle.js');
+    if (isOutputSameAsInput(input, outputPath)) return;
 
-    const bundleOptions = createBundleOptions(input, options, config, baseDir);
-
-    await performBundling(moduleSystem, bundleOptions, input);
+    await performBundling(moduleSystem, bundleOptions, input, outputPath);
   } catch (error) {
-    handleCliFailure(error, 'Bundle error:');
+    handleCliFailure(error, t().commands.bundle.messages.bundleError);
   }
 }
 
-async function createModuleSystem(baseDir: string, config: SomonConfig, _isProduction = false) {
+async function createModuleSystem(
+  input: string,
+  loaded: LoadedConfig,
+  compilation: CompilerOptions
+): Promise<ModuleSystem> {
   const { ModuleSystem } = await import('../module-system');
+  const inputDir = path.dirname(path.resolve(input));
+  const config = loaded.config;
+  const resolution = config.moduleSystem?.resolution;
   return new ModuleSystem({
     resolution: {
-      baseUrl: baseDir,
-      ...config.moduleSystem?.resolution,
+      ...resolution,
+      baseUrl: resolution?.baseUrl
+        ? resolveFromConfig(loaded, resolution.baseUrl, inputDir)
+        : inputDir,
     },
     loading: config.moduleSystem?.loading
       ? {
@@ -132,28 +190,34 @@ async function createModuleSystem(baseDir: string, config: SomonConfig, _isProdu
           encoding: config.moduleSystem.loading.encoding as BufferEncoding | undefined,
         }
       : undefined,
-    compilation: config.moduleSystem?.compilation,
+    compilation,
   });
 }
 
 function createBundleOptions(
   input: string,
   options: BundleOptions,
-  config: SomonConfig,
-  _baseDir: string
+  loaded: LoadedConfig
 ): ModuleBundleOptions {
+  const config = loaded.config;
   const formatValue = options.format ?? config.bundle?.format ?? 'commonjs';
   const requestedFormat = typeof formatValue === 'string' ? formatValue.toLowerCase() : 'commonjs';
 
   if (requestedFormat !== 'commonjs') {
-    throw new Error(
-      `SomonScript currently supports only the 'commonjs' bundle format. Received '${requestedFormat}'.`
-    );
+    throw new Error(t().commands.bundle.messages.onlyCommonJsSupported(requestedFormat));
+  }
+
+  // -o is relative to the current directory, bundle.output to the config file.
+  let outputPath: string | undefined;
+  if (options.output) {
+    outputPath = path.resolve(options.output);
+  } else if (config.bundle?.output) {
+    outputPath = resolveFromConfig(loaded, config.bundle.output, path.dirname(path.resolve(input)));
   }
 
   return {
     entryPoint: path.resolve(input),
-    outputPath: options.output ?? config.bundle?.output,
+    outputPath,
     format: 'commonjs',
     minify: options.minify ?? config.bundle?.minify,
     sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
@@ -165,64 +229,62 @@ function createBundleOptions(
 async function performBundling(
   moduleSystem: ModuleSystem,
   bundleOptions: ModuleBundleOptions,
-  input: string
+  input: string,
+  outputPath: string
 ): Promise<void> {
-  console.log(`📦 Bundling ${input}...`);
+  const messages = t().commands.bundle.messages;
+  console.log(messages.bundling(input));
   const bundle = await moduleSystem.bundle(bundleOptions);
-  const outputPath = getBundleOutputPath(bundleOptions, input);
 
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
   let outputCode = bundle.code;
   if (bundle.map) {
     const mapPath = `${outputPath}.map`;
     fs.writeFileSync(mapPath, bundle.map, 'utf8');
     outputCode = `${outputCode}\n//# sourceMappingURL=${path.basename(mapPath)}`;
-    console.log(`🗺️ Source map created: ${mapPath}`);
+    console.log(messages.sourceMapCreated(mapPath));
   }
 
   fs.writeFileSync(outputPath, outputCode, 'utf8');
 
-  console.log(`✅ Bundle created: ${outputPath}`);
+  console.log(messages.bundleCreated(outputPath));
 
   const stats = moduleSystem.getStatistics();
-  console.log(`📊 Bundled ${stats.totalModules} modules`);
+  console.log(messages.bundledModules(stats.totalModules));
 }
 
-function getBundleOutputPath(bundleOptions: ModuleBundleOptions, input: string): string {
-  if (bundleOptions.outputPath) {
-    return path.isAbsolute(bundleOptions.outputPath)
-      ? bundleOptions.outputPath
-      : path.resolve(path.dirname(path.resolve(input)), bundleOptions.outputPath);
-  }
-  return input.replace(/\.som$/, '.bundle.js');
-}
-
-export interface CompileOptions {
-  output?: string;
-  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
-  sourceMap?: boolean;
+export interface CompileOptions extends CompilerOptions {
   noSourceMap?: boolean;
-  minify?: boolean;
   noMinify?: boolean;
-  noTypeCheck?: boolean;
-  strict?: boolean;
-  outDir?: string;
-  watch?: boolean;
-  compileOnSave?: boolean;
+  /** `--no-type-check` is stored by commander as `typeCheck: false`. */
+  typeCheck?: boolean;
   production?: boolean;
+  /** Name of the input in the source map, relative to the map file. */
+  sourceFileName?: string;
 }
 
-function mergeOptions(input: string, options: CompileOptions): CompileOptions {
-  const config = loadConfig(path.dirname(path.resolve(input)));
-  const merged = { ...config.compilerOptions, ...options };
+interface MergedCompileOptions {
+  options: CompileOptions;
+  outputFile: string;
+  configPath?: string;
+}
+
+function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileOptions {
+  const inputDir = path.dirname(path.resolve(input));
+  const loaded = loadConfigWithPath(inputDir);
+  const config = loaded.config.compilerOptions ?? {};
+  const merged: CompileOptions = { ...config, ...cliOptions };
 
   // Handle negation flags - they override positive flags
-  if (options.noSourceMap) {
+  if (cliOptions.noSourceMap) {
     merged.sourceMap = false;
   }
-  if (options.noMinify) {
+  if (cliOptions.noMinify) {
     merged.minify = false;
+  }
+  if (cliOptions.typeCheck === false) {
+    merged.noTypeCheck = true;
   }
 
   // Set default target if not specified
@@ -230,7 +292,22 @@ function mergeOptions(input: string, options: CompileOptions): CompileOptions {
     merged.target = 'es2020';
   }
 
-  return merged;
+  // Command-line paths are relative to the current directory, config paths to the config file.
+  const outputName = replaceSomExtension(path.basename(input), '.js');
+  let outputFile: string;
+  if (cliOptions.output) {
+    outputFile = cliOptions.output;
+  } else if (cliOptions.outDir) {
+    outputFile = path.join(path.resolve(cliOptions.outDir), outputName);
+  } else if (config.output) {
+    outputFile = resolveFromConfig(loaded, config.output, inputDir);
+  } else if (config.outDir) {
+    outputFile = path.join(resolveFromConfig(loaded, config.outDir, inputDir), outputName);
+  } else {
+    outputFile = replaceSomExtension(input, '.js');
+  }
+
+  return { options: merged, outputFile, configPath: loaded.configPath };
 }
 
 export function compileFile(input: string, options: CompileOptions): CompileResult {
@@ -246,8 +323,9 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
     const result = compile(source, {
       target: options.target,
       sourceMap: options.sourceMap,
+      sourceFileName: options.sourceFileName,
       minify: options.minify,
-      typeCheck: !options.noTypeCheck,
+      typeCheck: options.typeCheck !== false && !options.noTypeCheck,
       strict: options.strict,
     });
 
@@ -269,54 +347,189 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('Error:', message);
+    console.error(t().common.error, message);
     process.exitCode = 1;
     return { code: '', errors: [message], warnings: [] };
   }
 }
 
-function resolveForwardedArgv(command: Command, input: string): string[] {
-  const parentArgs = command.parent?.args ?? [];
-  return parentArgs.length > 0 ? [...parentArgs] : [command.name(), input];
-}
-
-function createRunOutputPath(input: string, sourceDir: string): string {
-  const baseName = path.basename(input);
-  const withoutExtension = baseName.includes('.') ? baseName.replace(/\.[^.]+$/, '') : baseName;
-  const safeBase = withoutExtension || 'somon-script';
-  const uniqueSuffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  return path.join(sourceDir, `${safeBase}.somon-run-${uniqueSuffix}.js`);
-}
-
 interface ExecuteOptions {
   cwd?: string;
+  enableSourceMaps?: boolean;
 }
 
+export interface ExecutionResult {
+  status: number | null;
+  signal: string | null;
+  error?: Error;
+}
+
+type ForwardedSignal = 'SIGINT' | 'SIGTERM' | 'SIGHUP';
+
+const FORWARDED_SIGNALS: readonly ForwardedSignal[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+
 export const cliRuntime = {
+  /**
+   * Run a compiled file in a child Node process. Termination signals received by
+   * the CLI are forwarded to the child, and the promise settles when it exits.
+   */
   executeCompiledFile(
     filePath: string,
     forwardedArgv: string[] = [],
     options: ExecuteOptions = {}
-  ): ReturnType<typeof spawnSync> {
-    return spawnSync(process.execPath, [filePath, ...forwardedArgv], {
-      stdio: 'inherit',
-      env: process.env,
-      cwd: options.cwd,
+  ): Promise<ExecutionResult> {
+    return new Promise(resolve => {
+      const nodeArgs = options.enableSourceMaps ? ['--enable-source-maps'] : [];
+      const child = spawn(process.execPath, [...nodeArgs, filePath, ...forwardedArgv], {
+        stdio: 'inherit',
+        env: process.env,
+        cwd: options.cwd,
+      });
+
+      const forwardSignal = (signal: ForwardedSignal): void => {
+        try {
+          child.kill(signal);
+        } catch {
+          // The child may already be gone, or the platform may not support the signal.
+        }
+      };
+      for (const signal of FORWARDED_SIGNALS) {
+        process.on(signal, forwardSignal);
+      }
+
+      let settled = false;
+      const finish = (result: ExecutionResult): void => {
+        if (settled) return;
+        settled = true;
+        for (const signal of FORWARDED_SIGNALS) {
+          process.off(signal, forwardSignal);
+        }
+        resolve(result);
+      };
+
+      child.once('error', error => finish({ status: null, signal: null, error }));
+      child.once('exit', (status, signal) => finish({ status, signal }));
     });
   },
 };
 
 /**
+ * Create a private temporary directory for `run`, removed when `cleanup` is
+ * called or, as a fallback, when the CLI process exits.
+ */
+function createRunWorkspace(input: string): { file: string; cleanup: () => void } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-run-'));
+  const baseName = path.basename(input).replace(/\.[^.]+$/, '') || 'somon-script';
+  const file = path.join(dir, `${baseName}.js`);
+
+  const cleanup = (): void => {
+    process.off('exit', cleanup);
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      console.warn(
+        t().commands.run.messages.cleanupFailed,
+        cleanupError instanceof Error ? cleanupError.message : cleanupError
+      );
+    }
+  };
+  process.once('exit', cleanup);
+
+  return { file, cleanup };
+}
+
+/**
+ * Bundle source maps name sources relative to the entry directory; the temporary
+ * bundle lives elsewhere, so point them at the original files with file URLs.
+ */
+function absoluteSourceMap(map: string, entryDir: string): string {
+  const parsed = JSON.parse(map) as { sources?: string[] };
+  if (Array.isArray(parsed.sources)) {
+    parsed.sources = parsed.sources.map(source =>
+      /^[a-z][a-z\d+.-]*:\/\//i.test(source)
+        ? source
+        : pathToFileURL(path.resolve(entryDir, source)).href
+    );
+  }
+  return JSON.stringify(parsed);
+}
+
+async function executeRunCommand(
+  input: string,
+  scriptArgs: string[],
+  options: RunOptions
+): Promise<void> {
+  let cleanup: (() => void) | undefined;
+  try {
+    const baseDir = path.dirname(path.resolve(input));
+    const loaded = loadConfigWithPath(baseDir);
+    const config = loaded.config;
+
+    // Create module system and bundle the file with all dependencies
+    const moduleSystem = await createModuleSystem(
+      input,
+      loaded,
+      moduleCompilationOptions(config, options)
+    );
+
+    const sourceMaps = options.sourceMap ?? config.bundle?.sourceMaps ?? false;
+    const bundle = await moduleSystem.bundle({
+      entryPoint: path.resolve(input),
+      format: 'commonjs',
+      minify: options.minify ?? config.bundle?.minify,
+      sourceMaps,
+      inlineSources: false,
+      externals: config.bundle?.externals,
+      // The bundle runs from a temporary directory; modules keep their real locations.
+      modulePaths: true,
+    });
+
+    const workspace = createRunWorkspace(input);
+    cleanup = workspace.cleanup;
+    const compiledFilePath = workspace.file;
+
+    let code = bundle.code;
+    if (sourceMaps && bundle.map) {
+      const mapPath = `${compiledFilePath}.map`;
+      fs.writeFileSync(mapPath, absoluteSourceMap(bundle.map, baseDir), 'utf8');
+      code = `${code}\n//# sourceMappingURL=${path.basename(mapPath)}`;
+    }
+    fs.writeFileSync(compiledFilePath, code, 'utf8');
+
+    const child = await cliRuntime.executeCompiledFile(compiledFilePath, scriptArgs, {
+      cwd: baseDir,
+      enableSourceMaps: sourceMaps && !!bundle.map,
+    });
+
+    const messages = t().commands.run.messages;
+    if (child.error) {
+      console.error(messages.failedToExecute, child.error.message ?? child.error);
+      process.exitCode = 1;
+    } else if (typeof child.status === 'number') {
+      process.exitCode = child.status;
+    } else if (typeof child.signal === 'string') {
+      console.error(messages.terminatedWithSignal(child.signal));
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    handleCliFailure(error, t().common.error);
+  } finally {
+    cleanup?.();
+  }
+}
+
+/**
  * Display module statistics
  */
 function displayModuleStatistics(moduleSystem: ModuleSystem): void {
+  const messages = t().commands.moduleInfo.messages;
   const stats = moduleSystem.getStatistics();
-  console.log('\n📊 Module Statistics:');
-  console.log(`  Total modules: ${stats.totalModules}`);
-  console.log(`  Total dependencies: ${stats.totalDependencies}`);
-  console.log(`  Average dependencies per module: ${stats.averageDependencies.toFixed(2)}`);
-  console.log(`  Maximum dependency depth: ${stats.maxDependencyDepth}`);
-  console.log(`  Circular dependencies: ${stats.circularDependencies}`);
+  console.log(`\n${messages.moduleStatistics}`);
+  console.log(`  ${messages.totalModules} ${stats.totalModules}`);
+  console.log(`  ${messages.totalDependencies} ${stats.totalDependencies}`);
+  console.log(`  ${messages.averageDependencies} ${stats.averageDependencies.toFixed(2)}`);
+  console.log(`  ${messages.maxDepth} ${stats.maxDependencyDepth}`);
+  console.log(`  ${messages.circularDependencies} ${stats.circularDependencies}`);
 }
 
 /**
@@ -324,7 +537,7 @@ function displayModuleStatistics(moduleSystem: ModuleSystem): void {
  */
 function displayDependencyGraph(moduleSystem: ModuleSystem, baseDir: string): void {
   const graph = moduleSystem.getDependencyGraph();
-  console.log('\n🕸️  Dependency Graph:');
+  console.log(`\n${t().commands.moduleInfo.messages.dependencyGraph}`);
   for (const [moduleId, deps] of graph) {
     const relativePath = path.relative(baseDir, moduleId);
     console.log(`  ${relativePath}:`);
@@ -338,92 +551,130 @@ function displayDependencyGraph(moduleSystem: ModuleSystem, baseDir: string): vo
  * Display circular dependency validation results
  */
 function displayCircularDependencies(moduleSystem: ModuleSystem): void {
+  const messages = t().commands.moduleInfo.messages;
   const validation = moduleSystem.validate();
   if (validation.isValid) {
-    console.log('\n✅ No circular dependencies found');
+    console.log(`\n${messages.noCircularDeps}`);
   } else {
-    console.log('\n❌ Issues found:');
+    console.log(`\n${messages.issuesFound}`);
     for (const error of validation.errors) {
       console.log(`  • ${error}`);
     }
   }
 }
 
+type CommandKey = Exclude<keyof Translations['commands'], 'somon'>;
+
+/**
+ * Register a command under its English name. The English short alias and the
+ * name and alias in the current interface language are added as aliases, so the
+ * English spelling works in every language.
+ */
+function defineCommand(
+  program: Command,
+  name: string,
+  key: CommandKey,
+  englishAlias?: string
+): Command {
+  const tr = t().commands[key];
+  const command = program.command(name).description(tr.description);
+  // The localized name comes first so help lists it next to the English name.
+  const aliases = [tr.name, englishAlias, 'alias' in tr ? tr.alias : undefined];
+  for (const alias of aliases) {
+    if (alias && alias !== name && !command.aliases().includes(alias)) {
+      command.alias(alias);
+    }
+  }
+  return command;
+}
+
+/** Options shared by every command that compiles SomonScript (compile, run, bundle). */
+function addCompilerOptions(command: Command): Command {
+  const options = t().commands.compile.options;
+  return command
+    .addOption(new Option('--target <target>', options.target).choices(TARGETS))
+    .option('--source-map', options.sourceMap)
+    .option('--no-source-map', options.noSourceMap)
+    .option('--minify', options.minify)
+    .option('--no-minify', options.noMinify)
+    .option('--no-type-check', options.noTypeCheck)
+    .option('--strict', options.strict)
+    .addOption(new Option('--production').hideHelp());
+}
+
 export function createProgram(): Command {
   const program = new Command();
+  const tr = t();
 
-  // Add global --lang option
   program
     .name('somon')
-    .description(t().commands.somon.description)
-    .version(pkg.version, '-V, --version', t().common.version)
-    .option('--lang <language>', 'Set interface language (en, tj, ru)', (value: string) => {
-      if (value === 'en' || value === 'tj' || value === 'ru') {
-        i18n.setLanguage(value as Language);
+    .description(tr.commands.somon.description)
+    .version(pkg.version, '-V, --version', tr.common.version)
+    // The language itself is detected from argv before the program is built (see cli.ts).
+    .addOption(new Option('--lang <language>', tr.common.languageOption).choices(LANGUAGES))
+    .helpOption('-h, --help', tr.common.help)
+    .addHelpCommand('help [command]', tr.common.help)
+    .hook('preAction', (_program, actionCommand) => {
+      if (actionCommand.opts().production) {
+        console.warn(t().common.productionDeprecated);
       }
-      return value;
-    })
-    .helpOption('-h, --help', t().common.help);
+    });
 
-  program
-    .command(t().commands.compile.name)
-    .alias(t().commands.compile.alias)
-    .description(t().commands.compile.description)
-    .usage(t().commands.compile.usage)
-    .argument('<input>', t().commands.compile.args.input)
-    .option('-o, --output <file>', t().commands.compile.options.output)
-    .option('--out-dir <dir>', t().commands.compile.options.outDir)
-    .option('--target <target>', t().commands.compile.options.target)
-    .option('--source-map', t().commands.compile.options.sourceMap)
-    .option('--no-source-map', t().commands.compile.options.noSourceMap)
-    .option('--minify', t().commands.compile.options.minify)
-    .option('--no-minify', t().commands.compile.options.noMinify)
-    .option('--no-type-check', t().commands.compile.options.noTypeCheck)
-    .option('--strict', t().commands.compile.options.strict)
-    .option('-w, --watch', t().commands.compile.options.watch)
-    .option('--production', t().commands.compile.options.production)
+  const compileCommand = defineCommand(program, 'compile', 'compile', 'c')
+    .usage(tr.commands.compile.usage)
+    .argument('<input>', tr.commands.compile.args.input)
+    .option('-o, --output <file>', tr.commands.compile.options.output)
+    .option('--out-dir <dir>', tr.commands.compile.options.outDir);
+  addCompilerOptions(compileCommand)
+    .option('-w, --watch', tr.commands.compile.options.watch)
     .action((input: string, options: CompileOptions): void => {
       try {
-        let merged: CompileOptions;
+        let merged: MergedCompileOptions;
         try {
           merged = mergeOptions(input, options);
         } catch (error) {
-          handleCliFailure(error, 'Error:');
+          handleCliFailure(error, t().common.error);
           return;
         }
 
-        const shouldWatch = !!(merged.watch || merged.compileOnSave);
+        const shouldWatch = !!(merged.options.watch || merged.options.compileOnSave);
 
         const compileOnce = (): boolean => {
           try {
             merged = mergeOptions(input, options);
           } catch (error) {
-            handleCliFailure(error, 'Error:');
+            handleCliFailure(error, t().common.error);
             return false;
           }
 
-          const result = compileFile(input, merged);
+          const { outputFile } = merged;
+          if (isOutputSameAsInput(input, outputFile)) return false;
+
+          const outputDir = path.dirname(path.resolve(outputFile));
+          const result = compileFile(input, {
+            ...merged.options,
+            sourceFileName: path.relative(outputDir, path.resolve(input)).split(path.sep).join('/'),
+          });
           if (result.errors.length > 0) return false;
 
-          const baseDir = path.dirname(path.resolve(input));
-          const outputFile =
-            merged.output ||
-            (merged.outDir
-              ? path.join(
-                  path.resolve(baseDir, merged.outDir),
-                  path.basename(input).replace(/\.som$/, '.js')
-                )
-              : input.replace(/\.som$/, '.js'));
-          fs.mkdirSync(path.dirname(outputFile), { recursive: true });
-          fs.writeFileSync(outputFile, result.code);
+          fs.mkdirSync(outputDir, { recursive: true });
+          const sourceMapFile =
+            merged.options.sourceMap && result.sourceMap ? `${outputFile}.map` : undefined;
+          let code = result.code;
+          if (sourceMapFile) {
+            const map = JSON.parse(result.sourceMap!) as { file?: string };
+            map.file = path.basename(outputFile);
+            fs.writeFileSync(sourceMapFile, JSON.stringify(map));
+            code = `${code}\n//# sourceMappingURL=${path.basename(sourceMapFile)}`;
+          }
+          fs.writeFileSync(outputFile, code);
           console.log(t().commands.compile.messages.compiled(input, outputFile));
-
-          if (merged.sourceMap && result.sourceMap) {
-            const sourceMapFile = `${outputFile}.map`;
-            fs.writeFileSync(sourceMapFile, result.sourceMap);
+          if (sourceMapFile) {
             console.log(t().commands.compile.messages.sourceMapGenerated(sourceMapFile));
           }
 
+          // A successful recompile clears the failure of an earlier one.
+          process.exitCode = 0;
           return true;
         };
 
@@ -433,198 +684,36 @@ export function createProgram(): Command {
         }
 
         if (shouldWatch && process.env.NODE_ENV !== 'test') {
-          console.log(t().commands.compile.messages.watching(input));
-          const absoluteInput = path.resolve(input);
-          const watchTargets = new Set<string>([
-            absoluteInput,
-            path.resolve(path.dirname(absoluteInput), 'somon.config.json'),
-          ]);
-
-          const watcher = chokidar.watch(Array.from(watchTargets), {
-            persistent: true,
-            ignoreInitial: true,
-            awaitWriteFinish: {
-              stabilityThreshold: 150,
-              pollInterval: 20,
-            },
-          });
-
-          let watcherClosed = false;
-
-          // Install signal handlers for graceful shutdown in watch mode
-          const gracefulShutdown = async (signal: string) => {
-            if (!watcherClosed) {
-              console.log(`\nReceived ${signal}, stopping watcher...`);
-              watcherClosed = true;
-              await watcher.close();
-              process.exit(0);
-            }
-          };
-
-          process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
-          process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
-          process.on('SIGHUP', () => void gracefulShutdown('SIGHUP'));
-
-          const handleFileEvent = (
-            eventType: 'add' | 'change' | 'unlink',
-            changedPath: string
-          ): void => {
-            const normalizedPath = path.resolve(changedPath);
-
-            if (normalizedPath === absoluteInput) {
-              if (eventType === 'unlink') {
-                console.warn(`Source file '${input}' was removed. Waiting for it to reappear...`);
-                return;
-              }
-              console.log(t().commands.compile.messages.recompiling(input));
-              compileOnce();
-              return;
-            }
-
-            if (eventType === 'unlink') {
-              console.warn(
-                `Configuration file '${path.basename(normalizedPath)}' was removed. Using previous options.`
-              );
-              return;
-            }
-
-            console.log(t().commands.compile.messages.configChanged(path.basename(normalizedPath)));
-            compileOnce();
-          };
-
-          watcher
-            .on('add', (changedPath: string) => handleFileEvent('add', changedPath))
-            .on('change', (changedPath: string) => handleFileEvent('change', changedPath))
-            .on('unlink', (changedPath: string) => handleFileEvent('unlink', changedPath))
-            .on('error', (error: unknown) => {
-              console.error('Watch error:', error instanceof Error ? error.message : String(error));
-            });
-
-          const cleanupWatcher = (): void => {
-            if (watcherClosed) return;
-            watcherClosed = true;
-            watcher.close().catch((error: unknown) => {
-              console.error(
-                'Failed to close watcher:',
-                error instanceof Error ? error.message : String(error)
-              );
-            });
-          };
-
-          const registerSignalHandler = (signal: 'SIGINT' | 'SIGTERM'): void => {
-            process.once(signal, () => {
-              cleanupWatcher();
-              process.exit(process.exitCode ?? 0);
-            });
-          };
-
-          registerSignalHandler('SIGINT');
-          registerSignalHandler('SIGTERM');
-          process.once('exit', cleanupWatcher);
+          watchAndRecompile(input, merged.configPath, compileOnce);
         } else if (shouldWatch) {
           // In test environment, just log the message without actually watching
-          console.log(`Watching '${input}' for changes...`);
+          console.log(t().commands.compile.messages.watching(input));
         }
       } catch (error) {
-        handleCliFailure(error, 'Error:');
+        handleCliFailure(error, t().common.error);
         return;
       }
     });
 
-  program
-    .command('run')
-    .alias('r')
-    .description('Compile and run SomonScript file')
-    .usage('[input] [options]')
-    .argument('<input>', 'Input .som file')
-    .option('--target <target>', 'Compilation target')
-    .option('--source-map', 'Generate source maps')
-    .option('--no-source-map', 'Disable source maps')
-    .option('--minify', 'Minify output')
-    .option('--no-minify', 'Disable minification')
-    .option('--no-type-check', 'Disable type checking')
-    .option('--strict', 'Enable strict type checking')
-    .option('--production', 'Enable production mode with strict validation')
-    .action(async (input: string, options: CompileOptions, command: Command): Promise<void> => {
-      const cleanupTargets: string[] = [];
-      try {
-        const baseDir = path.dirname(path.resolve(input));
-        const config = loadConfig(baseDir);
-        const isProduction = options.production || process.env.NODE_ENV === 'production';
+  const runCommand = defineCommand(program, 'run', 'run', 'r')
+    .usage(tr.commands.run.usage)
+    .argument('<input>', tr.commands.run.args.input)
+    .argument('[args...]', tr.commands.run.args.args);
+  addCompilerOptions(runCommand).action(
+    async (input: string, scriptArgs: string[], options: RunOptions): Promise<void> => {
+      await executeRunCommand(input, scriptArgs, options);
+    }
+  );
 
-        // Create module system and bundle the file with all dependencies
-        const moduleSystem = await createModuleSystem(baseDir, config, isProduction);
-
-        // Create bundle options for temporary output
-        const compiledFilePath = createRunOutputPath(input, baseDir);
-        const bundleOptions = {
-          entryPoint: path.resolve(input),
-          outputPath: compiledFilePath,
-          format: 'commonjs' as const,
-          minify: options.minify ?? config.bundle?.minify,
-          sourceMaps: options.sourceMap ?? config.bundle?.sourceMaps,
-          inlineSources: false,
-          externals: config.bundle?.externals,
-        };
-
-        // Bundle the file and all its dependencies
-        const bundle = await moduleSystem.bundle(bundleOptions);
-
-        // Write the bundled code to temporary file
-        fs.writeFileSync(compiledFilePath, bundle.code, 'utf8');
-        cleanupTargets.push(compiledFilePath);
-
-        // Write source map if enabled
-        if (options.sourceMap && bundle.map) {
-          const mapPath = `${compiledFilePath}.map`;
-          fs.writeFileSync(mapPath, bundle.map, 'utf8');
-          cleanupTargets.push(mapPath);
-        }
-
-        // Execute the bundled file
-        const child = cliRuntime.executeCompiledFile(
-          compiledFilePath,
-          resolveForwardedArgv(command, input),
-          { cwd: baseDir }
-        );
-
-        if (child.error) {
-          console.error('Failed to execute Node:', child.error.message ?? child.error);
-          process.exitCode = 1;
-        } else if (typeof child.status === 'number') {
-          process.exitCode = child.status;
-        } else if (typeof child.signal === 'string') {
-          console.error(`Process terminated with signal ${child.signal}`);
-          process.exitCode = 1;
-        }
-      } catch (error) {
-        handleCliFailure(error, 'Error:');
-        return;
-      } finally {
-        // Clean up temporary files
-        for (const target of cleanupTargets) {
-          try {
-            fs.rmSync(target, { force: true });
-          } catch (cleanupError) {
-            console.warn(
-              'Warning: unable to clean temporary files:',
-              cleanupError instanceof Error ? cleanupError.message : cleanupError
-            );
-          }
-        }
-      }
-    });
-
-  program
-    .command('init')
-    .description('Initialize a new SomonScript project')
-    .argument('[name]', 'Project name', 'somon-project')
+  defineCommand(program, 'init', 'init')
+    .argument('[name]', tr.commands.init.args.name, 'somon-project')
     .action((name: string): void => {
       try {
         const projectDir = path.resolve(name);
+        const messages = t().commands.init.messages;
 
         if (fs.existsSync(projectDir)) {
-          console.error(`Error: Directory '${name}' already exists`);
+          console.error(messages.directoryExists(name));
           process.exitCode = 1;
           return;
         }
@@ -686,53 +775,47 @@ export function createProgram(): Command {
 
         fs.writeFileSync(path.join(projectDir, 'src', 'main.som'), mainSom);
 
-        console.log(`✅ Created SomonScript project '${name}'`);
-        console.log(`\nNext steps:`);
+        console.log(messages.projectCreated(name));
+        console.log(`\n${messages.nextSteps}`);
         console.log(`  cd ${name}`);
         console.log(`  npm install`);
         console.log(`  npm run dev`);
       } catch (error) {
-        console.error('Error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+        handleCliFailure(error, t().common.error);
       }
     });
 
   // Bundle command
-  program
-    .command('bundle')
-    .alias('b')
-    .description('Bundle SomonScript modules into a single file')
-    .usage('[input] [options]')
-    .argument('<input>', 'Entry point file')
-    .option('-o, --output <file>', 'Output file path')
-    .option('-f, --format <format>', "Bundle format (only 'commonjs' is supported)", 'commonjs')
-    .option('--minify', 'Minify the output')
-    .option('--source-map', 'Generate source maps')
-    .option('--inline-sources', 'Inline original sources into emitted source maps')
-    .option('--externals <modules>', 'External modules (comma-separated)')
-    .option('--production', 'Enable production mode with strict validation')
-    .action(async (input: string, options: BundleOptions) => {
-      await executeBundleCommand(input, options);
-    });
+  const bundleCommand = defineCommand(program, 'bundle', 'bundle', 'b')
+    .usage(tr.commands.bundle.usage)
+    .argument('<input>', tr.commands.bundle.args.input)
+    .option('-o, --output <file>', tr.commands.bundle.options.output)
+    .option('-f, --format <format>', tr.commands.bundle.options.format, 'commonjs')
+    .option('--inline-sources', tr.commands.bundle.options.inlineSources)
+    .option('--externals <modules>', tr.commands.bundle.options.externals);
+  addCompilerOptions(bundleCommand).action(async (input: string, options: BundleOptions) => {
+    await executeBundleCommand(input, options);
+  });
 
   // Module info command
-  program
-    .command('module-info')
-    .alias('info')
-    .description('Show module dependency information')
-    .usage('[input] [options]')
-    .argument('<input>', 'Entry point file')
-    .option('--graph', 'Show dependency graph')
-    .option('--stats', 'Show module statistics')
-    .option('--circular', 'Check for circular dependencies')
+  defineCommand(program, 'module-info', 'moduleInfo', 'info')
+    .usage(tr.commands.moduleInfo.usage)
+    .argument('<input>', tr.commands.moduleInfo.args.input)
+    .option('--graph', tr.commands.moduleInfo.options.graph)
+    .option('--stats', tr.commands.moduleInfo.options.stats)
+    .option('--circular', tr.commands.moduleInfo.options.circular)
     .action(
       async (input: string, options: { graph?: boolean; stats?: boolean; circular?: boolean }) => {
         try {
           const baseDir = path.dirname(path.resolve(input));
-          const config = loadConfig(baseDir);
-          const moduleSystem = await createModuleSystem(baseDir, config, false);
+          const loaded = loadConfigWithPath(baseDir);
+          const moduleSystem = await createModuleSystem(
+            input,
+            loaded,
+            moduleCompilationOptions(loaded.config, {})
+          );
 
-          console.log(`🔍 Analyzing ${input}...`);
+          console.log(t().commands.moduleInfo.messages.analyzing(input));
           const resolvedInput = path.resolve(input);
           await moduleSystem.loadModule(resolvedInput, path.dirname(resolvedInput));
 
@@ -748,20 +831,18 @@ export function createProgram(): Command {
             displayCircularDependencies(moduleSystem);
           }
         } catch (error) {
-          console.error('Analysis error:', error instanceof Error ? error.message : error);
-          process.exit(1);
+          handleCliFailure(error, t().commands.moduleInfo.messages.analysisError);
         }
       }
     );
 
   // Resolve command
-  program
-    .command('resolve')
-    .description('Resolve a module specifier to its file path')
-    .usage('<specifier> [options]')
-    .argument('<specifier>', 'Module specifier to resolve')
-    .option('-f, --from <file>', 'Resolve from this file (defaults to current directory)')
+  defineCommand(program, 'resolve', 'resolve')
+    .usage(tr.commands.resolve.usage)
+    .argument('<specifier>', tr.commands.resolve.args.specifier)
+    .option('-f, --from <file>', tr.commands.resolve.options.from)
     .action(async (specifier: string, options: { from?: string }) => {
+      const messages = t().commands.resolve.messages;
       try {
         const { ModuleResolver } = await import('../module-system');
         // Use explicit path resolution instead of process.cwd()
@@ -771,119 +852,97 @@ export function createProgram(): Command {
         });
         const resolved = resolver.resolve(specifier, fromFile);
 
-        console.log(`🎯 Resolved '${specifier}':`);
-        console.log(`  Path: ${resolved.resolvedPath}`);
-        console.log(`  Extension: ${resolved.extension}`);
-        console.log(`  External: ${resolved.isExternalLibrary ? 'Yes' : 'No'}`);
+        console.log(messages.resolved(specifier));
+        console.log(`  ${messages.path} ${resolved.resolvedPath}`);
+        console.log(`  ${messages.extension} ${resolved.extension}`);
+        console.log(
+          `  ${messages.external} ${resolved.isExternalLibrary ? messages.yes : messages.no}`
+        );
         if (resolved.packageName) {
-          console.log(`  Package: ${resolved.packageName}`);
+          console.log(`  ${messages.package} ${resolved.packageName}`);
         }
       } catch (error) {
-        console.error('Resolve error:', error instanceof Error ? error.message : error);
-        process.exit(1);
+        handleCliFailure(error, messages.resolveError);
       }
     });
 
   return program;
 }
 
-function loadCompiler(): CompilerModule {
-  try {
-    return localRequire(compiledCompilerModuleId) as CompilerModule;
-  } catch (error) {
-    if (!isModuleNotFound(error)) {
-      throw error;
+/**
+ * Watch the input and its config file and recompile on change until the CLI
+ * receives a termination signal.
+ */
+function watchAndRecompile(
+  input: string,
+  configPath: string | undefined,
+  compileOnce: () => boolean
+): void {
+  const messages = t().commands.compile.messages;
+  console.log(messages.watching(input));
+  const absoluteInput = path.resolve(input);
+  const watchTargets = new Set<string>([
+    absoluteInput,
+    configPath ?? path.resolve(path.dirname(absoluteInput), 'somon.config.json'),
+  ]);
+
+  const watcher = chokidar.watch(Array.from(watchTargets), {
+    persistent: true,
+    ignoreInitial: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 150,
+      pollInterval: 20,
+    },
+  });
+
+  const handleFileEvent = (eventType: 'add' | 'change' | 'unlink', changedPath: string): void => {
+    const normalizedPath = path.resolve(changedPath);
+
+    if (normalizedPath === absoluteInput) {
+      if (eventType === 'unlink') {
+        console.warn(messages.sourceRemoved(input));
+        return;
+      }
+      console.log(messages.recompiling(input));
+      compileOnce();
+      return;
     }
-  }
 
-  try {
-    return localRequire('../compiler.js') as CompilerModule;
-  } catch (error) {
-    if (!isModuleNotFound(error)) {
-      throw error;
+    if (eventType === 'unlink') {
+      console.warn(messages.configRemoved(path.basename(normalizedPath)));
+      return;
     }
-  }
 
-  const ts = loadTypeScript();
-  const compilerSourcePath = path.resolve(__dirname, '..', '..', 'src', 'compiler.ts');
-
-  if (!fs.existsSync(compilerSourcePath)) {
-    throw new Error("Compiler module not found. Run 'npm run build' before executing the CLI.");
-  }
-
-  registerRuntimeTsTranspiler(ts);
-
-  return localRequire(sourceCompilerModuleId) as CompilerModule;
-}
-
-function loadConfigModule(): ConfigModule {
-  try {
-    return localRequire(compiledConfigModuleId) as ConfigModule;
-  } catch (error) {
-    if (!isModuleNotFound(error)) {
-      throw error;
-    }
-  }
-
-  try {
-    return localRequire('../config.js') as ConfigModule;
-  } catch (error) {
-    if (!isModuleNotFound(error)) {
-      throw error;
-    }
-  }
-
-  const ts = loadTypeScript();
-  const configSourcePath = path.resolve(__dirname, '..', '..', 'src', 'config.ts');
-
-  if (!fs.existsSync(configSourcePath)) {
-    throw new Error("Config module not found. Run 'npm run build' before executing the CLI.");
-  }
-
-  registerRuntimeTsTranspiler(ts);
-
-  return localRequire(sourceConfigModuleId) as ConfigModule;
-}
-
-function isModuleNotFound(error: unknown): boolean {
-  return error instanceof Error && (error as { code?: unknown }).code === 'MODULE_NOT_FOUND';
-}
-
-function loadTypeScript(): typeof import('typescript') {
-  try {
-    return require('typescript');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error loading TypeScript';
-    throw new Error(
-      `TypeScript runtime is required to execute the CLI without compiled artifacts. Please install dev dependencies. Original error: ${message}`
-    );
-  }
-}
-
-function registerRuntimeTsTranspiler(ts: typeof import('typescript')): void {
-  if (tsRuntimeRegistered || require.extensions['.ts']) {
-    // Either we already registered our hook or another tool (e.g. ts-node) is handling .ts files.
-    tsRuntimeRegistered = true;
-    return;
-  }
-
-  require.extensions['.ts'] = (module: NodeModuleType, filename: string): void => {
-    const source = fs.readFileSync(filename, 'utf-8');
-    const { outputText } = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-        esModuleInterop: true,
-        sourceMap: false,
-      },
-      fileName: filename,
-    });
-
-    (module as NodeModuleType & { _compile(_code: string, _filename: string): void })._compile(
-      outputText,
-      filename
-    );
+    console.log(messages.configChanged(path.basename(normalizedPath)));
+    compileOnce();
   };
 
-  tsRuntimeRegistered = true;
+  watcher
+    .on('add', (changedPath: string) => handleFileEvent('add', changedPath))
+    .on('change', (changedPath: string) => handleFileEvent('change', changedPath))
+    .on('unlink', (changedPath: string) => handleFileEvent('unlink', changedPath))
+    .on('error', (error: unknown) => {
+      console.error(messages.watchError, error instanceof Error ? error.message : String(error));
+    });
+
+  // One shutdown path: close the watcher, then exit with the result of the last compile.
+  let closing = false;
+  const shutdown = (signal: ForwardedSignal): void => {
+    if (closing) return;
+    closing = true;
+    console.log(`\n${messages.stoppingWatcher(signal)}`);
+    watcher
+      .close()
+      .catch((error: unknown) => {
+        console.error(
+          messages.watchCloseFailed,
+          error instanceof Error ? error.message : String(error)
+        );
+      })
+      .finally(() => process.exit(process.exitCode ?? 0));
+  };
+
+  for (const signal of FORWARDED_SIGNALS) {
+    process.once(signal, shutdown);
+  }
 }

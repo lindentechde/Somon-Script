@@ -2,7 +2,8 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { CodeGenerator } from '../src/codegen';
 import { TokenType } from '../src/tokens';
-import { Program, ExpressionStatement } from '../src/types';
+import { compile } from '../src/compiler';
+import { Program, ExpressionStatement, TemplateLiteral } from '../src/types';
 
 // Helper type guards for cleaner tests without using 'as any'
 function isExpressionStatement(node: unknown): node is ExpressionStatement {
@@ -54,7 +55,8 @@ describe('Template Literals', () => {
 
       expect(tokens).toHaveLength(2);
       expect(tokens[0].type).toBe(TokenType.TEMPLATE_LITERAL);
-      expect(tokens[0].value).toBe('Escaped ` backtick and ${not interpolation}');
+      // The token keeps the text as written; the parser decodes escapes
+      expect(tokens[0].value).toBe('Escaped \\` backtick and \\${not interpolation}');
     });
 
     test('should handle nested braces in interpolation', () => {
@@ -364,6 +366,84 @@ describe('Template Literals', () => {
       const expression = (firstExpressionStatement(ast).expression as any).expressions[0];
       expect(expression.type).toBe('Identifier');
       expect(expression.name).toBe('undefined');
+    });
+  });
+
+  describe('Interpolation parsing', () => {
+    function parseTemplate(source: string): { template: TemplateLiteral; errors: string[] } {
+      const parser = new Parser(new Lexer(source).tokenize());
+      const ast = parser.parse();
+      const statement = ast.body[0] as ExpressionStatement | undefined;
+      return { template: statement?.expression as TemplateLiteral, errors: parser.getErrors() };
+    }
+
+    function run(source: string): string[] {
+      const result = compile(source);
+      expect(result.errors).toEqual([]);
+      const output: string[] = [];
+      new Function('console', result.code)({
+        log: (...args: unknown[]) => output.push(args.map(String).join(' ')),
+      });
+      return output;
+    }
+
+    test('the whole interpolation is parsed, not truncated', () => {
+      const { template, errors } = parseTemplate('`Статус: ${сол >= 18 ? "калон" : "хурд"}`;');
+      expect(errors).toEqual([]);
+      expect(template.expressions[0].type).toBe('ConditionalExpression');
+    });
+
+    test('trailing tokens in an interpolation are an error with the real position', () => {
+      const { errors } = parseTemplate('тағ т = 1;\nчоп.сабт(`x\n ${ а б }`);');
+      expect(errors).toEqual([expect.stringMatching(/Unexpected token 'б' at line 3, column 7/)]);
+    });
+
+    test('an invalid interpolation is an error, never raw text', () => {
+      const { errors } = parseTemplate('`${ ] }`;');
+      expect(errors).toEqual([expect.stringMatching(/Unexpected token '\]' at line 1, column 5/)]);
+      expect(compile('чоп.сабт(`${ ] }`);').code).toBe('');
+    });
+
+    test('interpolations are parsed with the real grammar', () => {
+      const { template, errors } = parseTemplate('`${ +чоп.сабт("x") }`;');
+      expect(errors).toEqual([]);
+      expect(template.expressions[0]).toMatchObject({
+        type: 'UnaryExpression',
+        operator: '+',
+        argument: { type: 'CallExpression' },
+      });
+    });
+
+    test('lexer errors inside an interpolation are parse errors with the real position', () => {
+      const { errors } = parseTemplate('чоп.сабт(1);\nчоп.сабт(`x ${ а @ }`);');
+      expect(errors).toEqual([
+        expect.stringMatching(/Unexpected character '@' at line 2, column 18/),
+      ]);
+    });
+
+    test('braces inside strings and nested templates do not end an interpolation', () => {
+      expect(run('чоп.сабт(`[${ "}" }]`);')).toEqual(['[}]']);
+      expect(run("чоп.сабт(`[${ '{' + `${ 1 + 1 }}` }]`);")).toEqual(['[{2}]']);
+    });
+
+    test('escapes are kept as written and decoded into cooked', () => {
+      const { template } = parseTemplate('`a\\`b\\\\c\\${x}\\n`;');
+      expect(template.expressions).toHaveLength(0);
+      expect(template.quasis[0].value).toEqual({
+        raw: 'a\\`b\\\\c\\${x}\\n',
+        cooked: 'a`b\\c${x}\n',
+      });
+    });
+
+    test('escapes compile and run correctly', () => {
+      expect(run('тағ x = 5;\nчоп.сабт(`a\\`b`, `c\\\\d`, `a\\${x}b`, `\\u0041\\x42`);')).toEqual([
+        'a`b c\\d a${x}b AB',
+      ]);
+    });
+
+    test('line numbers stay correct after a multi-line interpolation', () => {
+      const tokens = new Lexer('`${\n а\n}`\nб').tokenize();
+      expect(tokens.find(token => token.value === 'б')?.line).toBe(4);
     });
   });
 });

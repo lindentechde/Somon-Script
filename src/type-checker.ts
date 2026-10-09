@@ -1,8 +1,8 @@
-/* eslint-disable no-case-declarations */
 import {
   ArrayExpression,
   ArrayType,
   CallExpression,
+  ChainExpression,
   ClassDeclaration,
   ArrayPattern,
   ObjectPattern,
@@ -16,10 +16,14 @@ import {
   LiteralType,
   NewExpression,
   ObjectExpression,
+  NamespaceDeclaration,
+  ObjectType,
   PrimitiveType,
   Program,
+  PropertySignature,
   Statement,
   TupleType,
+  FunctionType,
   TypeAlias,
   TypeNode,
   UnionType,
@@ -27,7 +31,36 @@ import {
   TypeAnnotation,
   UniqueType,
 } from './types';
-import { PropertyDefinition, MethodDefinition, ExpressionStatement } from './ast';
+import {
+  AssignmentExpression,
+  AssignmentPattern,
+  AwaitExpression,
+  BinaryExpression,
+  BlockStatement,
+  ConditionalExpression,
+  ExportDeclaration,
+  ExpressionStatement,
+  ForInStatement,
+  ForOfStatement,
+  ForStatement,
+  IfStatement,
+  ImportDeclaration,
+  MemberExpression,
+  MethodDefinition,
+  Parameter,
+  PropertyDefinition,
+  RestElement,
+  ReturnStatement,
+  SequenceExpression,
+  SpreadElement,
+  SwitchStatement,
+  TemplateLiteral,
+  ThrowStatement,
+  TryStatement,
+  UnaryExpression,
+  UpdateExpression,
+  WhileStatement,
+} from './ast';
 
 /**
  * Represents a type checking error or warning
@@ -79,7 +112,10 @@ export interface Type {
   typeParameters?: Type[]; // For generic types like Map<K,V>, Set<T>
   paramTypes?: Type[]; // Parameter types for function types
   paramNames?: string[]; // Parameter names for function types
-  paramOptional?: boolean[]; // Which params are marked optional (suffix `?`)
+  paramOptional?: boolean[]; // Params that may be omitted (`?` suffix or default value)
+  hasRestParam?: boolean; // Last parameter is a rest parameter (`...а`)
+  indexType?: Type; // Index signature value type (`[калид: сатр]: Т`)
+  open?: boolean; // Members may be incomplete; skip excess-property checks
 }
 
 /**
@@ -89,6 +125,58 @@ export interface PropertyType {
   type: Type;
   optional: boolean;
 }
+
+/**
+ * Per-function checking context: the expected type of `бозгашт` arguments
+ * (already unwrapped from Promise for async functions) and the type of `ин`.
+ */
+interface FunctionContext {
+  returnType?: Type;
+  thisType?: Type;
+}
+
+type FunctionLike = {
+  params: Parameter[];
+  body: BlockStatement | Expression;
+  returnType?: TypeAnnotation;
+  async?: boolean;
+  isAsync?: boolean;
+};
+
+const UNKNOWN: Type = { kind: 'unknown' };
+
+/** Key the parser gives index signatures (`[калид: сатр]: Т`) in interface bodies. */
+const INDEX_SIGNATURE_KEY = '__computed__';
+
+/** Spellings of the Promise type; `Ваъда<T>` is the Tajik alias of `Promise<T>`. */
+const PROMISE_NAMES: ReadonlySet<string> = new Set(['Promise', 'Ваъда', 'ваъда', 'ВАЪДА']);
+
+const NUMERIC_BINARY_OPERATORS: ReadonlySet<string> = new Set([
+  '-',
+  '*',
+  '/',
+  '%',
+  '**',
+  '<<',
+  '>>',
+  '>>>',
+  '&',
+  '|',
+  '^',
+]);
+
+const BOOLEAN_BINARY_OPERATORS: ReadonlySet<string> = new Set([
+  '==',
+  '!=',
+  '===',
+  '!==',
+  '<',
+  '>',
+  '<=',
+  '>=',
+  'in',
+  'instanceof',
+]);
 
 /**
  * Type checker for SomonScript AST
@@ -103,7 +191,11 @@ export class TypeChecker {
     'объект',
     'сатрМетодҳо',
     'хато',
+    'Хато',
     'рӯйхат',
+    'сатр',
+    'ваъда', // Promise
+    'Ваъда',
     // Tajik literal keywords that surface as Identifier expressions
     'беқимат', // undefined
     'холӣ', // null (also a primitive type name)
@@ -137,29 +229,114 @@ export class TypeChecker {
     'globalThis',
     'this',
     'arguments',
+    // Host globals that may be absent from the checker's own globalThis
+    'require',
+    'module',
+    'exports',
+    '__dirname',
+    '__filename',
+    'process',
+    'Buffer',
+    'window',
+    'document',
+    'navigator',
+    'location',
+    'localStorage',
+    'sessionStorage',
+    'alert',
+    'fetch',
   ]);
 
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
-  private symbolTable: Map<string, Type> = new Map();
+  /** Lexical scope chain; index 0 is the global scope. */
+  private scopes: Map<string, Type>[] = [];
   private interfaceTable: Map<string, Type> = new Map();
   private typeAliasTable: Map<string, Type> = new Map();
+  private functionStack: FunctionContext[] = [];
+  /** (source, target) pairs being compared, to stop recursion on recursive types. */
+  private assignabilityStack: Array<[Type, Type]> = [];
 
   private sourceLines: string[] = [];
 
+  private readonly statementHandlers: Record<string, (_statement: Statement) => void> = {
+    VariableDeclaration: s => this.checkVariableDeclaration(s as VariableDeclaration),
+    FunctionDeclaration: s => this.checkFunctionDeclaration(s as FunctionDeclaration),
+    ClassDeclaration: s => this.checkClassDeclaration(s as ClassDeclaration),
+    ExpressionStatement: s => this.inferExpressionType((s as ExpressionStatement).expression),
+    ExportDeclaration: s => {
+      const inner = (s as ExportDeclaration).declaration;
+      if (inner) this.checkStatement(inner);
+    },
+    BlockStatement: s => this.withScope(() => this.checkStatements((s as BlockStatement).body)),
+    IfStatement: s => this.checkIfStatement(s as IfStatement),
+    WhileStatement: s => this.checkWhileStatement(s as WhileStatement),
+    DoWhileStatement: s => this.checkWhileStatement(s as WhileStatement),
+    ForStatement: s => this.checkForStatement(s as ForStatement),
+    ForInStatement: s => this.checkForInOfStatement(s as ForInStatement, true),
+    ForOfStatement: s => this.checkForInOfStatement(s as ForOfStatement, false),
+    SwitchStatement: s => this.checkSwitchStatement(s as SwitchStatement),
+    TryStatement: s => this.checkTryStatement(s as TryStatement),
+    ThrowStatement: s => this.inferExpressionType((s as ThrowStatement).argument),
+    ReturnStatement: s => this.checkReturnStatement(s as ReturnStatement),
+    NamespaceDeclaration: s =>
+      this.withScope(() => this.checkStatements((s as NamespaceDeclaration).body.statements)),
+  };
+
+  private readonly expressionHandlers: Record<
+    string,
+    (_expression: Expression, _targetType?: Type) => Type
+  > = {
+    Literal: e => this.inferLiteralType(e as Literal),
+    Identifier: e => this.inferIdentifierType(e as Identifier),
+    ArrayExpression: (e, t) => this.inferArrayExpressionType(e as ArrayExpression, t),
+    ObjectExpression: (e, t) => this.inferObjectType(e as ObjectExpression, t),
+    CallExpression: e => this.inferCallType(e as CallExpression),
+    NewExpression: e => this.inferNewExpressionType(e as NewExpression),
+    MemberExpression: e => this.inferMemberType(e as MemberExpression),
+    ChainExpression: e => this.inferExpressionType((e as ChainExpression).expression),
+    AssignmentExpression: e => this.inferAssignmentType(e as AssignmentExpression),
+    BinaryExpression: e => this.inferBinaryType(e as BinaryExpression),
+    UnaryExpression: e => this.inferUnaryType(e as UnaryExpression),
+    UpdateExpression: e => this.inferNumericOperand((e as UpdateExpression).argument),
+    TemplateLiteral: e => {
+      (e as TemplateLiteral).expressions.forEach(part => this.inferExpressionType(part));
+      return { kind: 'primitive', name: 'string' };
+    },
+    ConditionalExpression: (e, t) => this.inferConditionalType(e as ConditionalExpression, t),
+    SequenceExpression: e =>
+      (e as SequenceExpression).expressions.reduce<Type>(
+        (_, part) => this.inferExpressionType(part),
+        UNKNOWN
+      ),
+    SpreadElement: e => {
+      this.inferExpressionType((e as SpreadElement).argument);
+      return UNKNOWN;
+    },
+    AwaitExpression: e =>
+      this.unwrapPromise(this.inferExpressionType((e as AwaitExpression).argument)),
+    ArrowFunctionExpression: e =>
+      this.inferFunctionExpressionType(e as unknown as FunctionLike, true),
+    FunctionExpression: e => this.inferFunctionExpressionType(e as unknown as FunctionLike, false),
+    ThisExpression: () => this.currentFunction()?.thisType ?? UNKNOWN,
+    ImportExpression: e => {
+      this.inferExpressionType((e as unknown as { source: Expression }).source);
+      return UNKNOWN;
+    },
+  };
+
   constructor(source?: string) {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
-    this.initializePrimitiveTypes();
   }
 
   /**
    * Initialize primitive types in the symbol table
    */
   private initializePrimitiveTypes(): void {
-    this.symbolTable.set('сатр', { kind: 'primitive', name: 'string' });
-    this.symbolTable.set('рақам', { kind: 'primitive', name: 'number' });
-    this.symbolTable.set('мантиқӣ', { kind: 'primitive', name: 'boolean' });
-    this.symbolTable.set('холӣ', { kind: 'primitive', name: 'null' });
+    this.declare('сатр', { kind: 'primitive', name: 'string' });
+    this.declare('рақам', { kind: 'primitive', name: 'number' });
+    this.declare('мантиқӣ', { kind: 'primitive', name: 'boolean' });
+    this.declare('холӣ', { kind: 'primitive', name: 'null' });
   }
 
   private getSnippet(line: number): string {
@@ -174,14 +351,17 @@ export class TypeChecker {
   public check(program: Program): TypeCheckResult {
     this.errors = [];
     this.warnings = [];
+    this.scopes = [new Map()];
+    this.interfaceTable = new Map();
+    this.typeAliasTable = new Map();
+    this.functionStack = [];
+    this.initializePrimitiveTypes();
 
-    // First pass: collect type definitions
-    this.collectTypeDefinitions(program);
+    // First pass: collect type definitions and hoist top-level bindings
+    this.collectTypeDefinitions(program.body);
 
     // Second pass: type check statements
-    for (const statement of program.body) {
-      this.checkStatement(statement);
-    }
+    this.checkStatements(program.body);
 
     return {
       errors: this.errors,
@@ -189,95 +369,218 @@ export class TypeChecker {
     };
   }
 
-  /**
-   * Get the symbol table for language server completions
-   * @returns The symbol table with all defined types
-   */
-  public getSymbolTable(): Map<string, Type> {
-    return this.symbolTable;
+  // ---------------------------------------------------------------------------
+  // Scopes
+  // ---------------------------------------------------------------------------
+
+  private lookup(name: string): Type | undefined {
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      const type = this.scopes[i].get(name);
+      if (type) return type;
+    }
+    return undefined;
   }
 
-  private collectTypeDefinitions(program: Program): void {
-    for (const statement of program.body) {
-      if (statement.type === 'InterfaceDeclaration') {
-        this.collectInterface(statement as InterfaceDeclaration);
-      } else if (statement.type === 'TypeAlias') {
-        this.collectTypeAlias(statement as TypeAlias);
-      } else if (statement.type === 'ClassDeclaration') {
-        this.collectClass(statement as ClassDeclaration);
-      } else if (statement.type === 'ImportDeclaration') {
-        this.collectImport(statement as import('./ast').ImportDeclaration);
-      } else if (statement.type === 'FunctionDeclaration') {
-        this.hoistFunctionDeclaration(statement as FunctionDeclaration);
-      } else if (statement.type === 'ExportDeclaration') {
-        const decl = (statement as import('./ast').ExportDeclaration).declaration;
-        if (decl?.type === 'FunctionDeclaration') {
-          this.hoistFunctionDeclaration(decl as FunctionDeclaration);
-        }
+  private declare(name: string, type: Type): void {
+    this.scopes[this.scopes.length - 1].set(name, type);
+  }
+
+  private withScope(body: () => void): void {
+    this.scopes.push(new Map());
+    try {
+      body();
+    } finally {
+      this.scopes.pop();
+    }
+  }
+
+  private currentFunction(): FunctionContext | undefined {
+    return this.functionStack[this.functionStack.length - 1];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Declaration collection and hoisting
+  // ---------------------------------------------------------------------------
+
+  private unwrapExport(statement: Statement): Statement {
+    if (statement.type === 'ExportDeclaration') {
+      return (statement as ExportDeclaration).declaration ?? statement;
+    }
+    return statement;
+  }
+
+  /**
+   * Collects the program's interfaces and type aliases. Interfaces and classes
+   * are registered as empty shells first so that declaration order doesn't
+   * matter for references between them.
+   */
+  private collectTypeDefinitions(statements: Statement[]): void {
+    const declarations = statements.map(s => this.unwrapExport(s));
+    const interfaces = declarations.filter(
+      (s): s is InterfaceDeclaration => s.type === 'InterfaceDeclaration'
+    );
+    for (const interfaceDecl of interfaces) {
+      if (!this.interfaceTable.has(interfaceDecl.name.name)) {
+        this.interfaceTable.set(interfaceDecl.name.name, {
+          kind: 'interface',
+          name: interfaceDecl.name.name,
+          properties: new Map(),
+        });
+      }
+    }
+    const classes = this.declareClassShells(declarations);
+    for (const statement of declarations) {
+      if (statement.type === 'TypeAlias') this.collectTypeAlias(statement as TypeAlias);
+    }
+    const filled = new Set<InterfaceDeclaration>();
+    for (const interfaceDecl of interfaces) {
+      this.collectInterface(interfaceDecl, interfaces, filled);
+    }
+    classes.forEach(classDecl => this.collectClass(classDecl));
+  }
+
+  /**
+   * Hoists the bindings a statement list declares into the current scope:
+   * classes and functions with their full types, variables, namespaces and
+   * imports as placeholders that the statement itself refines when checked.
+   */
+  private hoistDeclarations(statements: Statement[]): void {
+    const declarations = statements.map(s => this.unwrapExport(s));
+    const classes = declarations.filter(
+      (s): s is ClassDeclaration =>
+        s.type === 'ClassDeclaration' && !this.isDeclaredHere(s as ClassDeclaration)
+    );
+    classes.forEach(classDecl => this.declareClassShell(classDecl));
+    classes.forEach(classDecl => this.collectClass(classDecl));
+
+    for (const statement of declarations) {
+      switch (statement.type) {
+        case 'FunctionDeclaration':
+          this.hoistFunctionDeclaration(statement as FunctionDeclaration);
+          break;
+        case 'VariableDeclaration':
+          this.hoistVariableDeclaration(statement as VariableDeclaration);
+          break;
+        case 'NamespaceDeclaration':
+          this.declare((statement as NamespaceDeclaration).name.name, UNKNOWN);
+          break;
+        case 'ImportDeclaration':
+          this.collectImport(statement as ImportDeclaration);
+          break;
       }
     }
   }
 
-  private collectImport(importDecl: import('./ast').ImportDeclaration): void {
+  private isDeclaredHere(classDecl: ClassDeclaration): boolean {
+    const existing = this.scopes[this.scopes.length - 1].get(classDecl.name.name);
+    return existing?.kind === 'class' && existing.properties !== undefined;
+  }
+
+  private declareClassShells(declarations: Statement[]): ClassDeclaration[] {
+    const classes = declarations.filter(
+      (s): s is ClassDeclaration => s.type === 'ClassDeclaration'
+    );
+    classes.forEach(classDecl => this.declareClassShell(classDecl));
+    return classes;
+  }
+
+  private declareClassShell(classDecl: ClassDeclaration): void {
+    this.declare(classDecl.name.name, {
+      kind: 'class',
+      name: classDecl.name.name,
+      properties: new Map(),
+    });
+  }
+
+  private collectImport(importDecl: ImportDeclaration): void {
     // Register imported local names as 'unknown' so references don't trip the
     // undefined-identifier diagnostic. Cross-module type inference isn't wired.
     for (const spec of importDecl.specifiers) {
-      this.symbolTable.set(spec.local.name, { kind: 'unknown' });
+      this.declare(spec.local.name, UNKNOWN);
     }
   }
 
   private hoistFunctionDeclaration(funcDecl: FunctionDeclaration): void {
-    const { paramTypes, paramNames, paramOptional } = this.extractFunctionParams(funcDecl);
-    const returnType: Type = funcDecl.returnType
-      ? this.resolveTypeNode(funcDecl.returnType.typeAnnotation)
-      : { kind: 'unknown' };
-    this.symbolTable.set(funcDecl.name.name, {
+    this.declare(funcDecl.name.name, this.buildFunctionType(funcDecl.name.name, funcDecl));
+  }
+
+  private hoistVariableDeclaration(varDecl: VariableDeclaration): void {
+    if (varDecl.identifier.type === 'Identifier') {
+      const declared = varDecl.typeAnnotation
+        ? this.resolveTypeNode(varDecl.typeAnnotation.typeAnnotation)
+        : UNKNOWN;
+      this.declare(varDecl.identifier.name, declared);
+    } else {
+      this.bindPatternTypes(varDecl.identifier, UNKNOWN);
+    }
+  }
+
+  private buildFunctionType(name: string | undefined, fn: Omit<FunctionLike, 'body'>): Type {
+    const paramTypes: Type[] = [];
+    const paramNames: string[] = [];
+    const paramOptional: boolean[] = [];
+    for (const param of fn.params) {
+      paramTypes.push(this.resolveParameterType(param));
+      paramNames.push(param.name?.name ?? '');
+      paramOptional.push(Boolean(param.optional) || param.defaultValue !== undefined);
+    }
+    const returnType: Type = fn.returnType
+      ? this.resolveTypeNode(fn.returnType.typeAnnotation)
+      : UNKNOWN;
+    return {
       kind: 'function',
-      name: funcDecl.name.name,
+      name,
       returnType,
       paramTypes,
       paramNames,
       paramOptional,
-    });
-  }
-
-  private extractFunctionParams(funcDecl: FunctionDeclaration): {
-    paramTypes: Type[];
-    paramNames: string[];
-    paramOptional: boolean[];
-  } {
-    const paramTypes: Type[] = [];
-    const paramNames: string[] = [];
-    const paramOptional: boolean[] = [];
-    for (const param of funcDecl.params) {
-      const paramType: Type = param.typeAnnotation
-        ? this.resolveTypeNode(param.typeAnnotation.typeAnnotation)
-        : { kind: 'unknown' };
-      paramTypes.push(paramType);
-      paramNames.push(param.name.name);
-      paramOptional.push(Boolean(param.optional));
-    }
-    return { paramTypes, paramNames, paramOptional };
-  }
-
-  private collectInterface(interfaceDecl: InterfaceDeclaration): void {
-    const properties = new Map<string, PropertyType>();
-
-    for (const prop of interfaceDecl.body.properties) {
-      const propType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
-      properties.set(prop.key.name, {
-        type: propType,
-        optional: prop.optional,
-      });
-    }
-
-    const interfaceType: Type = {
-      kind: 'interface',
-      name: interfaceDecl.name.name,
-      properties,
+      hasRestParam: fn.params.length > 0 && Boolean(fn.params[fn.params.length - 1].rest),
     };
+  }
 
-    this.interfaceTable.set(interfaceDecl.name.name, interfaceType);
+  private resolveParameterType(param: Parameter): Type {
+    if (param.typeAnnotation) return this.resolveTypeNode(param.typeAnnotation.typeAnnotation);
+    return param.rest ? { kind: 'array', elementType: UNKNOWN } : UNKNOWN;
+  }
+
+  private collectInterface(
+    interfaceDecl: InterfaceDeclaration,
+    allDecls: InterfaceDeclaration[],
+    filled: Set<InterfaceDeclaration>
+  ): void {
+    if (filled.has(interfaceDecl)) return;
+    filled.add(interfaceDecl);
+    const interfaceType = this.interfaceTable.get(interfaceDecl.name.name)!;
+    const properties = interfaceType.properties!;
+
+    // Inherited members first, so the interface's own members override them
+    for (const parentNode of interfaceDecl.extends ?? []) {
+      const parentName = (parentNode as Identifier | GenericType).name;
+      const name = typeof parentName === 'string' ? parentName : parentName?.name;
+      allDecls
+        .filter(d => d.name.name === name)
+        .forEach(d => this.collectInterface(d, allDecls, filled));
+      const parent = this.resolveTypeNode(parentNode);
+      for (const [key, prop] of this.getAllProperties(parent)) {
+        if (!properties.has(key)) properties.set(key, prop);
+      }
+      interfaceType.indexType ??= parent.indexType;
+      interfaceType.open ||= parent.open;
+    }
+
+    this.collectPropertySignatures(interfaceDecl.body.properties, interfaceType);
+  }
+
+  private collectPropertySignatures(signatures: PropertySignature[], target: Type): void {
+    for (const prop of signatures ?? []) {
+      if (!prop.key || !prop.typeAnnotation) continue;
+      const type = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
+      if (prop.key.name === INDEX_SIGNATURE_KEY) {
+        target.indexType = type;
+      } else {
+        target.properties!.set(prop.key.name, { type, optional: prop.optional });
+      }
+    }
   }
 
   private collectTypeAlias(typeAlias: TypeAlias): void {
@@ -285,79 +588,169 @@ export class TypeChecker {
     this.typeAliasTable.set(typeAlias.name.name, aliasType);
   }
 
+  /**
+   * Fills the class shell registered under the class name with its instance
+   * members and links its base class by name.
+   */
   private collectClass(classDecl: ClassDeclaration): void {
-    // Collect class members (properties and methods)
-    const properties = new Map<string, PropertyType>();
+    const classType = this.lookup(classDecl.name.name)!;
+    const properties = classType.properties!;
 
     for (const member of classDecl.body.body) {
+      if (member.static) continue;
       if (member.type === 'PropertyDefinition') {
         const prop = member as PropertyDefinition;
         const propType = prop.typeAnnotation
           ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
-          : { kind: 'unknown' };
-
-        properties.set(prop.key.name, {
-          type: propType,
-          optional: false,
-        });
+          : UNKNOWN;
+        properties.set(prop.key.name, { type: propType, optional: false });
       } else if (member.type === 'MethodDefinition') {
-        const method = member as MethodDefinition;
-        if (method.kind === 'constructor') continue; // Skip constructor
-
-        const returnType = method.value.returnType
-          ? this.resolveTypeNode(method.value.returnType.typeAnnotation)
-          : { kind: 'unknown' };
-
-        // Store method as a function type property
-        properties.set(method.key.name, {
-          type: {
-            kind: 'function',
-            name: method.key.name,
-            returnType: returnType,
-          },
-          optional: false,
-        });
+        this.collectMethod(member as MethodDefinition, properties);
       }
     }
 
-    // If class extends another class, resolve parent properties
-    let baseType: Type | undefined;
     if (classDecl.superClass) {
-      const parentName = classDecl.superClass.name;
-      baseType = this.symbolTable.get(parentName);
+      const parent = this.lookup(classDecl.superClass.name);
+      if (parent?.kind === 'class') classType.baseType = parent;
     }
+  }
 
-    // Register the class type with its members
-    const classType: Type = {
-      kind: 'class',
-      name: classDecl.name.name,
-      properties,
-      baseType,
-    };
-    this.symbolTable.set(classDecl.name.name, classType);
+  private collectMethod(method: MethodDefinition, properties: Map<string, PropertyType>): void {
+    if (method.kind === 'constructor') return;
+    const name = method.key.name;
+    const methodType = this.buildFunctionType(name, method.value);
+    if (method.kind === 'get') {
+      properties.set(name, { type: methodType.returnType ?? UNKNOWN, optional: false });
+    } else if (method.kind === 'set') {
+      if (!properties.has(name)) {
+        properties.set(name, { type: methodType.paramTypes?.[0] ?? UNKNOWN, optional: false });
+      }
+    } else {
+      properties.set(name, { type: methodType, optional: false });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Statements
+  // ---------------------------------------------------------------------------
+
+  private checkStatements(statements: Statement[]): void {
+    this.hoistDeclarations(statements);
+    for (const statement of statements) {
+      this.checkStatement(statement);
+    }
   }
 
   private checkStatement(statement: Statement): void {
-    switch (statement.type) {
-      case 'VariableDeclaration':
-        this.checkVariableDeclaration(statement as VariableDeclaration);
-        break;
-      case 'FunctionDeclaration':
-        this.checkFunctionDeclaration(statement as FunctionDeclaration);
-        break;
-      case 'ClassDeclaration':
-        this.checkClassDeclaration(statement as ClassDeclaration);
-        break;
-      case 'ExpressionStatement':
-        this.inferExpressionType((statement as ExpressionStatement).expression);
-        break;
-      case 'ExportDeclaration': {
-        const inner = (statement as import('./ast').ExportDeclaration).declaration;
-        if (inner) this.checkStatement(inner);
-        break;
-      }
-      // Add more statement types as needed
+    this.statementHandlers[statement.type]?.(statement);
+  }
+
+  /** Checks a statement used as a body (`агар (…) х = 1;`) in its own scope. */
+  private checkBody(statement: Statement | undefined): void {
+    if (!statement) return;
+    if (statement.type === 'BlockStatement') {
+      this.checkStatement(statement);
+    } else {
+      this.withScope(() => this.checkStatements([statement]));
     }
+  }
+
+  private checkIfStatement(statement: IfStatement): void {
+    this.inferExpressionType(statement.test);
+    this.checkBody(statement.consequent);
+    this.checkBody(statement.alternate);
+  }
+
+  private checkWhileStatement(statement: WhileStatement): void {
+    this.inferExpressionType(statement.test);
+    this.checkBody(statement.body);
+  }
+
+  private checkForStatement(statement: ForStatement): void {
+    this.withScope(() => {
+      const init = statement.init as Statement | Expression | null;
+      if (init) {
+        if (init.type === 'VariableDeclaration' || init.type === 'ExpressionStatement') {
+          this.checkStatements([init]);
+        } else {
+          this.inferExpressionType(init);
+        }
+      }
+      if (statement.test) this.inferExpressionType(statement.test);
+      if (statement.update) this.inferExpressionType(statement.update);
+      this.checkBody(statement.body);
+    });
+  }
+
+  private checkForInOfStatement(
+    statement: ForInStatement | ForOfStatement,
+    isForIn: boolean
+  ): void {
+    this.withScope(() => {
+      const iterated = this.inferExpressionType(statement.right);
+      const left = statement.left;
+      if (left.type === 'VariableDeclaration') {
+        const varDecl = left as VariableDeclaration;
+        const elementType: Type = isForIn
+          ? { kind: 'primitive', name: 'string' }
+          : this.iterationElementType(iterated);
+        const bound = varDecl.typeAnnotation
+          ? this.resolveTypeNode(varDecl.typeAnnotation.typeAnnotation)
+          : this.widenType(elementType);
+        this.bindPatternTypes(varDecl.identifier, bound);
+      } else {
+        this.inferExpressionType(left);
+      }
+      this.checkBody(statement.body);
+    });
+  }
+
+  private iterationElementType(type: Type): Type {
+    if (type.kind === 'array') return type.elementType ?? UNKNOWN;
+    if (type.kind === 'tuple' && type.types && type.types.length > 0) {
+      return { kind: 'union', types: type.types };
+    }
+    if (this.isStringType(type)) return { kind: 'primitive', name: 'string' };
+    return UNKNOWN;
+  }
+
+  private checkSwitchStatement(statement: SwitchStatement): void {
+    this.inferExpressionType(statement.discriminant);
+    // All cases share one block scope
+    this.withScope(() => {
+      this.hoistDeclarations(statement.cases.flatMap(c => c.consequent));
+      for (const switchCase of statement.cases) {
+        if (switchCase.test) this.inferExpressionType(switchCase.test);
+        switchCase.consequent.forEach(s => this.checkStatement(s));
+      }
+    });
+  }
+
+  private checkTryStatement(statement: TryStatement): void {
+    this.checkStatement(statement.block);
+    const handler = statement.handler;
+    if (handler) {
+      this.withScope(() => {
+        if (handler.param) this.bindPatternTypes(handler.param, UNKNOWN);
+        this.checkStatements(handler.body.body);
+      });
+    }
+    if (statement.finalizer) this.checkStatement(statement.finalizer);
+  }
+
+  private checkReturnStatement(statement: ReturnStatement): void {
+    if (!statement.argument) return;
+    const expected = this.currentFunction()?.returnType;
+    const actual = this.inferExpressionType(statement.argument, expected);
+    if (!expected) return;
+    this.checkAssignable(statement.argument, actual, expected, (source, target) =>
+      this.addError(
+        TypeCheckErrorCode.TypeMismatch,
+        `Type '${source}' is not assignable to return type '${target}'`,
+        statement.argument!.line ?? statement.line,
+        statement.argument!.column ?? statement.column
+      )
+    );
   }
 
   private checkVariableDeclaration(varDecl: VariableDeclaration): void {
@@ -372,159 +765,222 @@ export class TypeChecker {
     // Get inferred type from initializer
     let inferredType: Type | undefined;
     if (varDecl.init) {
-      inferredType = this.inferExpressionType(varDecl.init, declaredType);
-    }
-
-    // Type checking — skip when the inferred type is 'unknown' to avoid
-    // cascading false positives from expressions whose inference isn't wired
-    // (e.g., BinaryExpression, complex member accesses).
-    if (declaredType && inferredType && inferredType.kind !== 'unknown') {
-      if (!this.isAssignable(inferredType, declaredType)) {
-        this.addError(
-          TypeCheckErrorCode.TypeMismatch,
-          `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}'`,
-          varDecl.line,
-          varDecl.column
+      const init = varDecl.init;
+      inferredType = this.inferExpressionType(init, declaredType);
+      if (declaredType) {
+        this.checkAssignable(init, inferredType, declaredType, (source, target) =>
+          this.addError(
+            TypeCheckErrorCode.TypeMismatch,
+            `Type '${source}' is not assignable to type '${target}'`,
+            init.line ?? varDecl.line,
+            init.column ?? varDecl.column
+          )
         );
       }
     }
 
-    // Store variable type in symbol table
-    const finalType = declaredType || inferredType;
-    if (finalType) {
-      if (varDecl.identifier.type === 'Identifier') {
-        this.symbolTable.set(varDecl.identifier.name, finalType);
-      } else {
-        this.bindPatternTypes(varDecl.identifier, finalType);
-      }
-    }
+    // Store variable type in the current scope. Unannotated bindings get the
+    // widened type of their initializer (`тағйирёбанда х = 0` is a рақам).
+    const finalType =
+      declaredType ??
+      (inferredType ? this.widenType(inferredType, varDecl.kind === 'СОБИТ') : UNKNOWN);
+    this.bindPatternTypes(varDecl.identifier, finalType);
   }
 
-  private bindPatternTypes(pattern: Identifier | ArrayPattern | ObjectPattern, type: Type): void {
-    if (pattern.type === 'Identifier') {
-      this.symbolTable.set(pattern.name, type);
-      return;
-    }
-
-    if (pattern.type === 'ArrayPattern') {
-      this.bindArrayPatternTypes(pattern, type);
-      return;
-    }
-
-    if (pattern.type === 'ObjectPattern') {
-      this.bindObjectPatternTypes(pattern, type);
+  private bindPatternTypes(
+    pattern:
+      | Identifier
+      | ArrayPattern
+      | ObjectPattern
+      | AssignmentPattern
+      | SpreadElement
+      | RestElement,
+    type: Type
+  ): void {
+    switch (pattern.type) {
+      case 'Identifier':
+        this.declare((pattern as Identifier).name, type);
+        break;
+      case 'ArrayPattern':
+        this.bindArrayPatternTypes(pattern as ArrayPattern, type);
+        break;
+      case 'ObjectPattern':
+        this.bindObjectPatternTypes(pattern as ObjectPattern, type);
+        break;
+      case 'AssignmentPattern': {
+        const assignment = pattern as AssignmentPattern;
+        this.inferExpressionType(assignment.right);
+        this.bindPatternTypes(assignment.left, type);
+        break;
+      }
+      case 'SpreadElement':
+      case 'RestElement':
+        this.bindPatternTypes(
+          (pattern as SpreadElement).argument as Identifier | ArrayPattern | ObjectPattern,
+          type
+        );
+        break;
     }
   }
 
   private bindArrayPatternTypes(pattern: ArrayPattern, type: Type): void {
-    if (!type.elementType) return;
-
-    pattern.elements.forEach(element => {
-      if (element) {
-        this.bindPatternTypes(
-          element as Identifier | ArrayPattern | ObjectPattern,
-          type.elementType!
-        );
+    const elementType = type.kind === 'array' ? (type.elementType ?? UNKNOWN) : UNKNOWN;
+    pattern.elements.forEach((element, index) => {
+      if (!element) return;
+      if (element.type === 'SpreadElement' || (element.type as string) === 'RestElement') {
+        this.bindPatternTypes(element, { kind: 'array', elementType });
+      } else if (type.kind === 'tuple') {
+        this.bindPatternTypes(element, type.types?.[index] ?? UNKNOWN);
+      } else {
+        this.bindPatternTypes(element, elementType);
       }
     });
   }
 
   private bindObjectPatternTypes(pattern: ObjectPattern, type: Type): void {
-    if (!type.properties) return;
-
+    const properties = this.getAllProperties(type);
     for (const prop of pattern.properties) {
-      if (prop.type !== 'PropertyPattern') continue;
-      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
-      const propType = type.properties.get(keyName);
-      if (propType) {
-        this.bindPatternTypes(
-          prop.value as Identifier | ArrayPattern | ObjectPattern,
-          propType.type
-        );
+      if (prop.type !== 'PropertyPattern') {
+        this.bindPatternTypes(prop as SpreadElement, UNKNOWN);
+        continue;
       }
+      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+      const propType = prop.computed ? undefined : properties.get(keyName);
+      // Shorthand `{ а }` may arrive without a value from older parsers
+      const target = prop.value ?? (prop.key.type === 'Identifier' ? prop.key : undefined);
+      if (target) this.bindPatternTypes(target, propType?.type ?? UNKNOWN);
     }
   }
 
   private checkFunctionDeclaration(funcDecl: FunctionDeclaration): void {
-    const { paramTypes, paramNames, paramOptional } = this.extractFunctionParams(funcDecl);
+    // Reuse the signature hoisted into this scope
+    const hoisted = this.scopes[this.scopes.length - 1].get(funcDecl.name.name);
+    const functionType =
+      hoisted?.kind === 'function' ? hoisted : this.buildFunctionType(funcDecl.name.name, funcDecl);
+    this.checkFunctionBody(funcDecl, functionType, undefined);
+  }
 
-    const returnTypeAnnotation: TypeAnnotation | undefined = funcDecl.returnType;
-    const returnType: Type = returnTypeAnnotation
-      ? this.resolveTypeNode(returnTypeAnnotation.typeAnnotation)
-      : { kind: 'unknown' };
-
-    const functionType: Type = {
-      kind: 'function',
-      name: funcDecl.name.name,
-      returnType,
-      paramTypes,
-      paramNames,
-      paramOptional,
-    };
-
-    // Register the function BEFORE walking the body so recursion resolves.
-    this.symbolTable.set(funcDecl.name.name, functionType);
-
-    // Create new scope for function parameters and check the body.
-    const savedSymbols = new Map(this.symbolTable);
-    for (let i = 0; i < funcDecl.params.length; i++) {
-      this.symbolTable.set(paramNames[i], paramTypes[i]);
-    }
-
-    if (funcDecl.body && Array.isArray(funcDecl.body.body)) {
-      for (const stmt of funcDecl.body.body) {
-        this.checkStatement(stmt);
+  /**
+   * Checks parameters (defaults, destructuring) and the body of a function in
+   * a new scope, with `бозгашт` checked against the declared return type.
+   */
+  private checkFunctionBody(fn: FunctionLike, functionType: Type, thisType?: Type): void {
+    const isAsync = Boolean(fn.async ?? fn.isAsync);
+    this.functionStack.push({
+      returnType: this.expectedReturnType(functionType.returnType, isAsync),
+      thisType,
+    });
+    this.withScope(() => {
+      fn.params.forEach((param, index) =>
+        this.bindParameter(param, functionType.paramTypes?.[index] ?? UNKNOWN)
+      );
+      if (fn.body.type === 'BlockStatement') {
+        this.checkStatements((fn.body as BlockStatement).body);
+      } else {
+        this.checkReturnStatement({
+          type: 'ReturnStatement',
+          argument: fn.body,
+          line: fn.body.line,
+          column: fn.body.column,
+        } as ReturnStatement);
       }
-    }
+    });
+    this.functionStack.pop();
+  }
 
-    this.symbolTable = savedSymbols;
+  private bindParameter(param: Parameter, paramType: Type): void {
+    if (param.defaultValue) {
+      const defaultValue = param.defaultValue;
+      const defaultType = this.inferExpressionType(defaultValue, paramType);
+      this.checkAssignable(defaultValue, defaultType, paramType, (source, target) =>
+        this.addError(
+          TypeCheckErrorCode.TypeMismatch,
+          `Type '${source}' is not assignable to type '${target}'`,
+          defaultValue.line ?? param.line,
+          defaultValue.column ?? param.column
+        )
+      );
+    }
+    if (param.pattern) {
+      this.bindPatternTypes(param.pattern, paramType);
+    } else {
+      if (param.name) this.declare(param.name.name, paramType);
+    }
+  }
+
+  private expectedReturnType(returnType: Type | undefined, isAsync: boolean): Type | undefined {
+    let expected = returnType;
+    if (expected && isAsync) {
+      expected = this.isPromiseType(expected) ? expected.typeParameters?.[0] : undefined;
+    }
+    if (!expected || expected.kind === 'unknown') return undefined;
+    if (expected.kind === 'primitive' && ['void', 'any', 'unknown'].includes(expected.name!)) {
+      return undefined;
+    }
+    return expected;
   }
 
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
-    // Phase 2: Validate class relationships and property types
+    // Phase 2: Validate class relationships, property types and method bodies
     this.validateSuperClass(classDecl);
-    this.validateClassPropertyTypes(classDecl);
+    const classType = this.lookup(classDecl.name.name);
+    for (const member of classDecl.body.body) {
+      const thisType = member.static ? undefined : classType;
+      if (member.type === 'PropertyDefinition') {
+        this.functionStack.push({ thisType });
+        this.validatePropertyDefinition(member as PropertyDefinition);
+        this.functionStack.pop();
+      } else if (member.type === 'MethodDefinition') {
+        const method = member as MethodDefinition;
+        const methodType = this.buildFunctionType(method.key.name, method.value);
+        this.checkFunctionBody(method.value, methodType, thisType);
+      }
+    }
   }
 
   private validateSuperClass(classDecl: ClassDeclaration): void {
     if (!classDecl.superClass) return;
 
-    const parentType = this.symbolTable.get(classDecl.superClass.name);
-    const interfaceType = this.interfaceTable.get(classDecl.superClass.name);
-
-    if (!parentType && !interfaceType) {
-      this.addError(
-        TypeCheckErrorCode.ClassNotFound,
-        `Base class '${classDecl.superClass.name}' not found`,
-        classDecl.line,
-        classDecl.column
-      );
-      return;
-    }
+    const parentName = classDecl.superClass.name;
+    const parentType = this.lookup(parentName);
+    const interfaceType = this.interfaceTable.get(parentName);
 
     if (interfaceType) {
       this.addError(
         TypeCheckErrorCode.InvalidExtends,
-        `Class '${classDecl.name.name}' can only extend other classes, but '${classDecl.superClass.name}' is an interface`,
+        `Class '${classDecl.name.name}' can only extend other classes, but '${parentName}' is an interface`,
         classDecl.line,
         classDecl.column
       );
       return;
     }
 
-    if (parentType && parentType.kind !== 'class') {
+    if (!parentType) {
+      if (!this.isBuiltinValueName(parentName)) {
+        this.addError(
+          TypeCheckErrorCode.ClassNotFound,
+          `Base class '${parentName}' not found`,
+          classDecl.line,
+          classDecl.column
+        );
+      }
+      return;
+    }
+
+    // Imported or otherwise untyped bases can't be validated
+    if (parentType.kind === 'unknown') return;
+
+    if (parentType.kind !== 'class') {
       this.addInvalidExtendsError(classDecl, parentType);
       return;
     }
 
-    if (parentType) {
-      this.checkCircularInheritance(
-        classDecl.name.name,
-        parentType,
-        classDecl.line,
-        classDecl.column
-      );
-    }
+    this.checkCircularInheritance(
+      classDecl.name.name,
+      parentType,
+      classDecl.line,
+      classDecl.column
+    );
   }
 
   private addInvalidExtendsError(classDecl: ClassDeclaration, parentType: Type): void {
@@ -538,73 +994,54 @@ export class TypeChecker {
     );
   }
 
-  private validateClassPropertyTypes(classDecl: ClassDeclaration): void {
-    for (const member of classDecl.body.body) {
-      if (member.type === 'PropertyDefinition') {
-        this.validatePropertyDefinition(member);
-      }
-    }
-  }
-
   private validatePropertyDefinition(prop: PropertyDefinition): void {
-    if (!prop.typeAnnotation || !prop.value) return;
+    if (!prop.value) return;
+    const value = prop.value;
 
-    const declaredType = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
-    const inferredType = this.inferExpressionType(prop.value);
+    const declaredType = prop.typeAnnotation
+      ? this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
+      : undefined;
+    const inferredType = this.inferExpressionType(value, declaredType);
+    if (!declaredType) return;
 
-    if (inferredType.kind === 'unknown') return;
-
-    if (!this.isAssignable(inferredType, declaredType)) {
+    this.checkAssignable(value, inferredType, declaredType, (source, target) =>
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Type '${this.typeToString(inferredType)}' is not assignable to type '${this.typeToString(declaredType)}' for property '${prop.key.name}'`,
+        `Type '${source}' is not assignable to type '${target}' for property '${prop.key.name}'`,
         prop.line,
         prop.column
-      );
-    }
+      )
+    );
   }
 
   /**
-   * Check for circular inheritance in class hierarchy
-   * Follows fail-fast principle: errors are reported immediately
+   * Check for circular inheritance in class hierarchy by walking the base
+   * chain from the parent; reaching the class itself means a cycle.
    */
   private checkCircularInheritance(
     className: string,
-    currentType: Type,
+    parentType: Type,
     line: number,
-    column: number,
-    visited: Set<string> = new Set()
+    column: number
   ): void {
-    // Check if we've already visited this class in the inheritance chain
-    if (visited.has(className)) {
-      this.addError(
-        TypeCheckErrorCode.CircularInheritance,
-        `Circular inheritance detected involving class '${className}'`,
-        line,
-        column
-      );
-      return;
-    }
-
-    visited.add(className);
-
-    // Traverse up the inheritance chain
-    if (currentType.kind === 'class' && currentType.baseType) {
-      // Direct self-inheritance check
-      if (currentType.baseType.name === className) {
-        this.addError(
-          TypeCheckErrorCode.CircularInheritance,
-          `Circular inheritance detected: class '${className}' cannot extend itself`,
-          line,
-          column
-        );
+    const visited = new Set<string>();
+    for (let current: Type | undefined = parentType; current; current = current.baseType) {
+      if (current.name === className) {
+        const message =
+          current === parentType
+            ? `Circular inheritance detected: class '${className}' cannot extend itself`
+            : `Circular inheritance detected involving class '${className}'`;
+        this.addError(TypeCheckErrorCode.CircularInheritance, message, line, column);
         return;
       }
-
-      // Recursive check up the inheritance chain
-      this.checkCircularInheritance(className, currentType.baseType, line, column, visited);
+      if (visited.has(current.name!)) return;
+      visited.add(current.name!);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Type annotations
+  // ---------------------------------------------------------------------------
 
   private resolveTypeNode(typeNode: TypeNode): Type {
     switch (typeNode.type) {
@@ -624,10 +1061,24 @@ export class TypeChecker {
         return this.resolveUniqueType(typeNode as UniqueType);
       case 'LiteralType':
         return this.resolveLiteralType(typeNode as LiteralType);
+      case 'ObjectType':
+        return this.resolveObjectType(typeNode as ObjectType);
       case 'Identifier':
         return this.resolveIdentifierType(typeNode as Identifier);
+      case 'FunctionType': {
+        const fnType = typeNode as FunctionType;
+        return this.buildFunctionType(undefined, {
+          params: fnType.parameters,
+          returnType: {
+            type: 'TypeAnnotation',
+            typeAnnotation: fnType.returnType,
+            line: 0,
+            column: 0,
+          },
+        });
+      }
       default:
-        return { kind: 'unknown' };
+        return UNKNOWN;
     }
   }
 
@@ -667,14 +1118,24 @@ export class TypeChecker {
     };
   }
 
+  private resolveObjectType(objectType: ObjectType): Type {
+    const type: Type = { kind: 'object', properties: new Map() };
+    this.collectPropertySignatures(objectType.properties, type);
+    return type;
+  }
+
   private resolveGenericType(genericType: GenericType): Type {
     const baseName = genericType.name.name;
+    const typeParams = (genericType.typeParameters ?? []).map(tp => this.resolveTypeNode(tp));
+
+    if (PROMISE_NAMES.has(baseName)) {
+      return { kind: 'generic', name: 'Promise', typeParameters: typeParams };
+    }
+
     const baseType = this.resolveNamedType(baseName);
 
     // Add type parameters for generic types
-    if (genericType.typeParameters && genericType.typeParameters.length > 0) {
-      const typeParams = genericType.typeParameters.map(tp => this.resolveTypeNode(tp));
-
+    if (typeParams.length > 0) {
       // For Map and Set, explicitly mark as generic
       if (baseName === 'Map' || baseName === 'Set') {
         return {
@@ -698,6 +1159,9 @@ export class TypeChecker {
   }
 
   private resolveIdentifierType(identifierType: Identifier): Type {
+    if (PROMISE_NAMES.has(identifierType.name)) {
+      return { kind: 'generic', name: 'Promise', typeParameters: [] };
+    }
     return this.resolveNamedType(identifierType.name);
   }
 
@@ -714,7 +1178,7 @@ export class TypeChecker {
     }
 
     // Check if it's a class type
-    const classType = this.symbolTable.get(typeName);
+    const classType = this.lookup(typeName);
     if (classType && classType.kind === 'class') {
       return classType;
     }
@@ -750,46 +1214,43 @@ export class TypeChecker {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Expressions
+  // ---------------------------------------------------------------------------
+
   private inferExpressionType(expression: Expression, targetType?: Type): Type {
-    switch (expression.type) {
-      case 'Literal':
-        return this.inferLiteralType(expression as Literal);
-      case 'Identifier':
-        return this.inferIdentifierType(expression as Identifier);
-      case 'ArrayExpression':
-        return this.inferArrayExpressionType(expression as ArrayExpression, targetType);
-      case 'ObjectExpression':
-        return this.inferObjectType(expression as ObjectExpression, targetType);
-      case 'CallExpression':
-        return this.inferCallType(expression as CallExpression);
-      case 'NewExpression':
-        return this.inferNewExpressionType(expression as NewExpression);
-      default:
-        return { kind: 'unknown' };
-    }
+    const handler = this.expressionHandlers[expression.type];
+    return handler ? handler(expression, targetType) : UNKNOWN;
   }
 
   private inferLiteralType(literal: Literal): Type {
-    if (typeof literal.value === 'string') {
-      // Return as literal type for better type inference
-      return { kind: 'literal', value: literal.value };
-    } else if (typeof literal.value === 'number') {
-      // Return as literal type for better type inference
-      return { kind: 'literal', value: literal.value };
-    } else if (typeof literal.value === 'boolean') {
+    if (typeof literal.value === 'number' && /n$/.test(literal.raw ?? '')) {
+      // BigInt literal (`10n`): not a рақам
+      return UNKNOWN;
+    }
+    if (
+      typeof literal.value === 'string' ||
+      typeof literal.value === 'number' ||
+      typeof literal.value === 'boolean'
+    ) {
       // Return as literal type for better type inference
       return { kind: 'literal', value: literal.value };
     } else if (literal.value === null) {
       return { kind: 'primitive', name: 'null' };
     }
-    return { kind: 'unknown' };
+    return UNKNOWN;
+  }
+
+  private isBuiltinValueName(name: string): boolean {
+    return TypeChecker.BUILTIN_VALUE_NAMES.has(name) || name in global;
   }
 
   private inferIdentifierType(identifier: Identifier): Type {
-    const sym = this.symbolTable.get(identifier.name);
+    const sym = this.lookup(identifier.name);
     if (sym) return sym;
-    if (TypeChecker.BUILTIN_VALUE_NAMES.has(identifier.name)) {
-      return { kind: 'unknown' };
+    // Empty names are parser error-recovery placeholders
+    if (!identifier.name || this.isBuiltinValueName(identifier.name)) {
+      return UNKNOWN;
     }
     this.addError(
       TypeCheckErrorCode.UndefinedIdentifier,
@@ -797,29 +1258,21 @@ export class TypeChecker {
       identifier.line,
       identifier.column
     );
-    return { kind: 'unknown' };
+    return UNKNOWN;
   }
 
   private inferTupleTypeFromTarget(arrayExpr: ArrayExpression, targetTypes: Type[]): Type {
     const inferredTypes: Type[] = [];
     for (let i = 0; i < arrayExpr.elements.length; i++) {
       const element = arrayExpr.elements[i];
-      const targetElementType = targetTypes[i] || { kind: 'unknown' };
+      const targetElementType = targetTypes[i] || UNKNOWN;
       const inferredType = this.inferExpressionType(element, targetElementType);
       inferredTypes.push(inferredType);
     }
     return { kind: 'tuple', types: inferredTypes };
   }
 
-  private inferArrayElementType(arrayExpr: ArrayExpression): Type {
-    if (arrayExpr.elements.length === 0) {
-      return { kind: 'array', elementType: { kind: 'unknown' } };
-    }
-
-    const elementTypes = arrayExpr.elements.map((element: Expression) =>
-      this.inferExpressionType(element)
-    );
-
+  private unifyElementTypes(elementTypes: Type[]): Type {
     const firstType = elementTypes[0];
     const baseType = this.getBaseType(firstType);
 
@@ -830,39 +1283,55 @@ export class TypeChecker {
     });
 
     if (allSameBase) {
-      return { kind: 'array', elementType: baseType };
+      return baseType;
     }
 
-    // Mixed types: return as array of union type
-    const unionType: Type = { kind: 'union', types: elementTypes };
-    return { kind: 'array', elementType: unionType };
+    // Mixed types: array of union type
+    return { kind: 'union', types: elementTypes };
   }
 
-  private inferArrayExpressionType(arrayExpr: ArrayExpression, targetType?: Type): Type {
+  private inferArrayExpressionType(arrayExpr: ArrayExpression, contextType?: Type): Type {
+    const elements = arrayExpr.elements.filter(Boolean);
+    const hasSpread = elements.some(e => e.type === 'SpreadElement');
+    const targetType = this.arrayContextType(contextType, elements.length);
+
     // If target type is a tuple, use bidirectional inference
-    if (targetType && targetType.kind === 'tuple' && targetType.types) {
+    if (targetType && targetType.kind === 'tuple' && targetType.types && !hasSpread) {
       return this.inferTupleTypeFromTarget(arrayExpr, targetType.types);
     }
 
-    // If target is an array, infer array element type
-    if (targetType && targetType.kind === 'array') {
-      const elementType = targetType.elementType || { kind: 'unknown' };
-      arrayExpr.elements.forEach((element: Expression) =>
-        this.inferExpressionType(element, elementType)
-      );
+    const elementTarget = targetType?.kind === 'array' ? targetType.elementType : undefined;
+    const elementTypes = elements.map(element =>
+      element.type === 'SpreadElement'
+        ? this.iterationElementType(this.inferExpressionType((element as SpreadElement).argument))
+        : this.inferExpressionType(element, elementTarget)
+    );
+
+    if (elementTypes.length === 0 || elementTypes.some(t => t.kind === 'unknown')) {
+      return { kind: 'array', elementType: UNKNOWN };
+    }
+
+    // With a contextual array type, keep each element's own type so that
+    // assignability checks every element against the target element type
+    if (elementTarget) {
+      const elementType =
+        elementTypes.length === 1 ? elementTypes[0] : { kind: 'union', types: elementTypes };
       return { kind: 'array', elementType };
     }
 
-    // If target is an interface/object with numeric indices (simulating tuple)
-    if (targetType && (targetType.kind === 'interface' || targetType.kind === 'object')) {
-      const inferredTypes: Type[] = arrayExpr.elements.map(element =>
-        this.inferExpressionType(element)
-      );
-      return { kind: 'tuple', types: inferredTypes };
-    }
+    return { kind: 'array', elementType: this.unifyElementTypes(elementTypes) };
+  }
 
-    // Default: infer array type from elements
-    return this.inferArrayElementType(arrayExpr);
+  /**
+   * Picks the member of a union target that contextually types an array
+   * literal: a tuple of matching length, else an array type.
+   */
+  private arrayContextType(targetType: Type | undefined, length: number): Type | undefined {
+    if (targetType?.kind !== 'union' || !targetType.types) return targetType;
+    return (
+      targetType.types.find(t => t.kind === 'tuple' && t.types?.length === length) ??
+      targetType.types.find(t => t.kind === 'array')
+    );
   }
 
   /**
@@ -884,63 +1353,215 @@ export class TypeChecker {
     return type;
   }
 
-  private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
-    if (targetType && targetType.kind === 'interface') {
-      return targetType;
+  /**
+   * Type of a binding without annotation: literals become their primitive
+   * (except for `собит` bindings), `холӣ`/`беқимат` become unknown, and
+   * object/array members are widened since they stay mutable.
+   */
+  private widenType(type: Type, keepLiteral = false): Type {
+    switch (type.kind) {
+      case 'literal':
+        return keepLiteral ? type : this.getBaseType(type);
+      case 'primitive':
+        return type.name === 'null' || type.name === 'undefined' ? UNKNOWN : type;
+      case 'array':
+        return { kind: 'array', elementType: this.widenType(type.elementType ?? UNKNOWN) };
+      case 'union':
+        return { kind: 'union', types: type.types!.map(t => this.widenType(t)) };
+      case 'object': {
+        const properties = new Map<string, PropertyType>();
+        for (const [key, prop] of type.properties ?? []) {
+          properties.set(key, { type: this.widenType(prop.type), optional: prop.optional });
+        }
+        return { kind: 'object', properties };
+      }
+      default:
+        return type;
     }
-
-    if (
-      targetType &&
-      (targetType.kind === 'intersection' || (targetType.kind === 'unknown' && targetType.name))
-    ) {
-      return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
-    }
-
-    return { kind: 'object', properties: this.extractObjectProperties(objExpr) };
   }
 
-  private extractObjectProperties(objExpr: ObjectExpression): Map<string, PropertyType> {
+  private inferObjectType(objExpr: ObjectExpression, targetType?: Type): Type {
+    const targetProperties = targetType ? this.getAllProperties(targetType) : new Map();
     const properties = new Map<string, PropertyType>();
+    // Spread and computed keys contribute members we can't name statically
+    let open = false;
 
-    if (objExpr.properties) {
-      for (const prop of objExpr.properties) {
-        if (prop.key && prop.value) {
-          const keyName =
-            prop.key.type === 'Identifier'
-              ? (prop.key as Identifier).name
-              : String((prop.key as Literal).value);
-          const valueType = this.inferExpressionType(prop.value);
-          properties.set(keyName, {
-            type: valueType,
-            optional: false,
-          });
-        }
+    for (const prop of objExpr.properties ?? []) {
+      if (prop.type === 'SpreadElement') {
+        this.inferExpressionType((prop as SpreadElement).argument);
+        open = true;
+        continue;
+      }
+      if (prop.computed) {
+        this.inferExpressionType(prop.key);
+        open = true;
+      }
+      const value = prop.value ?? (prop.key.type === 'Identifier' ? prop.key : undefined);
+      if (!value) continue;
+      const keyName = this.propertyKeyName(prop.key);
+      const valueType = this.inferExpressionType(value, targetProperties.get(keyName)?.type);
+      if (!prop.computed) {
+        properties.set(keyName, { type: valueType, optional: false });
       }
     }
 
-    return properties;
+    return open ? UNKNOWN : { kind: 'object', properties };
+  }
+
+  private propertyKeyName(key: Identifier | Literal): string {
+    return key.type === 'Identifier' ? (key as Identifier).name : String((key as Literal).value);
+  }
+
+  private inferFunctionExpressionType(fn: FunctionLike, isArrow: boolean): Type {
+    const functionType = this.buildFunctionType(undefined, fn);
+    // Arrow functions keep the enclosing `ин`
+    const thisType = isArrow ? this.currentFunction()?.thisType : undefined;
+    this.checkFunctionBody(fn, functionType, thisType);
+    return functionType;
+  }
+
+  private isOptionalChain(expression: Expression): boolean {
+    let current: Expression | undefined = expression;
+    while (current && (current.type === 'MemberExpression' || current.type === 'CallExpression')) {
+      if ((current as MemberExpression | CallExpression).optional) return true;
+      current =
+        current.type === 'MemberExpression'
+          ? (current as MemberExpression).object
+          : (current as CallExpression).callee;
+    }
+    return false;
+  }
+
+  private inferMemberType(member: MemberExpression): Type {
+    const objectType = this.inferExpressionType(member.object);
+    if (member.computed) {
+      const indexType = this.inferExpressionType(member.property);
+      if (this.isOptionalChain(member)) return UNKNOWN;
+      return this.indexedAccessType(objectType, indexType);
+    }
+    if (this.isOptionalChain(member)) return UNKNOWN;
+    if (member.property.type !== 'Identifier') return UNKNOWN;
+    const name = (member.property as Identifier).name;
+
+    if (name === 'length' && (this.isStringType(objectType) || objectType.kind === 'array')) {
+      return { kind: 'primitive', name: 'number' };
+    }
+    return this.getAllProperties(objectType).get(name)?.type ?? UNKNOWN;
+  }
+
+  private indexedAccessType(objectType: Type, indexType: Type): Type {
+    if (!this.isNumericType(indexType)) return UNKNOWN;
+    if (objectType.kind === 'array') return objectType.elementType ?? UNKNOWN;
+    if (objectType.kind === 'tuple' && indexType.kind === 'literal') {
+      return objectType.types?.[indexType.value as number] ?? UNKNOWN;
+    }
+    return UNKNOWN;
+  }
+
+  private inferAssignmentType(assignment: AssignmentExpression): Type {
+    const left = assignment.left;
+    const leftType = this.inferExpressionType(left);
+    const isPlain = assignment.operator === '=';
+    const rightType = this.inferExpressionType(assignment.right, isPlain ? leftType : undefined);
+
+    if (isPlain && (left.type === 'Identifier' || left.type === 'MemberExpression')) {
+      this.checkAssignable(assignment.right, rightType, leftType, (source, target) =>
+        this.addError(
+          TypeCheckErrorCode.TypeMismatch,
+          `Type '${source}' is not assignable to type '${target}'`,
+          assignment.right.line ?? assignment.line,
+          assignment.right.column ?? assignment.column
+        )
+      );
+    }
+    return rightType;
+  }
+
+  private inferBinaryType(binary: BinaryExpression): Type {
+    const left = this.inferExpressionType(binary.left);
+    const right = this.inferExpressionType(binary.right);
+    const op = binary.operator;
+
+    if (BOOLEAN_BINARY_OPERATORS.has(op)) return { kind: 'primitive', name: 'boolean' };
+    const bothNumeric = this.isNumericType(left) && this.isNumericType(right);
+    if (NUMERIC_BINARY_OPERATORS.has(op)) {
+      return bothNumeric ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+    }
+    if (op === '+') {
+      if (this.isStringType(left) || this.isStringType(right)) {
+        return { kind: 'primitive', name: 'string' };
+      }
+      return bothNumeric ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+    }
+    return UNKNOWN;
+  }
+
+  private inferUnaryType(unary: UnaryExpression): Type {
+    const argument = this.inferExpressionType(unary.argument);
+    switch (unary.operator) {
+      case '!':
+      case 'delete':
+        return { kind: 'primitive', name: 'boolean' };
+      case 'typeof':
+        return { kind: 'primitive', name: 'string' };
+      case '-':
+      case '+':
+      case '~':
+        return this.isNumericType(argument) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+      default:
+        return UNKNOWN;
+    }
+  }
+
+  private inferNumericOperand(argument: Expression): Type {
+    const type = this.inferExpressionType(argument);
+    return this.isNumericType(type) ? { kind: 'primitive', name: 'number' } : UNKNOWN;
+  }
+
+  private inferConditionalType(conditional: ConditionalExpression, targetType?: Type): Type {
+    this.inferExpressionType(conditional.test);
+    const consequent = this.inferExpressionType(conditional.consequent, targetType);
+    const alternate = this.inferExpressionType(conditional.alternate, targetType);
+    if (consequent.kind === 'unknown' || alternate.kind === 'unknown') return UNKNOWN;
+    if (this.isExactMatch(consequent, alternate)) return consequent;
+    return { kind: 'union', types: [consequent, alternate] };
+  }
+
+  private isNumericType(type: Type): boolean {
+    return (
+      (type.kind === 'primitive' && type.name === 'number') ||
+      (type.kind === 'literal' && typeof type.value === 'number')
+    );
+  }
+
+  private isStringType(type: Type): boolean {
+    return (
+      (type.kind === 'primitive' && type.name === 'string') ||
+      (type.kind === 'literal' && typeof type.value === 'string')
+    );
+  }
+
+  private isPromiseType(type: Type): boolean {
+    return type.kind === 'generic' && type.name === 'Promise';
+  }
+
+  private unwrapPromise(type: Type): Type {
+    if (this.isPromiseType(type)) return type.typeParameters?.[0] ?? UNKNOWN;
+    return type;
   }
 
   private inferCallType(callExpr: CallExpression): Type {
-    if (callExpr.callee && callExpr.callee.type === 'Identifier') {
-      const functionName = (callExpr.callee as Identifier).name;
-      // Route through inferIdentifierType so undefined callees produce a
-      // single UndefinedIdentifier diagnostic instead of silently unknown.
-      const functionType = this.symbolTable.get(functionName)
-        ? this.symbolTable.get(functionName)!
-        : this.inferIdentifierType(callExpr.callee as Identifier);
-      if (functionType.kind === 'function') {
-        this.validateCallArguments(callExpr, functionType);
-        return functionType.returnType ?? { kind: 'unknown' };
-      }
-      // Still evaluate args so nested undefined identifiers are flagged.
-      callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
-    } else if (callExpr.callee) {
-      // Type-check non-identifier callees (e.g., member expressions) so
-      // arguments still trigger undefined-variable detection.
-      callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
+    const callee = callExpr.callee;
+    // Route identifiers through inferIdentifierType so undefined callees
+    // produce a single UndefinedIdentifier diagnostic.
+    const functionType = callee ? this.inferExpressionType(callee) : UNKNOWN;
+    if (functionType.kind === 'function' && !this.isOptionalChain(callExpr)) {
+      this.validateCallArguments(callExpr, functionType);
+      return functionType.returnType ?? UNKNOWN;
     }
-    return { kind: 'unknown' };
+    // Still evaluate args so nested undefined identifiers are flagged.
+    callExpr.arguments.forEach(arg => this.inferExpressionType(arg));
+    return UNKNOWN;
   }
 
   private validateCallArguments(callExpr: CallExpression, functionType: Type): void {
@@ -951,46 +1572,56 @@ export class TypeChecker {
       return;
     }
 
+    const args = callExpr.arguments;
+    const spreadIndex = args.findIndex(arg => arg.type === 'SpreadElement');
+    const hasRest = Boolean(functionType.hasRestParam);
+    const fixedCount = hasRest ? paramTypes.length - 1 : paramTypes.length;
     const optional = functionType.paramOptional ?? paramTypes.map(() => false);
-    const requiredCount = optional.filter(o => !o).length;
-    const actual = callExpr.arguments.length;
+    const requiredCount = optional.slice(0, fixedCount).filter(o => !o).length;
 
-    if (actual < requiredCount || actual > paramTypes.length) {
-      const expectedStr =
-        requiredCount === paramTypes.length
-          ? `${paramTypes.length}`
-          : `${requiredCount}-${paramTypes.length}`;
+    if (
+      spreadIndex === -1 &&
+      (args.length < requiredCount || (!hasRest && args.length > fixedCount))
+    ) {
+      const expectedStr = hasRest
+        ? `at least ${requiredCount}`
+        : requiredCount === fixedCount
+          ? `${fixedCount}`
+          : `${requiredCount}-${fixedCount}`;
       this.addError(
         TypeCheckErrorCode.ArgumentCountMismatch,
-        `Function '${functionType.name ?? 'anonymous'}' expected ${expectedStr} argument(s) but got ${actual}`,
+        `Function '${functionType.name ?? 'anonymous'}' expected ${expectedStr} argument(s) but got ${args.length}`,
         callExpr.line,
         callExpr.column
       );
     }
 
-    const checkCount = Math.min(callExpr.arguments.length, paramTypes.length);
-    for (let i = 0; i < checkCount; i++) {
-      const argType = this.inferExpressionType(callExpr.arguments[i], paramTypes[i]);
-      const paramType = paramTypes[i];
-      if (argType.kind === 'unknown' || paramType.kind === 'unknown') continue;
-      if (!this.isAssignable(argType, paramType)) {
-        const argNode = callExpr.arguments[i];
+    const restType = hasRest ? paramTypes[paramTypes.length - 1] : undefined;
+    const restElementType = restType?.kind === 'array' ? restType.elementType : undefined;
+    args.forEach((argNode, i) => {
+      // Positions after a spread argument are unknown
+      const paramType =
+        spreadIndex !== -1 && i >= spreadIndex
+          ? undefined
+          : i < fixedCount
+            ? paramTypes[i]
+            : restElementType;
+      const argType = this.inferExpressionType(argNode, paramType);
+      if (!paramType) return;
+      this.checkAssignable(argNode, argType, paramType, (source, target) =>
         this.addError(
           TypeCheckErrorCode.ArgumentTypeMismatch,
-          `Argument ${i + 1} of '${functionType.name ?? 'anonymous'}' expected type '${this.typeToString(paramType)}' but got '${this.typeToString(argType)}'`,
+          `Argument ${i + 1} of '${functionType.name ?? 'anonymous'}' expected type '${target}' but got '${source}'`,
           argNode.line ?? callExpr.line,
           argNode.column ?? callExpr.column
-        );
-      }
-    }
-
-    // Still evaluate any extra arguments so nested diagnostics fire.
-    for (let i = checkCount; i < callExpr.arguments.length; i++) {
-      this.inferExpressionType(callExpr.arguments[i]);
-    }
+        )
+      );
+    });
   }
 
   private inferNewExpressionType(newExpr: NewExpression): Type {
+    // Walk args so nested undefined identifiers are flagged
+    newExpr.arguments.forEach(arg => this.inferExpressionType(arg));
     if (newExpr.callee && newExpr.callee.type === 'Identifier') {
       const className = (newExpr.callee as Identifier).name;
 
@@ -1013,13 +1644,81 @@ export class TypeChecker {
         };
       }
 
-      const classType = this.symbolTable.get(className);
+      const classType = this.lookup(className);
       if (classType && classType.kind === 'class') {
         // Return the actual class type with all its properties and baseType
         return classType;
       }
+    } else if (newExpr.callee) {
+      this.inferExpressionType(newExpr.callee);
     }
-    return { kind: 'unknown' };
+    return UNKNOWN;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Assignability
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reports through `report` when `sourceType` (the type of `sourceExpr`) is
+   * not assignable to `targetType`; otherwise checks fresh object literals for
+   * properties the target doesn't declare.
+   */
+  private checkAssignable(
+    sourceExpr: Expression,
+    sourceType: Type,
+    targetType: Type,
+    report: (_source: string, _target: string) => void
+  ): void {
+    // Control flow isn't tracked, so a union-typed reference may already be
+    // narrowed (`агар (навъи х === "string") бозгашт х;`): accept it when any
+    // member fits.
+    const narrowable =
+      sourceType.kind === 'union' &&
+      (sourceExpr.type === 'Identifier' || sourceExpr.type === 'MemberExpression');
+    const assignable = narrowable
+      ? sourceType.types!.some(t => this.isAssignable(t, targetType))
+      : this.isAssignable(sourceType, targetType);
+    if (!assignable) {
+      report(this.typeToString(sourceType), this.typeToString(targetType));
+      return;
+    }
+    this.checkExcessProperties(sourceExpr, targetType);
+  }
+
+  private checkExcessProperties(expr: Expression, targetType: Type): void {
+    if (expr.type === 'ArrayExpression' && targetType.kind === 'array') {
+      for (const element of (expr as ArrayExpression).elements) {
+        if (element) this.checkExcessProperties(element, targetType.elementType ?? UNKNOWN);
+      }
+      return;
+    }
+    if (expr.type !== 'ObjectExpression') return;
+    if (targetType.kind !== 'interface' && targetType.kind !== 'object') return;
+    // An index signature accepts any key
+    if (targetType.indexType || targetType.open) return;
+    const objExpr = expr as ObjectExpression;
+    if (objExpr.properties.some(p => p.type === 'SpreadElement' || p.computed)) return;
+    this.checkObjectLiteralKeys(objExpr, targetType);
+  }
+
+  private checkObjectLiteralKeys(objExpr: ObjectExpression, targetType: Type): void {
+    const targetProperties = this.getAllProperties(targetType);
+    for (const prop of objExpr.properties) {
+      if (prop.type === 'SpreadElement') continue;
+      const keyName = this.propertyKeyName(prop.key);
+      const targetProp = targetProperties.get(keyName);
+      if (!targetProp) {
+        this.addError(
+          TypeCheckErrorCode.TypeMismatch,
+          `Object literal may only specify known properties, and '${keyName}' does not exist in type '${this.typeToString(targetType)}'`,
+          prop.line ?? objExpr.line,
+          prop.column ?? objExpr.column
+        );
+      } else if (prop.value) {
+        this.checkExcessProperties(prop.value, targetProp.type);
+      }
+    }
   }
 
   private isLiteralAssignableToPrimitive(source: Type, target: Type): boolean {
@@ -1050,35 +1749,49 @@ export class TypeChecker {
   private isStructuralTypeAssignable(source: Type, target: Type): boolean {
     return (
       this.isInterfaceAssignable(source, target) ||
-      this.isObjectAssignable(source, target) ||
       this.isClassAssignable(source, target) ||
       this.isUniqueAssignable(source, target)
     );
   }
 
-  private isSpecialCaseAssignable(source: Type, target: Type): boolean {
-    // Tuples are assignable to interfaces (for interface-based tuples)
-    if (source.kind === 'tuple' && target.kind === 'interface') {
+  /**
+   * Top-type rules: anything goes to `ҳар`/`ношинос`, `ҳар` goes anywhere,
+   * and unresolved types are never reported. `холӣ`/`беқимат` are accepted
+   * everywhere since nullability isn't tracked.
+   */
+  private isTopTypeAssignable(source: Type, target: Type): boolean {
+    if (source === target || source.kind === 'unknown' || target.kind === 'unknown') return true;
+    if (target.kind === 'primitive' && (target.name === 'any' || target.name === 'unknown')) {
       return true;
     }
-
-    // Allow assignment to unknown types with names (unresolved type references)
-    if (target.kind === 'unknown' && target.name) {
-      if (source.kind === 'object' || source.kind === 'interface' || source.kind === 'tuple') {
-        return true;
-      }
+    if (source.kind === 'primitive') {
+      return source.name === 'any' || source.name === 'null' || source.name === 'undefined';
     }
-
     return false;
   }
 
+  private isObjectTargetAssignable(source: Type, target: Type): boolean {
+    if (target.kind !== 'primitive' || target.name !== 'object') return false;
+    return ['object', 'interface', 'class', 'array', 'tuple', 'generic', 'function'].includes(
+      source.kind
+    );
+  }
+
   private isAssignable(source: Type, target: Type): boolean {
+    if (this.isTopTypeAssignable(source, target)) {
+      return true;
+    }
+
     if (this.isExactMatch(source, target)) {
       return true;
     }
 
-    // Anything is assignable to 'any' type
-    if (target.kind === 'primitive' && target.name === 'any') {
+    if (this.isObjectTargetAssignable(source, target)) {
+      return true;
+    }
+
+    // Function signatures aren't compared (no variance checking)
+    if (source.kind === 'function' && target.kind === 'function') {
       return true;
     }
 
@@ -1090,11 +1803,7 @@ export class TypeChecker {
       return true;
     }
 
-    if (this.isStructuralTypeAssignable(source, target)) {
-      return true;
-    }
-
-    return this.isSpecialCaseAssignable(source, target);
+    return this.isStructuralTypeAssignable(source, target);
   }
 
   private isExactMatch(source: Type, target: Type): boolean {
@@ -1117,7 +1826,11 @@ export class TypeChecker {
       // Full variance checking can be added later
       return true;
     }
-    // Check for primitive type match
+    // Primitives match by name; classes and interfaces by declared name.
+    // Structured types (arrays, objects, unions, …) have no name to compare.
+    if (!['primitive', 'class', 'interface'].includes(source.kind) || !source.name) {
+      return false;
+    }
     return source.kind === target.kind && source.name === target.name;
   }
 
@@ -1151,7 +1864,7 @@ export class TypeChecker {
     if (!target.types || target.types.length === 0) {
       return true; // Empty tuple accepts any array
     }
-    const sourceElementType = source.elementType || { kind: 'unknown' };
+    const sourceElementType = source.elementType || UNKNOWN;
     // Check if source element type is compatible with all tuple positions
     return target.types.every(tupleElementType =>
       this.isAssignable(sourceElementType, tupleElementType)
@@ -1159,11 +1872,11 @@ export class TypeChecker {
   }
 
   private isUnionAssignable(source: Type, target: Type): boolean {
-    if (target.kind === 'union' && target.types) {
-      return target.types.some(t => this.isAssignable(source, t));
-    }
     if (source.kind === 'union' && source.types) {
       return source.types.every(t => this.isAssignable(t, target));
+    }
+    if (target.kind === 'union' && target.types) {
+      return target.types.some(t => this.isAssignable(source, t));
     }
     return false;
   }
@@ -1179,85 +1892,155 @@ export class TypeChecker {
   }
 
   private isInterfaceAssignable(source: Type, target: Type): boolean {
-    if (target.kind !== 'interface') {
+    if (target.kind !== 'interface' && target.kind !== 'object') {
       return false;
     }
-    if (source.kind === 'interface' || source.kind === 'object') {
+    if (['interface', 'object', 'class'].includes(source.kind)) {
       return this.isStructurallyCompatible(source, target);
     }
     return false;
   }
 
-  private isObjectAssignable(source: Type, target: Type): boolean {
-    if (target.kind !== 'object') {
-      return false;
-    }
-    if (source.kind === 'object') {
-      return this.isStructurallyCompatible(source, target);
-    }
-    return false;
-  }
-
+  /**
+   * A class accepts its subclasses (base chain followed by name) and, like
+   * TypeScript, any object whose members match its own.
+   */
   private isClassAssignable(source: Type, target: Type): boolean {
-    return source.kind === 'class' && target.kind === 'class' && source.name === target.name;
+    if (target.kind !== 'class') return false;
+    if (source.kind === 'class') {
+      const visited = new Set<string>();
+      for (let t: Type | undefined = source; t && !visited.has(t.name!); t = t.baseType) {
+        if (t.name === target.name) return true;
+        visited.add(t.name!);
+      }
+    }
+    if (['interface', 'object', 'class'].includes(source.kind)) {
+      return this.isStructurallyCompatible(source, target);
+    }
+    return false;
   }
 
   private isUniqueAssignable(source: Type, target: Type): boolean {
     if (source.kind === 'unique' && target.kind === 'unique') {
       return this.isAssignable(source.baseType!, target.baseType!);
     }
-    if (source.kind === 'unique' || target.kind === 'unique') {
-      return false;
-    }
     return false;
   }
 
+  /**
+   * All members of an object-like type; for classes this includes members
+   * inherited along the base chain (own members override inherited ones).
+   */
+  private getAllProperties(type: Type): Map<string, PropertyType> {
+    if (type.kind === 'intersection' && type.types) {
+      const merged = new Map<string, PropertyType>();
+      type.types.forEach(t => this.getAllProperties(t).forEach((p, k) => merged.set(k, p)));
+      return merged;
+    }
+    if (!['interface', 'object', 'class'].includes(type.kind) || !type.properties) {
+      return new Map();
+    }
+    if (type.kind !== 'class' || !type.baseType) return type.properties;
+
+    const chain: Type[] = [];
+    const visited = new Set<string>();
+    for (let t: Type | undefined = type; t && !visited.has(t.name!); t = t.baseType) {
+      chain.unshift(t);
+      visited.add(t.name!);
+    }
+    const merged = new Map<string, PropertyType>();
+    chain.forEach(t => t.properties?.forEach((p, k) => merged.set(k, p)));
+    return merged;
+  }
+
+  private readonly typePrinters: Record<string, (_type: Type) => string> = {
+    primitive: t => this.mapPrimitiveToTajik(t.name ?? 'unknown'),
+    array: t => `${this.typeToString(t.elementType ?? UNKNOWN)}[]`,
+    union: t => this.typeListToString(t),
+    intersection: t => this.typeListToString(t),
+    tuple: t => this.typeListToString(t),
+    literal: t => (typeof t.value === 'string' ? `"${t.value}"` : String(t.value)),
+    unique: t => `беназир ${this.typeToString(t.baseType!)}`,
+    object: t => this.objectTypeToString(t),
+    generic: t => this.genericTypeToString(t),
+    function: t => this.functionTypeToString(t),
+    unknown: t => t.name ?? 'ношинос',
+  };
+
   private typeToString(type: Type): string {
+    const printer = this.typePrinters[type.kind];
+    // Interfaces and classes print by name
+    return printer ? printer(type) : (type.name ?? type.kind);
+  }
+
+  private genericTypeToString(type: Type): string {
+    const params = type.typeParameters ?? [];
+    if (params.length === 0) return type.name!;
+    return `${type.name}<${this.typeListToString({ kind: 'list', types: params })}>`;
+  }
+
+  private typeListToString(type: Type): string {
+    const parts = type.types!.map(t => this.typeToString(t));
     switch (type.kind) {
-      case 'primitive':
-        return this.mapPrimitiveToTajik(type.name || 'unknown');
-      case 'array':
-        return `${this.typeToString(type.elementType!)}[]`;
       case 'union':
-        return type.types!.map(t => this.typeToString(t)).join(' | ');
+        return parts.join(' | ');
       case 'intersection':
-        return type.types!.map(t => this.typeToString(t)).join(' & ');
-      case 'interface':
-        return type.name || 'interface';
+        return parts.join(' & ');
       case 'tuple':
-        return `[${type.types!.map(t => this.typeToString(t)).join(', ')}]`;
-      case 'literal':
-        return typeof type.value === 'string' ? `"${type.value}"` : String(type.value);
-      case 'class':
-        return type.name || 'class';
-      case 'unique':
-        return `беназир ${this.typeToString(type.baseType!)}`;
+        return `[${parts.join(', ')}]`;
       default:
-        return type.name || 'unknown';
+        return parts.join(', ');
     }
   }
 
+  private objectTypeToString(type: Type): string {
+    const members = [...(type.properties ?? [])].map(
+      ([key, prop]) => `${key}${prop.optional ? '?' : ''}: ${this.typeToString(prop.type)}`
+    );
+    return members.length > 0 ? `{ ${members.join('; ')} }` : '{}';
+  }
+
+  private functionTypeToString(type: Type): string {
+    const params = (type.paramTypes ?? []).map(
+      (p, i) => `${type.paramNames?.[i] ?? `п${i}`}: ${this.typeToString(p)}`
+    );
+    return `(${params.join(', ')}) => ${this.typeToString(type.returnType ?? UNKNOWN)}`;
+  }
+
   private isStructurallyCompatible(source: Type, target: Type): boolean {
-    if (!source.properties || !target.properties) {
-      return false;
+    // Recursive types: assume compatibility for a pair already being compared
+    if (this.assignabilityStack.some(([s, t]) => s === source && t === target)) {
+      return true;
     }
+    const sourceProperties = this.getAllProperties(source);
+    const targetProperties = this.getAllProperties(target);
 
-    // Check if source has all required properties of target
-    for (const [propName, targetProp] of target.properties) {
-      const sourceProp = source.properties.get(propName);
+    this.assignabilityStack.push([source, target]);
+    try {
+      // Check if source has all required properties of target
+      for (const [propName, targetProp] of targetProperties) {
+        const sourceProp = sourceProperties.get(propName);
 
-      // Required property missing
-      if (!sourceProp && !targetProp.optional) {
-        return false;
+        // Required property missing
+        if (!sourceProp && !targetProp.optional) {
+          return false;
+        }
+
+        // Property exists, check type compatibility. The parser records an
+        // interface method signature `ном(): сатр` by its return type only, so
+        // a method satisfies any member type.
+        if (
+          sourceProp &&
+          sourceProp.type.kind !== 'function' &&
+          !this.isAssignable(sourceProp.type, targetProp.type)
+        ) {
+          return false;
+        }
       }
-
-      // Property exists, check type compatibility
-      if (sourceProp && !this.isAssignable(sourceProp.type, targetProp.type)) {
-        return false;
-      }
+      return true;
+    } finally {
+      this.assignabilityStack.pop();
     }
-
-    return true;
   }
 
   private mapPrimitiveToTajik(primitiveType: string): string {
@@ -1270,6 +2053,18 @@ export class TypeChecker {
         return 'мантиқӣ';
       case 'null':
         return 'холӣ';
+      case 'undefined':
+        return 'беқимат';
+      case 'any':
+        return 'ҳар';
+      case 'unknown':
+        return 'ношинос';
+      case 'never':
+        return 'абадан';
+      case 'void':
+        return 'беджавоб';
+      case 'object':
+        return 'объект';
       default:
         return primitiveType;
     }
@@ -1283,22 +2078,6 @@ export class TypeChecker {
       column,
       snippet: this.getSnippet(line),
       severity: 'error',
-    });
-  }
-
-  private addWarning(
-    code: TypeCheckErrorCode,
-    message: string,
-    line: number,
-    column: number
-  ): void {
-    this.warnings.push({
-      code,
-      message,
-      line,
-      column,
-      snippet: this.getSnippet(line),
-      severity: 'warning',
     });
   }
 }

@@ -37,6 +37,15 @@ export interface Parameter extends ASTNode {
   name: Identifier;
   typeAnnotation?: TypeAnnotation;
   optional?: boolean;
+  /** Default value: `(а = 1) => а`. */
+  defaultValue?: Expression;
+  /** Rest parameter: `(...а) => а`. */
+  rest?: boolean;
+  /**
+   * Destructuring parameter: `({ а, б }) => а`. When set, it replaces `name`
+   * in the emitted parameter list (`name` then holds a synthetic identifier).
+   */
+  pattern?: ArrayPattern | ObjectPattern;
 }
 
 export interface BlockStatement extends Statement {
@@ -97,6 +106,10 @@ export interface Identifier extends Expression {
 export interface Literal extends Expression {
   type: 'Literal';
   value: string | number | boolean | null;
+  /**
+   * Source text. For numeric literals this is the literal as written, minus
+   * `_` separators (`0xFF`, `1e3`, `.5`, `10n`), and codegen emits it as is.
+   */
   raw: string;
 }
 
@@ -109,7 +122,9 @@ export interface TemplateLiteral extends Expression {
 export interface TemplateElement extends ASTNode {
   type: 'TemplateElement';
   value: {
+    /** Source text between delimiters, escapes kept as written. */
     raw: string;
+    /** Text with escape sequences decoded. */
     cooked: string;
   };
   tail: boolean;
@@ -138,7 +153,24 @@ export interface UpdateExpression extends Expression {
 export interface CallExpression extends Expression {
   type: 'CallExpression';
   callee: Expression;
+  /** May contain `SpreadElement` nodes: `ф(...а)`. */
   arguments: Expression[];
+  /** Optional call: `ф?.()`. */
+  optional?: boolean;
+}
+
+/** `test ? consequent : alternate` */
+export interface ConditionalExpression extends Expression {
+  type: 'ConditionalExpression';
+  test: Expression;
+  consequent: Expression;
+  alternate: Expression;
+}
+
+/** Comma operator: `а, б`. */
+export interface SequenceExpression extends Expression {
+  type: 'SequenceExpression';
+  expressions: Expression[];
 }
 
 export interface ArrowFunctionExpression extends Expression {
@@ -158,12 +190,13 @@ export interface AssignmentExpression extends Expression {
 
 export interface ArrayExpression extends Expression {
   type: 'ArrayExpression';
+  /** May contain `SpreadElement` nodes: `[...а, 1]`. */
   elements: Expression[];
 }
 
 export interface ObjectExpression extends Expression {
   type: 'ObjectExpression';
-  properties: Property[];
+  properties: (Property | SpreadElement)[];
 }
 
 export interface Property extends ASTNode {
@@ -172,6 +205,8 @@ export interface Property extends ASTNode {
   value: Expression;
   computed: boolean;
   shorthand: boolean;
+  /** Method shorthand: `{ ф() { … } }` — `value` is a `FunctionExpression`. */
+  method?: boolean;
 }
 
 export interface MemberExpression extends Expression {
@@ -179,6 +214,18 @@ export interface MemberExpression extends Expression {
   object: Expression;
   property: Expression;
   computed: boolean;
+  /** Optional chaining: `о?.а`, `о?.[к]`. */
+  optional?: boolean;
+}
+
+/**
+ * A parenthesised optional chain, `(о?.а)`: the parentheses end the chain, so
+ * `(о?.а).б` throws when `о` is nullish while `о?.а.б` does not. Created only
+ * when the grouped expression contains an optional link.
+ */
+export interface ChainExpression extends Expression {
+  type: 'ChainExpression';
+  expression: Expression;
 }
 
 export interface ImportDeclaration extends Statement {
@@ -322,7 +369,14 @@ export interface ContinueStatement extends Statement {
 // Destructuring and Spread Patterns
 export interface ArrayPattern extends ASTNode {
   type: 'ArrayPattern';
-  elements: (Identifier | ArrayPattern | ObjectPattern | SpreadElement | null)[];
+  elements: (
+    | Identifier
+    | ArrayPattern
+    | ObjectPattern
+    | AssignmentPattern
+    | SpreadElement
+    | null
+  )[];
 }
 
 export interface ObjectPattern extends ASTNode {
@@ -333,8 +387,16 @@ export interface ObjectPattern extends ASTNode {
 export interface PropertyPattern extends ASTNode {
   type: 'PropertyPattern';
   key: Identifier | Literal;
-  value: Identifier | ArrayPattern | ObjectPattern;
+  /** For shorthand `{ а }` the parser sets `value` to an Identifier equal to `key`. */
+  value: Identifier | ArrayPattern | ObjectPattern | AssignmentPattern;
   computed: boolean;
+}
+
+/** Binding with a default value: `{ а = 1 }`, `[а = 1]`. */
+export interface AssignmentPattern extends ASTNode {
+  type: 'AssignmentPattern';
+  left: Identifier | ArrayPattern | ObjectPattern;
+  right: Expression;
 }
 
 export interface SpreadElement extends ASTNode {

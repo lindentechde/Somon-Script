@@ -13,11 +13,13 @@ const CLI_PATH = path.join(__dirname, '..', '..', 'dist', 'cli.js');
  * `C:\Users\RUNNER~1\AppData\Local\Temp`. Downstream code (path.join,
  * path.resolve) typically returns the long form, which then fails
  * `toContain` / `toEqual` assertions in suites that mix the two. Resolving
- * through `realpathSync` forces a single canonical representation. On
- * Linux/macOS the call is an identity operation.
+ * through `realpathSync` forces a single canonical representation. On macOS
+ * it likewise resolves the `/var` → `/private/var` symlink that
+ * `require.resolve` follows; on Linux it is usually an identity operation.
  */
 export function canonicalTmpDir(prefix: string): string {
-  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  // The native variant expands 8.3 names; the JS `realpathSync` keeps them.
+  return fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 }
 
 /**
@@ -41,8 +43,9 @@ let cachedCliPath: string | undefined;
 /**
  * Resolve the CLI path, building it only when `dist/cli.js` is missing.
  *
- * The CI pipeline runs `npm run build` as its own step before tests, so the
- * usual path is a pure existence check. When invoked locally without a
+ * The CI pipeline (`test:ci`) and `npm test` (via `pretest`) run
+ * `npm run build` before jest starts, so the usual path is a pure existence
+ * check. An existing but stale `dist/` is not rebuilt here. When invoked locally without a
  * prior build, it falls back to `npm run build` — always with an explicit
  * `cwd: PROJECT_ROOT` so a leaked `process.chdir(tempDir)` from a prior
  * test can't misdirect npm into a deleted temp directory (the Windows CI
