@@ -344,8 +344,8 @@ export class Parser {
       return this.expressionStatement();
     } catch (error) {
       if (this.isNestingError(error)) throw error;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.errors.push(errorMessage);
+      // The parser and the lexer report problems with Errors
+      this.errors.push((error as Error).message);
       this.synchronize(startIndex);
       return null;
     } finally {
@@ -373,13 +373,11 @@ export class Parser {
     return error instanceof NestingError || error instanceof RangeError;
   }
 
+  /** Only nesting errors escape `statement()`: a NestingError or a stack overflow. */
   private nestingErrorMessage(error: unknown): string {
     if (error instanceof NestingError) return error.message;
-    if (this.isNestingError(error)) {
-      const token = this.peek();
-      return `Nesting too deep at line ${token.line}, column ${token.column}`;
-    }
-    throw error;
+    const token = this.peek();
+    return `Nesting too deep at line ${token.line}, column ${token.column}`;
   }
 
   /**
@@ -1359,9 +1357,7 @@ export class Parser {
     }
 
     if (isForOf) {
-      if (!this.isOfWord(this.peek())) {
-        throw new Error(this.unexpectedTokenMessage("Expected 'аз' in for-of loop"));
-      }
+      // `аз`, which detectForLoopType found after the binding
       this.advance();
     } else {
       this.consume(TokenType.ДАР, "Expected 'дар' in for-in loop");
@@ -1561,9 +1557,6 @@ export class Parser {
       case 'TypeAssertion':
         // `х! = 1`, `(х чун ҳар) = 1`: the assertion is erased
         return this.isAssignmentTarget((expr as NonNullExpression).expression, false);
-      case 'ArrayPattern':
-      case 'ObjectPattern':
-        return allowPattern;
       case 'ArrayExpression':
         return (
           allowPattern &&
@@ -1614,8 +1607,8 @@ export class Parser {
   private tryParseArrowFunction(): ArrowFunctionExpression | null {
     const startToken = this.peek();
     const offset = this.isAsyncArrowStart() ? 1 : 0;
+    // The token after an async arrow's `ҳамзамон` exists: isAsyncArrowStart looked at it
     const head = this.tokens[this.current + offset];
-    if (!head) return null;
 
     let params: Parameter[];
     let returnType: TypeAnnotation | undefined;
@@ -2272,8 +2265,8 @@ export class Parser {
     }
     if (!operator) return null;
 
-    const next = this.peekNext();
-    if (!next) return null;
+    // The operator word is no EOF, so a token follows it
+    const next = this.peekNext()!;
     const startsOperand =
       this.isIdentifierNameToken(next) ||
       [
@@ -3261,8 +3254,8 @@ export class Parser {
     try {
       tokens = new Lexer(source, { expression: true }).tokenize();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(this.shiftPositions(message, line, column));
+      // The lexer reports problems with Errors
+      throw new Error(this.shiftPositions((error as Error).message, line, column));
     }
     for (const token of tokens) {
       if (token.line === 1) token.column += column - 1;
@@ -3322,11 +3315,8 @@ export class Parser {
     return this.peek().type === TokenType.EOF;
   }
 
+  /** The tokens end with EOF, past which `advance` never moves. */
   private peek(): Token {
-    if (this.current >= this.tokens.length) {
-      // Return the last token (should be EOF) if we're past the end
-      return this.tokens[this.tokens.length - 1];
-    }
     return this.tokens[this.current];
   }
 
@@ -3335,17 +3325,9 @@ export class Parser {
     return this.tokens[this.current + 1];
   }
 
+  /** The last consumed token: there is one wherever this is asked. */
   private previous(): Token {
-    const index = this.current - 1;
-    if (index < 0) {
-      // Return the first token if we're before the start
-      return this.tokens[0];
-    }
-    if (index >= this.tokens.length) {
-      // Return the last token if we're past the end
-      return this.tokens[this.tokens.length - 1];
-    }
-    return this.tokens[index];
+    return this.tokens[this.current - 1];
   }
 
   public consume(type: TokenType, message: string): Token {
@@ -3380,7 +3362,6 @@ export class Parser {
 
   /** True when the current token starts on a later line than the previous one ended. */
   private hasLineBreakBefore(): boolean {
-    if (this.current === 0) return false;
     const previous = this.previous();
     // Template literals are the only tokens whose value keeps their line breaks
     const lastLine =
@@ -4365,7 +4346,7 @@ export class Parser {
     return params;
   }
 
-  private parseParameter(allowProperties = false): Parameter {
+  private parseParameter(allowProperties: boolean): Parameter {
     const modifiers = this.parseParameterModifiers(allowProperties);
     const rest = this.match(TokenType.SPREAD);
     const startToken = this.peek();
@@ -4739,9 +4720,10 @@ export class Parser {
       const type = this.tokens[i].type;
       if (type === TokenType.LEFT_PAREN) depth++;
       else if (type === TokenType.RIGHT_PAREN && --depth === 0) {
-        return this.tokens[i + 1]?.type === TokenType.ARROW;
-      } else if (type === TokenType.EOF) return false;
+        return this.tokens[i + 1].type === TokenType.ARROW;
+      }
     }
+    // No matching `)` before the end
     return false;
   }
 
@@ -5349,8 +5331,8 @@ export class Parser {
         line: start.line,
         column: start.column,
       };
-      // `мерос` or, as in TypeScript, `extends`
-      if (this.match(TokenType.МЕРОС) || this.matchIdentifierValue('extends')) {
+      // `мерос` or, as in TypeScript, `extends` (read as `мерос`)
+      if (this.match(TokenType.МЕРОС)) {
         typeParameter.constraint = this.parseType();
       }
       if (this.match(TokenType.ASSIGN)) {
@@ -5428,12 +5410,6 @@ export class Parser {
         );
       }
     }
-  }
-
-  private matchIdentifierValue(value: string): boolean {
-    if (!this.checkIdentifierValue(value)) return false;
-    this.advance();
-    return true;
   }
 
   /** `мерос А, Б<Т>` — the parent interfaces, or undefined without a clause. */
@@ -5979,7 +5955,7 @@ export class Parser {
         }
       } catch (error) {
         if (this.isNestingError(error)) throw error;
-        this.errors.push(error instanceof Error ? error.message : String(error));
+        this.errors.push((error as Error).message);
         if (this.recoverFromClassMemberError(memberStart)) {
           break;
         }
@@ -6068,10 +6044,10 @@ export class Parser {
    * its line (after `статикӣ` also on the next one). Otherwise the word is the
    * member's name: `статикӣ() {}`, `хосусӣ = 1`, `ҳамзамон: рақам`.
    */
-  private modifierApplies(offset = 0): boolean {
-    const token = this.tokens[this.current + offset];
-    const next = this.tokens[this.current + offset + 1];
-    if (!token || !next) return false;
+  private modifierApplies(): boolean {
+    // At a modifier word, which is no EOF: a token follows
+    const token = this.peek();
+    const next = this.tokens[this.current + 1];
     if (next.line !== token.line && token.type !== TokenType.СТАТИКӢ) return false;
     return Parser.MODIFIER_FOLLOWERS.has(next.type) || this.isIdentifierNameToken(next);
   }
@@ -6782,10 +6758,6 @@ export class Parser {
     const statements: Statement[] = [];
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
-      if (this.check(TokenType.RIGHT_BRACE)) {
-        break;
-      }
-
       const isExported = this.match(TokenType.СОДИР);
       const stmt = this.parseNamespaceMember(isExported);
 
@@ -7024,8 +6996,8 @@ export class Parser {
   private synchronize(startIndex: number): void {
     let depth = this.braceDepthSince(startIndex);
     if (this.current === startIndex && !this.isAtEnd()) {
-      // Guarantee progress: the statement could not even start
-      if (this.check(TokenType.LEFT_BRACE)) depth++;
+      // Guarantee progress: the statement could not even start (a `{` would have
+      // started a block)
       this.advance();
     }
 
@@ -7201,13 +7173,7 @@ export class Parser {
         column: token.column,
       } as Identifier;
     }
-    const ident = this.consume(TokenType.IDENTIFIER, 'Expected identifier');
-    return {
-      type: 'Identifier',
-      name: ident.value,
-      line: ident.line,
-      column: ident.column,
-    } as Identifier;
+    throw new Error(this.unexpectedTokenMessage('Expected identifier'));
   }
 
   private parseSpreadElement(): SpreadElement {
