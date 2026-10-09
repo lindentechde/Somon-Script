@@ -85,4 +85,25 @@ describe('type checker: namespaces', () => {
     ]);
     expect(typeScriptErrors(source)).toEqual(['TS2322 2', 'TS2322 3', 'TS2322 7']);
   });
+
+  test('an exported import alias is a member', () => {
+    const source = [
+      'номфазо А { содир собит б: рақам = 1; }',
+      'номфазо Н { содир ворид х = А.б; }',
+      'номфазо Н { содир функсия ф(): сатр { бозгашт х; } }',
+      'тағ с: сатр = Н.х;',
+    ].join('\n');
+    // `Н.х` had no type, and `х` was not defined in the other block
+    expect(check(source)).toEqual([
+      "TYPE_NOT_ASSIGNABLE 3:47 Type 'рақам' is not assignable to return type 'сатр'",
+      "TYPE_NOT_ASSIGNABLE 4:15 Type 'рақам' is not assignable to type 'сатр'",
+    ]);
+    expect(typeScriptErrors(source)).toEqual(['TS2322 3', 'TS2322 4']);
+    // A declared module exports an alias only when marked so, as TypeScript
+    expect(
+      check(
+        'эълон модул "м" { ворид х = Н.а; содир ворид у = Н.а; номфазо Н { собит а: рақам; } }\nворид { х, у } аз "м";'
+      )
+    ).toEqual([`PROPERTY_NOT_FOUND 2:9 Module '"м"' has no exported member 'х'`]);
+  });
 });

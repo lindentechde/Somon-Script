@@ -1130,6 +1130,8 @@ export class TypeChecker {
       return;
     }
     if (explicit && statement.type !== 'ExportDeclaration') return;
+    // An import alias is exported only when marked so (TypeScript's TS2459)
+    if (statement.type === 'ImportEqualsDeclaration') return;
     const declaration = this.unwrapExport(statement);
     for (const name of this.declaredNames(declaration)) {
       if (TypeChecker.TYPE_DECLARATIONS.has(declaration.type)) {
@@ -1173,6 +1175,9 @@ export class TypeChecker {
       case 'InterfaceDeclaration':
       case 'TypeAlias':
         return [(statement as FunctionDeclaration).name.name];
+      case 'ImportEqualsDeclaration':
+        // `ворид х = Н.а;`
+        return [(statement as ImportEqualsDeclaration).id.name];
       default:
         return [];
     }
