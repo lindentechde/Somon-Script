@@ -17,7 +17,7 @@ import {
   translateMessage,
 } from '../src/tsc-checker';
 import { TAJIK_DIAGNOSTIC_MESSAGES } from '../src/tsc-messages-tj';
-import { typeScriptLibNames, type Target } from '../src/targets';
+import type { Target } from '../src/targets';
 
 jest.setTimeout(60000);
 
@@ -456,13 +456,12 @@ describe('TypeScript checker: libs and targets', () => {
     expect(libFiles('es5', undefined)).toEqual(['lib.es5.d.ts', 'lib.dom.d.ts']);
     // An unknown target is the default one
     expect(libFiles('es2099' as Target, undefined)).toEqual(libFiles(undefined, undefined));
-    // es2024 before TypeScript 5.7: es2023 and the esnext parts ES2024 standardized
-    const es2024 = libFiles('es2024', undefined);
-    if (typeScriptLibNames().includes('es2024')) {
-      expect(es2024[0]).toBe('lib.es2024.d.ts');
-    } else {
-      expect(es2024).toEqual(expect.arrayContaining(['lib.es2023.d.ts', 'lib.esnext.object.d.ts']));
-    }
+    expect(libFiles('es2024', undefined)[0]).toBe('lib.es2024.d.ts');
+    expect(libFiles('es2025', undefined)).toEqual([
+      'lib.es2025.d.ts',
+      ...dom,
+      'lib.esnext.disposable.d.ts',
+    ]);
     expect(libFiles('es2020', ['ES2022', 'dom.iterable', 'lib.webworker.d.ts'])).toEqual([
       'lib.es2022.d.ts',
       'lib.dom.iterable.d.ts',

@@ -32,7 +32,12 @@ import ts from 'typescript';
 import { compile, type CompileOptions } from '../../src/compiler';
 import { Lexer } from '../../src/lexer';
 import { Parser } from '../../src/parser';
-import { deprecationOptions, scriptTargetFor, type Target } from '../../src/targets';
+import {
+  deprecationOptions,
+  NEWEST_EDITION,
+  scriptTargetFor,
+  type Target,
+} from '../../src/targets';
 import { TsEmitter } from '../../src/ts-emitter';
 import { migrate } from '../../src/tools/migrate';
 import {
@@ -377,7 +382,7 @@ async function runTypeScript(
 ): Promise<PathResult> {
   const result = await runPath(build(cell.target), entry, cell.format);
   if (cell.target !== 'esnext' || !result.output.startsWith(LOAD_ERROR)) return result;
-  return runPath(build('es2024'), entry, cell.format);
+  return runPath(build(NEWEST_EDITION), entry, cell.format);
 }
 
 const SKIPPED: PathResult = { status: 'skipped', output: '' };

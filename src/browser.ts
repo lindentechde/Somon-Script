@@ -71,6 +71,7 @@ const TARGETS = [
   'es2022',
   'es2023',
   'es2024',
+  'es2025',
   'esnext',
 ];
 
@@ -152,8 +153,8 @@ function lower(
     );
     return { code: '', errors, warnings, needsTypeScript: true };
   }
-  // As src/targets.ts does: TypeScript keeps decorators for ESNext, so lower them as for es2024
-  const lowerTo = neverNative && target === 'esnext' ? 'es2024' : target;
+  // As src/targets.ts does: TypeScript keeps decorators for ESNext, so lower them as for es2025
+  const lowerTo = neverNative && target === 'esnext' ? 'es2025' : target;
   const output = ts.transpileModule(code, {
     // A `.js` name: the input is JavaScript
     fileName: 'module.js',
@@ -180,9 +181,11 @@ function keepMode(code: string, lowered: string): string {
 }
 
 /**
- * `ts.ScriptTarget` of a target: 'es2017' → ES2017. A target newer than the
- * loaded TypeScript knows uses the newest older one. Never 'esnext', which
- * needs no lowering but of what no runtime runs (lowered as for es2024).
+ * `ts.ScriptTarget` of a target: 'es2017' → ES2017. The page may load another
+ * TypeScript than the one the compiler is built with: a target newer than it
+ * knows (es2025 before TypeScript 6) uses the newest older one. Never
+ * 'esnext', which needs no lowering but of what no runtime runs (lowered as
+ * for es2025).
  */
 function scriptTargetOf(ts: TypeScriptApi, target: string): number {
   for (let index = TARGETS.indexOf(target); index > 0; index--) {

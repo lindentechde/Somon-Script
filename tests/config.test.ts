@@ -183,7 +183,7 @@ describe('somon.config.json: targets, lib and bundle formats', () => {
     }
   }
 
-  test.each(['es5', 'es2016', 'es2021', 'es2023', 'es2024', 'esnext'])(
+  test.each(['es5', 'es2016', 'es2021', 'es2023', 'es2024', 'es2025', 'esnext'])(
     'accepts target %s',
     target => {
       expect(problems({ compilerOptions: { target } })).toEqual([]);
@@ -195,7 +195,7 @@ describe('somon.config.json: targets, lib and bundle formats', () => {
       {
         path: 'compilerOptions.target',
         message:
-          'must be one of: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, esnext',
+          'must be one of: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, es2025, esnext',
       },
     ]);
   });

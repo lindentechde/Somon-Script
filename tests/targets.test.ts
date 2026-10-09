@@ -18,9 +18,9 @@ import {
   loweringCompilerOptions,
   lowerToTarget,
   needsLowering,
+  NEWEST_EDITION,
   normalizeLib,
   readLibNames,
-  readsAlikeAsTypeScript,
   regExpFeatures,
   scriptTargetFor,
   TARGETS,
@@ -57,9 +57,11 @@ describe('targets', () => {
       'es2022',
       'es2023',
       'es2024',
+      'es2025',
       'esnext',
     ]);
     expect(DEFAULT_TARGET).toBe('es2022');
+    expect(NEWEST_EDITION).toBe('es2025');
   });
 
   test('isTarget and targetAtLeast', () => {
@@ -78,21 +80,20 @@ describe('targets', () => {
       'es2022',
       'es2023',
       'es2024',
+      'es2025',
       'esnext',
     ]);
   });
 
-  test('maps targets to the script targets the installed TypeScript knows', () => {
-    expect(scriptTargetFor('es5')).toBe(ts.ScriptTarget.ES5);
-    expect(scriptTargetFor('es2015')).toBe(ts.ScriptTarget.ES2015);
-    expect(scriptTargetFor('es2022')).toBe(ts.ScriptTarget.ES2022);
-    expect(scriptTargetFor('esnext')).toBe(ts.ScriptTarget.ESNext);
-    const known = ts.ScriptTarget as unknown as Record<string, number | undefined>;
-    // es2023/es2024 use the newest TypeScript target that is not newer
-    expect(scriptTargetFor('es2024')).toBe(known.ES2024 ?? known.ES2023 ?? ts.ScriptTarget.ES2022);
-    for (const target of TARGETS) {
-      expect(typeof scriptTargetFor(target)).toBe('number');
+  test('maps every target to its TypeScript script target', () => {
+    const known = ts.ScriptTarget as unknown as Record<string, number>;
+    for (const target of TARGETS.filter(target => target !== 'esnext')) {
+      expect([target, scriptTargetFor(target)]).toEqual([target, known[target.toUpperCase()]]);
     }
+    expect(scriptTargetFor('es2023')).toBe(ts.ScriptTarget.ES2023);
+    expect(scriptTargetFor('es2024')).toBe(ts.ScriptTarget.ES2024);
+    expect(scriptTargetFor('es2025')).toBe(ts.ScriptTarget.ES2025);
+    expect(scriptTargetFor('esnext')).toBe(ts.ScriptTarget.ESNext);
   });
 
   test('bundle formats and global names', () => {
@@ -141,11 +142,12 @@ describe('lib', () => {
     expect(defaultLib('es2015')).toEqual(['es2015', 'dom', 'dom.iterable']);
     expect(defaultLib('es2020')).toEqual(['es2020', 'dom', 'dom.iterable', 'dom.asynciterable']);
     expect(defaultLib('esnext')[0]).toBe('esnext');
-    // es2024 uses the newest ECMAScript lib TypeScript ships (es2023 before TypeScript 5.7)
-    const es2024 = typeScriptLibNames().includes('es2024') ? 'es2024' : 'es2023';
-    expect(defaultLib('es2024')[0]).toBe(es2024);
+    expect(defaultLib('es2024')[0]).toBe('es2024');
+    expect(defaultLib('es2025')).toEqual(['es2025', 'dom', 'dom.iterable', 'dom.asynciterable']);
     for (const target of TARGETS) {
+      // Each target names a lib of TypeScript
       expect(validateLib(defaultLib(target))).toEqual([]);
+      expect(typeScriptLibNames()).toContain(target);
     }
   });
 });
@@ -244,10 +246,29 @@ describe('analyzeSyntax: what a target cannot express', () => {
     ['/(?<!а)б/', 'es2017', 'Lookbehind assertions are'],
     ['/\\p{L}/u', 'es2017', 'Unicode property escapes are'],
     ['/(?i:а)/', 'es2024', 'Regular expression modifiers are'],
+    ['/(?<с>\\d{4})-\\d|\\d-(?<с>\\d{4})/', 'es2024', 'Duplicate named capturing groups are'],
   ])('%s with %s', (regExp, target, feature) => {
     const [diagnostic] = analyzeSyntax(`var р = ${regExp};`, target).diagnostics;
     expect(diagnostic.message).toMatch(new RegExp(`^${escapeRegExp(feature)} only available`));
     expect(diagnostic.message).toContain(`(target is ${target})`);
+  });
+
+  test('regular expression modifiers and duplicate group names are ES2025', () => {
+    const modifiers = 'var р = /(?i:а)б/;';
+    expect(analyzeSyntax(modifiers, 'es2024').diagnostics[0].message).toContain(
+      'only available when targeting es2025 or later'
+    );
+    expect(analyzeSyntax(modifiers, 'es2025').diagnostics).toEqual([]);
+    const duplicates = 'var р = /(?<с>а)|(?<с>б)/;';
+    expect(analyzeSyntax(duplicates, 'es2025').diagnostics).toEqual([]);
+    expect(analyzeSyntax(duplicates, 'es2025').required).toBe('es2025');
+    // Two different names, a lookbehind and a group in a class are no duplicates
+    expect(regExpFeatures('(?<а>а)(?<б>б)(?<=а)(?<=а)[(?<а>)]', false)).toEqual(
+      new Map([
+        ['Named capturing groups are', 'es2018'],
+        ['Lookbehind assertions are', 'es2018'],
+      ])
+    );
   });
 
   test('regular expressions the target has are fine', () => {
@@ -450,9 +471,7 @@ describe('lowerToTarget', () => {
       expect(lowered.neverNative).toBe(false);
       expect(targetAtLeast(target, lowered.required)).toBe(true);
     }
-    expect(loweringCompilerOptions({ target: 'esnext' }, true).target).toBe(
-      scriptTargetFor('es2024')
-    );
+    expect(loweringCompilerOptions({ target: 'esnext' }, true).target).toBe(ts.ScriptTarget.ES2025);
     expect(loweringCompilerOptions({ target: 'esnext' }).target).toBe(ts.ScriptTarget.ESNext);
   });
 
@@ -485,17 +504,19 @@ describe('lowerToTarget', () => {
     expect(code).toContain('а < б > (в < г)');
   });
 
-  // Found by tests/fuzz.test.ts: TypeScript 5.4's checker crashed while emitting this JavaScript
+  // Found by tests/fuzz.test.ts: TypeScript 5.4 type-checked the file while it transpiled
+  // it, and its checker crashed on this JavaScript ("Unhandled object type EvolvingArray");
+  // TypeScript 6 only transpiles
   const evolvingArraySwitch =
     'let х = [];\nswitch (х) {\n  case "а":\n    break;\n}\nconsole.log(х);\n';
 
-  test('lowers JavaScript that crashes TypeScript 5.4 as TypeScript, when it reads the same', () => {
+  test('lowers the JavaScript on which TypeScript 5.4 crashed', () => {
     const { code, diagnostics } = lowerToTarget(
-      `${evolvingArraySwitch}import { а } from "./а";\nconsole.log(х ?? 1);`,
+      `${evolvingArraySwitch}import { а } from "./а";\nconsole.log(х ?? (а < б > (в)));`,
       { target: 'es2017' }
     );
     expect(diagnostics).toEqual([]);
-    expect(code).toContain('х !== null && х !== void 0 ? х : 1');
+    expect(code).toContain('х !== null && х !== void 0 ? х : (а < б > (в))');
     // As in JavaScript, an import whose binding is unused stays
     expect(code).toContain('import { а } from "./а";');
     const result = compile('тағ х = [];\nинтихоб (х) { ҳолат "а": шикастан; }\nчоп.сабт(х ?? 1);', {
@@ -504,43 +525,14 @@ describe('lowerToTarget', () => {
     });
     expect(result.errors).toEqual([]);
     expect(run(result.code)).toEqual(['']);
+    // TypeScript 5.4's checker overflowed its stack on this one
+    const overflow = compile('тағ х = {} !== 1;\nагар ([х = холӣ], х) {}\nчоп.сабт(х);', {
+      target: 'es5',
+      typeCheck: false,
+    });
+    expect(overflow.errors).toEqual([]);
+    expect(run(overflow.code)).toEqual(['null']);
   });
-
-  /** TypeScript 5.6 and later no longer check the file while they transpile it. */
-  const typeScriptCrashes = ((): boolean => {
-    try {
-      ts.transpileModule(evolvingArraySwitch, {
-        fileName: 'module.js',
-        compilerOptions: { allowJs: true },
-      });
-      return false;
-    } catch {
-      return true;
-    }
-  })();
-
-  (typeScriptCrashes ? test : test.skip)(
-    'a crash on code TypeScript reads differently stays an error',
-    () => {
-      expect(readsAlikeAsTypeScript('а < б > (в);')).toBe(false);
-      expect(readsAlikeAsTypeScript(evolvingArraySwitch)).toBe(true);
-      expect(() =>
-        lowerToTarget(`${evolvingArraySwitch}console.log(х ?? (а < б > (в)));`, {
-          target: 'es2017',
-        })
-      ).toThrow(/^TypeScript \S+ crashed while lowering the code \(Debug Failure/);
-      // Found by tests/fuzz.test.ts: TypeScript 5.4's checker overflows its stack on this
-      const result = compile('тағ х = {} !== 1;\nагар ([х = холӣ], х) {}', {
-        target: 'es5',
-        typeCheck: false,
-      });
-      expect(result.errors).toEqual([
-        expect.stringMatching(
-          /^TypeScript \S+ crashed while lowering the code \(Maximum call stack size exceeded\); TypeScript 5\.6 and later/
-        ),
-      ]);
-    }
-  );
 
   test('useDefineForClassFields chooses defined or assigned fields', () => {
     const code = 'class К { а = 1; б; }';

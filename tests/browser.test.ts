@@ -89,7 +89,7 @@ describe('browser compiler entry', () => {
   });
 
   test('es2022 (the default) and newer targets need no TypeScript', () => {
-    for (const target of [undefined, 'es2022', 'es2023', 'es2024', 'esnext', 'ESNext']) {
+    for (const target of [undefined, 'es2022', 'es2023', 'es2024', 'es2025', 'esnext', 'ESNext']) {
       const result = compile('тағ а = 2 ** 3;', { target });
       expect([target, result.errors, result.needsTypeScript]).toEqual([target, [], undefined]);
       expect(result.code).toBe('let а = 2 ** 3;');
@@ -140,19 +140,30 @@ describe('browser compiler entry', () => {
     expect(legacy.code).toContain('__param');
 
     expect(compile('тағ а = 1;', { target: 'es1999', typescript }).errors).toEqual([
-      "Unknown target 'es1999'. Targets: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, esnext",
+      "Unknown target 'es1999'. Targets: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, es2025, esnext",
     ]);
 
     // Class fields keep their [[Define]] semantics only from es2022
     const fields = compile('синф К { а = 1; }', { target: 'es2020', typescript });
     expect(fields.code).toContain('this.а = 1');
-    // es2024 is newer than this TypeScript knows: lowered as for the newest it knows
     const newest = compile('функсия ф(а: ҳар, б: ҳар) {}\n@ф синф К {}', {
-      target: 'es2024',
+      target: 'es2025',
       typescript,
     });
     expect(newest.errors).toEqual([]);
     expect(newest.code).toContain('__esDecorate');
+    // A TypeScript older than the target (es2025 before TypeScript 6) lowers as for the newest
+    // edition it knows
+    const older = {
+      ...typescript,
+      ScriptTarget: { ...typescript.ScriptTarget, ES2025: undefined },
+    };
+    const lowered = compile('функсия ф(а: ҳар, б: ҳар) {}\n@ф синф К {}', {
+      target: 'esnext',
+      typescript: older as unknown as TypeScriptApi,
+    });
+    expect(lowered.errors).toEqual([]);
+    expect(lowered.code).toContain('__esDecorate');
   });
 
   test('lowered code keeps its mode, although TypeScript 6 makes every script strict', () => {

@@ -39,7 +39,7 @@ export type DiagnosticLocale = 'en' | 'ru' | 'tj';
 export interface TsCheckOptions {
   /** TypeScript's strict mode (`strict: true`); otherwise TypeScript's non-strict defaults. */
   strict?: boolean;
-  /** Script target (`es5` … `es2024`, `esnext`); default `es2022`. */
+  /** Script target (`es5` … `es2025`, `esnext`); default `es2022`. */
   target?: Target;
   /**
    * TypeScript lib names (`es2022`, `dom`, …); default: the target's

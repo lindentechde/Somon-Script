@@ -23,6 +23,7 @@ export const TARGETS = [
   'es2022',
   'es2023',
   'es2024',
+  'es2025',
   'esnext',
 ] as const;
 
@@ -83,20 +84,33 @@ export function deprecationOptions(target: Target): ts.CompilerOptions {
   return target === 'es5' ? { ignoreDeprecations: '6.0' } : {};
 }
 
-/**
- * TypeScript's script target for `target`. A target newer than the installed
- * TypeScript knows (es2023/es2024 before TypeScript 5.7) uses the newest older
- * one it knows: nothing between them can be lowered anyway.
- */
+const SCRIPT_TARGETS: Readonly<Record<Target, ts.ScriptTarget>> = {
+  es5: ts.ScriptTarget.ES5,
+  es2015: ts.ScriptTarget.ES2015,
+  es2016: ts.ScriptTarget.ES2016,
+  es2017: ts.ScriptTarget.ES2017,
+  es2018: ts.ScriptTarget.ES2018,
+  es2019: ts.ScriptTarget.ES2019,
+  es2020: ts.ScriptTarget.ES2020,
+  es2021: ts.ScriptTarget.ES2021,
+  es2022: ts.ScriptTarget.ES2022,
+  es2023: ts.ScriptTarget.ES2023,
+  es2024: ts.ScriptTarget.ES2024,
+  es2025: ts.ScriptTarget.ES2025,
+  esnext: ts.ScriptTarget.ESNext,
+};
+
+/** TypeScript's script target for `target`: TypeScript 6 knows every edition. */
 export function scriptTargetFor(target: Target): ts.ScriptTarget {
-  if (target === 'esnext') return ts.ScriptTarget.ESNext;
-  const known = ts.ScriptTarget as unknown as Record<string, number | undefined>;
-  for (let index = TARGETS.indexOf(target); index > 0; index--) {
-    const value = known[TARGETS[index].toUpperCase()];
-    if (typeof value === 'number') return value;
-  }
-  return ts.ScriptTarget.ES5;
+  return SCRIPT_TARGETS[target];
 }
+
+/**
+ * The newest edition: code that uses what no runtime runs yet (decorators,
+ * `accessor`, `using`) is lowered as for it when the target is esnext, where
+ * TypeScript keeps that syntax.
+ */
+export const NEWEST_EDITION: Target = 'es2025';
 
 // ---------------------------------------------------------------------------
 // lib
@@ -145,34 +159,15 @@ export function normalizeLib(lib: readonly string[]): string[] {
   return [...new Set(lib.map(name => name.trim().toLowerCase()).filter(name => name.length > 0))];
 }
 
-/** The esnext lib parts of TypeScript before 5.7 that hold ES2024 APIs. */
-const ES2024_IN_ESNEXT = ['esnext.object', 'esnext.collection', 'esnext.promise'];
-
 /**
- * The libs used for `target` when `lib` is not set, as in TypeScript: the
- * target's ECMAScript lib (the newest one TypeScript ships, at most the
- * target) and the DOM. For es2024 without an es2024 lib (TypeScript 5.4 to
- * 5.6) that is es2023 and the esnext parts with ES2024's APIs.
+ * The libs used for `target` when `lib` is not set, as in TypeScript's own
+ * defaults (`lib.<target>.full.d.ts`): the target's ECMAScript lib, whose
+ * name is the target's, and the DOM.
  */
 export function defaultLib(target: Target): string[] {
-  const known = new Set(typeScriptLibNames());
-  let esLib = 'es5';
-  for (let index = TARGETS.indexOf(target); index > 0; index--) {
-    if (known.has(TARGETS[index])) {
-      esLib = TARGETS[index];
-      break;
-    }
-  }
-  const lib = [esLib, 'dom'];
+  const lib = [target, 'dom'];
   if (targetAtLeast(target, 'es2015')) lib.push('dom.iterable');
-  if (targetAtLeast(target, 'es2018') && known.has('dom.asynciterable')) {
-    lib.push('dom.asynciterable');
-  }
-  // Before TypeScript 5.7 ships an es2024 lib, what ES2024 added is in esnext
-  // parts: Object.groupBy, Map.groupBy and Promise.withResolvers
-  if (target === 'es2024' && esLib !== 'es2024') {
-    lib.push(...ES2024_IN_ESNEXT.filter(name => known.has(name)));
-  }
+  if (targetAtLeast(target, 'es2018')) lib.push('dom.asynciterable');
   return lib;
 }
 
@@ -274,6 +269,8 @@ const NEW_ONLY_BUILTINS: ReadonlySet<string> = new Set([
   'Float64Array',
   'BigInt64Array',
   'BigUint64Array',
+  'Float16Array',
+  'Iterator',
 ]);
 
 /**
@@ -325,7 +322,7 @@ function groupFeature(rest: string): [string, Target] | undefined {
     return ['Lookbehind assertions are', 'es2018'];
   if (rest.startsWith('<')) return ['Named capturing groups are', 'es2018'];
   if (!rest.startsWith(':') && /^[ims]*(?:-[ims]*)?:/.test(rest)) {
-    return ['Regular expression modifiers are', 'esnext'];
+    return ['Regular expression modifiers are', 'es2025'];
   }
   return undefined;
 }
@@ -333,6 +330,7 @@ function groupFeature(rest: string): [string, Target] | undefined {
 /** Regular expression syntax (not flags) newer than ES2015 that a pattern uses. */
 export function regExpFeatures(pattern: string, unicode: boolean): Map<string, Target> {
   const features = new Map<string, Target>();
+  const groupNames = new Set<string>();
   let inClass = false;
   for (let index = 0; index < pattern.length; index++) {
     const char = pattern[index];
@@ -346,8 +344,15 @@ export function regExpFeatures(pattern: string, unicode: boolean): Map<string, T
     } else if (char === '[') {
       inClass = true;
     } else if (char === '(' && pattern[index + 1] === '?') {
-      const feature = groupFeature(pattern.slice(index + 2));
+      const rest = pattern.slice(index + 2);
+      const feature = groupFeature(rest);
       if (feature) features.set(feature[0], feature[1]);
+      // `(?<год>…)|(?<год>…)`: one name in alternatives (ES2025)
+      const name = /^<([^=!>][^>]*)>/.exec(rest)?.[1];
+      if (name !== undefined && groupNames.has(name)) {
+        features.set('Duplicate named capturing groups are', 'es2025');
+      }
+      if (name !== undefined) groupNames.add(name);
     }
   }
   return features;
@@ -484,7 +489,7 @@ class SyntaxScanner {
   }
 
   private checkDeclarationList(node: ts.VariableDeclarationList): void {
-    // `using` and `await using` (TypeScript 5.2; tsc-checker.ts already needs 5.4)
+    // `using` and `await using`
     if ((node.flags & ts.NodeFlags.Using) !== 0) {
       this.needLowering();
     } else if ((node.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) !== 0) {
@@ -845,7 +850,7 @@ export function loweringCompilerOptions(
   options: LowerOptions,
   neverNative = false
 ): ts.CompilerOptions {
-  const target = neverNative && options.target === 'esnext' ? 'es2024' : options.target;
+  const target = neverNative && options.target === 'esnext' ? NEWEST_EDITION : options.target;
   return {
     target: scriptTargetFor(target),
     // Keep whatever module syntax the code has
@@ -886,59 +891,6 @@ export function keepSloppyMode(output: ts.TranspileOutput): ts.TranspileOutput {
 }
 
 /**
- * `ts.transpileModule` of JavaScript: a `.js` name, since the input is
- * JavaScript (`a < b > (c)` is no generic call). TypeScript before 5.6
- * type-checks the file while it emits, and its checker crashes on some valid
- * JavaScript ("Debug Failure. Unhandled object type EvolvingArray" for an
- * `интихоб` over a variable that holds `[]`). The code is then transpiled as
- * TypeScript, which has no such arrays, when TypeScript reads it as the same
- * program. When that fails too (the checker of TypeScript 5.4 also overflows
- * its stack on `агар ([х = холӣ], х)` after `тағ х = {} !== 1`), the error
- * says that TypeScript crashed.
- */
-function transpileJavaScript(code: string, options: ts.TranspileOptions): ts.TranspileOutput {
-  try {
-    return ts.transpileModule(code, { ...options, fileName: 'module.js' });
-  } catch (error) {
-    if (!readsAlikeAsTypeScript(code)) throw typeScriptCrash(error);
-    try {
-      return ts.transpileModule(code, {
-        ...options,
-        fileName: 'module.ts',
-        // Keep every import, as for JavaScript
-        compilerOptions: { ...options.compilerOptions, verbatimModuleSyntax: true },
-      });
-    } catch {
-      throw typeScriptCrash(error);
-    }
-  }
-}
-
-/** Prefix of the error when TypeScript crashes while it lowers the code. */
-export const TYPESCRIPT_CRASH = `TypeScript ${ts.version} crashed while lowering the code`;
-
-function typeScriptCrash(error: unknown): Error {
-  // TypeScript fails with Errors (a stack overflow is a RangeError)
-  return new Error(
-    `${TYPESCRIPT_CRASH} (${(error as Error).message}); TypeScript 5.6 and later no longer type-check the code they lower`
-  );
-}
-
-/** Whether TypeScript parses `code` as TypeScript to the same syntax tree as JavaScript. */
-export function readsAlikeAsTypeScript(code: string): boolean {
-  const shape = (kind: ts.ScriptKind): string => {
-    const nodes: number[] = [];
-    const visit = (node: ts.Node): void => {
-      nodes.push(node.kind, node.pos, node.end);
-      ts.forEachChild(node, visit);
-    };
-    visit(ts.createSourceFile('module', code, ts.ScriptTarget.Latest, false, kind));
-    return nodes.join(',');
-  };
-  return shape(ts.ScriptKind.JS) === shape(ts.ScriptKind.TS);
-}
-
-/**
  * Make JavaScript run on `options.target`: report what the target cannot
  * express, and lower newer syntax with TypeScript. Code that only uses syntax
  * the target has is returned as it is.
@@ -955,7 +907,9 @@ export function lowerToTarget(code: string, options: LowerOptions): LowerResult 
     return { code, diagnostics: [], lowered: false };
   }
 
-  const transpiled = transpileJavaScript(code, {
+  // A `.js` name: the input is JavaScript (`a < b > (c)` is no generic call)
+  const transpiled = ts.transpileModule(code, {
+    fileName: 'module.js',
     compilerOptions: loweringCompilerOptions(options, report.neverNative),
     transformers: { before: [targetFixes(options.target)], after: [readableStrings] },
   });
