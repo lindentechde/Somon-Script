@@ -1147,9 +1147,7 @@ export class TypeChecker {
     }
     // `а?: рақам` is `рақам | беқимат` inside the function
     const boundType =
-      this.strict && param.optional && !param.defaultValue
-        ? this.orUndefined(paramType)
-        : paramType;
+      param.optional && !param.defaultValue ? this.optionalType(paramType) : paramType;
     if (param.pattern) {
       this.bindPatternTypes(param.pattern, boundType);
     } else {
@@ -1775,7 +1773,7 @@ export class TypeChecker {
       this.hasImplicitMember(type, name, jsName);
     const known = !this.isOpenType(type) && !type.fromLiteral;
     let propType = prop?.type ?? UNKNOWN;
-    if (prop?.optional && this.strict) propType = this.orUndefined(propType);
+    if (prop?.optional) propType = this.optionalType(propType);
     return { known, exists, type: propType };
   }
 
@@ -2108,12 +2106,17 @@ export class TypeChecker {
     const restElementType = restType?.kind === 'array' ? restType.elementType : undefined;
     args.forEach((argNode, i) => {
       // Positions after a spread argument are unknown
-      const paramType =
+      const declaredType =
         spreadIndex !== -1 && i >= spreadIndex
           ? undefined
           : i < fixedCount
             ? paramTypes[i]
             : restElementType;
+      // An optional or defaulted parameter also accepts `беқимат`
+      const paramType =
+        declaredType && i < fixedCount && optional[i]
+          ? this.optionalType(declaredType)
+          : declaredType;
       const argType = this.inferExpressionType(argNode, paramType);
       if (!paramType) return;
       this.checkAssignable(argNode, argType, paramType, (source, target) =>
@@ -2579,6 +2582,11 @@ export class TypeChecker {
     return this.isAnyLike(type) ? UNKNOWN : this.unionOf([type, UNDEFINED_TYPE]);
   }
 
+  /** Type of an optional slot (`а?: Т`): `Т | беқимат` in strict mode. */
+  private optionalType(type: Type): Type {
+    return this.strict ? this.orUndefined(type) : type;
+  }
+
   /**
    * In strict mode reports a value that may be `холӣ`/`беқимат` where it is
    * dereferenced or computed with; returns the type without them.
@@ -3018,7 +3026,10 @@ export class TypeChecker {
         if (
           sourceProp &&
           sourceProp.type.kind !== 'function' &&
-          !this.isAssignable(sourceProp.type, targetProp.type)
+          !this.isAssignable(
+            sourceProp.type,
+            targetProp.optional ? this.optionalType(targetProp.type) : targetProp.type
+          )
         ) {
           return false;
         }

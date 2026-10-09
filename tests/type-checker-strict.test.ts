@@ -77,6 +77,7 @@ describe('strict null checks', () => {
       ['assigning беқимат', 'тағ а: сатр = беқимат;'],
       ['passing холӣ as an argument', 'функсия ф(г: Г): рақам { бозгашт г.қ; } ф(холӣ);'],
       ['returning холӣ', 'функсия ф(): Г { бозгашт холӣ; }'],
+      ['холӣ for an optional property', 'интерфейс И { а?: рақам; } собит и: И = { а: холӣ };'],
       ['assigning a nullable field', 'собит г = нав Г(1); тағ д: Г = г.навбатӣ;'],
     ])('%s', (_name, source) => {
       expectError(source, /TYPE_NOT_ASSIGNABLE|ARGUMENT_TYPE_MISMATCH/);
@@ -148,6 +149,18 @@ describe('strict null checks', () => {
       ],
       ['an optional class field', 'синф К { а?: рақам; конструктор(а?: рақам) { ин.а = а; } }'],
       ['?? on a nullable value', 'функсия ф(н: рақам | холӣ): рақам { бозгашт (н ?? 0) + 1; }'],
+      [
+        'беқимат for an optional parameter',
+        'функсия ф(а?: рақам): рақам { бозгашт а ?? 0; } ф(беқимат);',
+      ],
+      [
+        'беқимат for a defaulted parameter',
+        'функсия ф(а: рақам = 1): рақам { бозгашт а; } ф(беқимат);',
+      ],
+      [
+        'беқимат for an optional property',
+        'интерфейс И { а?: рақам; } собит и: И = { а: беқимат };',
+      ],
       [
         'a member path through ин',
         'синф Р { сар: Г | холӣ = холӣ; ҷамъ(): рақам { агар (ин.сар === холӣ) бозгашт 0; бозгашт ин.сар.қ; } }',
