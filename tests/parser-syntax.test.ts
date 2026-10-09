@@ -781,6 +781,15 @@ describe('Parser: error reporting', () => {
     ]);
   });
 
+  test('`кӯшиш` needs `гирифтан` or `ниҳоят`', () => {
+    // Found by tests/fuzz.test.ts: `try { … }` alone was emitted, which no runtime loads
+    expect(parse('кӯшиш { а(); }\nб();').errors).toEqual([
+      "Unexpected token 'б' at line 2, column 1 (Expected 'гирифтан' or 'ниҳоят' after 'кӯшиш')",
+    ]);
+    expect(parse('кӯшиш {} ниҳоят {}').errors).toEqual([]);
+    expect(parse('кӯшиш {} гирифтан {}').errors).toEqual([]);
+  });
+
   test('an unclosed class body is reported with a position', () => {
     expect(parse('синф К {').errors).toEqual([
       expect.stringMatching(/^Expected '}' after class body at line 1, column \d+$/),

@@ -4333,6 +4333,10 @@ export class Parser {
       this.consume(TokenType.LEFT_BRACE, "Expected '{' after 'ниҳоят'");
       finalizer = this.blockStatement();
     }
+    // As in JavaScript (and TypeScript's TS1472): `try { }` alone is a syntax error
+    if (!handler && !finalizer) {
+      throw new Error(this.unexpectedTokenMessage("Expected 'гирифтан' or 'ниҳоят' after 'кӯшиш'"));
+    }
 
     return {
       type: 'TryStatement',

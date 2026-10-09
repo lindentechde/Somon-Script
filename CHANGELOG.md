@@ -84,6 +84,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon migrate` keeps `typeof` before a sign (`typeof -x`), which `навъи -x` would read as a subtraction.
 * Lowering for a target no longer fails when TypeScript 5.4's checker crashes on valid JavaScript (an `интихоб` over a variable that holds `[]`): the code is then lowered as TypeScript.
 * The TypeScript emitter keeps the parentheses of `(а < б) > (в)` and `ф((а < б), в > (г))`, which TypeScript would otherwise read as calls with type arguments.
+* `кӯшиш { … }` without `гирифтан` or `ниҳоят` is a parse error, as in JavaScript; it compiled to a `try` that no JavaScript engine loads.
 
 ## 0.4.0 (2026-10-09)
 
