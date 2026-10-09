@@ -28,7 +28,11 @@ export const TARGETS = [
 
 export type Target = (typeof TARGETS)[number];
 
-export const DEFAULT_TARGET: Target = 'es2020';
+/**
+ * ES2022: what every supported Node.js (20+) and current browser runs, and the
+ * syntax the code generator emits, so the default output is not rewritten.
+ */
+export const DEFAULT_TARGET: Target = 'es2022';
 
 /**
  * Bundle formats: a CommonJS module, an ES module that exports the entry's

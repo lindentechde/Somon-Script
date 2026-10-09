@@ -36,7 +36,7 @@ export interface CompileOptions {
   minify?: boolean;
   /**
    * ECMAScript version the generated code must run on (`es5` … `es2024`,
-   * `esnext`). Defaults to `es2020`. Newer syntax is lowered with TypeScript;
+   * `esnext`). Defaults to `es2022`. Newer syntax is lowered with TypeScript;
    * what the target cannot express (BigInt literals, some regular expression
    * flags) is a compile error.
    */

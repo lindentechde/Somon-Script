@@ -348,7 +348,7 @@ typeof қимат;                 // typeof
 ```json
 {
   "compilerOptions": {
-    "target": "es2020",
+    "target": "es2022",
     "sourceMap": true,
     "strict": true
   }
@@ -366,7 +366,7 @@ somon compile <file> [options]
   --output, -o     Output file path
   --source-map     Generate source maps
   --minify         Minify output
-  --target         JavaScript target (es5, es2015 … es2024, esnext; default es2020)
+  --target         JavaScript target (es5, es2015 … es2024, esnext; default es2022)
   --lib            TypeScript libs available at run time (e.g. es2022,dom)
 
 # Execution

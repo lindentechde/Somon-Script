@@ -56,7 +56,7 @@ describe('targets', () => {
       'es2024',
       'esnext',
     ]);
-    expect(DEFAULT_TARGET).toBe('es2020');
+    expect(DEFAULT_TARGET).toBe('es2022');
   });
 
   test('isTarget and targetAtLeast', () => {
@@ -569,13 +569,14 @@ describe('compile with a target', () => {
     expect(compile('тағ а = 1;\nчоп.сабт(2n ** 64n, а);\n').errors).toEqual([]);
   });
 
-  test('lowers the default es2020 output only when it uses newer syntax', () => {
-    expect(compile('тағ а = 1;\nчоп.сабт(а ?? 2);').code).toBe(
-      compile('тағ а = 1;\nчоп.сабт(а ?? 2);', { target: 'esnext' }).code
-    );
-    const fields = compile('синф К { а = 1; }').code;
-    expect(fields).toContain('this.а = 1;');
-    expect(compile('синф К { а = 1; }', { target: 'es2022' }).code).toContain('  а = 1;');
+  test('the default es2022 output is the generated code; older targets lower it', () => {
+    const program = 'синф К { #а = 1; б; статикӣ { } }\nтағ в = 1;\nв ??= 2;';
+    expect(compile(program).code).toBe(compile(program, { target: 'esnext' }).code);
+    expect(compile(program).code).toContain('  #а = 1;\n  б;');
+    const lowered = compile(program, { target: 'es2020' }).code;
+    expect(lowered).toContain('_К_а.set(this, 1);');
+    expect(lowered).not.toContain('б');
+    expect(compile('синф К { а = 1; }', { target: 'es2021' }).code).toContain('this.а = 1;');
   });
 
   test('downlevel: false keeps the syntax but still checks the target', () => {
@@ -588,8 +589,13 @@ describe('compile with a target', () => {
   });
 
   test('passes useDefineForClassFields through', () => {
-    const code = compile('синф К { а = 1; }', { useDefineForClassFields: true }).code;
+    const code = compile('синф К { а = 1; }', {
+      target: 'es2020',
+      useDefineForClassFields: true,
+    }).code;
     expect(code).toContain('Object.defineProperty(this, "а"');
+    const assigned = compile('синф К { а = 1; }', { useDefineForClassFields: false }).code;
+    expect(assigned).toContain('this.а = 1;');
   });
 
   test('source maps still point at the SomonScript lines', async () => {

@@ -12,13 +12,13 @@ transformers, and reports what no transformer can express.
 
 ## Choosing a Target
 
-| Value               | Runs on                                        |
-| ------------------- | ---------------------------------------------- |
-| `es5`               | ES5 engines (Internet Explorer 11, old WebKit) |
-| `es2015` … `es2019` | engines of that edition                        |
-| `es2020` (default)  | Node.js 14+, current browsers                  |
-| `es2021` … `es2024` | engines of that edition                        |
-| `esnext`            | the newest engines: nothing is lowered         |
+| Value               | Runs on                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `es5`               | ES5 engines (Internet Explorer 11, old WebKit)                |
+| `es2015` … `es2021` | engines of that edition                                       |
+| `es2022` (default)  | Node.js 16.11+ (so every supported Node.js), current browsers |
+| `es2023`, `es2024`  | engines of that edition                                       |
+| `esnext`            | the newest engines: nothing is lowered                        |
 
 ```bash
 somon compile app.som --target es2015
@@ -63,8 +63,11 @@ the output: there is no `tslib` dependency at run time.
 | class fields, `#хосусӣ` members, `#х дар о`, static blocks   | es2022 | constructor code, `WeakMap`/`WeakSet`, functions   |
 | decorators `@ном`, `дастрасӣ` (accessor), `истифода` (using) | never  | TypeScript's helpers, on every target              |
 
-The default target, `es2020`, therefore lowers class fields, private members and
-static blocks; a program without them is emitted exactly as generated.
+The default target, `es2022`, has everything the code generator emits except
+decorators, `дастрасӣ` and `истифода`, so the default output of any other
+program is the generated code itself. `--target es2020` or older lowers class
+fields, private members and static blocks too; a program without newer syntax is
+still emitted exactly as generated.
 
 ```som
 синф Ҳисоб {
@@ -147,7 +150,7 @@ somon compile app.som --target es5 --lib es2015,dom
   `webworker`, `scripthost` and parts such as `es2015.promise` or
   `es2022.array`. Case does not matter; an unknown name is an error.
 - Default: the target's ECMAScript lib and the DOM, as in TypeScript
-  (`["es2020", "dom", "dom.iterable", "dom.asynciterable"]` for `es2020`).
+  (`["es2022", "dom", "dom.iterable", "dom.asynciterable"]` for `es2022`).
 
 ---
 
@@ -156,7 +159,7 @@ somon compile app.som --target es5 --lib es2015,dom
 A field (`ном = "Алӣ";` or `ном: сатр;`) either is _defined_ on the new object
 (JavaScript's semantics since ES2022) or _assigned_ in the constructor
 (TypeScript's semantics before). The default follows TypeScript: defined from
-`es2022` on, assigned below.
+`es2022` on (so with the default target), assigned below.
 
 | `useDefineForClassFields` | Field with value                       | Field without value  |
 | ------------------------- | -------------------------------------- | -------------------- |
@@ -174,7 +177,7 @@ The difference shows when a base class has a setter or sets the field itself:
     қимат: рақам;
     омода(): холӣ { ин.қимат = 5; }
 }
-// false: 5 (the field is not redefined); true: undefined
+// false (es2021 and older): 5, the field is not redefined; true (es2022+): undefined
 чоп.сабт(нав Ворис().қимат);
 ```
 
@@ -256,9 +259,9 @@ Measured on the 170 programs in `examples/` and `examples/leetcode/` (Node 22):
 
 - Checking the generated code against the target: about 0.4 ms per program, on
   every compile.
-- Programs that need lowering (48 of the 170 at `es2020`, those with class
-  fields or private members): TypeScript adds about 5–10 ms each; `es5` adds
-  about 5 ms per program on top of code generation.
+- At the default `es2022` none of them is rewritten. At `es2020` 48 of the 170
+  (those with class fields or private members) are: TypeScript adds about 5–10
+  ms each; `es5` adds about 5 ms per program on top of code generation.
 - Programs without newer syntax are not rewritten at all.
 
 ---

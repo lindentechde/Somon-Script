@@ -22,7 +22,14 @@ import {
   type SomonConfig,
 } from '../config';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
-import { BUNDLE_FORMATS, normalizeLib, TARGETS, validateGlobalName, validateLib } from '../targets';
+import {
+  BUNDLE_FORMATS,
+  DEFAULT_TARGET,
+  normalizeLib,
+  TARGETS,
+  validateGlobalName,
+  validateLib,
+} from '../targets';
 import { LANGUAGES, t, type Translations } from './i18n';
 // Read package.json at runtime to avoid import attribute issues
 function findPackageJson(): { name: string; version: string } {
@@ -318,7 +325,7 @@ function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileO
 
   // Set default target if not specified
   if (!merged.target) {
-    merged.target = 'es2020';
+    merged.target = DEFAULT_TARGET;
   }
 
   // Command-line paths are relative to the current directory, config paths to the config file.
@@ -784,7 +791,7 @@ export function createProgram(): Command {
         // Create default configuration
         const somonConfig = {
           compilerOptions: {
-            target: 'es2020',
+            target: DEFAULT_TARGET,
             sourceMap: false,
             minify: false,
             noTypeCheck: false,

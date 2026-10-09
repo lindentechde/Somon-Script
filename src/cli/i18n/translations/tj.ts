@@ -16,7 +16,7 @@ const translations: Translations = {
       options: {
         output: 'Файли баромад (бо нобаёнӣ: вуруд бо .som ба .js иваз шуда, вагарна <вуруд>.js)',
         outDir: 'Феҳристи баромад',
-        target: 'Ҳадафи компилятсия',
+        target: 'Ҳадафи компилятсия (бо нобаёнӣ: es2022)',
         lib: 'Китобхонаҳои TypeScript, ки ҳангоми иҷро дастрасанд, бо вергул (масалан es2022,dom)',
         useDefineForClassFields: 'Майдонҳои синфро муайян кардан (бо нобаёнӣ аз es2022)',
         noUseDefineForClassFields: 'Майдонҳои синфро дар конструктор таъин кардан',

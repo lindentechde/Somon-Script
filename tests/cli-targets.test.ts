@@ -91,7 +91,15 @@ describe('CLI targets and bundle formats (spawned)', () => {
   test('--use-define-for-class-fields and --no-use-define-for-class-fields', () => {
     const define = path.join(tempDir, 'define.js');
     const assign = path.join(tempDir, 'assign.js');
-    cli(['compile', 'app.som', '--use-define-for-class-fields', '-o', define]);
+    cli([
+      'compile',
+      'app.som',
+      '--target',
+      'es2020',
+      '--use-define-for-class-fields',
+      '-o',
+      define,
+    ]);
     cli([
       'compile',
       'app.som',

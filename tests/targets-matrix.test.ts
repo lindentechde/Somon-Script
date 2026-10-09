@@ -11,8 +11,9 @@ import { DEFAULT_TARGET, TARGETS, targetAtLeast, type Target } from '../src/targ
  * Execution matrix: every runnable program — the top-level examples, the
  * LeetCode solutions and the programs of tests/operators.test.ts — compiled
  * for every target and run with the current Node in a fresh vm context. Its
- * output must equal the es2020 output, or the compiler must refuse the target
- * with a target error that names a newer one (BigInt literals below es2020).
+ * output must equal the output for the default target (es2022), or the
+ * compiler must refuse the target with a target error that names a newer one
+ * (BigInt literals below es2020).
  *
  * By default the operator programs and the examples run on every target and
  * each LeetCode solution on es5 and one more target (they rotate), which keeps
@@ -288,7 +289,7 @@ describe(`execution matrix (${FULL_MATRIX ? 'full' : 'sampled; SOMON_FULL_MATRIX
         const actual = await execute(result.code);
         if (actual !== expected) {
           problems.push(
-            `${target}: output differs\n--- es2020\n${expected}\n--- ${target}\n${actual}`
+            `${target}: output differs\n--- ${DEFAULT_TARGET}\n${expected}\n--- ${target}\n${actual}`
           );
         }
       }

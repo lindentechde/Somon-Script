@@ -16,7 +16,7 @@ const translations: Translations = {
       options: {
         output: 'Output file (default: input with .som replaced by .js, otherwise <input>.js)',
         outDir: 'Output directory',
-        target: 'Compilation target',
+        target: 'Compilation target (default: es2022)',
         lib: 'TypeScript libs available at run time, comma-separated (e.g. es2022,dom)',
         useDefineForClassFields: 'Define class fields (the default from es2022)',
         noUseDefineForClassFields: 'Assign class fields in the constructor',

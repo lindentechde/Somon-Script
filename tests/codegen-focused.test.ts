@@ -11,11 +11,11 @@ import { Parser } from '../src/parser';
 /**
  * Emitted JavaScript for `lines` of SomonScript. `compile` generates with
  * position markers (`generateWithMappings`); the plain `generate` path must
- * produce the very same text. `esnext` keeps the generated syntax as it is.
+ * produce the very same text.
  */
 function emitted(lines: string[]): string {
   const source = lines.join('\n');
-  const result = compile(source, { typeCheck: false, target: 'esnext' });
+  const result = compile(source, { typeCheck: false });
   expect(result.errors).toEqual([]);
   const ast = new Parser(new Lexer(source).tokenize()).parse();
   expect(new CodeGenerator().generate(ast)).toBe(result.code);

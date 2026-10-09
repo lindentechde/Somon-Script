@@ -17,7 +17,7 @@ const translations: Translations = {
       options: {
         output: 'Выходной файл (по умолчанию: вход с .som, заменённым на .js, иначе <вход>.js)',
         outDir: 'Выходная директория',
-        target: 'Цель компиляции',
+        target: 'Цель компиляции (по умолчанию: es2022)',
         lib: 'Библиотеки TypeScript, доступные при выполнении, через запятую (например es2022,dom)',
         useDefineForClassFields: 'Определять поля классов (по умолчанию начиная с es2022)',
         noUseDefineForClassFields: 'Присваивать поля классов в конструкторе',
