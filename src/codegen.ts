@@ -131,6 +131,15 @@ const JS_RESERVED_WORDS: ReadonlySet<string> = new Set([
   'yield',
 ]);
 
+/** Reserved words that are themselves complete JavaScript expressions. */
+const JS_KEYWORD_EXPRESSIONS: ReadonlySet<string> = new Set([
+  'null',
+  'true',
+  'false',
+  'this',
+  'super',
+]);
+
 const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   SequenceExpression: PREC.SEQUENCE,
   AssignmentExpression: PREC.ASSIGNMENT,
@@ -771,7 +780,7 @@ export class CodeGenerator {
 
   private generateFunctionDeclaration(node: FunctionDeclaration): string {
     const async = node.async ? 'async ' : '';
-    const name = this.generateIdentifier(node.name);
+    const name = this.generateIdentifier(node.name, true);
     const { params, body } = this.generateFunctionParts(node.params, node.body);
 
     return this.indent(`${async}function ${name}(${params}) ${body}`);
@@ -785,11 +794,11 @@ export class CodeGenerator {
     return (params ?? [])
       .map(param => {
         if ((param as { type: string }).type === 'Identifier') {
-          return this.generateIdentifier(param as unknown as Identifier);
+          return this.generateIdentifier(param as unknown as Identifier, true);
         }
         const target = param.pattern
           ? this.generatePattern(param.pattern)
-          : this.generateIdentifier(param.name);
+          : this.generateIdentifier(param.name, true);
         const defaultValue = param.defaultValue
           ? ` = ${this.generateExpression(param.defaultValue, PREC.ASSIGNMENT)}`
           : '';
@@ -1092,7 +1101,7 @@ export class CodeGenerator {
 
   private generateFunctionExpression(node: FunctionExpression): string {
     const async = node.async ? 'async ' : '';
-    const name = node.name ? ` ${this.generateIdentifier(node.name)}` : '';
+    const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
     const { params, body } = this.generateFunctionParts(node.params, node.body);
     return `${async}function${name}(${params}) ${body}`;
   }
@@ -1143,7 +1152,7 @@ export class CodeGenerator {
     // Handle default imports
     const defaultImports = specifiers.filter(s => s.type === 'ImportDefaultSpecifier');
     if (defaultImports.length > 0) {
-      const localName = this.generateIdentifier(defaultImports[0].local);
+      const localName = this.generateIdentifier(defaultImports[0].local, true);
       results.push(this.indent(`const ${localName} = ${tmpVar}.default ?? ${tmpVar};`));
     }
 
@@ -1152,7 +1161,7 @@ export class CodeGenerator {
       | undefined;
     if (namespaceImport) {
       results.push(
-        this.indent(`const ${this.generateIdentifier(namespaceImport.local)} = ${tmpVar};`)
+        this.indent(`const ${this.generateIdentifier(namespaceImport.local, true)} = ${tmpVar};`)
       );
     }
 
@@ -1162,7 +1171,7 @@ export class CodeGenerator {
       const destructuring = namedImports
         .map(spec => {
           const imported = spec.imported.name;
-          const local = this.generateIdentifier(spec.local);
+          const local = this.generateIdentifier(spec.local, true);
           return imported === local ? imported : `${imported}: ${local}`;
         })
         .join(', ');
@@ -1294,7 +1303,8 @@ export class CodeGenerator {
     return source;
   }
 
-  private generateIdentifier(node: Identifier): string {
+  /** `binding`: the identifier declares a name rather than referencing one. */
+  private generateIdentifier(node: Identifier, binding: boolean = false): string {
     // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
     // when the program does not declare a binding of that name in scope;
     // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
@@ -1303,7 +1313,8 @@ export class CodeGenerator {
       return mapped;
     }
 
-    if (JS_RESERVED_WORDS.has(node.name)) {
+    // `null`, `true`, `this`, … are fine as values, but never as declared names
+    if (JS_RESERVED_WORDS.has(node.name) && (binding || !JS_KEYWORD_EXPRESSIONS.has(node.name))) {
       this.errors.push(
         `'${node.name}' is a reserved word in JavaScript and cannot be used as an identifier at line ${node.line}, column ${node.column}`
       );
@@ -1692,7 +1703,7 @@ export class CodeGenerator {
       // A parameterless catch stays parameterless (ES2019) so it cannot shadow
       // an outer variable such as `error`.
       result += param
-        ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param))}) `
+        ? ` catch (${this.withScope([param.name], () => this.generateIdentifier(param, true))}) `
         : ' catch ';
       result += this.generateBlockStatement(node.handler.body, param ? [param.name] : []).replace(
         this.getIndent(),
@@ -1743,20 +1754,20 @@ export class CodeGenerator {
   private generateInterfaceDeclaration(node: InterfaceDeclaration): string {
     // Interfaces are TypeScript-only constructs, so we generate a comment in JavaScript
     // They should NOT generate any executable code at all
-    const name = this.generateIdentifier(node.name);
+    const name = node.name.name;
 
     return this.indent(`// Interface: ${name}\n`);
   }
 
   private generateTypeAlias(node: TypeAlias): string {
     // Type aliases are TypeScript-only constructs, so we generate a comment in JavaScript
-    const name = this.generateIdentifier(node.name);
+    const name = node.name.name;
     return this.indent(`// Type alias: ${name}\n`);
   }
 
   private generateNamespaceDeclaration(node: NamespaceDeclaration): string {
     // Generate namespace as an IIFE (Immediately Invoked Function Expression)
-    const name = this.generateIdentifier(node.name);
+    const name = this.generateIdentifier(node.name, true);
 
     // A local binding, so the namespace never leaks into (or, in strict code,
     // fails on) the global scope
@@ -1861,7 +1872,7 @@ export class CodeGenerator {
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {
-    const className = this.generateIdentifier(node.name);
+    const className = this.generateIdentifier(node.name, true);
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
       : '';
@@ -1957,7 +1968,7 @@ export class CodeGenerator {
   private generatePattern(node: PatternNode): string {
     switch (node.type) {
       case 'Identifier':
-        return this.generateIdentifier(node);
+        return this.generateIdentifier(node, true);
       case 'AssignmentPattern':
         return `${this.generatePattern(node.left)} = ${this.generateExpression(node.right, PREC.ASSIGNMENT)}`;
       case 'ArrayPattern':

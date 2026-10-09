@@ -31,6 +31,16 @@ describe('compiler pipeline', () => {
     ]);
   });
 
+  test('null/true/false are allowed as values but not as declared names', () => {
+    const ok = compile('тағйирёбанда а = null;\nчоп.сабт(а == null, true);', { typeCheck: false });
+    expect(ok.errors).toEqual([]);
+    expect(ok.code).toContain('а == null');
+
+    const bad = compile('функсия ф(null) {}', { typeCheck: false });
+    expect(bad.code).toBe('');
+    expect(bad.errors).toEqual([expect.stringMatching(/'null'.*line 1/)]);
+  });
+
   test('reserved words stay allowed as property names', () => {
     const result = compile('тағйирёбанда о = {class: 1, new: 2};\nчоп.сабт(о.class + о.new);', {
       typeCheck: false,
