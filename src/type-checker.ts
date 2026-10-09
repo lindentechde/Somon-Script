@@ -137,6 +137,12 @@ export interface TypeCheckOptions {
    * `strict` it is a warning).
    */
   strict?: boolean;
+  /**
+   * Called with each name the checker declares (variables, parameters,
+   * functions) or reads, and its type at that point, for editor tooling
+   * (hover, completion). Not called while expressions are re-inferred quietly.
+   */
+  onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
 }
 
 /**
@@ -284,7 +290,7 @@ function prototypeMembers(prototype: object): ReadonlySet<string> {
  * Members of built-in types, taken from the running JavaScript engine so the
  * lists match what the compiled program can call.
  */
-const BUILTIN_MEMBERS = {
+export const BUILTIN_MEMBERS = {
   object: prototypeMembers(Object.prototype),
   array: prototypeMembers(Array.prototype),
   string: prototypeMembers(String.prototype),
@@ -435,6 +441,7 @@ export class TypeChecker {
   private errors: TypeCheckError[] = [];
   private warnings: TypeCheckError[] = [];
   private readonly strict: boolean;
+  private readonly onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
   /** Lexical scope chain; index 0 is the global scope. */
   private scopes: Map<string, Type>[] = [];
   /** Unique id of each scope in `scopes`, so narrowing facts survive shadowing. */
@@ -575,6 +582,12 @@ export class TypeChecker {
   constructor(source?: string, options: TypeCheckOptions = {}) {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
     this.strict = Boolean(options.strict);
+    this.onIdentifierType = options.onIdentifierType;
+  }
+
+  /** Reports the type of a declared or read name to `onIdentifierType`. */
+  private recordIdentifierType(identifier: Identifier, type: Type): void {
+    if (this.silent === 0) this.onIdentifierType?.(identifier, type);
   }
 
   /**
@@ -1074,7 +1087,9 @@ export class TypeChecker {
   }
 
   private hoistFunctionDeclaration(funcDecl: FunctionDeclaration): void {
-    this.declare(funcDecl.name.name, this.buildFunctionType(funcDecl.name.name, funcDecl));
+    const type = this.buildFunctionType(funcDecl.name.name, funcDecl);
+    this.declare(funcDecl.name.name, type);
+    this.recordIdentifierType(funcDecl.name, type);
   }
 
   private hoistVariableDeclaration(varDecl: VariableDeclaration): void {
@@ -1951,6 +1966,7 @@ export class TypeChecker {
     switch (pattern.type) {
       case 'Identifier':
         this.declare((pattern as Identifier).name, type);
+        this.recordIdentifierType(pattern as Identifier, type);
         break;
       case 'ArrayPattern':
         this.bindArrayPatternTypes(pattern as ArrayPattern, type);
@@ -2106,8 +2122,9 @@ export class TypeChecker {
       param.optional && !param.defaultValue ? this.optionalType(paramType) : paramType;
     if (param.pattern) {
       this.bindPatternTypes(param.pattern, boundType);
-    } else {
-      if (param.name) this.declare(param.name.name, boundType);
+    } else if (param.name) {
+      this.declare(param.name.name, boundType);
+      this.recordIdentifierType(param.name, boundType);
     }
   }
 
@@ -2668,6 +2685,12 @@ export class TypeChecker {
   }
 
   private inferIdentifierType(identifier: Identifier): Type {
+    const type = this.identifierValueType(identifier);
+    this.recordIdentifierType(identifier, type);
+    return type;
+  }
+
+  private identifierValueType(identifier: Identifier): Type {
     const sym = this.lookup(identifier.name);
     if (sym?.typeOnly) {
       this.addError(
@@ -4727,7 +4750,8 @@ export class TypeChecker {
     unknown: t => t.name ?? 'ношинос',
   };
 
-  private typeToString(type: Type): string {
+  /** The type as SomonScript source writes it: `рақам[]`, `(х: сатр) => мантиқӣ`. */
+  public typeToString(type: Type): string {
     const printer = this.typePrinters[type.kind];
     // Interfaces and classes print by name
     return printer ? printer(type) : (type.name ?? type.kind);
