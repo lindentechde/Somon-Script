@@ -1,4 +1,4 @@
-import { compile } from '../src/compiler';
+import { compile, CompileOptions } from '../src/compiler';
 import * as vm from 'vm';
 
 /**
@@ -14,19 +14,34 @@ async function settle(): Promise<void> {
   }
 }
 
-async function expectOutput(source: string, expected: string): Promise<void> {
+async function expectOutput(
+  source: string,
+  expected: string,
+  options: CompileOptions = {}
+): Promise<void> {
   for (const strict of [false, true]) {
-    const result = compile(source, { strict });
+    const result = compile(source, { ...options, strict });
     expect(result.errors).toEqual([]);
     const lines: string[] = [];
     const log = (...args: unknown[]): void => {
       lines.push(args.map(String).join(' '));
     };
-    vm.runInNewContext(result.code, { console: { log } });
+    vm.runInNewContext(result.code, { console: { log }, Symbol: DisposableSymbol });
     await settle();
     expect(lines.join('\n')).toBe(expected);
   }
 }
+
+/**
+ * `Symbol` with `Symbol.dispose` and `Symbol.asyncDispose`, which `истифода`
+ * needs: Node.js defines them in its main realm, but not in `vm` contexts.
+ */
+const DisposableSymbol = Object.assign((description?: string) => Symbol(description), Symbol, {
+  iterator: Symbol.iterator,
+  asyncIterator: Symbol.asyncIterator,
+  dispose: Symbol('Symbol.dispose'),
+  asyncDispose: Symbol('Symbol.asyncDispose'),
+});
 
 describe('TypeScript operators in SomonScript', () => {
   describe('expression operators', () => {
@@ -311,6 +326,124 @@ describe('TypeScript operators in SomonScript', () => {
       ],
     ])('%s', async (_name, source, expected) => {
       await expectOutput(source, expected);
+    });
+  });
+
+  describe('TypeScript declarations', () => {
+    test.each([
+      [
+        'decorators @',
+        'функсия д(_: ҳар, к: ҳар) { чоп.сабт(к.kind, к.name); }\n@д синф К { @д м() {} @д х = 1; }',
+        'method м\nfield х\nclass К',
+      ],
+      [
+        'decorator factory @а.б(1)',
+        'собит асбоб = { зарб: (н: рақам) => (м: ҳар, _: ҳар) => (...а: ҳар[]) => м(...а) * н };\nсинф К { @асбоб.зарб(10) ду(): рақам { бозгашт 2; } }\nчоп.сабт(нав К().ду());',
+        '20',
+      ],
+      [
+        'accessor (дастрасӣ)',
+        'синф К { дастрасӣ х = 1; статикӣ дастрасӣ с = 2; }\nсобит к = нав К();\nк.х++;\nчоп.сабт(к.х, К.с);',
+        '2 2',
+      ],
+      [
+        'override (бознавис)',
+        'синф А { м(): сатр { бозгашт "А"; } }\nсинф Б мерос А { бознавис м(): сатр { бозгашт "Б"; } }\nчоп.сабт(нав Б().м());',
+        'Б',
+      ],
+      [
+        'declare (эълон)',
+        'эълон функсия parseFloat(с: сатр): рақам;\nэълон собит Infinity: рақам;\nчоп.сабт(parseFloat("1.5") * 2, Infinity > 0);',
+        '3 true',
+      ],
+      [
+        'declare module / global (эълон модул, эълон глобалӣ)',
+        'эълон модул "асбоб" { содир функсия ном(): сатр; }\nэълон глобалӣ { функсия isNaN(х: ҳар): мантиқӣ; }\nчоп.сабт(isNaN("а"));',
+        'true',
+      ],
+      [
+        'using (истифода)',
+        'функсия м(н: сатр) { бозгашт { [Symbol.dispose]() { чоп.сабт("озод", н); } }; }\nфунксия ф() { истифода а = м("а"); истифода б = м("б"); чоп.сабт("кор"); }\nф();',
+        'кор\nозод б\nозод а',
+      ],
+      [
+        'await using (интизор истифода)',
+        'ҳамзамон функсия ф() { интизор истифода а = { ҳамзамон [Symbol.asyncDispose]() { чоп.сабт("озод"); } }; чоп.сабт("кор"); }\nф();',
+        'кор\nозод',
+      ],
+      [
+        'type-only import / export (навъ)',
+        'ворид навъ { Т } аз "./т";\nсодир навъ { Т };\nчоп.сабт("ok");',
+        'ok',
+      ],
+      ['shebang #!', '#!/usr/bin/env node\nчоп.сабт("ok");', 'ok'],
+      [
+        'const / in / out type parameters',
+        'функсия ф<собит Т>(х: Т): Т { бозгашт х; }\nинтерфейс И<дар берун Т> { а: Т; }\nчоп.сабт(ф(1));',
+        '1',
+      ],
+      [
+        'function overloads',
+        'функсия ф(х: рақам): рақам;\nфунксия ф(х: сатр): сатр;\nфунксия ф(х: ҳар): ҳар { бозгашт х + х; }\nчоп.сабт(ф(1), ф("а"));',
+        '2 аа',
+      ],
+      [
+        'this parameter (ин)',
+        'функсия ф(ин: { н: рақам }, х: рақам): рақам { бозгашт ин.н + х; }\nчоп.сабт(ф.call({ н: 1 }, 2));',
+        '3',
+      ],
+      [
+        'namespace merging',
+        'номфазо Н { содир собит а = 1; }\nномфазо Н { содир собит б = а + 1; }\nчоп.сабт(Н.а, Н.б);',
+        '1 2',
+      ],
+      ['enum merging', 'шумориш Э { А }\nшумориш Э { Б = 5 }\nчоп.сабт(Э.А, Э.Б, Э[5]);', '0 5 Б'],
+      [
+        'class + namespace merging',
+        'синф К { }\nномфазо К { содир собит нусха = нав К(); }\nчоп.сабт(К.нусха instanceof К);',
+        'true',
+      ],
+      [
+        'class index signature',
+        'синф Л { [к: сатр]: ҳар; }\nсобит л = нав Л();\nл.а = 1;\nчоп.сабт(л.а);',
+        '1',
+      ],
+      [
+        'get / set signatures',
+        'интерфейс И { get х(): рақам; set х(қ: рақам); }\nсобит и: И = { х: 1 };\nи.х = 2;\nчоп.сабт(и.х);',
+        '2',
+      ],
+      [
+        'unique symbol key',
+        'собит к: беназир рамз = Symbol("к");\nинтерфейс И { [к]: рақам; }\nсобит и: И = { [к]: 1 };\nчоп.сабт(и[к]);',
+        '1',
+      ],
+      [
+        'abstract property',
+        'мавҳум синф Ш { мавҳум ном: сатр; салом(): сатр { бозгашт "салом " + ин.ном; } }\nсинф Д мерос Ш { ном = "д"; }\nчоп.сабт(нав Д().салом());',
+        'салом д',
+      ],
+      ['optional method', 'синф К { м?(): рақам; }\nчоп.сабт(нав К().м?.());', 'undefined'],
+      [
+        'declare field (эълон)',
+        'синф К { эълон х: рақам; }\nчоп.сабт(Object.keys(нав К()).length);',
+        '0',
+      ],
+      [
+        'import alias (ворид х = Н.а)',
+        'номфазо Н { содир собит а = 1; }\nворид б = Н.а;\nчоп.сабт(б);',
+        '1',
+      ],
+    ])('%s', async (_name, source, expected) => {
+      await expectOutput(source, expected);
+    });
+
+    test('legacy decorators (experimentalDecorators)', async () => {
+      await expectOutput(
+        'функсия п(_: ҳар, к: ҳар, и: рақам) { чоп.сабт("параметр", и); }\nсинф К { конструктор(@п х: рақам) {} }',
+        'параметр 0',
+        { experimentalDecorators: true }
+      );
     });
   });
 
