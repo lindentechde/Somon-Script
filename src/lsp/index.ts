@@ -9,7 +9,7 @@ import type { LanguageServerHooks } from './hooks';
 import { MessageReader, encodeMessage } from './jsonrpc';
 import { SomonLanguageServer } from './server';
 
-export { registerChecker, registerFormatter, type LanguageServerHooks } from './hooks';
+export { registerChecker, type LanguageServerHooks } from './hooks';
 export { SomonLanguageServer, type LanguageServerOptions } from './server';
 export { MessageReader, encodeMessage } from './jsonrpc';
 

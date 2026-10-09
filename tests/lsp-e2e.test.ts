@@ -179,6 +179,24 @@ describe('somon lsp (spawned)', () => {
       },
     ]);
 
+    // somon fmt: no edits while the syntax error is there, one whole-document edit after
+    const formattingOptions = { tabSize: 4, insertSpaces: true };
+    const unformattable = await client.request('textDocument/formatting', {
+      textDocument: { uri },
+      options: formattingOptions,
+    });
+    expect(unformattable.result).toEqual([]);
+    client.notify('textDocument/didChange', {
+      textDocument: { uri, version: 4 },
+      contentChanges: [{ text: fixed.replace('собит номҳо', 'собит    номҳо') }],
+    });
+    const formatting = await client.request('textDocument/formatting', {
+      textDocument: { uri },
+      options: formattingOptions,
+    });
+    const [edit] = formatting.result as Array<{ newText: string }>;
+    expect(edit.newText).toBe(fixed);
+
     const shutdown = await client.request('shutdown');
     expect(shutdown.result).toBeNull();
     const exited = new Promise<number | null>(resolve => child!.on('exit', resolve));

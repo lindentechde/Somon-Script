@@ -1,27 +1,28 @@
 /**
- * Injectable features the language server uses when they are available: a
- * source formatter (`somon fmt`) and alternative type checkers
- * (`compilerOptions.checker`, e.g. 'typescript'). Without them formatting is
- * not offered and the built-in type checker reports type errors.
+ * Replaceable parts of the language server: the formatter (`somon fmt`'s
+ * `format` unless one is injected) and alternative type checkers
+ * (`compilerOptions.checker`, e.g. 'typescript'); without one for the
+ * configured checker, the compiler runs it.
  */
 
-/** Options a formatter receives, from the editor's formatting request. */
+import { DEFAULT_INDENT, format } from '../tools/format';
+
+/** Options a formatter receives: the editor's request and the project's settings. */
 export interface FormatterOptions {
   tabSize: number;
   insertSpaces: boolean;
+  /** Spaces per indentation level from somon.config.json (`fmt.indent`), if set there. */
+  indent?: number;
   /** Path of the file being formatted, when it has one. */
   fileName?: string;
 }
 
 /**
- * Formats SomonScript source. May return the formatted text or an object
- * holding it (`code`, `formatted` or `output`); throws when the source cannot
- * be formatted (e.g. a syntax error).
+ * Formats SomonScript source and returns the formatted text. Throws when the
+ * source cannot be formatted (`FormatError`: a syntax error, or formatting
+ * would change what the code means).
  */
-export type Formatter = (
-  _source: string,
-  _options: FormatterOptions
-) => string | { code?: string; formatted?: string; output?: string };
+export type Formatter = (_source: string, _options: FormatterOptions) => string;
 
 /** A diagnostic from an alternative checker; positions as the compiler counts them. */
 export interface CheckerDiagnostic {
@@ -50,66 +51,34 @@ export interface LanguageServerHooks {
   checkers?: Record<string, Checker>;
 }
 
-const registered: { formatter?: Formatter; checkers: Map<string, Checker> } = {
-  checkers: new Map(),
-};
+/**
+ * `somon fmt`: the project's `fmt.indent`, else the editor's tab size (the
+ * formatter indents with 1–16 spaces).
+ */
+export const defaultFormatter: Formatter = (source, options) =>
+  format(source, {
+    indent: options.indent ?? clampIndent(options.tabSize),
+  });
 
-/** Makes a formatter available to every language server started afterwards. */
-export function registerFormatter(formatter: Formatter | undefined): void {
-  registered.formatter = formatter;
+function clampIndent(tabSize: number): number {
+  if (!Number.isInteger(tabSize)) return DEFAULT_INDENT;
+  return Math.min(16, Math.max(1, tabSize));
 }
+
+const registeredCheckers = new Map<string, Checker>();
 
 /** Makes a checker available under the name `compilerOptions.checker` selects it by. */
 export function registerChecker(name: string, checker: Checker | undefined): void {
-  if (checker) registered.checkers.set(name, checker);
-  else registered.checkers.delete(name);
+  if (checker) registeredCheckers.set(name, checker);
+  else registeredCheckers.delete(name);
 }
 
-/** Modules and export names where a formatter of the compiler may live. */
-const FORMATTER_MODULES = ['../formatter', '../format', '../fmt'];
-const FORMATTER_EXPORTS = ['format', 'formatSource', 'formatCode', 'default'];
-
-type ModuleLoader = (_id: string) => unknown;
-
-/** Requires a module relative to this one, or undefined when it does not exist. */
-const defaultLoader: ModuleLoader = id => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require(id);
-  } catch {
-    return undefined;
-  }
-};
-
-/**
- * The formatter to use: an explicitly injected one, else a registered one,
- * else one exported by the compiler's formatter module if it exists.
- */
-export function resolveFormatter(
-  hooks: LanguageServerHooks = {},
-  load: ModuleLoader = defaultLoader
-): Formatter | undefined {
-  if (hooks.formatter) return hooks.formatter;
-  if (registered.formatter) return registered.formatter;
-  for (const id of FORMATTER_MODULES) {
-    const exports = load(id) as Record<string, unknown> | undefined;
-    if (!exports) continue;
-    for (const name of FORMATTER_EXPORTS) {
-      if (typeof exports[name] === 'function') return exports[name] as Formatter;
-    }
-  }
-  return undefined;
+/** The formatter to use: an injected one, else `somon fmt`'s. */
+export function resolveFormatter(hooks: LanguageServerHooks = {}): Formatter {
+  return hooks.formatter ?? defaultFormatter;
 }
 
-/** The checker registered (or injected) under `name`. */
+/** The checker injected or registered under `name`. */
 export function resolveChecker(name: string, hooks: LanguageServerHooks = {}): Checker | undefined {
-  return hooks.checkers?.[name] ?? registered.checkers.get(name);
-}
-
-/** The formatted text from whatever a formatter returned. */
-export function formattedText(result: ReturnType<Formatter>): string {
-  if (typeof result === 'string') return result;
-  const text = result.code ?? result.formatted ?? result.output;
-  if (typeof text !== 'string') throw new Error('the formatter returned no text');
-  return text;
+  return hooks.checkers?.[name] ?? registeredCheckers.get(name);
 }

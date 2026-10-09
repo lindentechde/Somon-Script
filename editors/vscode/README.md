@@ -12,8 +12,8 @@ TypeScript-compatible language with Tajik Cyrillic keywords — in VS Code:
 - **Language server** (`somon lsp`): diagnostics from the lexer, parser and type
   checker as you type (honouring `somon.config.json`), hover with types and
   Tajik keyword docs, completion (Tajik aliases of built-in members first), go
-  to definition (also into imported files), the document outline and semantic
-  highlighting.
+  to definition (also into imported files), the document outline, semantic
+  highlighting and formatting with `somon fmt` (**Format Document**).
 
 ## Requirements
 

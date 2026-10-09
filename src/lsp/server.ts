@@ -7,7 +7,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { ConfigError, loadConfigWithPath } from '../config';
+import { ConfigError, loadConfigWithPath, type SomonConfig } from '../config';
+import { DEFAULT_INDENT } from '../tools/format';
 import {
   analyzeDocument,
   type Analysis,
@@ -65,7 +66,8 @@ type Handler = (_params: unknown) => unknown;
 
 const defaultReadFile = (file: string): string | undefined => {
   try {
-    return fs.readFileSync(file, 'utf8');
+    // An imported module next to an open document, for go to definition
+    return fs.readFileSync(file, 'utf8'); // NOSONAR
   } catch {
     return undefined;
   }
@@ -76,7 +78,7 @@ export class SomonLanguageServer {
   private readonly analyses = new Map<string, Analysis>();
   private locale: Locale;
   private messages: LspMessages;
-  private formatter: Formatter | undefined;
+  private readonly formatter: Formatter;
   private initialized = false;
   private shuttingDown = false;
   private readonly requests: Record<string, Handler>;
@@ -88,6 +90,7 @@ export class SomonLanguageServer {
     this.options = options;
     this.locale = normalizeLocale(options.locale);
     this.messages = messagesFor(this.locale);
+    this.formatter = resolveFormatter(options.hooks);
     this.requests = {
       initialize: params => this.initialize(params as InitializeParams),
       shutdown: () => {
@@ -192,7 +195,6 @@ export class SomonLanguageServer {
   private initialize(params: InitializeParams): object {
     const locale = params?.initializationOptions?.locale;
     if (typeof locale === 'string') this.setLocale(locale);
-    this.formatter = resolveFormatter(this.options.hooks);
     this.initialized = true;
     return {
       capabilities: {
@@ -202,7 +204,7 @@ export class SomonLanguageServer {
         completionProvider: { triggerCharacters: ['.'], resolveProvider: false },
         definitionProvider: true,
         documentSymbolProvider: true,
-        documentFormattingProvider: this.formatter !== undefined,
+        documentFormattingProvider: true,
         semanticTokensProvider: {
           legend: {
             tokenTypes: [...SEMANTIC_TOKEN_TYPES],
@@ -282,15 +284,20 @@ export class SomonLanguageServer {
       hooks: this.options.hooks,
       ...(fileName && { fileName }),
     };
-    if (fileName) {
-      try {
-        const { compilerOptions } = loadConfigWithPath(path.dirname(fileName)).config;
-        options.compilerOptions = compilerOptions as AnalysisOptions['compilerOptions'];
-      } catch (error) {
-        options.configError = this.messages.configError(describeConfigError(error));
-      }
-    }
+    const { config, error } = this.configFor(fileName);
+    options.compilerOptions = config?.compilerOptions as AnalysisOptions['compilerOptions'];
+    if (error) options.configError = this.messages.configError(error);
     return analyzeDocument(document, options);
+  }
+
+  /** The somon.config.json above a file, or why it could not be read. */
+  private configFor(fileName: string | undefined): { config?: SomonConfig; error?: string } {
+    if (!fileName) return {};
+    try {
+      return { config: loadConfigWithPath(path.dirname(fileName)).config };
+    } catch (error) {
+      return { error: describeConfigError(error) };
+    }
   }
 
   private withDocument<T>(
@@ -304,16 +311,20 @@ export class SomonLanguageServer {
     return run(analysis, offset);
   }
 
+  /** `somon fmt` with the project's `fmt.indent`, else the editor's tab size. */
   private format(params: TextDocumentParams): unknown {
     const document = this.documents.get(params.textDocument?.uri);
-    if (!document || !this.formatter) return null;
+    if (!document) return null;
+    const fileName = uriToPath(document.uri);
+    const indent = this.configFor(fileName).config?.fmt?.indent;
+    const { tabSize = DEFAULT_INDENT, insertSpaces = true } = params.options ?? {};
     try {
-      return formatDocument(
-        document,
-        this.formatter,
-        params.options ?? { tabSize: 4, insertSpaces: true },
-        uriToPath(document.uri)
-      );
+      return formatDocument(document, this.formatter, {
+        tabSize,
+        insertSpaces,
+        ...(indent !== undefined && { indent }),
+        ...(fileName && { fileName }),
+      });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new RequestError(ErrorCode.RequestFailed, this.messages.formatterFailed(reason));

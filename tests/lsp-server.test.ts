@@ -3,13 +3,7 @@ import * as path from 'path';
 import { PassThrough } from 'stream';
 import { pathToFileURL } from 'url';
 
-import {
-  MessageReader,
-  SomonLanguageServer,
-  encodeMessage,
-  registerFormatter,
-  startLanguageServer,
-} from '../src/lsp';
+import { MessageReader, SomonLanguageServer, encodeMessage, startLanguageServer } from '../src/lsp';
 import { ErrorCode, type Message } from '../src/lsp/protocol';
 import { uriToPath } from '../src/lsp/server';
 import { canonicalTmpDir } from './helpers/paths';
@@ -48,7 +42,6 @@ describe('LSP server', () => {
   });
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
-    registerFormatter(undefined);
   });
 
   const fileUri = (name: string) => pathToFileURL(path.join(dir, name)).href;
@@ -64,8 +57,7 @@ describe('LSP server', () => {
       completionProvider: { triggerCharacters: ['.'] },
       definitionProvider: true,
       documentSymbolProvider: true,
-      // No formatter in this version of the compiler
-      documentFormattingProvider: false,
+      documentFormattingProvider: true,
       semanticTokensProvider: { full: true },
     });
     notify('initialized', {});
@@ -319,12 +311,30 @@ describe('LSP server', () => {
     ).toBeNull();
   });
 
-  test('a registered formatter is picked up at initialize', () => {
-    registerFormatter(source => source.trim());
-    const { request } = createServer();
-    expect((request('initialize', {}).result as any).capabilities.documentFormattingProvider).toBe(
-      true
+  test('formats with somon fmt, indented as somon.config.json or the editor says', () => {
+    const { request, notify } = createServer();
+    request('initialize', {});
+    const uri = fileUri('а.som');
+    notify('textDocument/didOpen', {
+      textDocument: { uri, version: 1, text: 'функсия ф(){\r\nбозгашт 1;}\r\n' },
+    });
+    const format = (options?: unknown) =>
+      request('textDocument/formatting', { textDocument: { uri }, options }).result as any[];
+    // CRLF files stay CRLF
+    expect(format({ tabSize: 2, insertSpaces: true })[0].newText).toBe(
+      'функсия ф() {\r\n  бозгашт 1; }\r\n'
     );
+    expect(format()[0].newText).toBe('функсия ф() {\r\n    бозгашт 1; }\r\n');
+    fs.writeFileSync(path.join(dir, 'somon.config.json'), JSON.stringify({ fmt: { indent: 3 } }));
+    expect(format({ tabSize: 2, insertSpaces: true })[0].newText).toBe(
+      'функсия ф() {\r\n   бозгашт 1; }\r\n'
+    );
+    // A syntax error: nothing to format
+    notify('textDocument/didChange', {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: 'тағ = ;' }],
+    });
+    expect(format()).toEqual([]);
   });
 
   test('internal errors become error responses and log messages', () => {

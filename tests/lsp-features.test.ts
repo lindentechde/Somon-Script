@@ -5,9 +5,8 @@ import { definition, type ResolvedModule } from '../src/lsp/definition';
 import { documentSymbols } from '../src/lsp/document-symbols';
 import { formatDocument } from '../src/lsp/formatting';
 import {
-  formattedText,
+  defaultFormatter,
   registerChecker,
-  registerFormatter,
   resolveChecker,
   resolveFormatter,
 } from '../src/lsp/hooks';
@@ -28,6 +27,7 @@ import {
   semanticTokens,
 } from '../src/lsp/semantic-tokens';
 import { TextDocument } from '../src/lsp/text-document';
+import { FormatError } from '../src/tools/format';
 
 const en = messagesFor('en');
 const tj = messagesFor('tj');
@@ -450,62 +450,55 @@ describe('LSP semantic tokens', () => {
   });
 });
 
-describe('LSP formatting hooks', () => {
-  afterEach(() => {
-    registerFormatter(undefined);
-    registerChecker('test', undefined);
-  });
+describe('LSP formatting and hooks', () => {
+  afterEach(() => registerChecker('test', undefined));
 
-  test('formats through the formatter, as one edit or none', () => {
-    const document = new TextDocument('file:///а.som', 'тағ  х=1;\n');
-    const options = { tabSize: 2, insertSpaces: true };
-    const seen: unknown[] = [];
-    const edits = formatDocument(
-      document,
-      (source, formatOptions) => {
-        seen.push(formatOptions);
-        return source.replace('  х=1', ' х = 1');
-      },
-      options,
-      '/tmp/а.som'
-    );
-    expect(seen).toEqual([{ tabSize: 2, insertSpaces: true, fileName: '/tmp/а.som' }]);
-    expect(edits).toEqual([
+  const options = { tabSize: 2, insertSpaces: true };
+
+  test('formats with somon fmt as one edit of the whole document, or none', () => {
+    const document = new TextDocument('file:///а.som', 'функсия ф(){\nбозгашт 1;}\n');
+    expect(formatDocument(document, defaultFormatter, options)).toEqual([
       {
-        range: { start: { line: 0, character: 0 }, end: { line: 1, character: 0 } },
-        newText: 'тағ х = 1;\n',
+        range: { start: { line: 0, character: 0 }, end: { line: 2, character: 0 } },
+        newText: 'функсия ф() {\n  бозгашт 1; }\n',
       },
     ]);
-    expect(formatDocument(document, source => source, options)).toEqual([]);
+    // The project's fmt.indent wins over the editor's tab size
+    expect(formatDocument(document, defaultFormatter, { ...options, indent: 4 })[0].newText).toBe(
+      'функсия ф() {\n    бозгашт 1; }\n'
+    );
+    const formatted = new TextDocument('file:///а.som', 'функсия ф() {\n  бозгашт 1; }\n');
+    expect(formatDocument(formatted, defaultFormatter, options)).toEqual([]);
   });
 
-  test('accepts formatters that return an object', () => {
-    expect(formattedText('а')).toBe('а');
-    expect(formattedText({ code: 'б' })).toBe('б');
-    expect(formattedText({ formatted: 'в' })).toBe('в');
-    expect(formattedText({ output: 'г' })).toBe('г');
-    expect(() => formattedText({})).toThrow('no text');
-  });
-
-  test('finds an injected, registered or discovered formatter', () => {
-    const injected = () => 'а';
-    const registered = () => 'б';
-    expect(resolveFormatter({}, () => undefined)).toBeUndefined();
-    expect(resolveFormatter({ formatter: injected })).toBe(injected);
-    registerFormatter(registered);
-    expect(resolveFormatter({})).toBe(registered);
-    registerFormatter(undefined);
-    const discovered = () => 'в';
-    const loaded: string[] = [];
-    const load = (id: string) => {
-      loaded.push(id);
-      return id === '../format' ? { formatSource: discovered, other: 1 } : undefined;
+  test('a document that cannot be formatted gets no edits', () => {
+    const broken = new TextDocument('file:///а.som', 'тағ = ;');
+    expect(formatDocument(broken, defaultFormatter, options)).toEqual([]);
+    const unsafe = () => {
+      throw new FormatError('would change the program', 'unsafe');
     };
-    expect(resolveFormatter({}, load)).toBe(discovered);
-    expect(loaded).toEqual(['../formatter', '../format']);
-    expect(resolveFormatter({}, () => ({ notAFormatter: 1 }))).toBeUndefined();
-    // No formatter module exists in this version: formatting stays disabled
-    expect(resolveFormatter()).toBeUndefined();
+    expect(formatDocument(broken, unsafe, options)).toEqual([]);
+    const failing = () => {
+      throw new Error('bug');
+    };
+    expect(() => formatDocument(broken, failing, options)).toThrow('bug');
+  });
+
+  test('the editor tab size becomes the indentation, within 1–16', () => {
+    const source = 'функсия ф(){\nбозгашт 1;}\n';
+    const indented = (tabSize: number) =>
+      defaultFormatter(source, { tabSize, insertSpaces: true }).split('\n')[1];
+    expect(indented(3)).toBe('   бозгашт 1; }');
+    expect(indented(0)).toBe(' бозгашт 1; }');
+    expect(indented(40)).toBe(' '.repeat(16) + 'бозгашт 1; }');
+    expect(indented(2.5)).toBe('    бозгашт 1; }');
+  });
+
+  test('an injected formatter replaces somon fmt', () => {
+    const injected = (source: string) => source.trim();
+    expect(resolveFormatter({ formatter: injected })).toBe(injected);
+    expect(resolveFormatter({})).toBe(defaultFormatter);
+    expect(resolveFormatter()).toBe(defaultFormatter);
   });
 
   test('checkers are injected or registered by name', () => {
