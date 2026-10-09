@@ -131,6 +131,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * An optional chain after the constructor of `нав` (`нав о?.К()`, `нав К?.()`), a SyntaxError in JavaScript and TypeScript, compiled to `new о()?.К()`, which constructs `о` and fails at run time; it is the parse error "Invalid optional chain from new expression". `нав К()?.а` and `нав (о?.К)()` are unchanged.
 * Inside a namespace, an exported nested namespace (`номфазо Н { содир номфазо Д { … } функсия ф() { бозгашт Д.а; } }`) was only the property `Н.Д`, so a use of `Д` by its name failed with "Д is not defined"; it is also a local name, as other exported members are.
 * An enum member initialized by a template literal whose substitutions are constants (`Ф = \`${Н}-${А}\``) was computed at run time, so the enum also mapped its string value back to the member name, which TypeScript does for number members only; the template is folded to a string, as TypeScript folds it, and so is a member read as `Р[\`А\`]`.
+* A named function expression (`собит факт = функсия ф(н) { … ф(н - 1) … }`, also `функсия* г()`, `ҳамзамон функсия к()`), valid in JavaScript and TypeScript, was the parse error "Expected '(' after 'функсия'"; the name is bound in the function's body only, for both type checkers, the output and `somon lsp`.
 
 ## 0.4.0 (2026-10-09)
 

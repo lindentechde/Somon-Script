@@ -2775,6 +2775,11 @@ export class Parser {
 
   private parseFunctionExpression(funcToken: Token): FunctionExpression {
     const generator = this.match(TokenType.MULTIPLY);
+    // `функсия ном(…) { … }`: a name bound in the function's body only
+    const name =
+      this.match(TokenType.IDENTIFIER) || this.matchBuiltinIdentifier()
+        ? this.createIdentifier(this.previous())
+        : undefined;
     const typeParameters = this.parseTypeParameters();
     this.checkTypeParameterModifiers(typeParameters, 'function');
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'функсия'");
@@ -2791,6 +2796,7 @@ export class Parser {
     const body = this.withGenerator(generator, () => this.blockStatement());
     return {
       type: 'FunctionExpression',
+      ...(name && { name }),
       ...(typeParameters && { typeParameters }),
       params,
       body,

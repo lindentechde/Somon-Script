@@ -1401,17 +1401,20 @@ export class CodeGenerator {
     }
   }
 
+  /** `функсия (…) { … }`; its own name, if any, is in scope in its body only. */
   private generateFunctionExpression(node: FunctionExpression): string {
-    const async = node.async ? 'async ' : '';
-    const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
-    // `function* (…)`, `function* ном(…)`
-    const head = node.generator ? `function*${name || ' '}` : `function${name}`;
-    const typeParameters = this.typeParametersText(node.typeParameters);
-    const { params, body } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
-    );
-    const returnType = this.returnTypeText(node.returnType);
-    return `${async}${head}${typeParameters}(${params})${returnType} ${body}`;
+    return this.withScope(node.name ? [node.name.name] : [], () => {
+      const async = node.async ? 'async ' : '';
+      const name = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
+      // `function* (…)`, `function* ном(…)`
+      const head = node.generator ? `function*${name || ' '}` : `function${name}`;
+      const typeParameters = this.typeParametersText(node.typeParameters);
+      const { params, body } = this.withNewTarget(() =>
+        this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
+      );
+      const returnType = this.returnTypeText(node.returnType);
+      return `${async}${head}${typeParameters}(${params})${returnType} ${body}`;
+    });
   }
 
   private generateYieldExpression(node: YieldExpression): string {

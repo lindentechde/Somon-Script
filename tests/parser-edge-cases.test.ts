@@ -115,6 +115,44 @@ describe('parser: an optional chain in a new expression', () => {
   });
 });
 
+describe('parser: named function expressions', () => {
+  const source = [
+    'собит факт = функсия ф(н: рақам): рақам {',
+    '  бозгашт н <= 1 ? 1 : н * ф(н - 1);',
+    '};',
+    'собит ҳисоб = функсия* г() { ҳосил 1; ҳосил 2; };',
+    'собит кор = ҳамзамон функсия к() { бозгашт 3; };',
+    // The name is in an outer scope of the body: a body may declare it again
+    'собит б = функсия ф() { тағ ф = 4; бозгашт ф; };',
+    'чоп.сабт(факт(5), [...ҳисоб()].length, б(), навъи кор());',
+  ].join('\n');
+
+  test('name the function in its body', () => {
+    // It was "Expected '(' after 'функсия'"
+    expect(errorsOf(source)).toEqual([]);
+    expect(run(source)).toEqual(['120 2 4 object']);
+    for (const options of [{ strict: true }, { checker: 'typescript' as const, strict: true }]) {
+      expect(compile(source, options).errors).toEqual([]);
+    }
+    // In the body the name hides a built-in of that name; outside it does not
+    expect(
+      run(
+        'собит ф = функсия математика() { бозгашт навъи математика; };\nчоп.сабт(ф(), навъи математика.PI);'
+      )
+    ).toEqual(['function number']);
+  });
+
+  test('only in its body', () => {
+    const outside = 'собит а = функсия ф() { бозгашт 1; };\nчоп.сабт(ф);';
+    expect(compile(outside).errors).toEqual([
+      "Type error [UNDEFINED_IDENTIFIER] at line 2, column 10: Variable 'ф' is not defined\n> чоп.сабт(ф);",
+    ]);
+    expect(compile(outside, { checker: 'typescript' }).errors).toEqual([
+      "Type error [TS2304] at line 2, column 10: Cannot find name 'ф'.\n> чоп.сабт(ф);",
+    ]);
+  });
+});
+
 describe('parser: default imports', () => {
   test('bind any name a variable may have, built-in member aliases too', () => {
     for (const name of ['маълумот', 'рӯйхат', 'навъ', 'беқимат']) {

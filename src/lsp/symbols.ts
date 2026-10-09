@@ -335,6 +335,10 @@ class SymbolCollector {
     const end = body.type === 'BlockStatement' ? this.blockEnd(body) : this.nodeEnd(body);
     this.withScope(this.offsetOf(node), end, () =>
       this.nested(() => {
+        // `функсия ном(…) { … }`: a function expression's name is in its own scope
+        if (node.type === 'FunctionExpression' && isNode(node.name)) {
+          this.declare(node.name, 'function', [this.offsetOf(node), end]);
+        }
         this.declareTypeParameters(node);
         for (const param of node.params as AnyNode[]) {
           const extent: [number, number] = [this.offsetOf(param), this.offsetOf(param)];

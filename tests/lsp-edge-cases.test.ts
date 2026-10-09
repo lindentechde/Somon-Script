@@ -174,6 +174,19 @@ describe('LSP completion, hover and definition: rarer cases', () => {
     expect(memberContext('[1, 2].', 7)).toEqual({ literal: 'array' });
   });
 
+  test('the name of a function expression is declared in its body only', () => {
+    const text = 'собит факт = функсия ф(н: рақам): рақам { бозгашт н * ф(н - 1); };\nф;';
+    const analysis = analyze(text);
+    const uri = analysis.document.uri;
+    const inside = definition(analysis, uri, at(text, 'ф(н - 1)'), () => undefined);
+    expect(inside.map(location => analysis.document.offsetAt(location.range.start))).toEqual([
+      at(text, 'ф(н:'),
+    ]);
+    expect(definition(analysis, uri, at(text, '\nф;', 1), () => undefined)).toEqual([]);
+    // Not a declaration of the outline
+    expect(analysis.symbols.topLevel.map(d => d.name)).toEqual(['факт']);
+  });
+
   test('a namespace import without a module lookup has no members', () => {
     const text = 'ворид * чун М аз "./м";\nМ.';
     expect(completion(analyze(text), text.length, en)).toEqual([]);

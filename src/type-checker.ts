@@ -227,6 +227,8 @@ interface FunctionContext {
 }
 
 type FunctionLike = {
+  /** The name of a function declaration or a named function expression. */
+  name?: Identifier;
   typeParameters?: TypeParameter[];
   params: Parameter[];
   body: BlockStatement | Expression;
@@ -2969,7 +2971,11 @@ export class TypeChecker {
     const functionType = this.buildFunctionType(undefined, fn);
     // Arrow functions keep the enclosing `ин`
     const thisType = isArrow ? this.currentFunction()?.thisType : undefined;
-    this.checkFunctionBody(fn, functionType, thisType, true);
+    // `функсия ном(…) { … }`: the name is bound in the function's body only
+    this.withScope(() => {
+      if (fn.name) this.declare(fn.name.name, functionType);
+      this.checkFunctionBody(fn, functionType, thisType, true);
+    });
     return functionType;
   }
 
