@@ -340,6 +340,20 @@ describe('ModuleLoader', () => {
       expect(lodash.lastAccessed).toBeGreaterThanOrEqual(accessed);
     });
 
+    test('a cached module is loaded again when its imports become or stop being externals', () => {
+      project.write({ 'ext.som': '', 'main.som': 'ворид "./ext";\n' });
+      const loader = createLoader();
+      const first = loader.loadSync('./main', project.root);
+      expect(first.resolvedDependencies).toEqual([id('ext.som')]);
+      loader.setExternals(['./ext']);
+      const second = loader.loadSync('./main', project.root);
+      expect(second).not.toBe(first);
+      expect(second.resolvedDependencies).toEqual(['external:./ext']);
+      expect(loader.loadSync('./main', project.root)).toBe(second);
+      loader.setExternals([]);
+      expect(loader.loadSync('./main', project.root).resolvedDependencies).toEqual([id('ext.som')]);
+    });
+
     test('an external relative require of local JavaScript stays a dependency', () => {
       project.write({ 'lib.js': "require('./generated');\n" });
       const loader = createLoader({ externals: ['./generated'] });
