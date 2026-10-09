@@ -32,7 +32,7 @@ import ts from 'typescript';
 import { compile, type CompileOptions } from '../../src/compiler';
 import { Lexer } from '../../src/lexer';
 import { Parser } from '../../src/parser';
-import { scriptTargetFor, type Target } from '../../src/targets';
+import { deprecationOptions, scriptTargetFor, type Target } from '../../src/targets';
 import { TsEmitter } from '../../src/ts-emitter';
 import { migrate } from '../../src/tools/migrate';
 import {
@@ -272,8 +272,10 @@ export function transpileOptions(cell: Cell, experimentalDecorators?: boolean): 
   return {
     target: scriptTargetFor(cell.target),
     module: cell.format === 'esm' ? ts.ModuleKind.ESNext : ts.ModuleKind.CommonJS,
-    // What the TypeScript checker asks for on es5 when a program iterates a Map or a string
-    downlevelIteration: true,
+    // What the TypeScript checker asks for on es5 when a program iterates a Map or a
+    // string; TypeScript 6 deprecates both (see `deprecationOptions`)
+    ...(cell.target === 'es5' && { downlevelIteration: true }),
+    ...deprecationOptions(cell.target),
     esModuleInterop: true,
     experimentalDecorators,
     newLine: ts.NewLineKind.LineFeed,

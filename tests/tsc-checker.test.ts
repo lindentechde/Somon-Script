@@ -416,7 +416,8 @@ describe('TypeScript checker: the TypeScript 5 declaration syntax', () => {
     ).toEqual([
       ['TS2322', 4, 5],
       ['TS4113', 6, 27],
-      ['TS18052', 8, 6],
+      // TypeScript 6 names the member that is missing (TS2515); 5 said "all abstract members" (TS18052)
+      ['TS2515', 8, 6],
       ['TS2684', 10, 1],
       ['TS2322', 12, 5],
     ]);

@@ -20,6 +20,7 @@ import {
   DEFAULT_TARGET,
   defaultLib,
   defaultUseDefineForClassFields,
+  deprecationOptions,
   isTarget,
   normalizeLib,
   scriptTargetFor,
@@ -137,11 +138,19 @@ export function libFiles(target: Target | undefined, lib: string[] | undefined):
   return names.map(libFileName);
 }
 
+/**
+ * The TypeScript options of a check. Every option whose default TypeScript 6
+ * changed is set: `strict` (now on), `target` (now es2025), `module` (now
+ * es2022), `types` (now none) and `noUncheckedSideEffectImports` (now on).
+ */
 function compilerOptions(options: TsCheckOptions): ts.CompilerOptions {
   const target = isTarget(options.target) ? options.target : DEFAULT_TARGET;
   return {
     target: scriptTargetFor(target),
     lib: libFiles(target, options.lib),
+    // Every package of node_modules/@types, as TypeScript before 6 (whose default is
+    // none): Node.js's `require`, `process`, `console`, …
+    types: ['*'],
     // ES modules, and also `import х = require()` / `export =` (`ворид х = require`,
     // `содир =`), as the output has them
     module: ts.ModuleKind.Preserve,
@@ -153,6 +162,11 @@ function compilerOptions(options: TsCheckOptions): ts.CompilerOptions {
     resolveJsonModule: true,
     allowJs: true,
     checkJs: false,
+    // `ворид "./м";` of a module that is not found is not a type error, as before
+    // TypeScript 6: loading the program reports it
+    noUncheckedSideEffectImports: false,
+    // The lib files are TypeScript's own, not `@typescript/lib-*` packages
+    libReplacement: false,
     // Libraries' typings are not checked; the ambient modules of `.som` files are
     skipLibCheck: false,
     skipDefaultLibCheck: true,
@@ -164,6 +178,8 @@ function compilerOptions(options: TsCheckOptions): ts.CompilerOptions {
     declaration: Boolean(options.declaration),
     emitDeclarationOnly: Boolean(options.declaration),
     newLine: ts.NewLineKind.LineFeed,
+    // `target: "es5"` is deprecated in TypeScript 6
+    ...deprecationOptions(target),
   };
 }
 
@@ -246,16 +262,43 @@ interface VirtualFile {
   emitted: TsEmitResult;
 }
 
+/** The characters `toFileNameLowerCase` in TypeScript lowers: not `İ`, `ı`, `ß`. */
+const UPPER_CASE_IN_FILE_NAME = /[^\u0130\u0131\u00DFa-z0-9\\/:\-_. ]+/g;
+
+/**
+ * A file name as TypeScript compares it: in lower case where the file system
+ * ignores case (macOS, Windows), as the host of `ts.createCompilerHost` gives
+ * it. TypeScript keys the program's files by this name and compares paths
+ * ignoring case when `useCaseSensitiveFileNames()` is false: the two agree.
+ */
+export function canonicalFileName(fileName: string, caseSensitive: boolean): string {
+  return caseSensitive
+    ? fileName
+    : fileName.replace(UPPER_CASE_IN_FILE_NAME, part => part.toLowerCase());
+}
+
 function createHost(
   options: ts.CompilerOptions,
   currentDirectory: string,
   virtualFiles: Map<string, VirtualFile>,
   outputs: Map<string, string>
 ): ts.CompilerHost {
-  const optionsKey = JSON.stringify([options.target, options.module, options.moduleResolution]);
+  const caseSensitive = ts.sys.useCaseSensitiveFileNames;
+  const getCanonicalFileName = (fileName: string): string =>
+    canonicalFileName(fileName, caseSensitive);
+  const optionsKey = JSON.stringify([
+    options.target,
+    options.module,
+    options.moduleResolution,
+    caseSensitive,
+  ]);
   let resolutionCache = resolutionCaches.get(optionsKey);
   if (!resolutionCache) {
-    resolutionCache = ts.createModuleResolutionCache(currentDirectory, name => name, options);
+    resolutionCache = ts.createModuleResolutionCache(
+      currentDirectory,
+      getCanonicalFileName,
+      options
+    );
     resolutionCaches.set(optionsKey, resolutionCache);
   }
 
@@ -312,9 +355,9 @@ function createHost(
     getCurrentDirectory: () => currentDirectory,
     getDirectories: directory => ts.sys.getDirectories(directory),
     directoryExists: directory => ts.sys.directoryExists(directory),
-    getCanonicalFileName: fileName => fileName,
-    useCaseSensitiveFileNames: () => ts.sys.useCaseSensitiveFileNames,
-    // Required by the interface; TypeScript 5 takes the line break from `compilerOptions.newLine`
+    getCanonicalFileName,
+    useCaseSensitiveFileNames: () => caseSensitive,
+    // Required by the interface; TypeScript takes the line break from `compilerOptions.newLine`
     getNewLine: /* istanbul ignore next */ () => '\n',
     fileExists,
     // TypeScript reads package.json files with it; source files come from getSourceFile

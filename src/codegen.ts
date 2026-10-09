@@ -2545,7 +2545,10 @@ export class CodeGenerator {
         /^[\p{L}_$][\p{L}\p{N}\p{M}_$]*$/u.test(key) ? `${name}.${key}` : `${name}[${keyText}]`
       );
       previous = value;
-      return typeof value === 'string'
+      const stringMember =
+        typeof value === 'string' ||
+        (member.initializer !== undefined && CodeGenerator.isSyntacticString(member.initializer));
+      return stringMember
         ? this.indent(`${name}[${keyText}] = ${code};`)
         : this.indent(`${name}[${name}[${keyText}] = ${code}] = ${keyText};`);
     });
@@ -2574,6 +2577,23 @@ export class CodeGenerator {
     } finally {
       this.enumMembers = outer;
     }
+  }
+
+  /**
+   * Whether an enum initializer is a string by its syntax: a string or template
+   * literal, or `+` with one. As in TypeScript 6, such a member has no reverse
+   * mapping also when its value is only known at run time (`` `${х}` ``).
+   */
+  private static isSyntacticString(expr: Expression): boolean {
+    if (expr.type === 'TemplateLiteral') return true;
+    if (expr.type === 'Literal') return typeof (expr as Literal).value === 'string';
+    if (expr.type !== 'BinaryExpression') return false;
+    const binary = expr as BinaryExpression;
+    return (
+      binary.operator === '+' &&
+      (CodeGenerator.isSyntacticString(binary.left) ||
+        CodeGenerator.isSyntacticString(binary.right))
+    );
   }
 
   private enumValueText(value: number | string): string {

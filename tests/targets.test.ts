@@ -10,9 +10,11 @@ import {
   DEFAULT_TARGET,
   defaultLib,
   defaultUseDefineForClassFields,
+  deprecationOptions,
   hasInvalidEscape,
   isBundleFormat,
   isTarget,
+  keepSloppyMode,
   loweringCompilerOptions,
   lowerToTarget,
   needsLowering,
@@ -553,6 +555,74 @@ describe('lowerToTarget', () => {
     const legacy = lowerToTarget(code, { target: 'esnext', useDefineForClassFields: false });
     expect(legacy.code).toContain('this.а = 1;');
     expect(loweringCompilerOptions({ target: 'es2022' }).useDefineForClassFields).toBe(true);
+  });
+
+  test('only es5 uses the options TypeScript 6 deprecates, without its deprecation errors', () => {
+    expect(deprecationOptions('es5')).toEqual({ ignoreDeprecations: '6.0' });
+    expect(deprecationOptions('es2015')).toEqual({});
+    expect(loweringCompilerOptions({ target: 'es5' })).toMatchObject({
+      target: ts.ScriptTarget.ES5,
+      downlevelIteration: true,
+      ignoreDeprecations: '6.0',
+    });
+    for (const target of TARGETS.filter(target => target !== 'es5')) {
+      const options = loweringCompilerOptions({ target });
+      expect([target, 'downlevelIteration' in options, 'ignoreDeprecations' in options]).toEqual([
+        target,
+        false,
+        false,
+      ]);
+      // TypeScript reports nothing about these options, as for es5 with them
+      const output = ts.transpileModule('[...а];', {
+        fileName: 'module.js',
+        reportDiagnostics: true,
+        compilerOptions: options,
+      });
+      expect(output.diagnostics).toEqual([]);
+    }
+    const es5 = ts.transpileModule('[...а];', {
+      fileName: 'module.js',
+      reportDiagnostics: true,
+      compilerOptions: loweringCompilerOptions({ target: 'es5' }),
+    });
+    expect(es5.diagnostics).toEqual([]);
+    expect(es5.outputText).toContain('__read');
+  });
+
+  test('lowered code keeps the mode it runs in: TypeScript 6 makes every script strict', () => {
+    const sloppy = 'function ф() { return this; }\nconsole.log(typeof ф(), 1 ?? 2);\n';
+    for (const target of ['es5', 'es2015', 'es2019'] as const) {
+      const { code, lowered } = lowerToTarget(sloppy, { target });
+      expect(lowered).toBe(true);
+      expect(code).not.toContain('use strict');
+      // `this` of a plain call is the global object, as without lowering
+      expect(run(code)).toEqual(['object 1']);
+    }
+    // Strict code stays strict, and a module needs no directive
+    const strict = lowerToTarget(`"use strict";\n${sloppy}`, { target: 'es2019' }).code;
+    expect(strict.startsWith('"use strict";\n')).toBe(true);
+    expect(run(strict)).toEqual(['undefined 1']);
+    const module = lowerToTarget('export const а = 1 ?? 2;', { target: 'es2019' }).code;
+    expect(module).not.toContain('use strict');
+    // `"use\x20strict"` is a string, not a directive
+    expect(analyzeSyntax('"use\\x20strict";\nа;', 'es2022').useStrict).toBe(false);
+    expect(analyzeSyntax('"а";\n"use strict";\nа;', 'es2022').useStrict).toBe(true);
+  });
+
+  test('a #! line and the source map stay in place without the directive TypeScript adds', () => {
+    const code = '#!/usr/bin/env node\nconst а = 1;\nconst б = а ?? 2;\n';
+    const result = lowerToTarget(code, { target: 'es2019', sourceMap: true });
+    expect(result.code.split('\n').slice(0, 2)).toEqual(['#!/usr/bin/env node', 'const а = 1;']);
+    // The second line (`const а = 1;`) maps to the second line of the input
+    expect(result.map!.mappings.split(';')[1]).toMatch(/^AACA/);
+    const withoutShebang = lowerToTarget('const а = 1;\nconst б = а ?? 2;\n', {
+      target: 'es2019',
+      sourceMap: true,
+    });
+    expect(withoutShebang.map!.mappings.startsWith('AAAA')).toBe(true);
+    // Output without the directive (an ES module) is returned as it is
+    const output = { outputText: 'export {};\n', sourceMapText: undefined };
+    expect(keepSloppyMode(output)).toBe(output);
   });
 
   test('returns a source map of the lowered code', () => {

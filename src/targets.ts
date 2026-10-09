@@ -74,6 +74,16 @@ export function defaultUseDefineForClassFields(target: Target): boolean {
 }
 
 /**
+ * Options that keep TypeScript's deprecated features working without an error.
+ * TypeScript 6 deprecates `target: "es5"` and `downlevelIteration` (TypeScript 7
+ * removes them): they still work, but report TS5107/TS5101 unless
+ * `ignoreDeprecations` is `"6.0"`. Only es5 needs them.
+ */
+export function deprecationOptions(target: Target): ts.CompilerOptions {
+  return target === 'es5' ? { ignoreDeprecations: '6.0' } : {};
+}
+
+/**
  * TypeScript's script target for `target`. A target newer than the installed
  * TypeScript knows (es2023/es2024 before TypeScript 5.7) uses the newest older
  * one it knows: nothing between them can be lowered anyway.
@@ -189,6 +199,8 @@ export interface SyntaxReport {
    * target, `esnext` included.
    */
   neverNative: boolean;
+  /** Whether the code starts with a `"use strict"` directive. */
+  useStrict: boolean;
   /** What the target cannot express, lowered or not. */
   diagnostics: TargetDiagnostic[];
 }
@@ -406,8 +418,21 @@ class SyntaxScanner {
       required: TARGETS[this.required],
       classFields: this.classFields,
       neverNative: this.neverNative,
+      useStrict: this.startsWithUseStrict(),
       diagnostics: this.diagnostics,
     };
+  }
+
+  /** Whether a `"use strict"` directive is in the code's directive prologue. */
+  private startsWithUseStrict(): boolean {
+    for (const statement of this.sourceFile.statements) {
+      if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) {
+        return false;
+      }
+      // A directive is the literal as written: `"use\x20strict"` is none
+      if (statement.expression.getText(this.sourceFile).slice(1, -1) === 'use strict') return true;
+    }
+    return false;
   }
 
   private readonly visit = (node: ts.Node): void => {
@@ -827,13 +852,37 @@ export function loweringCompilerOptions(
     module: ts.ModuleKind.ESNext,
     allowJs: true,
     // Spread, for-of and destructuring follow the iteration protocol on es5 too
-    downlevelIteration: true,
+    // (`downlevelIteration` only matters there, and TypeScript 6 deprecates it)
+    ...(target === 'es5' && { downlevelIteration: true }),
+    ...deprecationOptions(target),
     useDefineForClassFields:
       options.useDefineForClassFields ?? defaultUseDefineForClassFields(options.target),
     sourceMap: Boolean(options.sourceMap),
     newLine: ts.NewLineKind.LineFeed,
     ...(options.experimentalDecorators && { experimentalDecorators: true }),
   };
+}
+
+/**
+ * TypeScript 6 writes every file as strict mode code: it starts a script that has
+ * no `"use strict"` with one (`alwaysStrict` is on and can no longer be turned
+ * off). Lowering changes syntax, not the mode the code runs in, so code that was
+ * not strict mode code loses that line again, and its source map the line's
+ * (empty) mappings.
+ */
+export function keepSloppyMode(output: ts.TranspileOutput): ts.TranspileOutput {
+  const added = /^(#![^\n]*\n)?"use strict";\n/.exec(output.outputText);
+  if (!added) return output;
+  const shebang = added[1] ?? '';
+  const result = { ...output, outputText: shebang + output.outputText.slice(added[0].length) };
+  if (output.sourceMapText) {
+    const map = JSON.parse(output.sourceMapText) as RawSourceMap;
+    const lines = map.mappings.split(';');
+    // TypeScript maps no position to the directive it added
+    lines.splice(shebang ? 1 : 0, 1);
+    result.sourceMapText = JSON.stringify({ ...map, mappings: lines.join(';') });
+  }
+  return result;
 }
 
 /**
@@ -906,10 +955,11 @@ export function lowerToTarget(code: string, options: LowerOptions): LowerResult 
     return { code, diagnostics: [], lowered: false };
   }
 
-  const output = transpileJavaScript(code, {
+  const transpiled = transpileJavaScript(code, {
     compilerOptions: loweringCompilerOptions(options, report.neverNative),
     transformers: { before: [targetFixes(options.target)], after: [readableStrings] },
   });
+  const output = report.useStrict ? transpiled : keepSloppyMode(transpiled);
   const map =
     options.sourceMap && output.sourceMapText
       ? (JSON.parse(output.sourceMapText) as RawSourceMap)

@@ -164,10 +164,20 @@ export function supports(feature: string): boolean {
 // ---------------------------------------------------------------------------
 // TypeScript program (for the checker), with the library files parsed once
 
+/**
+ * The checker only tells which names and members belong to the library; its
+ * diagnostics are not used. The options whose default TypeScript 6 changed are
+ * set: `strict` as before (off), and modules as the input may write them, ES
+ * modules next to `import х = require()` and `export =`.
+ */
 const COMPILER_OPTIONS: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2022,
   lib: ['lib.es2023.d.ts'],
   types: [],
+  strict: false,
+  module: ts.ModuleKind.Preserve,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  libReplacement: false,
   noResolve: true,
   noEmit: true,
   skipLibCheck: true,
@@ -787,7 +797,8 @@ class Converter {
   importDeclaration(node: ts.ImportDeclaration): boolean {
     const clause = node.importClause;
     if (!clause) return false;
-    if (clause.isTypeOnly) {
+    // `import type …` (TypeScript 6 deprecates `isTypeOnly` for `phaseModifier`)
+    if (clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       if (supports('importType')) return false;
       this.remove(node);
       this.warn(

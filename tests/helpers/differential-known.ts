@@ -44,6 +44,14 @@ export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: st
       '`содир { навъ Т, х }` exports the undeclared `х` (TS2304): SomonScript reads it, ' +
       'TypeScript drops an export it cannot resolve to a value',
   },
+  'ts-syntax-checker.test.ts › интерфейс Ҳисоб { баланс: рақам; }': {
+    cells: ['*/cjs'],
+    reason:
+      'calls a function that uses `ин` without a receiver. TypeScript 6 emits every file as ' +
+      'strict mode code (`alwaysStrict` can no longer be turned off), so `ин` is `undefined` ' +
+      'in its CommonJS output; SomonScript’s CommonJS output of a script (no imports or ' +
+      'exports) is sloppy mode code, as JavaScript and TypeScript 5 have it: the global object',
+  },
   'migrate/38-errors.ts': {
     cells: ['es5/cjs', 'es5/esm'],
     reason:

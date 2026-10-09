@@ -148,7 +148,7 @@ describe('codegen: enum members', () => {
       '  Қ = Р[`Ф`] + "!",',
       // Not constant: computed when the enum is created
       '  Т = !А ? 1 : 2, У = "а" - 1, Х = Б.А, Ч = Р[100], Ш = -Н, Щ = !А, Ы = 1 && 2,',
-      '  Ю = дуруст, Ә = 10n, Ғ = `${Б.А}`, Ҳ = Р[`${Н}`]',
+      '  Ю = дуруст, Ә = 10n, Ғ = `${Б.А}`, Ҳ = Р[`${Н}`], Ӯ = "п" + Б.А',
       '}',
       'чоп.сабт(JSON.stringify(Р, (к, қ) => (навъи қ === "bigint" ? `${қ}n` : қ)));',
     ].join('\n');
@@ -160,6 +160,10 @@ describe('codegen: enum members', () => {
     // constant substitutions makes it (`Ф`), or a member read as `Р[`Ф`]`
     expect(enumObject['матн-7-4.5']).toBeUndefined();
     expect(enumObject['матн-7-4.5!']).toBeUndefined();
+    // As in TypeScript 6, neither does a string by its syntax whose value is only
+    // known at run time: `${Б.А}` and "п" + Б.А (TypeScript 5 mapped `Р[3]` to `Ғ`)
+    expect(enumObject).toMatchObject({ '3': 'Х', Ғ: '3', Ӯ: 'п3' });
+    expect(enumObject['п3']).toBeUndefined();
   });
 });
 

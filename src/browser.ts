@@ -121,6 +121,9 @@ export function compile(source: string, options: BrowserCompileOptions = {}): Br
   return lower(generated, generator.getLoweringNeeds(), options, errors, warnings);
 }
 
+/** A `"use strict"` directive on the first line (after a `#!` line). */
+const USE_STRICT = /^(#![^\n]*\n)?"use strict";\n/;
+
 /** Lowers the generated code with TypeScript when the target or the syntax needs it. */
 function lower(
   code: string,
@@ -158,13 +161,22 @@ function lower(
       target: scriptTargetOf(ts, lowerTo),
       module: ts.ModuleKind.ESNext,
       allowJs: true,
-      downlevelIteration: true,
+      // TypeScript 6 deprecates both; they work without an error with `ignoreDeprecations`
+      ...(lowerTo === 'es5' && { downlevelIteration: true, ignoreDeprecations: '6.0' }),
       useDefineForClassFields: index >= NATIVE_FROM,
       newLine: ts.NewLineKind.LineFeed,
       ...(options.experimentalDecorators && { experimentalDecorators: true }),
     },
   });
-  return { code: output.outputText, errors, warnings };
+  return { code: keepMode(code, output.outputText), errors, warnings };
+}
+
+/**
+ * TypeScript 6 starts every script with `"use strict"`; lowered code keeps the
+ * mode of the generated code (as `keepSloppyMode` in src/targets.ts does).
+ */
+function keepMode(code: string, lowered: string): string {
+  return USE_STRICT.test(code) ? lowered : lowered.replace(USE_STRICT, '$1');
 }
 
 /**

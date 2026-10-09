@@ -155,6 +155,19 @@ describe('browser compiler entry', () => {
     expect(newest.code).toContain('__esDecorate');
   });
 
+  test('lowered code keeps its mode, although TypeScript 6 makes every script strict', () => {
+    const script = 'функсия ф() { бозгашт ин; }\nчоп.сабт(навъи ф());';
+    for (const target of ['es5', 'es2019']) {
+      const lowered = compile(script, { target, typescript });
+      expect(lowered.errors).toEqual([]);
+      expect(lowered.code).not.toContain('use strict');
+      expect(run(script, { target, typescript })).toEqual(['object']);
+    }
+    // A module is strict mode code: its directive stays
+    const module = compile('содир собит а = 1;', { target: 'es5', typescript });
+    expect(module.code.startsWith('"use strict";\n')).toBe(true);
+  });
+
   test('the version is filled in by the bundle', () => {
     expect(version).toBe('__SOMON_VERSION__');
   });

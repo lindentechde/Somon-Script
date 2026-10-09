@@ -6,9 +6,10 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import ts from 'typescript';
 
 import { compile, type CompileOptions } from '../src/compiler';
-import { checkWithTypeScript, translateMessage } from '../src/tsc-checker';
+import { canonicalFileName, checkWithTypeScript, translateMessage } from '../src/tsc-checker';
 import { canonicalTmpDir } from './helpers/paths';
 
 jest.setTimeout(60000);
@@ -90,6 +91,47 @@ describe('TypeScript checker: files that are not there', () => {
   test('an error inside an ambient module, after a shebang', () => {
     const source = '#!/usr/bin/env node\nэълон модул "м" {\n    тағ х: НестНавъ;\n}\n';
     expect(positions(source, { filePath: write('main.som', source) })).toEqual([['TS2304', 3, 12]]);
+  });
+
+  test('every @types package is seen, which TypeScript 6 no longer includes by default', () => {
+    write('node_modules/@types/hisob/index.d.ts', 'declare const ҲИСОБ: number;\n');
+    write('node_modules/@types/zarb/index.d.ts', 'declare function зарб(а: number): number;\n');
+    const source = 'тағ с: сатр = ҲИСОБ;\nтағ р: рақам = зарб(ҲИСОБ);';
+    expect(positions(source, { filePath: write('main.som', source) })).toEqual([['TS2322', 1, 5]]);
+  });
+
+  test('a side-effect import of a missing module is no type error, as before TypeScript 6', () => {
+    write('ҳаст.som', 'чоп.сабт(1);\n');
+    const source = 'ворид "./нест";\nворид "./ҳаст";\nтағ х: рақам = 1;';
+    expect(positions(source, { filePath: write('main.som', source) })).toEqual([]);
+  });
+
+  test('on a file system that ignores case, file names are compared in lower case', () => {
+    expect(canonicalFileName('/Лоиҳа/Math.SOM.ts', true)).toBe('/Лоиҳа/Math.SOM.ts');
+    expect(canonicalFileName('/Лоиҳа/Math.SOM.ts', false)).toBe('/лоиҳа/math.som.ts');
+    // As TypeScript's `toFileNameLowerCase`: `İ`, `ı` and `ß` stay
+    expect(canonicalFileName('/İı/ẞß/A', false)).toBe('/İı/ßß/a');
+    write('math.som', 'содир функсия зарб(а: рақам): рақам { бозгашт а * 2; }\n');
+    const source = 'ворид { зарб, ҷамъ } аз "./math";\nтағ с: сатр = зарб(1);';
+    const file = write('main.som', source);
+    const errors = (): string[] =>
+      compile(source, { checker: 'typescript', filePath: file }).errors.map(
+        error => /^Type error \[(TS\d+)\] at line (\d+), column (\d+)/.exec(error)![0]
+      );
+    const sys = ts.sys as { useCaseSensitiveFileNames: boolean };
+    const caseSensitive = sys.useCaseSensitiveFileNames;
+    try {
+      sys.useCaseSensitiveFileNames = true;
+      const sensitive = errors();
+      sys.useCaseSensitiveFileNames = false;
+      expect(errors()).toEqual(sensitive);
+      expect(sensitive).toEqual([
+        'Type error [TS2305] at line 1, column 15',
+        'Type error [TS2322] at line 2, column 5',
+      ]);
+    } finally {
+      sys.useCaseSensitiveFileNames = caseSensitive;
+    }
   });
 });
 
