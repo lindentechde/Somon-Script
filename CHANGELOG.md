@@ -105,6 +105,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * With `moduleSystem.loading.cache: false` the module system compiled nothing: `compile()` returned no modules and no errors and `somon bundle`/`somon run` failed with "Entry module … missing from bundle results". Without a cache every build reads its files again.
 * The errors of `ModuleSystem.compile()` for a module that does not compile had no `column` (and bundle errors named `file:line`), because the compiler's "at line 3, column 16" was read with a pattern for "line 3:16"; they have both.
 * `ModuleSystem.compile()`/`bundle()` closed every watcher of `watch()` when the entry point could not be loaded, so a watch-and-rebuild loop stopped at the first broken edit; watchers stay until `shutdown()`.
+* A `moduleSystem.resolution.paths` pattern `"lib/*"` also matched names that only start with `lib` (`library` was mapped to `src/lib/rary`, `lib` to `src/lib/`); as in TypeScript it matches `lib/…` only.
 
 ## 0.4.0 (2026-10-09)
 

@@ -430,11 +430,11 @@ export class ModuleResolver {
     return null;
   }
 
+  /** `*`, `prefix/*` (the prefix with its '/') or an exact name, as in TypeScript. */
   private matchesPattern(specifier: string, pattern: string): boolean {
     if (pattern === '*') return true;
     if (pattern.endsWith('/*')) {
-      const prefix = pattern.slice(0, -2);
-      return specifier.startsWith(prefix);
+      return specifier.startsWith(pattern.slice(0, -1));
     }
     return specifier === pattern;
   }
@@ -444,9 +444,8 @@ export class ModuleResolver {
       return mapping.replace('*', specifier);
     }
     if (pattern.endsWith('/*')) {
-      const prefix = pattern.slice(0, -2);
-      const suffix = specifier.slice(prefix.length);
-      return mapping.replace('*', suffix);
+      // What the '*' of `prefix/*` matched
+      return mapping.replace('*', specifier.slice(pattern.length - 1));
     }
     return mapping;
   }

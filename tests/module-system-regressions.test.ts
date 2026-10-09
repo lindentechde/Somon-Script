@@ -517,6 +517,24 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('paths patterns', () => {
+    test('"lib/*" maps "lib/x" only, not other names that start with "lib"', () => {
+      write({
+        'src/lib/x.som': '',
+        'src/lib/rary.som': '',
+        'src/lib/index.som': '',
+        'node_modules/library/index.js': '',
+        'main.som': '',
+      });
+      const resolver = new ModuleResolver({ baseUrl: root, paths: { 'lib/*': ['src/lib/*'] } });
+      const resolve = (spec: string) =>
+        resolver.resolve(spec, path.join(root, 'main.som')).resolvedPath;
+      expect(resolve('lib/x')).toBe(path.join(root, 'src', 'lib', 'x.som'));
+      expect(resolve('library')).toBe(path.join(root, 'node_modules', 'library', 'index.js'));
+      expect(() => resolve('lib')).toThrow('Module not found: lib');
+    });
+  });
+
   describe('package.json exports', () => {
     beforeEach(() => {
       write({
