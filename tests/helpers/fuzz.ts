@@ -1264,10 +1264,11 @@ const TYPESCRIPT_FORMS: ReadonlyArray<[(node: ts.Node) => boolean, (node: never)
 ];
 
 /**
- * Whether TypeScript reads type arguments into code that has none: in
- * TypeScript (and in SomonScript once the parser reads call type arguments)
- * `а < б > (в)`, `ф(а < б, в > (г))` and `а << (б > (в))` are generic calls,
- * while JavaScript compares. Generated programs never have type arguments.
+ * Whether TypeScript reads type arguments into code that has none:
+ * `а < б > (в)` and `ф(а < б, в > (г))` are generic calls in TypeScript and
+ * SomonScript (the printers parenthesize such comparisons), and so is
+ * `а << (б > (в))` in TypeScript alone, while JavaScript compares. Generated
+ * programs never have type arguments.
  */
 export function readsTypeArguments(code: string): boolean {
   const file = ts.createSourceFile('main.ts', code, ts.ScriptTarget.Latest, true);

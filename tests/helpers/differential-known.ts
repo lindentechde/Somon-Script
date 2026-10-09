@@ -134,6 +134,34 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
       'TS2300: an interface property and method of the same name; the SomonScript checker ' +
       'does not look for duplicate interface members',
   },
+  'ts-syntax-gaps.test.ts › интерфейс И { нав: рақам; нав?(): рақам; нав(): И; }': {
+    default: 'typescript-only',
+    strict: 'typescript-only',
+    reason:
+      'TS2300: an interface property and method of the same name (`нав`); the SomonScript ' +
+      'checker does not look for duplicate interface members',
+  },
+  'ts-syntax-gaps.test.ts › собит а = 1, б = 2, в = 3;': {
+    default: 'typescript-only',
+    strict: 'typescript-only',
+    reason:
+      'TS2365: TypeScript does not compare a boolean with a number (`а < б > в`), which ' +
+      'JavaScript and SomonScript do',
+  },
+  'migrate/70-type-argument-lookahead.ts': {
+    default: 'typescript-only',
+    strict: 'typescript-only',
+    reason:
+      'TS2365/TS2558, as on the original: TypeScript does not compare a boolean with a number ' +
+      '(`a < b > c`), and `f(g<number, string>(5))` passes type arguments to a function ' +
+      'without type parameters',
+  },
+  'ts-syntax-gaps.test.ts › синф В { статикӣ': {
+    strict: 'typescript-only',
+    reason:
+      'TS7008 (noImplicitAny): fields named `статикӣ` and `ҳамзамон` have neither a type nor ' +
+      'an initializer; the SomonScript checker does not require one',
+  },
   'ts-syntax-parser.test.ts › синф К { дастрасӣ() {} }': {
     strict: 'typescript-only',
     reason:
@@ -204,19 +232,5 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
     reason:
       'TS1169/TS2304: a computed interface member names an undeclared value; the SomonScript ' +
       'checker does not check the names of interface members',
-  },
-  // Call type arguments: the parser work on `ф<Т>(…)` will let migrate keep them
-  'migrate/15-recursion.ts': {
-    default: 'typescript-only',
-    strict: 'typescript-only',
-    reason:
-      'migrate leaves out the type arguments of `reduce<unknown[]>(…)` (with a warning) until ' +
-      'the parser reads call type arguments; without them TypeScript infers too narrow a type',
-  },
-  'migrate/56-sorting.ts': {
-    strict: 'typescript-only',
-    reason:
-      'migrate leaves out the type arguments of `reduce<Record<…>>(…)` (with a warning) until ' +
-      'the parser reads call type arguments',
   },
 };
