@@ -1,6 +1,6 @@
 // Complete TypeScript operator test suite
 
-функсия тести_пурраи_операторҳо(): холӣ {
+функсия тести_пурраи_операторҳо(): беджавоб {
     чоп.сабт("=== Санҷиши пурраи ҳамаи операторҳои TypeScript ===\n");
     
     // Arithmetic operators

@@ -1,6 +1,6 @@
 // Inheritance Example - Base and Derived Classes with Proper TypeScript Inheritance
 синф Ҳайвон {
-    хосусӣ номи: сатр;
+    муҳофизатшуда номи: сатр;
     хосусӣ қисми: сатр;
 
     конструктор(номи: сатр, қисми: сатр) {
