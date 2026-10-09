@@ -45,6 +45,19 @@ describe('Lexer comment mode', () => {
     expect(withComments).toEqual(new Lexer(source).tokenize());
   });
 
+  test('a #! line gets offsets too', () => {
+    const source = '#!/usr/bin/env node\nа; // шарҳ';
+    const [shebang, ...rest] = new Lexer(source, { comments: true }).tokenize();
+    expect(shebang).toMatchObject({ type: TokenType.SHEBANG, start: 0, end: 19 });
+    expect(rest.map(token => source.slice(token.start, token.end))).toEqual([
+      '\n',
+      'а',
+      ';',
+      '// шарҳ',
+      '',
+    ]);
+  });
+
   test('the default mode neither emits comments nor offsets', () => {
     const tokens = new Lexer('а // шарҳ\n/* б */').tokenize();
     expect(tokens.some(token => token.type === TokenType.COMMENT)).toBe(false);

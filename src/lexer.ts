@@ -191,7 +191,9 @@ export class Lexer {
 
     // `#!/usr/bin/env node`: only on the very first line, as in JavaScript
     if (this.input.startsWith('#!')) {
-      tokens.push(this.readShebang());
+      const shebang = this.readShebang();
+      if (this.keepComments) Object.assign(shebang, { start: 0, end: this.position });
+      tokens.push(shebang);
     }
 
     while (!this.isAtEnd()) {
