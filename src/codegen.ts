@@ -348,15 +348,21 @@ export class CodeGenerator {
         return this.withJumpTarget('loops', () =>
           this.generateWhileStatement(node as WhileStatement)
         );
+      // A loop head binding one name twice (`барои (собит [а, а] аз …)`) is an early error
       case 'ForStatement':
+        if ((node as ForStatement).init) {
+          this.checkRedeclarations([(node as ForStatement).init as Statement]);
+        }
         return this.withScope(this.declaredNames([(node as ForStatement).init as Statement]), () =>
           this.withJumpTarget('loops', () => this.generateForStatement(node as ForStatement))
         );
       case 'ForInStatement':
+        this.checkRedeclarations([(node as ForInStatement).left]);
         return this.withScope(this.declaredNames([(node as ForInStatement).left]), () =>
           this.withJumpTarget('loops', () => this.generateForInStatement(node as ForInStatement))
         );
       case 'ForOfStatement':
+        this.checkRedeclarations([(node as ForOfStatement).left]);
         return this.withScope(this.declaredNames([(node as ForOfStatement).left]), () =>
           this.withJumpTarget('loops', () => this.generateForOfStatement(node as ForOfStatement))
         );

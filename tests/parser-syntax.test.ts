@@ -10,6 +10,8 @@ import {
   ClassDeclaration,
   ConditionalExpression,
   ExpressionStatement,
+  ForInStatement,
+  ForOfStatement,
   ForStatement,
   FunctionDeclaration,
   MemberExpression,
@@ -327,6 +329,105 @@ describe('Parser: destructuring patterns', () => {
     expect(errors).toEqual([
       expect.stringMatching(/Multiple variables in one declaration are not supported at line 1/),
     ]);
+  });
+});
+
+describe('Parser: destructuring in for-of and for-in heads', () => {
+  test('array pattern in a for-of head', () => {
+    const [loop] = parseOk('барои (тағ [к, в] аз объект.воридот(о)) {}') as ForOfStatement[];
+    expect(loop).toMatchObject({
+      type: 'ForOfStatement',
+      left: {
+        type: 'VariableDeclaration',
+        kind: 'ТАҒЙИРЁБАНДА',
+        init: undefined,
+        identifier: {
+          type: 'ArrayPattern',
+          elements: [
+            { type: 'Identifier', name: 'к' },
+            { type: 'Identifier', name: 'в' },
+          ],
+        },
+      },
+      right: { type: 'CallExpression' },
+      body: { type: 'BlockStatement' },
+    });
+  });
+
+  test('object pattern in a for-in head', () => {
+    const [loop] = parseOk('барои (собит { length } дар о) чоп.сабт(length);') as ForInStatement[];
+    expect(loop).toMatchObject({
+      type: 'ForInStatement',
+      left: {
+        kind: 'СОБИТ',
+        identifier: {
+          type: 'ObjectPattern',
+          properties: [{ type: 'PropertyPattern', key: { name: 'length' } }],
+        },
+      },
+      right: { type: 'Identifier', name: 'о' },
+      body: { type: 'ExpressionStatement' },
+    });
+  });
+
+  test('nested patterns, defaults and rest elements', () => {
+    const [loop] = parseOk(
+      'барои (тағйирёбанда [а = 0, [б, { в: г = 1, ...д }], , ...е] аз м) {}'
+    ) as ForOfStatement[];
+    const left = loop.left as VariableDeclaration;
+    expect(left.kind).toBe('ТАҒЙИРЁБАНДА');
+    expect(left.identifier).toMatchObject({
+      type: 'ArrayPattern',
+      elements: [
+        { type: 'AssignmentPattern', left: { name: 'а' }, right: { value: 0 } },
+        {
+          type: 'ArrayPattern',
+          elements: [
+            { type: 'Identifier', name: 'б' },
+            {
+              type: 'ObjectPattern',
+              properties: [
+                {
+                  type: 'PropertyPattern',
+                  key: { name: 'в' },
+                  value: { type: 'AssignmentPattern', left: { name: 'г' } },
+                },
+                { type: 'SpreadElement', argument: { name: 'д' } },
+              ],
+            },
+          ],
+        },
+        null,
+        { type: 'SpreadElement', argument: { name: 'е' } },
+      ],
+    });
+  });
+
+  test('defaults may contain brackets, braces and calls', () => {
+    const [loop] = parseOk(
+      'барои (собит [а = ф([1], { б: 2 }), { в } = {}] аз м) {}'
+    ) as ForOfStatement[];
+    expect(loop.type).toBe('ForOfStatement');
+    expect((loop.left as VariableDeclaration).identifier).toMatchObject({
+      type: 'ArrayPattern',
+      elements: [
+        { type: 'AssignmentPattern', right: { type: 'CallExpression' } },
+        { type: 'AssignmentPattern', left: { type: 'ObjectPattern' } },
+      ],
+    });
+  });
+
+  test('a pattern followed by an initializer is still a classic for loop', () => {
+    const [loop] = parseOk('барои (тағ [а, б] = [0, 1]; а < 3; а++) {}') as ForStatement[];
+    expect(loop).toMatchObject({
+      type: 'ForStatement',
+      init: { type: 'VariableDeclaration', identifier: { type: 'ArrayPattern' } },
+    });
+  });
+
+  test('an unclosed pattern is a parse error', () => {
+    const { errors } = parse('барои (собит [а аз м) {}');
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
 

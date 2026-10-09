@@ -385,16 +385,43 @@ export class Parser {
     ) {
       lookaheadIndex++;
       const nextToken = this.tokens[lookaheadIndex];
+      let afterBinding = -1;
       if (this.isTypeKeywordOrIdentifier(nextToken?.type)) {
-        lookaheadIndex++;
-        if (this.tokens[lookaheadIndex]?.type === TokenType.АЗ) {
-          isForOf = true;
-        } else if (this.tokens[lookaheadIndex]?.type === TokenType.ДАР) {
-          isForIn = true;
-        }
+        afterBinding = lookaheadIndex + 1;
+      } else if (this.isPatternStart(nextToken?.type)) {
+        // `[к, в]` / `{ а, б }`: skip the whole pattern, defaults included
+        const close = this.findMatchingBracket(lookaheadIndex);
+        if (close !== -1) afterBinding = close + 1;
       }
+      const keyword = afterBinding === -1 ? undefined : this.tokens[afterBinding]?.type;
+      isForOf = keyword === TokenType.АЗ;
+      isForIn = keyword === TokenType.ДАР;
     }
     return { isForOf, isForIn };
+  }
+
+  private isPatternStart(type: TokenType | undefined): boolean {
+    return type === TokenType.LEFT_BRACKET || type === TokenType.LEFT_BRACE;
+  }
+
+  /** Index of the bracket closing the `(`, `[` or `{` at `openIndex`, or -1. */
+  private findMatchingBracket(openIndex: number): number {
+    let depth = 0;
+    for (let i = openIndex; i < this.tokens.length; i++) {
+      switch (this.tokens[i].type) {
+        case TokenType.LEFT_PAREN:
+        case TokenType.LEFT_BRACKET:
+        case TokenType.LEFT_BRACE:
+          depth++;
+          break;
+        case TokenType.RIGHT_PAREN:
+        case TokenType.RIGHT_BRACKET:
+        case TokenType.RIGHT_BRACE:
+          if (--depth === 0) return i;
+          break;
+      }
+    }
+    return -1;
   }
 
   private isTypeKeywordOrIdentifier(type: TokenType | undefined): boolean {
@@ -413,16 +440,22 @@ export class Parser {
     const varToken = this.advance();
     const kind = varToken.type === TokenType.ТАҒЙИРЁБАНДА ? 'ТАҒЙИРЁБАНДА' : 'СОБИТ';
 
-    const nameToken = this.isTypeKeywordOrIdentifier(this.peek().type)
-      ? this.advance()
-      : this.consume(TokenType.IDENTIFIER, 'Expected variable name');
+    let id: Identifier | ArrayPattern | ObjectPattern;
+    if (this.isPatternStart(this.peek().type)) {
+      // Destructuring, as in a declaration: `[к, в = 0]`, `{ а, ...боқӣ }`
+      id = this.parsePattern();
+    } else {
+      const nameToken = this.isTypeKeywordOrIdentifier(this.peek().type)
+        ? this.advance()
+        : this.consume(TokenType.IDENTIFIER, 'Expected variable name');
 
-    const id: Identifier = {
-      type: 'Identifier',
-      name: nameToken.value,
-      line: nameToken.line,
-      column: nameToken.column,
-    };
+      id = {
+        type: 'Identifier',
+        name: nameToken.value,
+        line: nameToken.line,
+        column: nameToken.column,
+      };
+    }
 
     if (isForOf) {
       this.consume(TokenType.АЗ, "Expected 'аз' in for-of loop");
