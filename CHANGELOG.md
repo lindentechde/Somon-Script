@@ -93,6 +93,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon repl` with piped input no longer fails on Node.js 24: when the input ended while an input was still running, the next prompt went to the closed readline interface, which Node.js 24 rejects (`readline was closed`).
 * Importing a Node.js module (`ворид * чун фс аз "fs"`, `"node:path"`, `"fs/promises"`) failed in `somon run`, `somon bundle` and `ModuleSystem.compile()` with "Module not found" unless it was listed in `externals`; built-in modules now always stay host requires (imports of an `esm` bundle), and `validate()` no longer reports them as missing.
 * An absolute import path (`ворид { х } аз "/home/…/лоиҳа/util"`) was used as written: without its extension or naming a directory it failed with `ENOENT`; it now tries the extensions, `index.*` files and `package.json` "main" like a relative import, and a path that names no file is a "Cannot resolve module" error.
+* A package from `node_modules` whose `package.json` "exports" only has an `import` condition (an ES module package) could not be imported ("Package subpath '.' is not exported"), not even into an `esm` bundle or with `run --module esm`; such a subpath now resolves to its ES module.
 
 ## 0.4.0 (2026-10-09)
 

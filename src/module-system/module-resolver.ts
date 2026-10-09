@@ -17,6 +17,14 @@ export interface ResolvedModule {
   extension: string;
 }
 
+/** Conditions of package.json "exports" that Node's `require()` matches. */
+const REQUIRE_CONDITIONS: ReadonlySet<string> = new Set(['require', 'node', 'default']);
+/**
+ * The conditions of `import`: a package with ES module entries only is still a
+ * dependency the host loads (an esm bundle imports it).
+ */
+const IMPORT_CONDITIONS: ReadonlySet<string> = new Set(['import', 'node', 'default']);
+
 export class ModuleResolver {
   private options: Required<ModuleResolutionOptions>;
 
@@ -175,7 +183,8 @@ export class ModuleResolver {
   /**
    * Resolve `subpath` through the package.json "exports" field like Node's require():
    * string, array and conditional targets ("require", "node", "default") and
-   * "./dir/*" patterns. Returns null when the package has no "exports" field.
+   * "./dir/*" patterns. A subpath exported for "import" only resolves to that ES
+   * module. Returns null when the package has no "exports" field.
    */
   private tryPackageExports(
     packageDir: string,
@@ -197,12 +206,13 @@ export class ModuleResolver {
       !Array.isArray(exportsField) &&
       Object.keys(exportsField).some(key => key.startsWith('.'));
 
-    let target: string | null = null;
-    if (!isSubpathMap) {
-      target = subpath === '.' ? this.resolveExportsTarget(exportsField) : null;
-    } else {
-      target = this.matchExportsSubpath(exportsField as Record<string, unknown>, subpath);
-    }
+    const targetFor = (conditions: ReadonlySet<string>): string | null => {
+      if (!isSubpathMap) {
+        return subpath === '.' ? this.resolveExportsTarget(exportsField, conditions) : null;
+      }
+      return this.matchExportsSubpath(exportsField as Record<string, unknown>, subpath, conditions);
+    };
+    const target = targetFor(REQUIRE_CONDITIONS) ?? targetFor(IMPORT_CONDITIONS);
 
     if (target === null || !target.startsWith('./')) {
       throw new Error(
@@ -221,9 +231,13 @@ export class ModuleResolver {
     return resolved;
   }
 
-  private matchExportsSubpath(map: Record<string, unknown>, subpath: string): string | null {
+  private matchExportsSubpath(
+    map: Record<string, unknown>,
+    subpath: string,
+    conditions: ReadonlySet<string>
+  ): string | null {
     if (Object.prototype.hasOwnProperty.call(map, subpath)) {
-      return this.resolveExportsTarget(map[subpath]);
+      return this.resolveExportsTarget(map[subpath], conditions);
     }
 
     // Longest matching "./prefix*suffix" pattern wins
@@ -238,27 +252,31 @@ export class ModuleResolver {
         subpath.length >= prefix.length + suffix.length
       ) {
         const match = subpath.slice(prefix.length, subpath.length - suffix.length);
-        return this.resolveExportsTarget(map[key], match);
+        return this.resolveExportsTarget(map[key], conditions, match);
       }
     }
     return null;
   }
 
-  private resolveExportsTarget(target: unknown, patternMatch?: string): string | null {
+  private resolveExportsTarget(
+    target: unknown,
+    conditions: ReadonlySet<string>,
+    patternMatch?: string
+  ): string | null {
     if (typeof target === 'string') {
       return patternMatch === undefined ? target : target.split('*').join(patternMatch);
     }
     if (Array.isArray(target)) {
       for (const item of target) {
-        const resolved = this.resolveExportsTarget(item, patternMatch);
+        const resolved = this.resolveExportsTarget(item, conditions, patternMatch);
         if (resolved !== null) return resolved;
       }
       return null;
     }
     if (target && typeof target === 'object') {
       for (const [condition, value] of Object.entries(target)) {
-        if (condition === 'require' || condition === 'node' || condition === 'default') {
-          const resolved = this.resolveExportsTarget(value, patternMatch);
+        if (conditions.has(condition)) {
+          const resolved = this.resolveExportsTarget(value, conditions, patternMatch);
           if (resolved !== null) return resolved;
         }
       }

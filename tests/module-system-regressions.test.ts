@@ -453,6 +453,52 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('packages with ES module entries only', () => {
+    beforeEach(() => {
+      write({
+        'node_modules/esm-only/package.json': JSON.stringify({
+          name: 'esm-only',
+          type: 'module',
+          exports: { import: './index.js' },
+        }),
+        'node_modules/esm-only/index.js':
+          'export const ном = "esm-only";\nexport default function салом() { return "салом"; }\n',
+        'node_modules/dual/package.json': JSON.stringify({
+          name: 'dual',
+          exports: {
+            '.': { import: './i.mjs', require: './r.cjs' },
+            './esm/*': { import: './esm/*.mjs' },
+          },
+        }),
+        'node_modules/dual/i.mjs': 'export const вариант = "esm";\n',
+        'node_modules/dual/r.cjs': 'exports.вариант = "cjs";\n',
+        'node_modules/dual/esm/x.mjs': 'export const х = 1;\n',
+        'main.som':
+          'ворид салом, { ном } аз "esm-only";\nворид { вариант } аз "dual";\n' +
+          'чоп.сабт(ном, салом(), вариант);\n',
+      });
+    });
+
+    test('resolve to their "import" entry when nothing is exported for require', () => {
+      const resolver = new ModuleResolver({ baseUrl: root });
+      const resolve = (spec: string) =>
+        resolver.resolve(spec, path.join(root, 'main.som')).resolvedPath;
+      expect(resolve('esm-only')).toBe(path.join(root, 'node_modules', 'esm-only', 'index.js'));
+      expect(resolve('dual')).toBe(path.join(root, 'node_modules', 'dual', 'r.cjs'));
+      expect(resolve('dual/esm/x')).toBe(path.join(root, 'node_modules', 'dual', 'esm', 'x.mjs'));
+    });
+
+    test('an esm bundle imports them', async () => {
+      const ms = createSystem();
+      const bundle = await ms.bundle({ entryPoint: path.join(root, 'main.som'), format: 'esm' });
+      fs.writeFileSync(path.join(root, 'bundle.mjs'), bundle.code);
+      const output = execFileSync(process.execPath, [path.join(root, 'bundle.mjs')], {
+        encoding: 'utf8',
+      });
+      expect(output.trim()).toBe('esm-only салом esm');
+    });
+  });
+
   describe('registry graph', () => {
     test('stores resolved module ids only', async () => {
       write({

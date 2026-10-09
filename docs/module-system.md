@@ -35,8 +35,10 @@ Notes:
 - Supports path mapping (`paths`) and `node_modules` packages. For packages,
   `package.json#exports` is used when present, like Node's `require()`: a
   string, `"."` and subpath keys (including `"./dir/*"` patterns) and the
-  `require`, `node` and `default` conditions. A subpath that is not exported is
-  an error. Without `exports`, `main` and then `index.*` are used.
+  `require`, `node` and `default` conditions; a package that exports a subpath
+  for `import` only (an ES module package) resolves to that module. A subpath
+  that is not exported is an error. Without `exports`, `main` and then `index.*`
+  are used.
 
 Containment policy:
 
