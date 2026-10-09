@@ -62,6 +62,7 @@ programs may still use them as ordinary names elsewhere (`тағ ҳосил = 1;
 
 | TypeScript                  | SomonScript                      | Notes                                 |
 | --------------------------- | -------------------------------- | ------------------------------------- |
+| `let a = 1, b = 2;`         | `тағ а = 1, б = 2;`              | also in `барои (тағ и = 0, ҷ = н; …)` |
 | `if / else if / else`       | `агар / вагарна агар / вагарна`  |                                       |
 | `switch / case / default`   | `интихоб / ҳолат / пешфарз`      |                                       |
 | `while (c) { }`             | `то (ш) { }`                     |                                       |
@@ -191,8 +192,6 @@ programs may still use them as ordinary names elsewhere (`тағ ҳосил = 1;
 - `import.meta`: the compiler emits CommonJS modules.
 - Decorators (`@декоратор`), `declare`, `override`, `accessor` and `using`
   declarations.
-- Several variables in one declaration (`тағ а = 1, б = 2;`): declare each one
-  separately.
 
 ---
 

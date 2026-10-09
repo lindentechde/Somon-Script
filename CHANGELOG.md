@@ -8,9 +8,16 @@ All notable changes to this project will be documented in this file. See [Conven
 
 * `--strict` (`compile(source, { strict: true })`) checks for `холӣ`/`беқимат` like TypeScript's `strictNullChecks`: they are only assignable to types that include them, and a value that may be `холӣ`/`беқимат` can't be dereferenced or computed with until a check (`!== холӣ`, `агар (х)`, an early `бозгашт`, …) narrows it. `Array` `.баровардан()`/`.ҳазфиАввал()`/`.дар()`/`.кофтан()`/`.охиринЁфтан()`, `String` `.дар()` and `Map` `.бозгирифтан()` return `Т | беқимат`, and optional parameters and properties include `беқимат`. Programs compiled with `--strict` may need such checks.
 * Reading a member that an array, string, number, `Map`, `Set`, `Promise`, class, interface or object type doesn't have is reported (`PROPERTY_NOT_FOUND`): an error with `--strict`, a warning otherwise. `с.дорад(1)` on a `Set` (`includes`) now points to `дорадКалид` (`has`).
+* Assigning to a `танҳохонӣ` (readonly) property, element or array outside its initialisation is reported (`READONLY_ASSIGNMENT`): an error with `--strict`, a warning otherwise.
+* Method signatures in interfaces and object types are checked as function types: calls are checked for argument count and types, and a non-function value for a method is a type error.
 
 ### ✨ Features
 
+* Every TypeScript operator and statement has a SomonScript form; `llm-guide/14-operators.md` lists them and `tests/operators.test.ts` runs each one:
+  * Type operators in expressions: `х чун Т` (`as`), `х чун собит`, `<Т>х`, the non-null assertion `х!`, `х бармесоё Т` (`satisfies`), definite assignment `тағ х!: Т`, generic arrow functions `<Т>(х: Т) => х`.
+  * Statements: `кун { … } то (…);` (do-while), labels with `шикастан`/`давом нишона`, `барои интизор` (for await), `debugger`, the empty statement, `шумориш` enums (and `собит шумориш`), generators `функсия*` with `ҳосил`/`ҳосил*` (yield), and several variables in one declaration (`тағ а = 1, б = 2;`, also in `барои` heads). `кун`, `шумориш` and `ҳосил` are contextual: they remain usable as names.
+  * Expressions: regular expression literals, tagged templates, `нав.target`, class expressions, private members `#х` with `#х дар о`, getters/setters in classes and object literals, static blocks, parameter properties (`конструктор(хосусӣ х: рақам)`), generator and async methods.
+  * Types: `х аст Т` type predicates and `тасдиқ х [аст Т]` assertion signatures that narrow at the call site, `танҳохонӣ Т[]`/`танҳохонӣ [А, Б]`, `беназир рамз`, optional tuple elements, constructor types `нав (…) => Т`, the `ин` type, generic constraints/defaults with object types, `чун` key remapping in mapped types, optional and generic method signatures.
 * Destructuring patterns in `барои … аз` / `барои … дар` heads: `барои (собит [к, в] аз объект.воридот(о))`.
 * `нав Map<сатр, рақам>()` keeps its type arguments, and `ном?: сатр` class fields are optional.
 * `examples/leetcode`: solutions to LeetCode's Top 100 Liked problems with their own tests (`npm run test:leetcode`).
@@ -19,6 +26,8 @@ All notable changes to this project will be documented in this file. See [Conven
 
 * Generated JavaScript indents the first statement of nested blocks, single-statement bodies, bare blocks, class members and `интихоб` cases correctly.
 * A name declared twice in a `барои` head pattern is a compile error instead of a SyntaxError at run time.
+* Constructor parameter properties (`конструктор(хосусӣ х: рақам)`) assign `ин.х`; they were silently dropped, leaving `ин.х` undefined.
+* `get х()`/`set х(қ)` in a class compile to accessors instead of a field named `get` followed by a method.
 * The docs list the `Map`/`Set` aliases and only valid `compilerOptions`.
 
 ## 0.4.0 (2026-10-09)
