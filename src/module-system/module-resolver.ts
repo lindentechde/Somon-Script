@@ -68,11 +68,8 @@ export class ModuleResolver {
       const isOsPath = this.isOsLevelAbsolutePath(normalizedPath);
 
       if (isOsPath) {
-        return {
-          resolvedPath: normalizedPath,
-          isExternalLibrary: false,
-          extension: path.extname(normalizedPath),
-        };
+        // Like a relative import: extensions, index files and package.json "main" are tried
+        return this.resolveFile(normalizedPath, false);
       }
       // Otherwise, fall through to project-relative handling
     }

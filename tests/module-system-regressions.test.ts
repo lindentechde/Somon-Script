@@ -324,6 +324,43 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('absolute import paths', () => {
+    const slash = (file: string) => file.split(path.sep).join('/');
+
+    test('are resolved like relative ones: extensions and index files', async () => {
+      write({
+        'lib/util.som': 'содир собит У = 2;\n',
+        'lib/dir/index.som': 'содир собит И = 3;\n',
+        'data.json': '{ "Д": 4 }\n',
+      });
+      write({
+        'main.som': [
+          // The project directory has quotes in its name
+          `ворид { У } аз ${JSON.stringify(slash(path.join(root, 'lib', 'util')))};`,
+          `ворид { И } аз ${JSON.stringify(slash(path.join(root, 'lib', 'dir')))};`,
+          `ворид { Д } аз ${JSON.stringify(slash(path.join(root, 'data')))};`,
+          'чоп.сабт(У + И + Д);',
+        ].join('\n'),
+      });
+      const ms = createSystem();
+      const result = await ms.compile(path.join(root, 'main.som'));
+      expect(result.errors).toEqual([]);
+      expect(ms.resolve(path.join(root, 'lib', 'dir'), root)).toBe(
+        path.join(root, 'lib', 'dir', 'index.som')
+      );
+      expect(await bundleAndRun('main.som', { ms })).toBe('9');
+    });
+
+    test('that name no file are an error of the resolver', () => {
+      write({ 'main.som': '' });
+      const resolver = new ModuleResolver({ baseUrl: root });
+      const missing = path.join(root, 'missing');
+      expect(() => resolver.resolve(missing, path.join(root, 'main.som'))).toThrow(
+        `Cannot resolve module: ${missing}`
+      );
+    });
+  });
+
   describe('package.json exports', () => {
     beforeEach(() => {
       write({

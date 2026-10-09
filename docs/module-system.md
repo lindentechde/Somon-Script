@@ -42,7 +42,8 @@ Containment policy:
 
 - Relative imports (`./`, `../`, any depth) and OS-absolute paths (`/home/…`,
   `/tmp/…`, `C:\…`, or anything inside `baseUrl`) are allowed and not confined —
-  SomonScript sources are trusted code.
+  SomonScript sources are trusted code. Both try the extensions and `index.*`
+  files.
 - Project-relative absolute imports (`/lib/utils`) resolve against `baseUrl` and
   must stay inside it; `paths` mappings and a package's `main`/`exports` targets
   must stay inside `baseUrl` / the package directory. These checks follow
