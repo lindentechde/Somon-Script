@@ -872,7 +872,7 @@ export class TsEmitter extends CodeGenerator {
     }
     const key = property.computedKey
       ? `[${this.generateExpression(property.computedKey, PREC.ASSIGNMENT)}]`
-      : this.markPosition(property.key, translateMemberName(property.key.name));
+      : this.generatePropertyKey(property.key);
     // `get ном(): Т;`, `set ном(қимат: Т);` (the parameter's name is not kept)
     if (property.kind === 'get') return `get ${key}(): ${this.typeText(valueType)}`;
     if (property.kind === 'set') return `set ${key}(value: ${this.typeText(valueType)})`;

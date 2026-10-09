@@ -1,4 +1,4 @@
-import { ASTNode, Expression, Identifier, Parameter, Statement } from './ast';
+import { ASTNode, Expression, Identifier, Literal, Parameter, Statement } from './ast';
 
 // Type system AST nodes
 export interface TypeAnnotation extends ASTNode {
@@ -60,7 +60,8 @@ export interface InterfaceBody extends ASTNode {
 
 export interface PropertySignature extends ASTNode {
   type: 'PropertySignature';
-  key: Identifier;
+  /** The name; a literal for `"а-б": Т` and `1: Т`. */
+  key: Identifier | Literal;
   typeAnnotation: TypeAnnotation;
   optional: boolean;
   readonly?: boolean;

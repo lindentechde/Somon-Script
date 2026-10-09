@@ -1214,7 +1214,7 @@ export class TypeChecker {
    * The type is named for diagnostics: "Function 'ном' expected 2 argument(s)".
    */
   private collectMethodSignature(prop: PropertySignature, type: Type, target: Type): void {
-    const name = prop.key.name;
+    const name = TypeChecker.signatureName(prop);
     const existing = target.properties!.get(name);
     if (existing?.type.kind !== 'function') {
       target.properties!.set(name, { type, optional: prop.optional });
@@ -1243,6 +1243,13 @@ export class TypeChecker {
     });
   }
 
+  /** The member name of a signature: `ном`, or the text of `"а-б"` and `1`. */
+  private static signatureName(prop: PropertySignature): string {
+    return prop.key.type === 'Identifier'
+      ? (prop.key as Identifier).name
+      : String((prop.key as Literal).value);
+  }
+
   private collectPropertySignatures(signatures: PropertySignature[], target: Type): void {
     for (const prop of signatures ?? []) {
       // A computed name (`[калид]: Т`) is only known at run time
@@ -1250,7 +1257,7 @@ export class TypeChecker {
       const type = this.withTypeParameters(prop.typeParameters, () =>
         this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
       );
-      const name = prop.key.name;
+      const name = TypeChecker.signatureName(prop);
       if (name === INDEX_SIGNATURE_KEY) {
         target.indexType = type;
       } else if (prop.method) {

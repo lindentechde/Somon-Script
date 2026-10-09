@@ -164,7 +164,13 @@ type argument; otherwise `<` and `>` compare. As in TypeScript,
 ```
 
 `бознавис`, `дастрасӣ` and `эълон` are contextual (`override`, `accessor` and
-`declare` also work): a member may still be named `бознавис() { }`. The type
+`declare` also work): a member may still be named `бознавис() { }`. As in
+TypeScript, any keyword names a member of a class, object literal, interface or
+object type, and a member after `.` or `?.`: `агар() { }`, `бозгашт = 1;`,
+`{ синф: 1 }`, `о.нав()`. A modifier word is a modifier only when the member
+follows it (on its line, except `статикӣ`): `статикӣ() { }` and `хосусӣ = 1;`
+are members named `статикӣ` and `хосусӣ`. Interface and object type members may
+also be named by a string or a number (`"а-б": рақам;`, `1: сатр;`). The type
 checker reports `бознавис` on a member the base class does not have, and on a
 class without a base class (TypeScript's TS4113 / TS4112), and `нав` of a
 `мавҳум синф`.

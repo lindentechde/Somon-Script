@@ -3942,6 +3942,7 @@ export class Parser {
     } else if (this.match(TokenType.STRING)) {
       key = this.createLiteral(this.previous().value, this.previous());
     } else if (this.match(TokenType.NUMBER)) {
+      this.checkBigIntName(this.previous());
       key = this.createNumericLiteral(this.previous());
     } else if (this.isIdentifierNameToken(this.peek())) {
       // Keywords can be used as property names
@@ -5227,7 +5228,7 @@ export class Parser {
     };
     return {
       type: 'PropertySignature',
-      key: this.createIdentifier(keyName),
+      key: this.createSignatureKey(keyName),
       typeAnnotation: {
         type: 'TypeAnnotation',
         typeAnnotation: functionType,
@@ -5281,7 +5282,7 @@ export class Parser {
       accessor === 'get' ? returnType : (params[0]?.typeAnnotation ?? returnType);
     return {
       type: 'PropertySignature',
-      key: this.createIdentifier(keyName),
+      key: this.createSignatureKey(keyName),
       typeAnnotation: typeAnnotation ?? {
         type: 'TypeAnnotation',
         typeAnnotation: {
@@ -5300,29 +5301,70 @@ export class Parser {
     };
   }
 
+  /** The name of an interface or object type member: any word, a string or a number. */
   private parsePropertyKeyName(): Token {
-    if (this.check(TokenType.IDENTIFIER)) {
+    const token = this.peek();
+    if (token.type === TokenType.STRING || this.isIdentifierNameToken(token)) {
       return this.advance();
-    } else if (this.matchBuiltinIdentifier()) {
-      return this.previous();
-    } else if (
-      this.check(TokenType.САТР) ||
-      this.check(TokenType.РАҚАМ) ||
-      this.check(TokenType.МАНТИҚӢ) ||
-      this.check(TokenType.ХОЛӢ)
-    ) {
-      // Allow type keywords as property names
+    }
+    if (token.type === TokenType.NUMBER) {
+      this.checkBigIntName(token);
       return this.advance();
-    } else {
-      throw new Error(
-        `Expected property name at line ${this.peek().line}, column ${this.peek().column}`
+    }
+    throw new Error(`Expected property name at line ${token.line}, column ${token.column}`);
+  }
+
+  /** `"а-б": Т` and `1: Т` keep their literal names; any other name is an identifier. */
+  private createSignatureKey(token: Token): Identifier | Literal {
+    if (token.type === TokenType.STRING) return this.createLiteral(token.value, token);
+    if (token.type === TokenType.NUMBER) return this.createNumericLiteral(token);
+    return this.createIdentifier(token);
+  }
+
+  /** TypeScript's TS1539: `1n` is no property name. */
+  private checkBigIntName(token: Token): void {
+    if (token.type === TokenType.NUMBER && token.value.endsWith('n')) {
+      this.errors.push(
+        `A bigint literal cannot be used as a property name at line ${token.line}, column ${token.column}`
       );
     }
   }
 
+  /**
+   * Modifiers that a member of an interface or object type cannot have
+   * (TypeScript's TS1070, and TS1275 for `дастрасӣ`): reported, then skipped.
+   */
+  private skipTypeMemberModifiers(): void {
+    for (;;) {
+      const token = this.peek();
+      const isModifier =
+        Parser.CLASS_ONLY_MODIFIERS.has(token.type) ||
+        (token.type === TokenType.IDENTIFIER && this.memberModifier(token) !== undefined);
+      if (!isModifier || !this.modifierApplies()) return;
+      const at = `at line ${token.line}, column ${token.column}`;
+      this.errors.push(
+        this.memberModifier(token) === 'accessor'
+          ? `'${token.value}' modifier can only appear on a property declaration ${at}`
+          : `'${token.value}' modifier cannot appear on a type member ${at}`
+      );
+      this.advance();
+    }
+  }
+
+  /** Modifier keywords of class members only. */
+  private static readonly CLASS_ONLY_MODIFIERS: ReadonlySet<TokenType> = new Set([
+    TokenType.ҶАМЪИЯТӢ,
+    TokenType.ХОСУСӢ,
+    TokenType.МУҲОФИЗАТШУДА,
+    TokenType.СТАТИКӢ,
+    TokenType.МАВҲУМ,
+    TokenType.ҲАМЗАМОН,
+  ]);
+
   private propertySignature(): PropertySignature {
-    // Parse optional readonly modifier
-    const readonly = this.match(TokenType.ТАНҲОХОНӢ);
+    this.skipTypeMemberModifiers();
+    // `танҳохонӣ ном: Т;` — a member may itself be named `танҳохонӣ`
+    const readonly = this.check(TokenType.ТАНҲОХОНӢ) && this.modifierApplies() && !!this.advance();
 
     // Index signatures `[калид: сатр]: Т;`
     if (this.isIndexSignatureStart()) {
@@ -5363,12 +5405,7 @@ export class Parser {
 
     return {
       type: 'PropertySignature',
-      key: {
-        type: 'Identifier',
-        name: keyName.value,
-        line: keyName.line,
-        column: keyName.column,
-      },
+      key: this.createSignatureKey(keyName),
       typeAnnotation,
       optional: optional || false,
       readonly,
@@ -5589,43 +5626,62 @@ export class Parser {
   }
 
   private parseAccessibility(): AccessibilityModifier {
-    if (!this.match(TokenType.ҶАМЪИЯТӢ, TokenType.ХОСУСӢ, TokenType.МУҲОФИЗАТШУДА)) {
-      return undefined;
-    }
+    const isAccessibility =
+      this.check(TokenType.ҶАМЪИЯТӢ) ||
+      this.check(TokenType.ХОСУСӢ) ||
+      this.check(TokenType.МУҲОФИЗАТШУДА);
+    if (!isAccessibility || !this.modifierApplies()) return undefined;
 
-    const accessToken = this.previous();
+    const accessToken = this.advance();
     if (accessToken.type === TokenType.ҶАМЪИЯТӢ) return 'public';
     if (accessToken.type === TokenType.ХОСУСӢ) return 'private';
     return 'protected';
   }
 
   private parseModifiers(): { isStatic: boolean; isAbstract: boolean } {
-    let isStatic = false;
-    let isAbstract = false;
-
-    if (this.match(TokenType.СТАТИКӢ)) {
-      isStatic = true;
-    }
-
-    if (this.match(TokenType.МАВҲУМ)) {
-      isAbstract = true;
-      // Abstract members can have 'функсия' keyword
-      this.match(TokenType.ФУНКСИЯ);
-    }
-
+    const isStatic = this.check(TokenType.СТАТИКӢ) && this.modifierApplies() && !!this.advance();
+    const isAbstract = this.check(TokenType.МАВҲУМ) && this.modifierApplies() && !!this.advance();
     return { isStatic, isAbstract };
   }
 
-  private parseMemberName(): Token {
-    // Check for regular method with 'функсия' keyword
-    this.match(TokenType.ФУНКСИЯ);
+  /**
+   * Whether the modifier word at `offset` (`статикӣ`, `хосусӣ`, `ҳамзамон`,
+   * `бознавис`, …) is a modifier, by TypeScript's rule: the rest of a member
+   * follows it — a name, string, number, `#ном`, `[`, `{`, `*` or `...` — on
+   * its line (after `статикӣ` also on the next one). Otherwise the word is the
+   * member's name: `статикӣ() {}`, `хосусӣ = 1`, `ҳамзамон: рақам`.
+   */
+  private modifierApplies(offset = 0): boolean {
+    const token = this.tokens[this.current + offset];
+    const next = this.tokens[this.current + offset + 1];
+    if (!token || !next) return false;
+    if (next.line !== token.line && token.type !== TokenType.СТАТИКӢ) return false;
+    return Parser.MODIFIER_FOLLOWERS.has(next.type) || this.isIdentifierNameToken(next);
+  }
 
-    if (this.check(TokenType.IDENTIFIER) || this.check(TokenType.PRIVATE_NAME)) {
-      return this.advance();
+  /** Tokens after which a modifier word is a modifier, besides names (see `modifierApplies`). */
+  private static readonly MODIFIER_FOLLOWERS: ReadonlySet<TokenType> = new Set([
+    TokenType.LEFT_BRACKET,
+    TokenType.LEFT_BRACE,
+    TokenType.MULTIPLY,
+    TokenType.SPREAD,
+    TokenType.STRING,
+    TokenType.NUMBER,
+    TokenType.PRIVATE_NAME,
+  ]);
+
+  /**
+   * A class member's name: any word, keywords included (`агар() {}`,
+   * `бозгашт = 1`, `нав()`), or `#ном`. A `функсия` before a name is skipped.
+   */
+  private parseMemberName(): Token {
+    const next = this.peekNext();
+    if (this.check(TokenType.ФУНКСИЯ) && next && this.isIdentifierNameToken(next)) {
+      this.advance();
     }
 
-    if (this.matchBuiltinIdentifier()) {
-      return this.previous();
+    if (this.check(TokenType.PRIVATE_NAME) || this.isIdentifierNameToken(this.peek())) {
+      return this.advance();
     }
 
     throw new Error(
@@ -5650,6 +5706,7 @@ export class Parser {
       return { key, token: open, computed: true };
     }
     if (this.check(TokenType.STRING) || this.check(TokenType.NUMBER)) {
+      this.checkBigIntName(this.peek());
       const token = this.advance();
       const key =
         token.type === TokenType.STRING
@@ -5741,17 +5798,9 @@ export class Parser {
 
   /** `танҳохонӣ ном: Т` — unless `танҳохонӣ` is itself the member name. */
   private parseReadonlyModifier(): boolean {
-    const token = this.peek();
-    const next = this.peekNext();
-    if (token.type !== TokenType.ТАНҲОХОНӢ || !next || next.line !== token.line) return false;
-    const isName =
-      next.type === TokenType.IDENTIFIER ||
-      next.type === TokenType.PRIVATE_NAME ||
-      next.type === TokenType.LEFT_BRACKET ||
-      next.type === TokenType.STRING ||
-      this.isBuiltinIdentifierType(next.type);
-    if (isName) this.advance();
-    return isName;
+    if (!this.check(TokenType.ТАНҲОХОНӢ) || !this.modifierApplies()) return false;
+    this.advance();
+    return true;
   }
 
   /** `бознавис` / `override` (override), also on parameter properties. */
@@ -5769,20 +5818,6 @@ export class Parser {
   /** `эълон` / `declare`: an ambient declaration or a declared class field. */
   private static readonly DECLARE_KEYWORDS: ReadonlySet<string> = new Set(['эълон', 'declare']);
 
-  /** Tokens after which a modifier word is the member's name: `бознавис() {}`, `эълон: рақам`. */
-  private static readonly MEMBER_NAME_FOLLOWERS: ReadonlySet<TokenType> = new Set([
-    TokenType.LEFT_PAREN,
-    TokenType.COLON,
-    TokenType.ASSIGN,
-    TokenType.SEMICOLON,
-    TokenType.QUESTION,
-    TokenType.NOT,
-    TokenType.LESS_THAN,
-    TokenType.RIGHT_BRACE,
-    TokenType.COMMA,
-    TokenType.EOF,
-  ]);
-
   /**
    * Contextual member modifiers after the accessibility and `статикӣ`:
    * `бознавис` (override), `эълон` (declare), `дастрасӣ` (accessor) and a
@@ -5794,16 +5829,8 @@ export class Parser {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const token = this.peek();
-      const next = this.peekNext();
       const modifier = this.memberModifier(token);
-      if (
-        !modifier ||
-        !next ||
-        next.line !== token.line ||
-        Parser.MEMBER_NAME_FOLLOWERS.has(next.type)
-      ) {
-        return modifiers;
-      }
+      if (!modifier || !this.modifierApplies()) return modifiers;
       const at = `at line ${token.line}, column ${token.column}`;
       if (modifiers[modifier]) {
         this.errors.push(`'${token.value}' modifier already seen ${at}`);
@@ -5903,14 +5930,9 @@ export class Parser {
 
   /** `ҳамзамон ном() {…}` — unless `ҳамзамон` is itself the member name. */
   private matchAsyncModifier(): boolean {
-    const next = this.peekNext()?.type;
-    return (
-      this.check(TokenType.ҲАМЗАМОН) &&
-      next !== TokenType.LEFT_PAREN &&
-      next !== TokenType.COLON &&
-      next !== TokenType.ASSIGN &&
-      this.match(TokenType.ҲАМЗАМОН)
-    );
+    if (!this.check(TokenType.ҲАМЗАМОН) || !this.modifierApplies()) return false;
+    this.advance();
+    return true;
   }
 
   /** `м?() {…}`, `м?(): Т;`: the `?` of an optional method. */
@@ -6204,8 +6226,8 @@ export class Parser {
       );
     }
 
-    // Optional semicolon after property declaration
-    if (!this.match(TokenType.SEMICOLON)) this.noteOmittedSemicolon();
+    // As in JavaScript, a field ends with ';', '}' or a line break: `а = 1 б = 2` is an error
+    this.consumeSemicolon("Expected ';' after a class field");
 
     return {
       type: 'PropertyDefinition',

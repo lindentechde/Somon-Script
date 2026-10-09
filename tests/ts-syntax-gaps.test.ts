@@ -298,3 +298,113 @@ describe('a leading `|` or `&` in a union or intersection type', () => {
     expect(errorsOf('навъ А = | | рақам;')).toHaveLength(1);
   });
 });
+
+describe('members named with keywords', () => {
+  test('class members, with and without modifiers', async () => {
+    expect(
+      await run(
+        [
+          'синф А {',
+          '    агар(): рақам { бозгашт 1; }',
+          '    бозгашт = 2;',
+          '    статикӣ нав(): рақам { бозгашт 3; }',
+          '    хосусӣ синф = 4;',
+          '    танҳохонӣ функсия = 5;',
+          '    get барои(): рақам { бозгашт ин.синф; }',
+          '    ҳамзамон интизор(): Ваъда<рақам> { бозгашт 6; }',
+          '    *ҳосил(): Generator<рақам> { ҳосил 7; }',
+          '    if(): рақам { бозгашт 8; }',
+          '    return = 9;',
+          '    new(): рақам { бозгашт 10; }',
+          '}',
+          'собит а = нав А();',
+          'чоп.сабт(а.агар(), а.бозгашт, А.нав(), а.функсия, а.барои, [...а.ҳосил()][0]);',
+          'чоп.сабт(а.if(), а.return, а.new(), а?.агар(), а?.бозгашт);',
+          'а.интизор().then(х => чоп.сабт(х));',
+        ].join('\n')
+      )
+    ).toEqual(['1 2 3 5 4 7', '8 9 10 1 2', '6']);
+  });
+
+  test('modifier words name members when no member follows them', async () => {
+    expect(
+      await run(
+        [
+          'синф Б {',
+          '    статикӣ(): рақам { бозгашт 1; }',
+          '    хосусӣ = 2;',
+          '    ҷамъиятӣ?: рақам;',
+          '    танҳохонӣ: рақам = 3;',
+          '    мавҳум = 4;',
+          '    ҳамзамон = 5;',
+          '    бознавис(): рақам { бозгашт 6; }',
+          '    get(): рақам { бозгашт 7; }',
+          '    set = 8;',
+          '}',
+          'собит б = нав Б();',
+          'чоп.сабт(б.статикӣ(), б.хосусӣ, б.ҷамъиятӣ, б.танҳохонӣ, б.мавҳум, б.ҳамзамон);',
+          'чоп.сабт(б.бознавис(), б.get(), б.set);',
+        ].join('\n')
+      )
+    ).toEqual(['1 2 undefined 3 4 5', '6 7 8']);
+    const members = (
+      parseOk('синф В { статикӣ\n    х = 1;\n    ҳамзамон\n    у = 2; }')[0] as {
+        body: { body: Array<{ static: boolean; key: { name: string } }> };
+      }
+    ).body.body;
+    // As in TypeScript, `статикӣ` may end its line; other modifiers may not
+    expect(members.map(member => [member.key.name, member.static])).toEqual([
+      ['х', true],
+      ['ҳамзамон', false],
+      ['у', false],
+    ]);
+  });
+
+  test('object literals, interfaces, object types, enums and member access', async () => {
+    expect(
+      await run(
+        [
+          'интерфейс И {',
+          '    агар: рақам;',
+          '    бозгашт(): рақам;',
+          '    синф?: сатр;',
+          '    танҳохонӣ: рақам;',
+          '    танҳохонӣ нав: сатр;',
+          '    "а-б": рақам;',
+          '    1: сатр;',
+          '}',
+          'собит и: И = {',
+          '    агар: 1,',
+          '    бозгашт() { бозгашт 2; },',
+          '    танҳохонӣ: 3,',
+          '    нав: "н",',
+          '    "а-б": 4,',
+          '    1: "як",',
+          '};',
+          'собит т: { то: рақам; ҳолат(): сатр } = { то: 5, ҳолат: () => "ҳ" };',
+          'шумориш Э { агар, бозгашт }',
+          'чоп.сабт(и.агар, и.бозгашт(), и.синф, и.танҳохонӣ, и.нав, и["а-б"], и[1]);',
+          'чоп.сабт(т.то, т.ҳолат(), Э.агар, Э.бозгашт, и?.агар);',
+        ].join('\n')
+      )
+    ).toEqual(['1 2 undefined 3 н 4 як', '5 ҳ 0 1 1']);
+    expect(typescriptOf('интерфейс И { "а-б": рақам; 1: сатр; агар: мантиқӣ; }')).toBe(
+      'interface И {\n  "а-б": number;\n  1: string;\n  агар: boolean;\n}'
+    );
+  });
+
+  test('errors where TypeScript has them', () => {
+    expect(errorsOf('синф А { а = 1 б = 2 }')).toEqual([
+      "Unexpected token 'б' at line 1, column 16 (Expected ';' after a class field)",
+    ]);
+    expect(errorsOf('интерфейс И { дастрасӣ х: рақам; хосусӣ у: рақам; }')).toEqual([
+      "'дастрасӣ' modifier can only appear on a property declaration at line 1, column 15",
+      "'хосусӣ' modifier cannot appear on a type member at line 1, column 34",
+    ]);
+    expect(errorsOf('синф А { 1n = 1; }\nтағ о = { 2n: 1 };\nнавъ Т = { 3n: рақам };')).toEqual([
+      'A bigint literal cannot be used as a property name at line 1, column 10',
+      'A bigint literal cannot be used as a property name at line 2, column 11',
+      'A bigint literal cannot be used as a property name at line 3, column 12',
+    ]);
+  });
+});
