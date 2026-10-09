@@ -620,7 +620,13 @@ export class ModuleSystem {
     this.setupExternals(externals, previousExternals);
 
     try {
-      const entryModule = await this.loader.load(entryPoint, path.dirname(entryPoint));
+      // The entry is a file, relative to the current directory: not an import specifier,
+      // which could be a package name or a path relative to baseUrl
+      const entryFile = path.resolve(entryPoint);
+      const entryModule = await this.loader.load(
+        `./${path.basename(entryFile)}`,
+        path.dirname(entryFile)
+      );
       // The loader's cycle warnings depend on load order and cache state; cycles are
       // reported once, from the module graph, by checkCircularDependencies().
       this.loader.clearWarnings();

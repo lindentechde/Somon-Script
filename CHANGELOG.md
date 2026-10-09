@@ -99,6 +99,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * On Windows an import of a UNC path (`//server/share/lib/x`) outside `baseUrl` was resolved against `baseUrl`'s drive (`C:\server\share\lib\x`) as if it were project-relative; UNC paths are system paths like `C:\…`.
 * The dependency levels of the module registry treated a module reached a second time as level 0 (`main → c` and `main → b → c`), so `maxDependencyDepth` (`somon module-info --stats`) and the levels of `getDependencyTree()` were too small.
 * `somon bundle --minify` and `somon run --minify` minified the bundle with the `babel.config.json` of the current directory, applying the project's presets and plugins to it (and failing when they were not installed); bundles are minified the same way in every project.
+* `ModuleSystem.compile()`/`bundle()` treated their entry point as an import specifier: a relative entry (`compile("src/main.som")`) failed with "Module not found", and an absolute entry outside `baseUrl` whose path has no known system prefix (`/private/var/…` on macOS, `/workspaces/…`, `/srv/…`) was resolved inside `baseUrl` instead. The entry is a file path, relative to the current directory.
 
 ## 0.4.0 (2026-10-09)
 

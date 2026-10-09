@@ -114,7 +114,9 @@ const bundle = await ms.bundle({
 Compilation:
 
 - `compile(entry)` loads dependencies, registers modules, topologically orders
-  them, and codegens to JS per module.
+  them, and codegens to JS per module. `entry` (also `bundle()`'s `entryPoint`)
+  is a file path, absolute or relative to the current directory, inside or
+  outside `baseUrl`.
 - Errors are returned in `errors` (and not logged): each has the `filePath` it
   is in, `line`/`column`, and for loading errors the `importer` and `specifier`.
 - Circular dependencies follow `loading.circularDependencyStrategy`: `'warn'`

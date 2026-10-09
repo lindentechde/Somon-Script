@@ -586,6 +586,40 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('entry points', () => {
+    beforeEach(() => {
+      write({
+        'src/util.som': 'содир собит У = 7;\n',
+        'src/main.som': 'ворид { У } аз "./util";\nчоп.сабт(У);\n',
+        'scripts/build.som': 'ворид { У } аз "../src/util";\nчоп.сабт(У * 2);\n',
+      });
+    });
+
+    test('a relative entry path is relative to the current directory', async () => {
+      const ms = createSystem();
+      const cwd = process.cwd();
+      process.chdir(root);
+      let result: Awaited<ReturnType<ModuleSystem['compile']>>;
+      try {
+        result = await ms.compile(path.join('src', 'main.som'));
+      } finally {
+        process.chdir(cwd);
+      }
+      expect(result.errors).toEqual([]);
+      expect(result.entryPoint).toBe(path.join(root, 'src', 'main.som'));
+    });
+
+    test('an entry outside baseUrl is a file, not a project-relative import', async () => {
+      const ms = createSystem({ resolution: { baseUrl: path.join(root, 'src') } });
+      const result = await ms.compile(path.join(root, 'scripts', 'build.som'));
+      expect(result.errors).toEqual([]);
+      expect([...result.modules.keys()]).toEqual([
+        path.join(root, 'src', 'util.som'),
+        path.join(root, 'scripts', 'build.som'),
+      ]);
+    });
+  });
+
   describe('minified bundles', () => {
     test("ignore the Babel configuration of the project they're built in", async () => {
       write({
