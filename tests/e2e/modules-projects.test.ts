@@ -518,8 +518,8 @@ describe('reported: outside the module system', () => {
   });
 
   // src/parser.ts: a default import named like a member alias of a built-in
-  // (`маълумот`, console.info) is a parse error; `ворид * чун маълумот` works.
-  test.failing('a default import may be named маълумот', () => {
+  // (`маълумот`, console.info) was a parse error; `ворид * чун маълумот` always worked.
+  test('a default import may be named маълумот', () => {
     const source = 'ворид маълумот аз "./д";\nчоп.сабт(маълумот);';
     expect(compile(source, { typeCheck: false }).errors).toEqual([]);
   });

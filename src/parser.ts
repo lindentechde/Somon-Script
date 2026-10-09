@@ -3484,8 +3484,8 @@ export class Parser {
       };
     }
 
-    // Handle default import or named imports
-    if (this.check(TokenType.IDENTIFIER)) {
+    // A default import binds any name a variable may have (`маълумот`, `рӯйхат`, …)
+    if (this.isPlainIdentifierToken(this.peek())) {
       const local = this.advance();
       specifiers.push({
         type: 'ImportDefaultSpecifier',

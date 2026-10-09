@@ -90,3 +90,20 @@ describe('parser: overloads of class methods', () => {
     ]);
   });
 });
+
+describe('parser: default imports', () => {
+  test('bind any name a variable may have, built-in member aliases too', () => {
+    for (const name of ['маълумот', 'рӯйхат', 'навъ', 'беқимат']) {
+      const parser = new Parser(new Lexer(`ворид ${name}, { а } аз "./м";`).tokenize());
+      const [declaration] = parser.parse().body as any[];
+      expect(parser.getErrors()).toEqual([]);
+      expect(declaration.specifiers.map((s: any) => [s.type, s.local.name])).toEqual([
+        ['ImportDefaultSpecifier', name],
+        ['ImportSpecifier', 'а'],
+      ]);
+    }
+    expect(
+      compile('ворид маълумот аз "./д";\nчоп.сабт(маълумот);', { typeCheck: false }).code
+    ).toContain('const маълумот = __somon_import_0.default ?? __somon_import_0;');
+  });
+});
