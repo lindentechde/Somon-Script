@@ -165,7 +165,8 @@ fast (the 100 LeetCode solutions take a few seconds).
 `--declaration` (config `declaration`, API `declaration: true`) also produces
 TypeScript declarations: `somon compile math.som --declaration` writes `math.js`
 and `math.d.ts`, and `compile()` returns the text in
-`CompileResult.declaration`.
+`CompileResult.declaration`. The file is named as TypeScript looks for it next
+to the output: `-o math.mjs` writes `math.d.mts`, `-o math.cjs` `math.d.cts`.
 
 ```som
 содир функсия ҷамъ(а: рақам, б: рақам): рақам {
