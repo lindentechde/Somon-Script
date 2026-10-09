@@ -28,8 +28,6 @@ const baseConfig = {
     '!src/types.ts', // Re-export file
     // Exclude the thin Node entry wrapper; we cover CLI logic via program tests
     '!src/cli.ts',
-    // Exclude infrastructure/system components that are better tested via integration tests
-    '!src/module-system/logger.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {
