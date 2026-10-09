@@ -375,6 +375,47 @@ describe('module system regressions', () => {
     });
   });
 
+  describe('Node.js built-in modules', () => {
+    const files = {
+      'util.js': "const os = require('os');\nexports.eol = JSON.stringify(os.EOL);\n",
+      'main.som': [
+        'ворид * чун фс аз "fs";',
+        'ворид { join } аз "node:path";',
+        'ворид * чун ваъдаҳо аз "fs/promises";',
+        'ворид { eol } аз "./util";',
+        'чоп.сабт(навъи фс.existsSync, join("а", "б"), навъи ваъдаҳо.readFile, eol.length > 2);',
+      ].join('\n'),
+    };
+
+    test('stay host requires: compile, validate and run without externals', async () => {
+      write(files);
+      const ms = createSystem();
+      const result = await ms.compile(path.join(root, 'main.som'));
+      expect(result.errors).toEqual([]);
+      expect([...result.modules.keys()].map(id => path.basename(id)).sort()).toEqual([
+        'main.som',
+        'util.js',
+      ]);
+      expect(ms.validate()).toEqual({ isValid: true, errors: [] });
+
+      expect(await bundleAndRun('main.som', { ms })).toBe(
+        `function ${path.join('а', 'б')} function true`
+      );
+    });
+
+    test('an esm bundle imports them and an iife bundle refuses them', async () => {
+      write(files);
+      const ms = createSystem();
+      const esm = await ms.bundle({ entryPoint: path.join(root, 'main.som'), format: 'esm' });
+      expect(esm.code).toMatch(/^import \* as __somonImport\d from "fs";$/m);
+      expect(esm.code).toMatch(/^import \* as __somonImport\d from "node:path";$/m);
+      expect(esm.code).toMatch(/^import \* as __somonImport\d from "os";$/m);
+      await expect(
+        ms.bundle({ entryPoint: path.join(root, 'main.som'), format: 'iife' })
+      ).rejects.toThrow(/needs 'os', 'fs', 'node:path', 'fs\/promises'\./);
+    });
+  });
+
   describe('registry graph', () => {
     test('stores resolved module ids only', async () => {
       write({

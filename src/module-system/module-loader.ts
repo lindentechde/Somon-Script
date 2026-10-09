@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import { parseSync } from '@babel/core';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
@@ -749,9 +750,11 @@ export class ModuleLoader {
   }
 
   private matchExternal(specifier: string): string | null {
+    const trimmed = specifier.trim();
+    // Node.js modules (`fs`, `node:path`) always come from the host
+    if (isBuiltin(trimmed)) return trimmed;
     if (this.externalSpecifiers.size === 0) return null;
 
-    const trimmed = specifier.trim();
     const candidates = this.buildExternalCandidates(trimmed);
     for (const candidate of candidates) {
       if (this.externalSpecifiers.has(candidate)) {

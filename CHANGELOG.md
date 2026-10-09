@@ -91,6 +91,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `somon.config.json` accepted an array where an object belongs (`"compilerOptions": []`, also for the file itself, `moduleSystem` and its sections, `paths`, `bundle` and `fmt`) and ignored it; it is a configuration error (`compilerOptions: must be an object`).
 * A `somon.config.json` saved as UTF-8 with a byte order mark (as Notepad and other Windows editors do) was "not valid JSON"; the mark is ignored.
 * `somon repl` with piped input no longer fails on Node.js 24: when the input ended while an input was still running, the next prompt went to the closed readline interface, which Node.js 24 rejects (`readline was closed`).
+* Importing a Node.js module (`ворид * чун фс аз "fs"`, `"node:path"`, `"fs/promises"`) failed in `somon run`, `somon bundle` and `ModuleSystem.compile()` with "Module not found" unless it was listed in `externals`; built-in modules now always stay host requires (imports of an `esm` bundle), and `validate()` no longer reports them as missing.
 
 ## 0.4.0 (2026-10-09)
 

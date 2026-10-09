@@ -1,5 +1,6 @@
 import chokidar from 'chokidar';
 import type { FSWatcher, WatchOptions } from 'chokidar';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
@@ -1853,7 +1854,8 @@ export class ModuleSystem {
 
     // Check for missing dependencies
     for (const module of this.registry.getAll()) {
-      for (const dep of module.dependencies) {
+      // Node.js modules (`fs`, `node:path`) are provided by the host
+      for (const dep of module.dependencies.filter(specifier => !isBuiltin(specifier))) {
         try {
           this.resolver.resolve(dep, module.resolvedPath);
         } catch (error) {

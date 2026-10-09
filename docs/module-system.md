@@ -134,11 +134,11 @@ Bundling:
   [llm-guide/16-targets.md](../llm-guide/16-targets.md)).
 - Local `.js` dependencies are included verbatim (their relative requires are
   rewritten too) and `.json` dependencies as `module.exports = <json>`. Packages
-  from `node_modules` and `externals` stay `require()` calls resolved by the
-  host at runtime, relative to the bundle file. A relative `require()` in a
-  local `.js` file that does not resolve at build time (an optional dependency
-  in `try`/`catch`, say) is left to the runtime as well; requires in comments
-  are ignored.
+  from `node_modules`, Node.js modules (`fs`, `node:path`, `fs/promises`) and
+  `externals` stay `require()` calls resolved by the host at runtime, relative
+  to the bundle file. A relative `require()` in a local `.js` file that does not
+  resolve at build time (an optional dependency in `try`/`catch`, say) is left
+  to the runtime as well; requires in comments are ignored.
 - Bundles are relocatable: they contain no absolute paths of the build machine,
   and every bundled module sees the bundle file's `__filename` and `__dirname`.
   `somon run` instead bundles with `modulePaths: true`: each module gets its
