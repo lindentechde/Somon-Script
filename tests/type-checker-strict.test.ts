@@ -743,3 +743,154 @@ describe('symbol, tuple, constructor and generic types', () => {
     expectClean('собит с: сатр = сатр.хоми`а${1}`;');
   });
 });
+
+describe('regexes, class expressions, accessors, static blocks, parameter properties', () => {
+  describe('valid programs are clean in strict mode', () => {
+    test.each([
+      [
+        'RegExp members of a regex literal',
+        'собит р = /а/g;\n' +
+          'собит б: мантиқӣ = р.test("а");\n' +
+          'собит с: сатр = р.source + р.flags;\n' +
+          'р.lastIndex = 0;\n' +
+          'собит н: рақам = р.lastIndex;\n' +
+          'чоп.сабт(р.exec("а"), р.global, р.sticky, р.unicode, р.toString(), "а".replace(р, "б"));\n' +
+          'собит р2: RegExp = нав RegExp("а"); чоп.сабт(р2.test("а"));',
+      ],
+      [
+        'members and statics of class expressions',
+        'собит К = синф Ном {\n' +
+          '  статикӣ шумора = 0;\n' +
+          '  х: рақам = 1;\n' +
+          '  конструктор() { Ном.шумора++; К.шумора++; }\n' +
+          '  гир(): рақам { бозгашт ин.х + Ном.шумора; }\n' +
+          '};\n' +
+          'собит к = нав К();\n' +
+          'собит н: рақам = к.гир() + к.х + К.шумора;\n' +
+          'собит Анон = синф { статикӣ т = 1; у = 2; };\n' +
+          'собит а: рақам = Анон.т + нав Анон().у + нав (синф { з = 3; })().з;\n' +
+          'чоп.сабт(синф { }, [синф { }]);',
+      ],
+      [
+        'a class expression extending a ҳар base (a mixin)',
+        'собит М = (Асос: ҳар) => синф мерос Асос { м(): рақам { бозгашт 1; } };\n' +
+          'функсия ф(Асос: ҳар) { бозгашт синф мерос Асос { }; }',
+      ],
+      [
+        'object literal accessors',
+        'собит о = { _х: 1, get х(): рақам { бозгашт ин._х; }, set х(қ: рақам) { ин._х = қ; } };\n' +
+          'о.х = 4;\n' +
+          'собит н: рақам = о.х + 1;\n' +
+          'собит п = { set ф(қ: сатр) { } };\n' +
+          'п.ф = "а";',
+      ],
+      [
+        'static blocks',
+        'синф К { статикӣ х = 0; статикӣ { К.х = 9; ин.х = 1; тағ м: рақам = К.х; } }',
+      ],
+      [
+        'parameter properties are typed instance members',
+        'синф Н {\n' +
+          '  конструктор(хосусӣ х: рақам, ҷамъиятӣ у: сатр, танҳохонӣ з = 3, муҳофизатшуда в?: рақам) { }\n' +
+          '  ҷамъ(): рақам { бозгашт ин.х + ин.з + (ин.в ?? 0); }\n' +
+          '}\n' +
+          'собит н = нав Н(1, "у");\n' +
+          'собит у: сатр = н.у;\n' +
+          'собит з: рақам = н.з;\n' +
+          // Functions in field initializers run after the constructor
+          'синф М { ф = () => ин.х; статикӣ с = 1; конструктор(хосусӣ х: рақам) { } }\n' +
+          // A private field of the same name is not the parameter property
+          'синф П { #х = 1; у = ин.#х; танҳохонӣ з: рақам = 2; конструктор(хосусӣ х: рақам) { } }',
+      ],
+      [
+        'optional interface methods may be missing',
+        'интерфейс И { м?(): рақам; а: рақам; }\n' +
+          'собит и: И = { а: 1 };\n' +
+          'собит н: рақам | беқимат = и.м?.();\n' +
+          'навъ Т = { н?(х: рақам): рақам };\n' +
+          'собит т: Т = {};',
+      ],
+      [
+        'method signatures are function types',
+        'интерфейс И { ҷамъ(а: рақам, б?: рақам): рақам; ҳамон<Т>(х: Т): Т; }\n' +
+          'навъ Т = { н: рақам };\n' +
+          'собит и: И = { ҷамъ: (а, б) => а + (б ?? 0), ҳамон: х => х };\n' +
+          'собит н: рақам = и.ҷамъ(1) + и.ҷамъ(1, 2);\n' +
+          'и.ҳамон("а");',
+      ],
+      [
+        'overloaded method signatures',
+        'интерфейс И { ф(х: рақам): рақам; ф(х: сатр): сатр; }\n' +
+          'собит и: И = { ф: (х: ҳар) => х };\n' +
+          'и.ф(1); и.ф("а");',
+      ],
+    ])('%s', (_name, source) => {
+      expectClean(source);
+      expect(compile(source).errors).toEqual([]);
+    });
+  });
+
+  describe('errors are still reported', () => {
+    test.each([
+      ['a missing RegExp member', 'чоп.сабт(/а/.нест);', /PROPERTY_NOT_FOUND.*'нест'.*'RegExp'/],
+      ['a regex where a сатр is expected', 'собит с: сатр = /а/;', /TYPE_NOT_ASSIGNABLE.*'RegExp'/],
+      [
+        'a missing member of a class expression instance',
+        'собит К = синф { х = 1; }; нав К().нест;',
+        /PROPERTY_NOT_FOUND.*'нест'.*type 'К'/,
+      ],
+      [
+        'a missing static of a class expression',
+        'собит К = синф Ном { статикӣ х = 1; }; К.нест;',
+        /PROPERTY_NOT_FOUND.*'нест'.*class 'Ном'/,
+      ],
+      [
+        'a getter used as another type',
+        'собит о = { get х(): рақам { бозгашт 1; } }; собит с: сатр = о.х;',
+        /TYPE_NOT_ASSIGNABLE.*'рақам'.*'сатр'/,
+      ],
+      [
+        'a parameter property used as another type',
+        'синф Н { конструктор(хосусӣ х: рақам) { } } собит с: сатр = нав Н(1).х;',
+        /TYPE_NOT_ASSIGNABLE.*'рақам'.*'сатр'/,
+      ],
+      [
+        'an optional parameter property',
+        'синф Н { конструктор(ҷамъиятӣ у?: сатр) { } } чоп.сабт(нав Н().у.length);',
+        /POSSIBLY_NULL/,
+      ],
+      [
+        'a required interface method that is missing',
+        'интерфейс И { м(): рақам; } собит и: И = {};',
+        /TYPE_NOT_ASSIGNABLE/,
+      ],
+      [
+        'a non-function for a method signature',
+        'интерфейс И { м(): рақам; } собит и: И = { м: 5 };',
+        /TYPE_NOT_ASSIGNABLE/,
+      ],
+      [
+        'a method signature called with too few arguments',
+        'интерфейс И { ҷамъ(а: рақам, б: рақам): рақам; } функсия ф(и: И) { и.ҷамъ(1); }',
+        /ARGUMENT_COUNT_MISMATCH.*'ҷамъ' expected 2/,
+      ],
+      [
+        'a method signature result used as another type',
+        'интерфейс И { м(): рақам; } функсия ф(и: И) { собит с: сатр = и.м(); }',
+        /TYPE_NOT_ASSIGNABLE/,
+      ],
+      [
+        'a field initializer reading a parameter property (it runs before the constructor)',
+        'синф Н { у = ин.х * 2; конструктор(хосусӣ х: рақам) { } }',
+        /USED_BEFORE_INITIALIZATION.*'х'/,
+      ],
+      [
+        'a nonexistent member read in a static block',
+        'синф К { статикӣ { К.нест; } }',
+        /PROPERTY_NOT_FOUND.*'нест'/,
+      ],
+    ])('%s', (_name, source, pattern) => {
+      expectError(source, pattern);
+    });
+  });
+});

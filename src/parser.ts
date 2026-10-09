@@ -14,11 +14,13 @@ import {
   ExpressionStatement,
   Identifier,
   Literal,
+  RegExpLiteral,
   BinaryExpression,
   UnaryExpression,
   UpdateExpression,
   CallExpression,
   ChainExpression,
+  ClassExpression,
   ConditionalExpression,
   SequenceExpression,
   AssignmentPattern,
@@ -76,6 +78,7 @@ import {
   ClassBody,
   MethodDefinition,
   PropertyDefinition,
+  StaticBlock,
   SwitchStatement,
   SwitchCase,
   BreakStatement,
@@ -101,12 +104,18 @@ import {
   TypePredicate,
   ConstructorType,
 } from './types';
-import { Lexer } from './lexer';
+import { Lexer, isRegexStartInText, regexLiteralEnd } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
 import { DeclarationHandler } from './handlers/declaration-handler';
 import { LoopHandler } from './handlers/loop-handler';
 
 type AccessibilityModifier = 'public' | 'private' | 'protected' | undefined;
+
+/** Modifiers of a constructor parameter property; only those present are set. */
+interface ParameterModifiers {
+  accessibility?: 'public' | 'private' | 'protected';
+  readonly?: boolean;
+}
 
 /** Raised when input nests deeper than the parser supports; aborts the parse. */
 class NestingError extends Error {}
@@ -1622,6 +1631,7 @@ export class Parser {
         TokenType.NUMBER,
         TokenType.STRING,
         TokenType.TEMPLATE_LITERAL,
+        TokenType.REGEX,
         TokenType.LEFT_PAREN,
         TokenType.LEFT_BRACKET,
         TokenType.NOT,
@@ -2098,7 +2108,22 @@ export class Parser {
     if (this.match(TokenType.TEMPLATE_LITERAL)) {
       return this.parseTemplateLiteral();
     }
+    if (this.match(TokenType.REGEX)) {
+      return this.createRegExpLiteral(this.previous());
+    }
     return null;
+  }
+
+  /** The REGEX token holds the literal as written: `/а+/g`. */
+  private createRegExpLiteral(token: Token): RegExpLiteral {
+    const closing = token.value.lastIndexOf('/');
+    return {
+      type: 'RegExpLiteral',
+      pattern: token.value.slice(1, closing),
+      flags: token.value.slice(closing + 1),
+      line: token.line,
+      column: token.column,
+    };
   }
 
   private parseThisOrSuperExpression(): Expression | null {
@@ -2198,6 +2223,10 @@ export class Parser {
       return this.parseFunctionExpression(this.previous());
     }
 
+    if (this.match(TokenType.СИНФ)) {
+      return this.parseClassExpression(this.previous());
+    }
+
     if (this.check(TokenType.ҲАМЗАМОН) && this.peekNext()?.type === TokenType.ФУНКСИЯ) {
       const asyncToken = this.advance();
       this.advance(); // consume 'функсия'
@@ -2221,10 +2250,18 @@ export class Parser {
     const grouping = this.parseGroupingOrCollection();
     if (grouping) return grouping;
 
+    throw this.unexpectedOperandError();
+  }
+
+  /** The error for a token that starts no operand. */
+  private unexpectedOperandError(): Error {
     const token = this.peek();
-    throw new Error(
-      `Unexpected token '${token.value}' at line ${token.line}, column ${token.column}`
-    );
+    const at = `at line ${token.line}, column ${token.column}`;
+    // The lexer reads '/' as a regular expression only when it is closed on its line
+    if (token.type === TokenType.DIVIDE || token.type === TokenType.DIVIDE_ASSIGN) {
+      return new Error(`Unterminated regular expression ${at}`);
+    }
+    return new Error(`Unexpected token '${token.value}' ${at}`);
   }
 
   /** `нав.target` (`new.target`); the only meta property of `нав`. */
@@ -2312,19 +2349,16 @@ export class Parser {
 
   /**
    * Index of the '}' that closes an interpolation whose body starts at `start`;
-   * braces in strings, nested templates and comments do not count.
+   * braces in strings, nested templates, regular expressions and comments do not count.
    */
   private findInterpolationEnd(raw: string, start: number): number {
     let depth = 1;
     let i = start;
     while (i < raw.length) {
       const char = raw[i];
-      if (char === '/' && raw[i + 1] === '/') {
-        const newline = raw.indexOf('\n', i);
-        i = newline === -1 ? raw.length : newline;
-      } else if (char === '/' && raw[i + 1] === '*') {
-        const close = raw.indexOf('*/', i + 2);
-        i = close === -1 ? raw.length : close + 2;
+      const skipped = char === '/' ? this.skipCommentOrRegex(raw, i, start) : -1;
+      if (skipped !== -1) {
+        i = skipped;
       } else if (char === '"' || char === "'") {
         i = this.skipQuoted(raw, i + 1, char);
       } else if (char === '`') {
@@ -2340,6 +2374,22 @@ export class Parser {
       }
     }
     return raw.length;
+  }
+
+  /**
+   * At the '/' at `i` of an interpolation starting at `start`: the index just
+   * past a comment or regular expression literal there, or -1 for a division.
+   */
+  private skipCommentOrRegex(raw: string, i: number, start: number): number {
+    if (raw[i + 1] === '/') {
+      const newline = raw.indexOf('\n', i);
+      return newline === -1 ? raw.length : newline;
+    }
+    if (raw[i + 1] === '*') {
+      const close = raw.indexOf('*/', i + 2);
+      return close === -1 ? raw.length : close + 2;
+    }
+    return isRegexStartInText(raw, i, start) ? regexLiteralEnd(raw, i) : -1;
   }
 
   /** Index just past the closing `quote` of a string starting at `i`. */
@@ -3077,8 +3127,12 @@ export class Parser {
       column: startToken.column,
     };
 
+    // A generic method's type parameters: `{ ҳамон<Т>(х: Т): Т { … } }`
+    const typeParameters = this.parseTypeParametersOrSkip();
     if (this.match(TokenType.LEFT_PAREN)) {
-      return this.parseMethodShorthand(property, startToken, accessor, modifiers);
+      this.parseMethodShorthand(property, startToken, accessor, modifiers);
+      if (typeParameters) (property.value as FunctionExpression).typeParameters = typeParameters;
+      return property;
     }
 
     if (modifiers.isAsync || modifiers.generator) {
@@ -3117,7 +3171,7 @@ export class Parser {
     property.method = true;
     if (accessor) {
       property.kind = accessor;
-      this.checkAccessorParams(accessor, method.params, startToken);
+      this.checkAccessorParams(accessor, method, startToken);
     }
     return property;
   }
@@ -3186,11 +3240,14 @@ export class Parser {
     };
   }
 
-  /** Parses parameters after a consumed '(' up to and including the closing ')'. */
-  private parseParameterList(closeMessage: string): Parameter[] {
+  /**
+   * Parses parameters after a consumed '(' up to and including the closing ')'.
+   * `allowProperties`: a constructor, whose parameters may be parameter properties.
+   */
+  private parseParameterList(closeMessage: string, allowProperties = false): Parameter[] {
     const params: Parameter[] = [];
     while (!this.check(TokenType.RIGHT_PAREN)) {
-      const param = this.parseParameter();
+      const param = this.parseParameter(allowProperties);
       params.push(param);
       if (param.rest && !this.check(TokenType.RIGHT_PAREN)) {
         throw new Error(
@@ -3203,7 +3260,8 @@ export class Parser {
     return params;
   }
 
-  private parseParameter(): Parameter {
+  private parseParameter(allowProperties = false): Parameter {
+    const modifiers = this.parseParameterModifiers(allowProperties);
     const rest = this.match(TokenType.SPREAD);
     const startToken = this.peek();
 
@@ -3259,11 +3317,67 @@ export class Parser {
       optional,
       line: startToken.line,
       column: startToken.column,
+      ...modifiers,
     };
     if (defaultValue) param.defaultValue = defaultValue;
     if (rest) param.rest = true;
     if (pattern) param.pattern = pattern;
     return param;
+  }
+
+  private static readonly PARAMETER_MODIFIERS: ReadonlyMap<
+    TokenType,
+    'public' | 'private' | 'protected' | 'readonly'
+  > = new Map([
+    [TokenType.ҶАМЪИЯТӢ, 'public'],
+    [TokenType.ХОСУСӢ, 'private'],
+    [TokenType.МУҲОФИЗАТШУДА, 'protected'],
+    [TokenType.ТАНҲОХОНӢ, 'readonly'],
+  ]);
+
+  /**
+   * Modifiers of a parameter property: `[ҷамъиятӣ|хосусӣ|муҳофизатшуда] [танҳохонӣ]`.
+   * They are modifiers only when a parameter follows (`хосусӣ х`); otherwise
+   * (`(хосусӣ: рақам)`) the word is the parameter's name.
+   */
+  private parseParameterModifiers(allowProperties: boolean): ParameterModifiers {
+    const result: ParameterModifiers = {};
+    const first = this.peek();
+    let modifier = Parser.PARAMETER_MODIFIERS.get(first.type);
+    while (modifier && this.startsParameterAfterModifier(this.peekNext())) {
+      const token = this.advance();
+      const at = `at line ${token.line}, column ${token.column}`;
+      if (!allowProperties) {
+        throw new Error(`A parameter property is only allowed in a constructor ${at}`);
+      }
+      if (modifier === 'readonly' ? result.readonly : result.accessibility) {
+        throw new Error(`Duplicate modifier '${token.value}' ${at}`);
+      }
+      if (modifier === 'readonly') {
+        result.readonly = true;
+      } else if (result.readonly) {
+        throw new Error(`'${token.value}' modifier must precede 'танҳохонӣ' modifier ${at}`);
+      } else {
+        result.accessibility = modifier;
+      }
+      modifier = Parser.PARAMETER_MODIFIERS.get(this.peek().type);
+    }
+    if (first !== this.peek() && !this.isPlainIdentifierToken(this.peek())) {
+      throw new Error(
+        `A parameter property cannot be a rest parameter or a destructuring pattern at line ${first.line}, column ${first.column}`
+      );
+    }
+    return result;
+  }
+
+  private startsParameterAfterModifier(token: Token | undefined): boolean {
+    return (
+      token !== undefined &&
+      (this.isPlainIdentifierToken(token) ||
+        token.type === TokenType.SPREAD ||
+        token.type === TokenType.LEFT_BRACKET ||
+        token.type === TokenType.LEFT_BRACE)
+    );
   }
 
   private typeAnnotation(): TypeAnnotation {
@@ -4054,35 +4168,50 @@ export class Parser {
     };
   }
 
-  private parseMethodSignature(keyName: Token, readonly: boolean): PropertySignature {
-    this.advance(); // consume '('
+  /**
+   * Method signature `ном[?][<Т>](параметрҳо)[: Навъ];`, recorded as a member
+   * whose type is the function type. A missing return type is `ҳар`, as in
+   * TypeScript.
+   */
+  private parseMethodSignature(
+    keyName: Token,
+    readonly: boolean,
+    optional: boolean
+  ): PropertySignature {
+    const typeParameters = this.parseTypeParametersOrSkip();
+    const openParen = this.consume(TokenType.LEFT_PAREN, "Expected '(' in method signature");
+    const parameters = this.parseParameterList("Expected ')' after method parameters");
 
-    // Skip parameters for now (just consume until ')')
-    let parenCount = 1;
-    while (parenCount > 0 && !this.isAtEnd()) {
-      if (this.check(TokenType.LEFT_PAREN)) {
-        parenCount++;
-      } else if (this.check(TokenType.RIGHT_PAREN)) {
-        parenCount--;
-      }
-      this.advance();
-    }
-
-    this.consume(TokenType.COLON, "Expected ':' after method parameters");
-    const typeAnnotation = this.returnTypeAnnotation();
+    const returnType: TypeNode = this.match(TokenType.COLON)
+      ? this.parseReturnType()
+      : ({
+          type: 'PrimitiveType',
+          name: 'ҳар',
+          line: openParen.line,
+          column: openParen.column,
+        } as TypeNode);
     this.consumeMemberSeparator("Expected ';' after method signature");
 
+    const functionType: FunctionType = {
+      type: 'FunctionType',
+      parameters,
+      returnType,
+      line: keyName.line,
+      column: keyName.column,
+    };
     return {
       type: 'PropertySignature',
-      key: {
-        type: 'Identifier',
-        name: keyName.value,
+      key: this.createIdentifier(keyName),
+      typeAnnotation: {
+        type: 'TypeAnnotation',
+        typeAnnotation: functionType,
         line: keyName.line,
         column: keyName.column,
       },
-      typeAnnotation,
-      optional: false,
+      optional,
       readonly,
+      method: true,
+      ...(typeParameters && { typeParameters }),
       line: keyName.line,
       column: keyName.column,
     };
@@ -4118,16 +4247,14 @@ export class Parser {
     }
 
     const keyName = this.parsePropertyKeyName();
-    // A generic method signature: `метод<Т>(х: Т): Т;`
-    this.parseTypeParametersOrSkip();
+    const optional = this.match(TokenType.QUESTION);
 
-    // Check if this is a method signature (has parentheses)
-    if (this.check(TokenType.LEFT_PAREN)) {
-      return this.parseMethodSignature(keyName, readonly);
+    // Method signature: `ном(…): Навъ`, `ном?(…)`, `ном<Т>(…)`
+    if (this.check(TokenType.LEFT_PAREN) || this.check(TokenType.LESS_THAN)) {
+      return this.parseMethodSignature(keyName, readonly, optional);
     }
 
     // Regular property signature: propName: type;
-    const optional = this.match(TokenType.QUESTION);
     this.consume(TokenType.COLON, "Expected ':' after property name");
     const typeAnnotation = this.typeAnnotation();
     this.consumeMemberSeparator("Expected ';' after property type");
@@ -4228,13 +4355,48 @@ export class Parser {
     };
   }
 
+  /**
+   * `синф [Ном] [мерос Асос] [татбиқ И] { … }` in expression position; the
+   * name is optional (`мерос`/`татбиқ` right after `синф` start the heritage).
+   */
+  private parseClassExpression(classToken: Token): ClassExpression {
+    const nameToken =
+      this.check(TokenType.LEFT_BRACE) ||
+      this.check(TokenType.МЕРОС) ||
+      this.check(TokenType.ТАТБИҚ) ||
+      this.check(TokenType.LESS_THAN)
+        ? undefined
+        : this.parseImportOrExportName("Expected class name or '{'");
+
+    const typeParameters = this.parseTypeParametersOrSkip();
+
+    const superClassToken = this.parseClassExtendsClause();
+    const implementsTokens = this.parseClassImplementsClause();
+    const body = this.consumeClassBody();
+
+    const classExpression: ClassExpression = {
+      type: 'ClassExpression',
+      ...(typeParameters && { typeParameters }),
+      superClass: superClassToken ? this.createIdentifier(superClassToken) : undefined,
+      implements: implementsTokens.map(impl => this.createIdentifier(impl)),
+      body,
+      line: classToken.line,
+      column: classToken.column,
+    };
+    if (nameToken) classExpression.name = this.createIdentifier(nameToken);
+    return classExpression;
+  }
+
   private classBody(): ClassBody {
-    const members: (MethodDefinition | PropertyDefinition)[] = [];
+    const members: (MethodDefinition | PropertyDefinition | StaticBlock)[] = [];
 
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
       const memberStart = this.current;
       try {
-        const member = this.classMember();
+        // `статикӣ { … }`; a member named `статикӣ` is followed by '(', ':', '=', …
+        const member = this.checkSequence(TokenType.СТАТИКӢ, TokenType.LEFT_BRACE)
+          ? this.staticBlock()
+          : this.classMember();
         if (member) {
           members.push(member);
         }
@@ -4397,22 +4559,28 @@ export class Parser {
     if (typeParameters) method.value.typeParameters = typeParameters;
     if (accessor) {
       method.kind = accessor;
-      this.checkAccessorParams(accessor, method.value.params, method);
+      this.checkAccessorParams(accessor, method.value, method);
     }
     return method;
   }
 
-  /** A getter takes no parameter and a setter exactly one, as JavaScript requires. */
+  /**
+   * A getter takes no parameter and a setter exactly one, as JavaScript
+   * requires; a setter has no return type, as TypeScript requires.
+   */
   private checkAccessorParams(
     accessor: 'get' | 'set',
-    params: Parameter[],
+    method: FunctionExpression,
     at: { line: number; column: number }
   ): void {
+    const params = method.params;
     const position = `at line ${at.line}, column ${at.column}`;
     if (accessor === 'get' && params.length > 0) {
       this.errors.push(`Getter must not have any formal parameters ${position}`);
     } else if (accessor === 'set' && (params.length !== 1 || params[0].rest)) {
       this.errors.push(`Setter must have exactly one formal parameter ${position}`);
+    } else if (accessor === 'set' && method.returnType) {
+      this.errors.push(`A 'set' accessor cannot have a return type annotation ${position}`);
     }
   }
 
@@ -4479,6 +4647,19 @@ export class Parser {
     return property;
   }
 
+  /** Class static initialization block: `статикӣ { … }`. */
+  private staticBlock(): StaticBlock {
+    const staticToken = this.advance();
+    this.advance(); // consume '{'
+    const block = this.blockStatement();
+    return {
+      type: 'StaticBlock',
+      body: block.body,
+      line: staticToken.line,
+      column: staticToken.column,
+    };
+  }
+
   private constructorMethod(accessibility?: string, isStatic?: boolean): MethodDefinition {
     const constructorToken = this.previous();
     const access: AccessibilityModifier =
@@ -4487,7 +4668,7 @@ export class Parser {
         : undefined;
 
     this.consume(TokenType.LEFT_PAREN, "Expected '(' after constructor");
-    const params = this.parseParameterList("Expected ')' after constructor parameters");
+    const params = this.parseParameterList("Expected ')' after constructor parameters", true);
 
     this.consume(TokenType.LEFT_BRACE, "Expected '{' after constructor parameters");
     const body = this.blockStatement();

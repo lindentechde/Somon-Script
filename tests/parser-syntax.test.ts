@@ -1429,3 +1429,231 @@ describe('Parser: TypeScript type operators', () => {
     expect(output).toEqual(['55', '10']);
   });
 });
+
+describe('Parser: regular expression literals', () => {
+  test('pattern and flags are kept as written', () => {
+    expect(initOf('тағ р = /[/]\\d+/gu;')).toEqual({
+      type: 'RegExpLiteral',
+      pattern: '[/]\\d+',
+      flags: 'gu',
+      line: 1,
+      column: 9,
+    });
+  });
+
+  test('a regex is a primary expression: member access, arguments, operands', () => {
+    expect(expressionOf('/а/g.test(с);')).toMatchObject({
+      type: 'CallExpression',
+      callee: { type: 'MemberExpression', object: { type: 'RegExpLiteral', flags: 'g' } },
+    });
+    expect(expressionOf('с.replace(/-/g, "+");')).toMatchObject({
+      arguments: [{ type: 'RegExpLiteral', pattern: '-' }, { type: 'Literal' }],
+    });
+    expect(expressionOf('навъи /а/;')).toMatchObject({
+      type: 'UnaryExpression',
+      operator: 'typeof',
+      argument: { type: 'RegExpLiteral' },
+    });
+  });
+
+  test('division still parses as a binary operator', () => {
+    expect(expressionOf('а / б / в;')).toMatchObject({
+      type: 'BinaryExpression',
+      operator: '/',
+      left: { type: 'BinaryExpression', operator: '/' },
+      right: { type: 'Identifier', name: 'в' },
+    });
+    expect(expressionOf('а /= 2;')).toMatchObject({ type: 'AssignmentExpression', operator: '/=' });
+  });
+});
+
+describe('Parser: class expressions', () => {
+  test('anonymous, named and with a base class', () => {
+    expect(initOf('собит К = синф { х = 1; };')).toMatchObject({
+      type: 'ClassExpression',
+      body: { type: 'ClassBody', body: [{ type: 'PropertyDefinition', key: { name: 'х' } }] },
+    });
+    expect(initOf<{ name?: unknown }>('собит К = синф { };').name).toBeUndefined();
+    expect(initOf('собит К = синф Ном мерос Асос татбиқ И { };')).toMatchObject({
+      type: 'ClassExpression',
+      name: { name: 'Ном' },
+      superClass: { name: 'Асос' },
+      implements: [{ name: 'И' }],
+    });
+    expect(initOf('собит К = синф мерос Асос { };')).toMatchObject({
+      type: 'ClassExpression',
+      superClass: { name: 'Асос' },
+    });
+  });
+
+  test('as an argument and as the callee of нав', () => {
+    expect(expressionOf('ф(синф { });')).toMatchObject({
+      arguments: [{ type: 'ClassExpression' }],
+    });
+    expect(initOf('тағ о = нав (синф { х = 1; })();')).toMatchObject({
+      type: 'NewExpression',
+      callee: { type: 'ClassExpression' },
+    });
+  });
+
+  test('a class statement still needs a name', () => {
+    expect(parse('синф { }').errors).toEqual([expect.stringContaining('Expected class name')]);
+  });
+});
+
+describe('Parser: object literal accessors', () => {
+  test('get and set before a member name', () => {
+    const object = initOf<ObjectExpression>(
+      'тағ о = { get х(): рақам { бозгашт 1; }, set х(қ: рақам) { }, get "к"() { }, set [к](қ) { } };'
+    );
+    const [getter, setter, stringKey, computed] = object.properties as Property[];
+    expect(getter).toMatchObject({
+      kind: 'get',
+      key: { name: 'х' },
+      value: { type: 'FunctionExpression', params: [], returnType: {} },
+    });
+    expect(getter.method).toBe(true);
+    expect(setter).toMatchObject({ kind: 'set', value: { params: [{ name: { name: 'қ' } }] } });
+    expect(stringKey).toMatchObject({ kind: 'get', key: { type: 'Literal', value: 'к' } });
+    expect(computed).toMatchObject({ kind: 'set', computed: true });
+  });
+
+  test('get and set remain ordinary member names', () => {
+    const object = initOf<ObjectExpression>('тағ о = { get: 1, set(х) { }, get() { }, get, set };');
+    const [getValue, setMethod, getMethod, getShorthand, setShorthand] =
+      object.properties as Property[];
+    expect(getValue).toMatchObject({ key: { name: 'get' }, value: { type: 'Literal' } });
+    expect(setMethod).toMatchObject({ key: { name: 'set' }, method: true });
+    expect(getMethod).toMatchObject({ key: { name: 'get' }, method: true });
+    expect(getShorthand).toMatchObject({ key: { name: 'get' }, shorthand: true });
+    expect(setShorthand).toMatchObject({ key: { name: 'set' }, shorthand: true });
+    expect(expressionOf('о.get(1);')).toMatchObject({ callee: { property: { name: 'get' } } });
+  });
+
+  test('async methods', () => {
+    const object = initOf<ObjectExpression>('тағ о = { ҳамзамон ф() { }, ҳамзамон: 1 };');
+    expect(object.properties[0]).toMatchObject({ method: true, value: { async: true } });
+    expect(object.properties[1]).toMatchObject({ key: { name: 'ҳамзамон' } });
+  });
+
+  test.each([
+    ['тағ о = { get х(а) { } };', 'Getter must not have any formal parameters'],
+    ['тағ о = { set х() { } };', 'Setter must have exactly one formal parameter'],
+    ['тағ о = { set х(а, б) { } };', 'Setter must have exactly one formal parameter'],
+    ['тағ о = { set х(...а) { } };', 'Setter must have exactly one formal parameter'],
+    ['тағ о = { set х(а): рақам { } };', "A 'set' accessor cannot have a return type"],
+    ['синф К { set х(а): рақам { } }', "A 'set' accessor cannot have a return type"],
+  ])('%s is an error', (source, message) => {
+    expect(parse(source).errors).toEqual([expect.stringContaining(message)]);
+  });
+});
+
+describe('Parser: class static blocks', () => {
+  test('статикӣ { … } is a static block member', () => {
+    const classDecl = parseOk('синф К { статикӣ х = 0; статикӣ { К.х = 9; } статикӣ { } }')[0];
+    expect((classDecl as ClassDeclaration).body.body).toMatchObject([
+      { type: 'PropertyDefinition', static: true },
+      { type: 'StaticBlock', body: [{ type: 'ExpressionStatement' }] },
+      { type: 'StaticBlock', body: [] },
+    ]);
+  });
+
+  test('статикӣ is still an identifier elsewhere', () => {
+    expect(run('тағ статикӣ = { х: 1 }; чоп.сабт(статикӣ.х);')).toEqual(['1']);
+  });
+});
+
+describe('Parser: constructor parameter properties', () => {
+  test('accessibility and readonly modifiers', () => {
+    const classDecl = parseOk(
+      'синф Н { конструктор(хосусӣ х: рақам, ҷамъиятӣ у: рақам, муҳофизатшуда з = 1, танҳохонӣ в?: рақам, хосусӣ танҳохонӣ г: сатр, оддӣ: рақам) { } }'
+    )[0] as ClassDeclaration;
+    const constructor = classDecl.body.body[0] as { value: { params: unknown[] } };
+    expect(constructor.value.params).toMatchObject([
+      { name: { name: 'х' }, accessibility: 'private' },
+      { name: { name: 'у' }, accessibility: 'public' },
+      { name: { name: 'з' }, accessibility: 'protected', defaultValue: { value: 1 } },
+      { name: { name: 'в' }, readonly: true, optional: true },
+      { name: { name: 'г' }, accessibility: 'private', readonly: true },
+      { name: { name: 'оддӣ' } },
+    ]);
+    expect(constructor.value.params[5]).not.toHaveProperty('accessibility');
+  });
+
+  test('a modifier word without a following name is the parameter name', () => {
+    const classDecl = parseOk(
+      'синф Н { конструктор(хосусӣ: рақам, танҳохонӣ, ҷамъиятӣ танҳохонӣ: сатр) { } }'
+    )[0] as ClassDeclaration;
+    const constructor = classDecl.body.body[0] as { value: { params: unknown[] } };
+    expect(constructor.value.params).toMatchObject([
+      { name: { name: 'хосусӣ' } },
+      { name: { name: 'танҳохонӣ' } },
+      { name: { name: 'танҳохонӣ' }, accessibility: 'public' },
+    ]);
+    expect(constructor.value.params[0]).not.toHaveProperty('accessibility');
+    expect(run('функсия ф(хосусӣ: рақам) { бозгашт хосусӣ; } чоп.сабт(ф(2));')).toEqual(['2']);
+  });
+
+  test.each([
+    ['функсия ф(хосусӣ х: рақам) { }', 'only allowed in a constructor'],
+    ['синф К { м(ҷамъиятӣ х) { } }', 'only allowed in a constructor'],
+    ['тағ ф = (танҳохонӣ х) => х;', 'only allowed in a constructor'],
+    ['синф К { конструктор(хосусӣ ...х) { } }', 'cannot be a rest parameter'],
+    ['синф К { конструктор(хосусӣ [х]) { } }', 'cannot be a rest parameter'],
+    ['синф К { конструктор(хосусӣ ҷамъиятӣ х) { } }', "Duplicate modifier 'ҷамъиятӣ'"],
+    ['синф К { конструктор(танҳохонӣ хосусӣ х) { } }', "'хосусӣ' modifier must precede"],
+  ])('%s is an error', (source, message) => {
+    expect(parse(source).errors).toEqual(
+      expect.arrayContaining([expect.stringContaining(message)])
+    );
+  });
+});
+
+describe('Parser: method signatures', () => {
+  test('optional and generic method signatures have function types', () => {
+    const interfaceDecl = parseOk(
+      'интерфейс И { м?(): рақам; а: рақам; г<Т>(х: Т, ...б: Т[]): Т; б(); }'
+    )[0] as unknown as { body: { properties: unknown[] } };
+    expect(interfaceDecl.body.properties).toMatchObject([
+      {
+        key: { name: 'м' },
+        optional: true,
+        method: true,
+        typeAnnotation: {
+          typeAnnotation: {
+            type: 'FunctionType',
+            parameters: [],
+            returnType: { name: 'рақам' },
+          },
+        },
+      },
+      {
+        key: { name: 'а' },
+        optional: false,
+        typeAnnotation: { typeAnnotation: { name: 'рақам' } },
+      },
+      {
+        key: { name: 'г' },
+        optional: false,
+        typeAnnotation: {
+          typeAnnotation: {
+            type: 'FunctionType',
+            parameters: [{ name: { name: 'х' } }, { name: { name: 'б' }, rest: true }],
+          },
+        },
+      },
+      { key: { name: 'б' }, typeAnnotation: { typeAnnotation: { returnType: { name: 'ҳар' } } } },
+    ]);
+  });
+
+  test('in object types too', () => {
+    const alias = parseOk('навъ Т = { м?(х: рақам): сатр, н: рақам };')[0] as TypeAlias;
+    expect(alias.typeAnnotation.typeAnnotation).toMatchObject({
+      type: 'ObjectType',
+      properties: [
+        { key: { name: 'м' }, optional: true, method: true },
+        { key: { name: 'н' }, optional: false },
+      ],
+    });
+  });
+});

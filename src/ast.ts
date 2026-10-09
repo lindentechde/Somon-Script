@@ -52,6 +52,13 @@ export interface Parameter extends ASTNode {
    * in the emitted parameter list (`name` then holds a synthetic identifier).
    */
   pattern?: ArrayPattern | ObjectPattern;
+  /**
+   * Parameter property of a constructor, `конструктор(хосусӣ х: рақам)`: the
+   * parameter also declares an instance property assigned from it.
+   */
+  accessibility?: 'public' | 'private' | 'protected';
+  /** `танҳохонӣ` parameter property. */
+  readonly?: boolean;
 }
 
 export interface BlockStatement extends Statement {
@@ -158,6 +165,13 @@ export interface Literal extends Expression {
    * `_` separators (`0xFF`, `1e3`, `.5`, `10n`), and codegen emits it as is.
    */
   raw: string;
+}
+
+/** Regular expression literal `/а+/g`; `pattern` and `flags` are kept as written. */
+export interface RegExpLiteral extends Expression {
+  type: 'RegExpLiteral';
+  pattern: string;
+  flags: string;
 }
 
 export interface TemplateLiteral extends Expression {
@@ -406,9 +420,26 @@ export interface ClassDeclaration extends Statement {
   body: ClassBody;
 }
 
+/** `синф { … }` / `синф Ном мерос Асос { … }` in expression position. */
+export interface ClassExpression extends Expression {
+  type: 'ClassExpression';
+  name?: Identifier;
+  /** `синф<Т> { … }` */
+  typeParameters?: TypeParameter[];
+  superClass?: Identifier;
+  implements?: Identifier[];
+  body: ClassBody;
+}
+
 export interface ClassBody extends ASTNode {
   type: 'ClassBody';
-  body: (MethodDefinition | PropertyDefinition)[];
+  body: (MethodDefinition | PropertyDefinition | StaticBlock)[];
+}
+
+/** Class static initialization block: `статикӣ { … }`. */
+export interface StaticBlock extends ASTNode {
+  type: 'StaticBlock';
+  body: Statement[];
 }
 
 export interface MethodDefinition extends ASTNode {

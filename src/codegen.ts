@@ -15,11 +15,13 @@ import {
   ExpressionStatement,
   Identifier,
   Literal,
+  RegExpLiteral,
   BinaryExpression,
   UnaryExpression,
   UpdateExpression,
   CallExpression,
   ChainExpression,
+  ClassExpression,
   ArrowFunctionExpression,
   AssignmentExpression,
   MemberExpression,
@@ -41,6 +43,7 @@ import {
   ClassDeclaration,
   MethodDefinition,
   PropertyDefinition,
+  StaticBlock,
   SwitchStatement,
   SpreadElement,
   SwitchCase,
@@ -214,6 +217,8 @@ export class CodeGenerator {
   private newTargetScopes = 0;
   /** Private names (`#ном`, without '#') declared by each enclosing class, innermost last. */
   private readonly privateNames: Set<string>[] = [];
+  /** Inside a class `статикӣ { … }` block (and not in a function within it). */
+  private inStaticBlock = false;
 
   /**
    * Return diagnostics collected during generation. Codegen follows the same
@@ -576,6 +581,11 @@ export class CodeGenerator {
   }
 
   private generateReturnStatement(node: ReturnStatement): string {
+    if (this.inStaticBlock) {
+      this.errors.push(
+        `Illegal return statement at line ${node.line}, column ${node.column}: 'бозгашт' cannot be used in a static block`
+      );
+    }
     const argument = node.argument ? ` ${this.generateExpression(node.argument)}` : '';
     return this.indent(`return${argument};`);
   }
@@ -741,6 +751,7 @@ export class CodeGenerator {
     const simpleExpressions = [
       'Identifier',
       'Literal',
+      'RegExpLiteral',
       'TemplateLiteral',
       'ThisExpression',
       'Super',
@@ -785,6 +796,7 @@ export class CodeGenerator {
       'ArrowFunctionExpression',
       'FunctionExpression',
       'YieldExpression',
+      'ClassExpression',
     ];
     if (specialExpressions.includes(node.type)) {
       return this.generateSpecialExpression(node);
@@ -799,6 +811,9 @@ export class CodeGenerator {
         return this.generateIdentifier(node as Identifier);
       case 'Literal':
         return this.generateLiteral(node as Literal);
+      case 'RegExpLiteral':
+        // Pattern and flags as written; the lexer has validated them
+        return `/${(node as RegExpLiteral).pattern}/${(node as RegExpLiteral).flags}`;
       case 'TemplateLiteral':
         return this.generateTemplateLiteral(node as TemplateLiteral);
       case 'ThisExpression':
@@ -907,6 +922,8 @@ export class CodeGenerator {
         return this.generateFunctionExpression(node as FunctionExpression);
       case 'YieldExpression':
         return this.generateYieldExpression(node as YieldExpression);
+      case 'ClassExpression':
+        return this.generateClassExpression(node as ClassExpression);
       default:
         return this.handleUnknownExpression(node);
     }
@@ -1207,21 +1224,25 @@ export class CodeGenerator {
 
   /**
    * Run `generate` for a function body: loops and labels around the function
-   * are not jump targets. `isAsync`: the function is `ҳамзамон`.
+   * are not jump targets, and a `бозгашт` returns from the function, not from
+   * an enclosing static block. `isAsync`: the function is `ҳамзамон`.
    */
   private withFunctionBoundary<T>(generate: () => T, isAsync = false): T {
     const outer = this.jumpTargets;
     const outerLabels = this.labels;
     const outerAsync = this.inAsyncFunction;
+    const outerStaticBlock = this.inStaticBlock;
     this.jumpTargets = { loops: 0, switches: 0 };
     this.labels = [];
     this.inAsyncFunction = isAsync;
+    this.inStaticBlock = false;
     try {
       return generate();
     } finally {
       this.jumpTargets = outer;
       this.labels = outerLabels;
       this.inAsyncFunction = outerAsync;
+      this.inStaticBlock = outerStaticBlock;
     }
   }
 
@@ -2016,7 +2037,17 @@ export class CodeGenerator {
   }
 
   private generateClassDeclaration(node: ClassDeclaration): string {
-    const className = this.generateIdentifier(node.name, true);
+    return this.indent(this.generateClass(node));
+  }
+
+  /** `синф { … }` as an expression; its own name is in scope in its body only. */
+  private generateClassExpression(node: ClassExpression): string {
+    return this.withScope(node.name ? [node.name.name] : [], () => this.generateClass(node));
+  }
+
+  /** `class Ном extends Асос { … }`, members one level deeper than the current indentation. */
+  private generateClass(node: ClassDeclaration | ClassExpression): string {
+    const className = node.name ? ` ${this.generateIdentifier(node.name, true)}` : '';
     const extendsClause = node.superClass
       ? ` extends ${this.generateIdentifier(node.superClass)}`
       : '';
@@ -2035,6 +2066,8 @@ export class CodeGenerator {
               return this.generateMethodDefinition(member as MethodDefinition);
             case 'PropertyDefinition':
               return this.generatePropertyDefinition(member as PropertyDefinition);
+            case 'StaticBlock':
+              return this.generateStaticBlock(member as StaticBlock);
             default:
               return '';
           }
@@ -2048,17 +2081,38 @@ export class CodeGenerator {
       }
     }
 
-    return this.indent(`class ${className}${extendsClause} {${classBody}}`);
+    return `class${className}${extendsClause} {${classBody}}`;
+  }
+
+  /**
+   * `static { … }`: unlike a function body, `бозгашт` is not allowed; like
+   * one, loops around the class are not jump targets.
+   */
+  private generateStaticBlock(node: StaticBlock): string {
+    const block: BlockStatement = {
+      type: 'BlockStatement',
+      body: node.body,
+      line: node.line,
+      column: node.column,
+    };
+    // `нав.target` is allowed (and `беқимат`) in a static block
+    const body = this.withNewTarget(() =>
+      this.withFunctionBoundary(() => {
+        this.inStaticBlock = true;
+        return this.generateBlockStatement(block);
+      })
+    );
+    return this.indent(`static ${body}`);
   }
 
   /**
    * Private names a class declares. Declaring one twice is an early error,
    * except for a getter and a setter of the same name.
    */
-  private declaredPrivateNames(node: ClassDeclaration): Set<string> {
+  private declaredPrivateNames(node: ClassDeclaration | ClassExpression): Set<string> {
     const declared = new Map<string, string>();
     for (const member of node.body.body) {
-      if (member.key?.type !== 'PrivateIdentifier') continue;
+      if (member.type === 'StaticBlock' || member.key?.type !== 'PrivateIdentifier') continue;
       const name = member.key.name;
       const kind = member.type === 'MethodDefinition' ? member.kind : 'field';
       const previous = declared.get(name);
@@ -2103,10 +2157,61 @@ export class CodeGenerator {
       );
       return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) {}`);
     }
-    const { params, body } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.value.params, node.value.body, node.value.async)
+    const body =
+      node.kind === 'constructor' ? this.withParameterProperties(node.value) : node.value.body;
+    const { params, body: code } = this.withNewTarget(() =>
+      this.generateFunctionParts(node.value.params, body, node.value.async)
     );
-    return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) ${body}`);
+    return this.indent(`${isStatic}${isAsync}${star}${methodName}(${params}) ${code}`);
+  }
+
+  /**
+   * The constructor body with `this.х = х;` for each parameter property
+   * (`конструктор(хосусӣ х: рақам)`), placed as TypeScript places them: at
+   * the start, or right after the `супер(…)` call among the body's statements.
+   */
+  private withParameterProperties(constructor: FunctionExpression): BlockStatement {
+    const assignments = constructor.params
+      .filter(param => param.accessibility || param.readonly)
+      .map(param => {
+        const { line, column } = param;
+        const target: MemberExpression = {
+          type: 'MemberExpression',
+          object: { type: 'ThisExpression', line, column },
+          property: { ...param.name },
+          computed: false,
+          line,
+          column,
+        };
+        const assignment: AssignmentExpression = {
+          type: 'AssignmentExpression',
+          left: target,
+          operator: '=',
+          right: param.name,
+          line,
+          column,
+        };
+        return { type: 'ExpressionStatement', expression: assignment, line, column };
+      });
+    if (assignments.length === 0) return constructor.body;
+
+    const statements = constructor.body.body;
+    const superCall = statements.findIndex(statement => {
+      const expression = (statement as ExpressionStatement).expression;
+      return (
+        statement.type === 'ExpressionStatement' &&
+        expression.type === 'CallExpression' &&
+        (expression as CallExpression).callee.type === 'Super'
+      );
+    });
+    return {
+      ...constructor.body,
+      body: [
+        ...statements.slice(0, superCall + 1),
+        ...assignments,
+        ...statements.slice(superCall + 1),
+      ],
+    };
   }
 
   private generatePropertyDefinition(node: PropertyDefinition): string {

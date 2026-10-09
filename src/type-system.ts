@@ -62,6 +62,10 @@ export interface PropertySignature extends ASTNode {
   typeAnnotation: TypeAnnotation;
   optional: boolean;
   readonly?: boolean;
+  /** Method signature `ном(…): Т`; `typeAnnotation` holds its function type. */
+  method?: boolean;
+  /** Type parameters of a generic method signature: `ҳамон<Т>(х: Т): Т`. */
+  typeParameters?: TypeParameter[];
 }
 
 export interface TypeParameter extends ASTNode {

@@ -944,3 +944,168 @@ describe('CodeGenerator: new.target, tagged templates, private members and acces
     expect(map.mappings.split(';').length).toBeGreaterThan(4);
   });
 });
+
+describe('CodeGenerator - literals, classes and object members', () => {
+  test('regular expression literals are emitted as written', () => {
+    expect(
+      emitted([
+        'собит р = /[/]\\d+/gu;',
+        'чоп.сабт(/а+/g.test("а"), "а-б".ҷойгузин(/-/g, "+"), а / б / в, (а) / 2, х[0] / 2);',
+        'а /= 2;',
+      ])
+    ).toBe(
+      [
+        'const р = /[/]\\d+/gu;',
+        'console.log(/а+/g.test("а"), "а-б".replace(/-/g, "+"), а / б / в, а / 2, х[0] / 2);',
+        'а /= 2;',
+      ].join('\n')
+    );
+  });
+
+  test('class expressions keep their name, base class and indentation', () => {
+    expect(
+      emitted([
+        'функсия ф() {',
+        '    собит К = синф Ном мерос Асос {',
+        '        х = 1;',
+        '        гир(): рақам { бозгашт ин.х; }',
+        '    };',
+        '    бозгашт [синф { }, нав (синф { у = 2; })()];',
+        '}',
+      ])
+    ).toBe(
+      [
+        'function ф() {',
+        '  const К = class Ном extends Асос {',
+        '    х = 1;',
+        '    гир() {',
+        '      return this.х;',
+        '    }',
+        '  };',
+        '  return [class {}, new class {',
+        '    у = 2;',
+        '  }()];',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('a class expression statement is parenthesised', () => {
+    expect(emitted(['(синф { }).name;'])).toBe('(class {}.name);');
+  });
+
+  test('object literal accessors and async methods', () => {
+    expect(
+      emitted([
+        'собит о = {',
+        '    get х(): рақам { бозгашт 1; },',
+        '    set х(қ: рақам) { чоп.сабт(қ); },',
+        '    ҳамзамон ф() { },',
+        '    get: 2,',
+        '};',
+      ])
+    ).toBe(
+      [
+        'const о = {get х() {',
+        '  return 1;',
+        '}, set х(қ) {',
+        '  console.log(қ);',
+        '}, async ф() {}, get: 2};',
+      ].join('\n')
+    );
+  });
+
+  test('static blocks', () => {
+    expect(
+      emitted([
+        'синф К {',
+        '    статикӣ х = 0;',
+        '    статикӣ {',
+        '        К.х = 9;',
+        '    }',
+        '    статикӣ { }',
+        '}',
+      ])
+    ).toBe(
+      [
+        'class К {',
+        '  static х = 0;',
+        '  static {',
+        '    К.х = 9;',
+        '  }',
+        '  static {}',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('parameter properties are assigned first, or right after супер(…)', () => {
+    expect(
+      emitted([
+        'синф А {',
+        '    конструктор(хосусӣ х: рақам, ҷамъиятӣ у = 2, з: рақам) { чоп.сабт(з); }',
+        '}',
+        'синф Б мерос А {',
+        '    конструктор(танҳохонӣ в: рақам) {',
+        '        чоп.сабт("пеш");',
+        '        супер(в, в, в);',
+        '        чоп.сабт(ин.в);',
+        '    }',
+        '}',
+        'синф В { конструктор(муҳофизатшуда г: сатр) { } }',
+      ])
+    ).toBe(
+      [
+        'class А {',
+        '  constructor(х, у = 2, з) {',
+        '    this.х = х;',
+        '    this.у = у;',
+        '    console.log(з);',
+        '  }',
+        '}',
+        'class Б extends А {',
+        '  constructor(в) {',
+        '    console.log("пеш");',
+        '    super(в, в, в);',
+        '    this.в = в;',
+        '    console.log(this.в);',
+        '  }',
+        '}',
+        'class В {',
+        '  constructor(г) {',
+        '    this.г = г;',
+        '  }',
+        '}',
+      ].join('\n')
+    );
+  });
+
+  test('parameter property assignments map to their parameters in the source map', () => {
+    const result = compile('синф А {\n  конструктор(\n    хосусӣ х: рақам\n  ) { }\n}', {
+      typeCheck: false,
+      sourceMap: true,
+    });
+    expect(result.errors).toEqual([]);
+    const ast = new Parser(
+      new Lexer('синф А {\n  конструктор(\n    хосусӣ х: рақам\n  ) { }\n}').tokenize()
+    ).parse();
+    const { mappings } = new CodeGenerator().generateWithMappings(ast);
+    expect(mappings).toContainEqual({
+      generated: { line: 3, column: 4 },
+      original: { line: 3, column: 11 },
+    });
+  });
+
+  test('бозгашт in a static block is an error, but not in a function inside it', () => {
+    expect(compile('синф К { статикӣ { бозгашт; } }').errors).toEqual([
+      expect.stringMatching(/Illegal return statement at line 1, column 20/),
+    ]);
+    expect(
+      compile('синф К { статикӣ { функсия ф() { бозгашт 1; } тағ г = () => { бозгашт 2; }; } }')
+        .errors
+    ).toEqual([]);
+    expect(
+      compile('то (дуруст) { синф К { статикӣ { шикастан; } } }', { typeCheck: false }).errors
+    ).toEqual([expect.stringContaining('Illegal break statement')]);
+  });
+});

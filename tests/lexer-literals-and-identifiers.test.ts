@@ -257,3 +257,171 @@ describe('Lexer: identifiers', () => {
     expect(runLogs('тағ $нарх = 3; тағ 𝑥 = 4; чоп.сабт($нарх * 𝑥);')).toEqual([[12]]);
   });
 });
+
+describe('Lexer: regular expression literals', () => {
+  /** Token types of `source`, regular expressions as their text. */
+  function shapes(source: string): string[] {
+    return significant(source).map(t => (t.type === TokenType.REGEX ? t.value : t.type));
+  }
+
+  test.each([
+    '/а+/g',
+    '/[0-9]+/u',
+    '/[/]/',
+    '/\\//',
+    '/[\\]/]/',
+    '/(?<сол>\\d{4})/dgimsy',
+    '/[\\p{L}--[а]]/v',
+    '/=/',
+  ])('%s is one token', source => {
+    expect(significant(source)).toEqual([
+      { type: TokenType.REGEX, value: source, line: 1, column: 1 },
+    ]);
+  });
+
+  test.each([
+    'х = /а/;',
+    'ф(/а/, /б/);',
+    '[/а/];',
+    'о = { к: /а/ };',
+    'х ? /а/ : /б/;',
+    '!/а/.test(с);',
+    'а && /а/ || /б/ ?? /в/;',
+    'х => /а/;',
+    'бозгашт /а/;',
+    'партофтан /а/;',
+    'навъи /а/;',
+    'typeof /а/;',
+    'void /а/;',
+    'вагарна /а/;',
+    '{ } /а/;',
+    'агар (х) /а/;',
+    'то (х) /а/;',
+    '"а" дар /а/;',
+    'ҳолат /а/:',
+    '; /а/;',
+  ])('a regex where an operand starts: %s', source => {
+    expect(shapes(source)).toContain('/а/');
+  });
+
+  test.each([
+    ['а / б / в', 'IDENTIFIER / IDENTIFIER / IDENTIFIER'],
+    ['(а) / 2', '( IDENTIFIER ) / NUMBER'],
+    ['х[0] / 2', 'IDENTIFIER [ NUMBER ] / NUMBER'],
+    ['а /= 2', 'IDENTIFIER /= NUMBER'],
+    ['а++ / 2 / в', 'IDENTIFIER ++ / NUMBER / IDENTIFIER'],
+    ['а-- / 2 / в', 'IDENTIFIER -- / NUMBER / IDENTIFIER'],
+    ['"а" / 2 / в', 'STRING / NUMBER / IDENTIFIER'],
+    ['ф() / 2 / в', 'IDENTIFIER ( ) / NUMBER / IDENTIFIER'],
+    ['ин / 2 / в', 'ИН / NUMBER / IDENTIFIER'],
+    ['о.бозгашт / 2 / в', 'IDENTIFIER . БОЗГАШТ / NUMBER / IDENTIFIER'],
+    ['дар / 2 / в', 'ДАР / NUMBER / IDENTIFIER'],
+    // `ҳолат` starts a switch case only at the start of a statement
+    ['х = ҳолат / 2 / в', 'IDENTIFIER = ҲОЛАТ / NUMBER / IDENTIFIER'],
+    ['х = { а: 1 } / 2 / в', 'IDENTIFIER = { IDENTIFIER : NUMBER } / NUMBER / IDENTIFIER'],
+  ])('a division after an operand: %s', (source, expected) => {
+    expect(shapes(source).join(' ')).toBe(expected);
+  });
+
+  test.each([
+    ['х! / 2 / в', 'IDENTIFIER ! / NUMBER / IDENTIFIER'],
+    ['ф()! / 2 / в', 'IDENTIFIER ( ) ! / NUMBER / IDENTIFIER'],
+    ['а[0]! /= 2 / в', 'IDENTIFIER [ NUMBER ] ! /= NUMBER / IDENTIFIER'],
+    ['х!! / 2 / в', 'IDENTIFIER ! ! / NUMBER / IDENTIFIER'],
+    ['"а"! / 2 / в', 'STRING ! / NUMBER / IDENTIFIER'],
+  ])('a division after a postfix non-null `!`: %s', (source, expected) => {
+    expect(shapes(source).join(' ')).toBe(expected);
+  });
+
+  test.each([
+    ['!/а/.test("а")', '! /а/ . IDENTIFIER ( STRING )'],
+    ['х = !/а/.test(с)', 'IDENTIFIER = ! /а/ . IDENTIFIER ( IDENTIFIER )'],
+    ['ф(!!/а/)', 'IDENTIFIER ( ! ! /а/ )'],
+    ['х\n!/а/.test(с)', 'IDENTIFIER NEWLINE ! /а/ . IDENTIFIER ( IDENTIFIER )'],
+  ])('a regex after a prefix `!`: %s', (source, expected) => {
+    expect(shapes(source).join(' ')).toBe(expected);
+  });
+
+  test.each([
+    'функсия* г() { ҳосил /а/; }',
+    'тағ г = функсия* () { yield /а/; };',
+    'ҳамзамон функсия* г() { ҳосил /а/; }',
+    'тағ о = { *г() { ҳосил /а/; } };',
+    'тағ о = { ҳамзамон *г() { ҳосил /а/; } };',
+    'синф К { статикӣ *г() { агар (х) { ҳосил /а/; } } }',
+  ])('ҳосил yields a regex in a generator: %s', source => {
+    expect(shapes(source)).toContain('/а/');
+  });
+
+  test.each([
+    ['ҳосил / 2 / в', 'IDENTIFIER / NUMBER / IDENTIFIER'],
+    [
+      'функсия* г() { } ҳосил / 2 / в',
+      'ФУНКСИЯ * IDENTIFIER ( ) { } IDENTIFIER / NUMBER / IDENTIFIER',
+    ],
+    [
+      'функсия г() { ҳосил / 2 / в }',
+      'ФУНКСИЯ IDENTIFIER ( ) { IDENTIFIER / NUMBER / IDENTIFIER }',
+    ],
+    ['а * б / 2 / в', 'IDENTIFIER * IDENTIFIER / NUMBER / IDENTIFIER'],
+  ])('ҳосил is a name outside generators: %s', (source, expected) => {
+    expect(shapes(source).join(' ')).toBe(expected);
+  });
+
+  test('a division continues an expression across a line break', () => {
+    expect(shapes('а\n/ б /\nв').join(' ')).toBe(
+      'IDENTIFIER NEWLINE / IDENTIFIER / NEWLINE IDENTIFIER'
+    );
+  });
+
+  test('comments are never regular expressions', () => {
+    expect(shapes('// а / б\n/* в / г */ х').join(' ')).toBe('NEWLINE IDENTIFIER');
+  });
+
+  test('a template interpolation tells a postfix `!` from a prefix one', () => {
+    const source = '`${х! / 2}${!/}/.test(с)}${а[0]!! / в}`';
+    expect(significant(source)).toEqual([
+      expect.objectContaining({ type: TokenType.TEMPLATE_LITERAL, value: source.slice(1, -1) }),
+    ]);
+  });
+
+  test('a regex in a template interpolation may contain braces and quotes', () => {
+    expect(significant('`${с.replace(/}"/g, "")} ${а / б}`')).toEqual([
+      expect.objectContaining({
+        type: TokenType.TEMPLATE_LITERAL,
+        value: '${с.replace(/}"/g, "")} ${а / б}',
+      }),
+    ]);
+  });
+
+  test.each([
+    ['/а/gg', "Invalid regular expression flags 'gg' at line 1, column 5"],
+    ['/а/x', "Invalid regular expression flags 'x' at line 1, column 5"],
+    ['/а/uv', "Invalid regular expression flags 'uv' at line 1, column 5"],
+    ['/а(/', 'Invalid regular expression: /а(/: Unterminated group at line 1, column 5'],
+  ])('%s is an early error', (regex, message) => {
+    expect(() => tokenize(`х = ${regex};`)).toThrow(message);
+    expect(compile(`тағ х = ${regex};`).errors).toEqual([expect.stringContaining('column 9')]);
+  });
+
+  test('a regex not closed on its line is left to the parser to report', () => {
+    expect(shapes('х = /а\n/;').join(' ')).toBe('IDENTIFIER = / IDENTIFIER NEWLINE / ;');
+    expect(compile('тағ х = /а\n/;').errors).toEqual([
+      'Parse error: Unterminated regular expression at line 1, column 9',
+    ]);
+  });
+
+  test('regexes compile and run in every expression position', () => {
+    expect(
+      runLogs(
+        'собит с = "а-б-в";\n' +
+          'чоп.сабт(/а+/g.test("бааа"), с.replace(/-/g, "+"), с.ҷойгузин(/-/g, ""), /[/]/.test("/"));\n' +
+          'функсия ф(х: сатр): мантиқӣ { бозгашт /^\\d+$/.test(х); }\n' +
+          'чоп.сабт(ф("12"), ф("1а"), `${"а}б".replace(/}/g, "")}`, [/а/][0].source);'
+      )
+    ).toEqual([
+      [true, 'а+б+в', 'абв', true],
+      [true, false, 'аб', 'а'],
+    ]);
+  });
+});

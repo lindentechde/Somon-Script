@@ -11,6 +11,8 @@ export enum TokenType {
   BOOLEAN = 'BOOLEAN',
   IDENTIFIER = 'IDENTIFIER',
   PRIVATE_NAME = 'PRIVATE_NAME', // `#ном`: a private class member name
+  /** Regular expression literal; the value is the source text, `/а+/g`. */
+  REGEX = 'REGEX',
 
   // Keywords (in Tajik Cyrillic)
   ТАҒЙИРЁБАНДА = 'ТАҒЙИРЁБАНДА', // variable (let/var)

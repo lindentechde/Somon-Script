@@ -1,6 +1,51 @@
 import { Token, TokenType } from './types';
 import { KEYWORDS } from './keyword-map';
 
+function isLineTerminator(char: string): boolean {
+  return char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029';
+}
+
+/**
+ * Index just past the regular expression literal whose opening '/' is at
+ * `start` (flags included), or -1 when the line ends before its closing '/'.
+ * A '/' inside a character class (`/[/]/`) or escaped (`/\//`) does not close it.
+ */
+export function regexLiteralEnd(text: string, start: number): number {
+  let inClass = false;
+  let i = start + 1;
+  for (; i < text.length && (text[i] !== '/' || inClass); i++) {
+    const char = text[i];
+    if (char === '\\') i++;
+    else if (char === '[') inClass = true;
+    else if (char === ']') inClass = false;
+    if (i >= text.length || isLineTerminator(text[i])) return -1;
+  }
+  if (i >= text.length) return -1;
+  i++;
+  while (i < text.length && /[\p{ID_Continue}$]/u.test(text[i])) i++;
+  return i;
+}
+
+/**
+ * Whether the '/' at `index` of raw source text starts a regular expression,
+ * judged by the last non-blank character since `start`: after an operator or
+ * an opening bracket it does, after an operand (`а / 2`, `(а) / 2`, `а++ / 2`,
+ * `а! / 2`) it is a division. Used where template interpolations are scanned as text.
+ */
+export function isRegexStartInText(text: string, index: number, start: number): boolean {
+  let i = index - 1;
+  while (i >= start && /\s/.test(text[i])) i--;
+  if (i < start) return true;
+  const previous = text[i];
+  if ((previous === '+' || previous === '-') && text[i - 1] === previous) return false;
+  if (previous === '!') {
+    // `х! / 2`: a `!` after an operand on the same line is the postfix non-null assertion
+    while (i > start && /[! \t]/.test(text[i - 1])) i--;
+    return i === start || !/[\p{L}\p{N}\p{M}_$)\]"'`]/u.test(text[i - 1]);
+  }
+  return '(,=:[&|?{};+-*%<>~^'.includes(previous);
+}
+
 export class Lexer {
   private readonly input: string;
   private position: number = 0;
@@ -8,6 +53,109 @@ export class Lexer {
   private column: number = 1;
 
   private readonly keywords = KEYWORDS;
+
+  /** Whether a '/' at this point starts a regular expression rather than a division. */
+  private regexAllowed = true;
+  /** The last token other than a line break, for `trackRegexContext`. */
+  private previousToken: Token | undefined;
+  /** Line on which `previousToken` ends. */
+  private previousTokenEndLine = 1;
+  /**
+   * For each open '(' '[' '{': whether a '/' right after its closing bracket
+   * starts a regex, and whether it opens the body of a generator.
+   */
+  private readonly openBrackets: Array<{ regexAfterClose: boolean; generatorBody: boolean }> = [];
+  /** Open generator bodies; in them `ҳосил` / `yield` is the yield operator. */
+  private generatorBodies = 0;
+  /** A `*` marked a generator (`функсия*`, `*ном() {…}`): the next block is its body. */
+  private generatorPending = false;
+
+  /** Words after which an operand, and so a regular expression, may follow. */
+  private static readonly OPERATOR_WORDS: ReadonlySet<string> = new Set([
+    'бозгашт',
+    'return',
+    'партофтан',
+    'throw',
+    'навъи',
+    'typeof',
+    'нав',
+    'new',
+    'интизор',
+    'await',
+    'void',
+    'delete',
+    'вагарна',
+    'чунин',
+    'else',
+    'do',
+    'пешфарз',
+  ]);
+
+  /** The yield operator inside a generator body, an ordinary name elsewhere. */
+  private static readonly YIELD_WORDS: ReadonlySet<string> = new Set(['ҳосил', 'yield']);
+
+  /** Words after which a `*` marks a generator: `функсия* г`, `ҳамзамон *г() {…}`. */
+  private static readonly GENERATOR_STAR_WORDS: ReadonlySet<string> = new Set([
+    'функсия',
+    'функция',
+    'function',
+    'ҳамзамон',
+    'async',
+    'статикӣ',
+    'static',
+    'ҷамъиятӣ',
+    'хосусӣ',
+    'муҳофизатшуда',
+  ]);
+
+  /** Binary operator words; used as ordinary names where an operand is expected. */
+  private static readonly INFIX_WORDS: ReadonlySet<string> = new Set([
+    'дар',
+    'in',
+    'аз',
+    'of',
+    'instanceof',
+  ]);
+
+  /** Words after which a '{' opens a block, not an object literal. */
+  private static readonly BLOCK_WORDS: ReadonlySet<string> = new Set([
+    'вагарна',
+    'чунин',
+    'else',
+    'do',
+  ]);
+
+  /**
+   * Tokens that keep the context before them: postfix after an operand
+   * (`а++ / 2`, the non-null assertion `а! / 2`), prefix before one
+   * (`!/а/.test(с)`).
+   */
+  private static readonly CONTEXT_KEEPING_TOKENS: ReadonlySet<TokenType> = new Set([
+    TokenType.INCREMENT,
+    TokenType.DECREMENT,
+    TokenType.NOT,
+  ]);
+
+  private static readonly CLOSING_BRACKETS: ReadonlySet<TokenType> = new Set([
+    TokenType.RIGHT_PAREN,
+    TokenType.RIGHT_BRACKET,
+    TokenType.RIGHT_BRACE,
+  ]);
+
+  /** Literal tokens: a '/' after them divides. */
+  private static readonly OPERAND_TOKENS: ReadonlySet<TokenType> = new Set([
+    TokenType.NUMBER,
+    TokenType.STRING,
+    TokenType.TEMPLATE_LITERAL,
+    TokenType.REGEX,
+  ]);
+
+  /** Keywords whose '(' holds a condition; a '/' after the closing ')' starts a statement. */
+  private static readonly CONDITION_KEYWORDS: ReadonlySet<TokenType> = new Set([
+    TokenType.АГАР,
+    TokenType.ТО,
+    TokenType.БАРОИ,
+  ]);
 
   private static readonly SIMPLE_ESCAPES: Readonly<Record<string, string>> = {
     n: '\n',
@@ -31,6 +179,10 @@ export class Lexer {
       const token = this.nextToken();
       if (token.type !== TokenType.WHITESPACE) {
         tokens.push(token);
+        if (token.type !== TokenType.NEWLINE) {
+          this.trackRegexContext(token);
+          this.previousTokenEndLine = this.line;
+        }
       }
     }
 
@@ -86,12 +238,159 @@ export class Lexer {
   }
 
   private handleDivideOperator(): Token {
+    const regex = this.regexAllowed ? this.readRegularExpression() : undefined;
+    if (regex) return regex;
     if (this.peek() === '=') {
       this.advance();
       this.advance();
       return this.createToken(TokenType.DIVIDE_ASSIGN, '/=', this.line, this.column - 2);
     }
     return this.singleCharToken(TokenType.DIVIDE);
+  }
+
+  /**
+   * Reads the regular expression literal starting at the current '/'. When the
+   * line ends before its closing '/', returns undefined: the '/' is then read
+   * as a division operator, which the parser reports where an operand belongs.
+   */
+  private readRegularExpression(): Token | undefined {
+    const end = regexLiteralEnd(this.input, this.position);
+    if (end === -1) return undefined;
+
+    const line = this.line;
+    const column = this.column;
+    const text = this.input.slice(this.position, end);
+    const closing = text.lastIndexOf('/');
+    Lexer.validateRegularExpression(text.slice(1, closing), text.slice(closing + 1), line, column);
+
+    while (this.position < end) this.advanceCodePoint();
+    return this.createToken(TokenType.REGEX, text, line, column);
+  }
+
+  /** Invalid flags or pattern syntax are early errors in JavaScript. */
+  private static validateRegularExpression(
+    pattern: string,
+    flags: string,
+    line: number,
+    column: number
+  ): void {
+    if (
+      !/^[dgimsuyv]*$/.test(flags) ||
+      new Set(flags).size !== flags.length ||
+      (flags.includes('u') && flags.includes('v'))
+    ) {
+      throw new Error(
+        `Invalid regular expression flags '${flags}' at line ${line}, column ${column}`
+      );
+    }
+    try {
+      new RegExp(pattern, flags);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message} at line ${line}, column ${column}`);
+    }
+  }
+
+  /**
+   * Records whether a '/' after `token` starts a regular expression (an operand
+   * is expected: after an operator, an opening bracket, `бозгашт`, …) or is a
+   * division (an operand just ended: a name, a literal, `)`, `]`, `а++`).
+   */
+  private trackRegexContext(token: Token): void {
+    const before = this.regexAllowed;
+    const previous = this.previousToken;
+    this.previousToken = token;
+    if (Lexer.CONTEXT_KEEPING_TOKENS.has(token.type)) {
+      // A `!` starting a line is a prefix `!`, never a postfix non-null assertion
+      if (token.type === TokenType.NOT && token.line > this.previousTokenEndLine) {
+        this.regexAllowed = true;
+      }
+      return;
+    }
+    if (Lexer.CLOSING_BRACKETS.has(token.type)) {
+      const open = this.openBrackets.pop();
+      if (open?.generatorBody) this.generatorBodies--;
+      this.regexAllowed = open?.regexAfterClose ?? token.type === TokenType.RIGHT_BRACE;
+    } else if (Lexer.OPERAND_TOKENS.has(token.type)) {
+      this.regexAllowed = false;
+    } else if (/^[\p{ID_Start}$_#]/u.test(token.value)) {
+      this.regexAllowed = this.regexAllowedAfterWord(token, before, previous);
+    } else {
+      this.trackPunctuator(token, before, previous);
+      this.regexAllowed = true;
+    }
+  }
+
+  /**
+   * Remembers, for an opening bracket, whether a '/' after its closing bracket
+   * starts a regex, and notes generator markers and bodies.
+   */
+  private trackPunctuator(token: Token, before: boolean, previous?: Token): void {
+    switch (token.type) {
+      case TokenType.LEFT_PAREN:
+        // `агар (…) /…/` starts a statement; `ф(…) / 2` divides
+        this.openBrackets.push({
+          regexAfterClose: previous !== undefined && Lexer.CONDITION_KEYWORDS.has(previous.type),
+          generatorBody: false,
+        });
+        break;
+      case TokenType.LEFT_BRACKET:
+        this.openBrackets.push({ regexAfterClose: false, generatorBody: false });
+        break;
+      case TokenType.LEFT_BRACE: {
+        const block = !Lexer.opensObjectLiteral(before, previous);
+        const generatorBody = block && this.generatorPending;
+        if (generatorBody) {
+          this.generatorPending = false;
+          this.generatorBodies++;
+        }
+        this.openBrackets.push({ regexAfterClose: block, generatorBody });
+        break;
+      }
+      case TokenType.MULTIPLY:
+        // A `*` where no operand precedes it marks a generator (but `ҳосил* х` delegates)
+        if (
+          previous !== undefined &&
+          (Lexer.GENERATOR_STAR_WORDS.has(previous.value) ||
+            (before && !Lexer.YIELD_WORDS.has(previous.value)))
+        ) {
+          this.generatorPending = true;
+        }
+        break;
+    }
+  }
+
+  private regexAllowedAfterWord(token: Token, before: boolean, previous?: Token): boolean {
+    // A property name: `о.бозгашт / 2`
+    if (previous?.type === TokenType.DOT || previous?.type === TokenType.OPTIONAL_CHAINING) {
+      return false;
+    }
+    // `ҳосил /…/` yields a regex in a generator; elsewhere `ҳосил` is a name
+    if (Lexer.YIELD_WORDS.has(token.value)) return this.generatorBodies > 0;
+    if (Lexer.OPERATOR_WORDS.has(token.value)) return true;
+    // `х дар /…/` is an operator; a variable named `дар` is an operand
+    if (Lexer.INFIX_WORDS.has(token.value)) return !before;
+    // `ҳолат /…/:` starts a switch case; elsewhere `ҳолат` is an ordinary name
+    if (token.value === 'ҳолат' || token.value === 'case') {
+      return previous === undefined || [';', '{', '}', ':'].includes(previous.value);
+    }
+    return false;
+  }
+
+  /** Whether a '{' after `previous` opens an object literal (an operand) rather than a block. */
+  private static opensObjectLiteral(before: boolean, previous?: Token): boolean {
+    if (!before || previous === undefined) return false;
+    if (
+      previous.type === TokenType.SEMICOLON ||
+      previous.type === TokenType.LEFT_BRACE ||
+      previous.type === TokenType.RIGHT_BRACE ||
+      previous.type === TokenType.RIGHT_PAREN ||
+      previous.type === TokenType.ARROW ||
+      previous.type === TokenType.GREATER_THAN
+    ) {
+      return false;
+    }
+    return !Lexer.BLOCK_WORDS.has(previous.value);
   }
 
   private handleModuloOperator(): Token {
@@ -496,18 +795,20 @@ export class Lexer {
 
   /**
    * Copies `${…}` as written. Braces inside string literals, nested template
-   * literals and comments do not count towards the closing '}'.
+   * literals, regular expressions and comments do not count towards the closing '}'.
    */
   private handleInterpolation(): string {
     let result = '${';
     this.advance(); // Skip $
     this.advance(); // Skip {
+    const start = this.position;
 
     let braceCount = 1;
     while (!this.isAtEnd()) {
       const char = this.currentChar();
-      if (char === '/' && (this.peek() === '/' || this.peek() === '*')) {
-        result += this.copyComment();
+      const skipped = char === '/' ? this.copyCommentOrRegex(start) : undefined;
+      if (skipped !== undefined) {
+        result += skipped;
         continue;
       }
       if (char === '"' || char === "'") {
@@ -534,6 +835,21 @@ export class Lexer {
       result += this.processStringCharacter();
     }
 
+    return result;
+  }
+
+  /**
+   * At a '/' inside an interpolation whose text starts at `start`: copies a
+   * comment or a regular expression literal, or returns undefined for a division.
+   */
+  private copyCommentOrRegex(start: number): string | undefined {
+    if (this.peek() === '/' || this.peek() === '*') return this.copyComment();
+    const end = isRegexStartInText(this.input, this.position, start)
+      ? regexLiteralEnd(this.input, this.position)
+      : -1;
+    if (end === -1) return undefined;
+    let result = '';
+    while (this.position < end) result += this.processStringCharacter();
     return result;
   }
 

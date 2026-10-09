@@ -4,6 +4,7 @@ import {
   CallExpression,
   ChainExpression,
   ClassDeclaration,
+  ClassExpression,
   ArrayPattern,
   ObjectPattern,
   Expression,
@@ -64,6 +65,7 @@ import {
   SatisfiesExpression,
   SequenceExpression,
   SpreadElement,
+  StaticBlock,
   SwitchStatement,
   TaggedTemplateExpression,
   TemplateLiteral,
@@ -107,6 +109,7 @@ export const TypeCheckErrorCode = {
   PropertyNotFound: 'PROPERTY_NOT_FOUND',
   PossiblyNull: 'POSSIBLY_NULL',
   ReadonlyAssignment: 'READONLY_ASSIGNMENT',
+  UsedBeforeInitialization: 'USED_BEFORE_INITIALIZATION',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -250,7 +253,12 @@ const BUILTIN_MEMBERS = {
   Map: prototypeMembers(Map.prototype),
   Set: prototypeMembers(Set.prototype),
   Promise: prototypeMembers(Promise.prototype),
+  // An instance, for its own `lastIndex`
+  RegExp: prototypeMembers(/(?:)/),
 } as const;
+
+/** Type of regular expression literals (`/а+/g`) and `нав RegExp(…)`. */
+const REGEXP_TYPE: Type = { kind: 'generic', name: 'RegExp', typeParameters: [] };
 
 /** Array methods that return an element or `undefined` when there is none. */
 const ARRAY_ELEMENT_OR_UNDEFINED: ReadonlySet<string> = new Set([
@@ -410,6 +418,11 @@ export class TypeChecker {
   private primitiveValues: Set<Type> = new Set();
   /** Callee type of each call when last inferred, for type predicates (`х аст Т`). */
   private calleeTypes = new WeakMap<CallExpression, Type>();
+  /**
+   * Reference keys of bindings that hold a class made by a class expression
+   * (`собит К = синф {…}`): `К.ном` reads a static member, as for `синф К`.
+   */
+  private classValueKeys: Set<string> = new Set();
   /** (source, target) pairs being compared, to stop recursion on recursive types. */
   private assignabilityStack: Array<[Type, Type]> = [];
 
@@ -446,6 +459,8 @@ export class TypeChecker {
     (_expression: Expression, _targetType?: Type) => Type
   > = {
     Literal: e => this.inferLiteralType(e as Literal),
+    RegExpLiteral: () => REGEXP_TYPE,
+    ClassExpression: e => this.inferClassExpressionType(e as ClassExpression),
     Identifier: e => this.inferIdentifierType(e as Identifier),
     ArrayExpression: (e, t) => this.inferArrayExpressionType(e as ArrayExpression, t),
     ObjectExpression: (e, t) => this.inferObjectType(e as ObjectExpression, t),
@@ -543,6 +558,7 @@ export class TypeChecker {
     this.typeParameterScopes = [];
     this.classStack = [];
     this.calleeTypes = new WeakMap();
+    this.classValueKeys = new Set();
     this.initializePrimitiveTypes();
 
     // First pass: collect type definitions and hoist top-level bindings
@@ -817,13 +833,28 @@ export class TypeChecker {
   }
 
   private collectPropertySignatures(signatures: PropertySignature[], target: Type): void {
+    const methods = new Set<string>();
     for (const prop of signatures ?? []) {
       if (!prop.key || !prop.typeAnnotation) continue;
-      const type = this.resolveTypeNode(prop.typeAnnotation.typeAnnotation);
-      if (prop.key.name === INDEX_SIGNATURE_KEY) {
+      const type = this.withTypeParameters(prop.typeParameters, () =>
+        this.resolveTypeNode(prop.typeAnnotation.typeAnnotation)
+      );
+      const name = prop.key.name;
+      if (name === INDEX_SIGNATURE_KEY) {
         target.indexType = type;
+      } else if (prop.method && methods.has(name)) {
+        // Overloads (`м(х: рақам): рақам; м(х: сатр): сатр;`): calls aren't
+        // matched against one signature
+        target.properties!.set(name, {
+          type: { kind: 'function', returnType: UNKNOWN },
+          optional: prop.optional && target.properties!.get(name)!.optional,
+        });
+      } else if (prop.method) {
+        // Named for diagnostics: "Function 'ном' expected 2 argument(s)"
+        target.properties!.set(name, { type: { ...type, name }, optional: prop.optional });
+        methods.add(name);
       } else {
-        target.properties!.set(prop.key.name, {
+        target.properties!.set(name, {
           type,
           optional: prop.optional,
           ...(prop.readonly && { readonly: true }),
@@ -866,6 +897,7 @@ export class TypeChecker {
   private collectClassMembers(classDecl: ClassDeclaration, classType: Type): void {
     const properties = classType.properties!;
     for (const member of classDecl.body.body) {
+      if (member.type === 'StaticBlock') continue;
       if (member.static) {
         const key = (member as PropertyDefinition | MethodDefinition).key;
         if (key?.name) classType.staticMembers!.add(this.memberKeyName(key));
@@ -885,12 +917,78 @@ export class TypeChecker {
         this.collectMethod(member as MethodDefinition, properties);
       }
     }
+    this.collectParameterProperties(classDecl, properties);
   }
 
   /** The name a class member is known by: `#ном` for private names. */
   private memberKeyName(key: Identifier | PrivateIdentifier): string {
     return key.type === 'PrivateIdentifier' ? `#${key.name}` : key.name;
   }
+
+  /** `конструктор(хосусӣ х: рақам)` declares the instance property `х: рақам`. */
+  private collectParameterProperties(
+    classDecl: ClassDeclaration,
+    properties: Map<string, PropertyType>
+  ): void {
+    for (const param of this.parameterProperties(classDecl)) {
+      properties.set(param.name.name, {
+        type: this.resolveParameterType(param),
+        optional: Boolean(param.optional) && !param.defaultValue,
+      });
+    }
+  }
+
+  /** Constructor parameters with `хосусӣ`/`ҷамъиятӣ`/`муҳофизатшуда`/`танҳохонӣ`. */
+  private parameterProperties(classDecl: ClassDeclaration): Parameter[] {
+    const constructor = classDecl.body.body.find(
+      (member): member is MethodDefinition =>
+        member.type === 'MethodDefinition' && member.kind === 'constructor'
+    );
+    return (constructor?.value.params ?? []).filter(param => param.accessibility || param.readonly);
+  }
+
+  /**
+   * Field initializers run before the constructor body assigns parameter
+   * properties, so `у = ин.х;` with `конструктор(хосусӣ х)` reads `беқимат`:
+   * TypeScript's "used before its initialization". Functions in an
+   * initializer run later and may read them.
+   */
+  private checkParameterPropertyReads(classDecl: ClassDeclaration): void {
+    const names = new Set(this.parameterProperties(classDecl).map(param => param.name.name));
+    if (names.size === 0) return;
+    const visit = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      const record = node as Record<string, unknown>;
+      if (TypeChecker.DEFERRED_NODES.has(record.type as string)) return;
+      const member = record as unknown as MemberExpression;
+      if (
+        member.type === 'MemberExpression' &&
+        member.object.type === 'ThisExpression' &&
+        !member.computed &&
+        member.property.type === 'Identifier' &&
+        names.has((member.property as Identifier).name)
+      ) {
+        const name = (member.property as Identifier).name;
+        this.addError(
+          TypeCheckErrorCode.UsedBeforeInitialization,
+          `Property '${name}' is used before its initialization: field initializers run before the constructor assigns parameter properties`,
+          member.property.line,
+          member.property.column
+        );
+      }
+      Object.values(record).forEach(visit);
+    };
+    for (const member of classDecl.body.body) {
+      if (member.type === 'PropertyDefinition' && !member.static) visit(member.value);
+    }
+  }
+
+  /** Nodes whose code runs later than the expression containing them, with their own `ин`. */
+  private static readonly DEFERRED_NODES: ReadonlySet<string> = new Set([
+    'FunctionExpression',
+    'ArrowFunctionExpression',
+    'ClassExpression',
+  ]);
 
   /**
    * Members a class creates by assignment (`ин.ном = ном;`) without declaring
@@ -907,7 +1005,7 @@ export class TypeChecker {
       const record = node as Record<string, unknown>;
       // Nested functions and classes have their own `ин`
       if (record.type === 'FunctionExpression' || record.type === 'FunctionDeclaration') return;
-      if (record.type === 'ClassDeclaration') return;
+      if (record.type === 'ClassDeclaration' || record.type === 'ClassExpression') return;
       if (record.type === 'AssignmentExpression') {
         const left = (record as unknown as AssignmentExpression).left as MemberExpression;
         if (
@@ -1330,7 +1428,7 @@ export class TypeChecker {
     let inferredType: Type | undefined;
     if (varDecl.init) {
       const init = varDecl.init;
-      inferredType = this.inferExpressionType(init, declaredType);
+      inferredType = this.inferInitializerType(varDecl, init, declaredType);
       if (declaredType) {
         this.checkAssignable(init, inferredType, declaredType, (source, target) =>
           this.addError(
@@ -1360,6 +1458,24 @@ export class TypeChecker {
           : undefined;
       if (key && narrowed) this.narrowed.set(key, narrowed);
     }
+  }
+
+  /**
+   * Type of a variable's initializer. A class expression is named after the
+   * variable when it has no name of its own (`собит К = синф {…}`), as in
+   * JavaScript, and `К.ном` then reads its static members.
+   */
+  private inferInitializerType(
+    varDecl: VariableDeclaration,
+    init: Expression,
+    declaredType?: Type
+  ): Type {
+    if (init.type !== 'ClassExpression' || varDecl.identifier.type !== 'Identifier') {
+      return this.inferExpressionType(init, declaredType);
+    }
+    const name = varDecl.identifier.name;
+    this.classValueKeys.add(this.bindingKey(this.scopes.length - 1, name));
+    return this.inferClassExpressionType(init as ClassExpression, name);
   }
 
   private bindPatternTypes(
@@ -1546,6 +1662,7 @@ export class TypeChecker {
   private checkClassDeclaration(classDecl: ClassDeclaration): void {
     // Phase 2: Validate class relationships, property types and method bodies
     this.validateSuperClass(classDecl);
+    this.checkParameterPropertyReads(classDecl);
     this.withTypeParameters(classDecl.typeParameters, () => this.checkClassMembers(classDecl));
   }
 
@@ -1561,6 +1678,10 @@ export class TypeChecker {
 
   private checkClassMemberBodies(classDecl: ClassDeclaration, classType: Type | undefined): void {
     for (const member of classDecl.body.body) {
+      if (member.type === 'StaticBlock') {
+        this.checkStaticBlock(member);
+        continue;
+      }
       const thisType = member.static ? undefined : classType;
       if (member.type === 'PropertyDefinition') {
         this.functionStack.push({ thisType });
@@ -1572,6 +1693,50 @@ export class TypeChecker {
         this.checkFunctionBody(method.value, methodType, thisType);
       }
     }
+  }
+
+  /** `статикӣ { … }` runs once, like a function body without parameters; `ин` is the class. */
+  private checkStaticBlock(block: StaticBlock): void {
+    const body: BlockStatement = {
+      type: 'BlockStatement',
+      body: block.body,
+      line: block.line,
+      column: block.column,
+    };
+    this.checkFunctionBody(
+      { params: [], body },
+      { kind: 'function', returnType: UNKNOWN },
+      undefined,
+      true
+    );
+  }
+
+  /**
+   * A class expression has the class itself as its type, as a declaration
+   * does; `bindingName` names a class without a name of its own.
+   */
+  private inferClassExpressionType(classExpr: ClassExpression, bindingName?: string): Type {
+    const name = classExpr.name?.name ?? bindingName ?? '(Anonymous class)';
+    const classDecl = {
+      ...classExpr,
+      type: 'ClassDeclaration',
+      name: classExpr.name ?? {
+        type: 'Identifier',
+        name,
+        line: classExpr.line,
+        column: classExpr.column,
+      },
+    } as ClassDeclaration;
+    let classType: Type = UNKNOWN;
+    // The class's own name is bound inside its body only
+    this.withScope(() => {
+      this.declareClassShell(classDecl);
+      classType = this.lookup(name)!;
+      this.classValueKeys.add(this.bindingKey(this.scopes.length - 1, name));
+      this.collectClass(classDecl);
+      this.checkClassDeclaration(classDecl);
+    });
+    return classType;
   }
 
   private validateSuperClass(classDecl: ClassDeclaration): void {
@@ -1603,8 +1768,14 @@ export class TypeChecker {
       return;
     }
 
-    // Imported or otherwise untyped bases can't be validated
-    if (parentType.kind === 'unknown') return;
+    // Imported or otherwise untyped bases can't be validated, nor can a `ҳар`
+    // value (a mixin's base: `(Асос: ҳар) => синф мерос Асос { … }`)
+    if (
+      parentType.kind === 'unknown' ||
+      (parentType.kind === 'primitive' && parentType.name === 'any')
+    ) {
+      return;
+    }
 
     if (parentType.kind !== 'class') {
       this.addInvalidExtendsError(classDecl, parentType);
@@ -2225,7 +2396,8 @@ export class TypeChecker {
     if (
       member.object.type === 'Identifier' &&
       objectType.kind === 'class' &&
-      objectType.name === (member.object as Identifier).name
+      (objectType.name === (member.object as Identifier).name ||
+        this.classValueKeys.has(this.referenceKey(member.object) ?? ''))
     ) {
       if (!this.hasStaticMember(objectType, name, jsName)) {
         this.reportMissingMember(property, name, jsName, objectType, true);
@@ -2360,9 +2532,9 @@ export class TypeChecker {
     if (base.kind === 'primitive' && base.name === 'boolean') return BUILTIN_MEMBERS.boolean;
     if (
       type.kind === 'generic' &&
-      (['Map', 'Set', 'Promise'] as const).includes(type.name as 'Map')
+      (['Map', 'Set', 'Promise', 'RegExp'] as const).includes(type.name as 'Map')
     ) {
-      return BUILTIN_MEMBERS[type.name as 'Map' | 'Set' | 'Promise'];
+      return BUILTIN_MEMBERS[type.name as 'Map' | 'Set' | 'Promise' | 'RegExp'];
     }
     return undefined;
   }
@@ -2381,9 +2553,14 @@ export class TypeChecker {
     return UNKNOWN;
   }
 
-  /** Members of `Map<К, В>` / `Set<Т>` with known types. */
+  /** Members of `Map<К, В>` / `Set<Т>` / `RegExp` with known types. */
   private collectionMemberType(type: Type, jsName: string): Type {
     if ((type.name === 'Map' || type.name === 'Set') && jsName === 'size') return NUMBER_TYPE;
+    if (type.name === 'RegExp') {
+      if (jsName === 'test') return this.methodReturning({ kind: 'primitive', name: 'boolean' });
+      if (jsName === 'lastIndex') return NUMBER_TYPE;
+      if (jsName === 'source' || jsName === 'flags') return STRING_TYPE;
+    }
     if (type.name === 'Map' && jsName === 'get') {
       return this.methodReturning(this.orUndefined(type.typeParameters?.[1] ?? UNKNOWN));
     }
@@ -2934,24 +3111,8 @@ export class TypeChecker {
     newExpr.arguments.forEach(arg => this.inferExpressionType(arg));
     if (newExpr.callee && newExpr.callee.type === 'Identifier') {
       const className = (newExpr.callee as Identifier).name;
-
-      // Handle built-in generic types: Map and Set (`нав Map<сатр, рақам>()`)
-      const typeArguments = (newExpr.typeArguments ?? []).map(t => this.resolveTypeNode(t));
-      const any: Type = { kind: 'primitive', name: 'any' };
-      if (className === 'Map') {
-        return {
-          kind: 'generic',
-          name: 'Map',
-          typeParameters: typeArguments.length === 2 ? typeArguments : [any, any],
-        };
-      }
-      if (className === 'Set') {
-        return {
-          kind: 'generic',
-          name: 'Set',
-          typeParameters: typeArguments.length === 1 ? typeArguments : [any],
-        };
-      }
+      const builtin = this.builtinInstanceType(className, newExpr);
+      if (builtin) return builtin;
 
       const classType = this.lookup(className);
       if (classType && classType.kind === 'class') {
@@ -2961,9 +3122,33 @@ export class TypeChecker {
       // A value of a constructor type: `нав (а: рақам) => Т`
       if (classType?.kind === 'constructor') return classType.returnType ?? UNKNOWN;
     } else if (newExpr.callee) {
-      this.inferExpressionType(newExpr.callee);
+      // `нав (синф { … })()` constructs an instance of the class
+      const calleeType = this.inferExpressionType(newExpr.callee);
+      if (calleeType.kind === 'class') return calleeType;
     }
     return UNKNOWN;
+  }
+
+  /** Instances of built-in classes: `нав Map<сатр, рақам>()`, `нав Set()`, `нав RegExp(…)`. */
+  private builtinInstanceType(className: string, newExpr: NewExpression): Type | undefined {
+    const typeArguments = (newExpr.typeArguments ?? []).map(t => this.resolveTypeNode(t));
+    const any: Type = { kind: 'primitive', name: 'any' };
+    if (className === 'Map') {
+      return {
+        kind: 'generic',
+        name: 'Map',
+        typeParameters: typeArguments.length === 2 ? typeArguments : [any, any],
+      };
+    }
+    if (className === 'Set') {
+      return {
+        kind: 'generic',
+        name: 'Set',
+        typeParameters: typeArguments.length === 1 ? typeArguments : [any],
+      };
+    }
+    if (className === 'RegExp' && !this.lookup(className)) return REGEXP_TYPE;
+    return undefined;
   }
 
   // ---------------------------------------------------------------------------
@@ -3975,12 +4160,11 @@ export class TypeChecker {
           return false;
         }
 
-        // Property exists, check type compatibility. The parser records an
-        // interface method signature `ном(): сатр` by its return type only, so
-        // a method satisfies any member type.
+        // Property exists, check type compatibility. Method signatures
+        // (`ном(): сатр`) have function types; functions are compared
+        // without their signatures.
         if (
           sourceProp &&
-          sourceProp.type.kind !== 'function' &&
           !this.isAssignable(
             sourceProp.type,
             targetProp.optional ? this.optionalType(targetProp.type) : targetProp.type
