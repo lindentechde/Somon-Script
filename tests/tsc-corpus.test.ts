@@ -68,6 +68,7 @@ const STRICTER_IN_TYPESCRIPT: ReadonlyArray<[string, string[], string]> = [
   ['(1, 2, 3)', ['TS2695'], 'the left side of a comma operator has no effect'],
   ['тасдиқиПур', ['TS2775'], 'an assertion call needs an explicitly typed target'],
   ['бознавис ҳарчӣ', ['TS4113'], "'override' of a member Error does not have"],
+  ['а < б > в, а < б > +1', ['TS2365', 'TS2365', 'TS2365', 'TS2365'], 'a comparison compared'],
 ];
 
 /** Programs that import modules of their own, which exist only in their tests. */

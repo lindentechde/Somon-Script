@@ -231,12 +231,16 @@ const JS_KEYWORD_EXPRESSIONS: ReadonlySet<string> = new Set([
   'super',
 ]);
 
-/** Expressions that only assert a type (`х чун Т`, `<Т>х`, `х бармесоё Т`, `х!`). */
+/**
+ * Expressions that only assert a type (`х чун Т`, `<Т>х`, `х бармесоё Т`, `х!`)
+ * or fix type arguments (`ф<Т>`).
+ */
 const ASSERTION_TYPES: ReadonlySet<string> = new Set([
   'AsExpression',
   'TypeAssertion',
   'SatisfiesExpression',
   'NonNullExpression',
+  'InstantiationExpression',
 ]);
 
 /** `code` without the line breaks at its end (a loop, not a backtracking `/\n+$/`). */
@@ -2100,7 +2104,8 @@ export class CodeGenerator {
    * quasis are emitted raw rather than re-escaped from their cooked value.
    */
   private generateTaggedTemplate(node: TaggedTemplateExpression): string {
-    const tag = this.generateExpression(node.tag, PREC.CALL);
+    const tag =
+      this.generateExpression(node.tag, PREC.CALL) + this.typeArgumentsText(node.typeArguments);
     const { quasis, expressions } = node.quasi;
     let template = '';
     quasis.forEach((quasi, i) => {

@@ -230,7 +230,10 @@ export interface TupleType extends TypeNode {
 
 export interface LiteralType extends TypeNode {
   type: 'LiteralType';
+  /** Negative numbers too: `-1`. */
   value: string | number | boolean;
+  /** A bigint literal type, `1n` (`value` holds its number). */
+  bigint?: boolean;
 }
 
 export interface ObjectType extends TypeNode {

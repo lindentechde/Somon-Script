@@ -386,6 +386,17 @@ export interface NonNullExpression extends Expression {
   expression: Expression;
 }
 
+/**
+ * Instantiation expression `ф<рақам>` (TypeScript 4.7): a generic function or
+ * class with its type arguments fixed, without calling it. Only `expression`
+ * is emitted in JavaScript.
+ */
+export interface InstantiationExpression extends Expression {
+  type: 'InstantiationExpression';
+  expression: Expression;
+  typeArguments: TypeNode[];
+}
+
 export interface ImportDeclaration extends Statement {
   type: 'ImportDeclaration';
   /** Empty for a side-effect import: `ворид "./м";`. */
@@ -721,4 +732,6 @@ export interface TaggedTemplateExpression extends Expression {
   type: 'TaggedTemplateExpression';
   tag: Expression;
   quasi: TemplateLiteral;
+  /** Explicit type arguments: `тег<рақам>\`…\`` (erased in JavaScript). */
+  typeArguments?: TypeNode[];
 }

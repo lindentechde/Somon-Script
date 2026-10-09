@@ -28,8 +28,6 @@ const programs = fs
  */
 const EXPECTED_WARNINGS: Readonly<Record<string, number>> = {
   '01-variables.ts': 1, // var → тағ
-  '15-recursion.ts': 1, // reduce<unknown[]>(…): type arguments left out
-  '56-sorting.ts': 1, // reduce<Record<…>>(…): type arguments left out
 };
 
 /** Runs CommonJS code in a fresh context and returns what it printed. */

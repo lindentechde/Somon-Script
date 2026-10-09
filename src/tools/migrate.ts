@@ -131,6 +131,8 @@ const FEATURE_PROBES: Readonly<Record<string, Probe>> = {
   importMeta: { source: 'тағ м = ворид.meta;' },
   // `о.м<Т>(х)`: older parsers read the type arguments of a method call as `<` and `>`
   memberTypeArguments: { source: 'тағ а = [1].map<рақам>(х => х);', absent: ['<'] },
+  // Any type as a type argument: older parsers compared `ф < ҳар > 1`
+  typeArguments: { source: 'функсия ф<Т>(х: Т) {}\nф<ҳар>(1);', absent: ['<'] },
 };
 
 const featureCache = new Map<string, boolean>();
@@ -876,7 +878,8 @@ class Converter {
   /** Explicit type arguments of a call that the SomonScript parser could misread as `<` `>`. */
   callExpression(node: ts.CallExpression): boolean {
     const typeArguments = node.typeArguments;
-    if (!typeArguments || typeArguments.length === 0) return false;
+    // A compiler that reads every type argument list needs no rewriting
+    if (!typeArguments?.length || supports('typeArguments')) return false;
     const open = this.child(node, ts.SyntaxKind.LessThanToken);
     const close = this.child(node, ts.SyntaxKind.GreaterThanToken);
     if (!open || !close) return false;

@@ -112,6 +112,7 @@ import {
   InferType,
   TypeQuery,
   TemplateLiteralType,
+  InstantiationExpression,
 } from './types';
 import { Lexer, isRegexStartInText, regexLiteralEnd } from './lexer';
 import { ImportHandler } from './handlers/import-handler';
@@ -187,6 +188,11 @@ export class Parser {
   private ambient = false;
   /** Terminators the source left out, in source order (used by the formatter). */
   readonly omittedSemicolons: OmittedSemicolon[] = [];
+  /**
+   * While `speculate` runs: the `>>` / `>>>` tokens split into `>` tokens
+   * (see `consumeTypeArgumentsClose`), so that a failed attempt can undo it.
+   */
+  private tokenSplits: Array<{ index: number; token: Token }> | undefined;
 
   constructor(tokens: Token[]) {
     // Line breaks are insignificant: statements end with ';', so expressions
@@ -710,11 +716,11 @@ export class Parser {
         false
       );
     }
-    if (this.check(TokenType.LESS_THAN) && this.isLikelyGenericCall()) {
-      this.skipGenericTypeArguments();
-    }
+    const typeArguments = this.parseTypeArgumentsInExpression();
     if (this.match(TokenType.LEFT_PAREN)) {
-      expression = this.finishCall(expression);
+      expression = this.finishCall(expression, typeArguments);
+    } else if (typeArguments) {
+      expression = this.createInstantiation(expression, typeArguments);
     }
     return expression;
   }
@@ -1552,20 +1558,16 @@ export class Parser {
       afterName !== undefined &&
       this.startsTypeParameter(afterName);
     if (!name || (!this.isPlainIdentifierToken(name) && !modified)) return null;
-    // Closing '>>' tokens are split while parsing; undo that if this is no arrow
-    const tokens = this.tokens.slice();
-    const head = this.speculate(() => {
+    return this.speculate(() => {
       this.current += offset;
       const typeParameters = this.parseTypeParameters()!;
       this.checkTypeParameterModifiers(typeParameters, 'function');
       this.consume(TokenType.LEFT_PAREN, "Expected '(' after type parameters");
       const params = this.parseParameterList("Expected ')' after arrow function parameters");
-      const returnType = this.match(TokenType.COLON) ? this.typeAnnotation() : undefined;
+      const returnType = this.match(TokenType.COLON) ? this.returnTypeAnnotation() : undefined;
       this.consume(TokenType.ARROW, "Expected '=>' after arrow function parameters");
       return { typeParameters, params, returnType };
     });
-    if (!head) this.tokens = tokens;
-    return head;
   }
 
   /** Index of the ')' matching the '(' at `openIndex`, or -1. */
@@ -1579,20 +1581,45 @@ export class Parser {
     return -1;
   }
 
-  /** Runs `parse`; on failure restores the position and errors and returns null. */
-  private speculate<T>(parse: () => T): T | null {
+  /**
+   * Runs `parse`; when it throws or returns undefined, restores the position,
+   * the errors, the omitted semicolons and every `>>` it split (see
+   * `consumeTypeArgumentsClose`), and returns null.
+   */
+  private speculate<T>(parse: () => T | undefined): T | null {
     const savedIndex = this.current;
     const savedErrors = this.errors.length;
     const savedOmitted = this.omittedSemicolons.length;
+    const outerSplits = this.tokenSplits;
+    const splits: Array<{ index: number; token: Token }> = [];
+    this.tokenSplits = splits;
+    let result: T | undefined;
     try {
-      return parse();
+      result = parse();
     } catch (error) {
       if (this.isNestingError(error)) throw error;
-      this.current = savedIndex;
-      this.errors.length = savedErrors;
-      this.omittedSemicolons.length = savedOmitted;
-      return null;
+      result = undefined;
+    } finally {
+      this.tokenSplits = outerSplits;
     }
+    if (result !== undefined) {
+      outerSplits?.push(...splits);
+      return result;
+    }
+    for (const split of splits.reverse()) this.tokens.splice(split.index, 2, split.token);
+    this.current = savedIndex;
+    this.errors.length = savedErrors;
+    this.omittedSemicolons.length = savedOmitted;
+    return null;
+  }
+
+  /** Like `speculate`, but an error `parse` records also makes it fail. */
+  private speculateCleanly<T>(parse: () => T | undefined): T | null {
+    return this.speculate(() => {
+      const errorCount = this.errors.length;
+      const result = parse();
+      return this.errors.length === errorCount ? result : undefined;
+    });
   }
 
   private parseArrowFunctionBody(): BlockStatement | Expression {
@@ -2111,51 +2138,23 @@ export class Parser {
     return this.applyCallChaining(expr);
   }
 
-  /**
-   * Type arguments of a generic call (`ф<Т>(…)`, `о.м<Т>(…)`), only on a name
-   * or member callee followed by `<…>(`; anything else is a comparison.
-   */
-  private callTypeArguments(callee: Expression): TypeNode[] | undefined {
-    const named =
-      callee.type === 'Identifier' ||
-      (callee.type === 'MemberExpression' && !(callee as MemberExpression).computed);
-    if (!named || !this.check(TokenType.LESS_THAN) || !this.isLikelyGenericCall()) {
-      return undefined;
-    }
-    return this.parseNewTypeArguments();
-  }
-
   private applyCallChaining(expr: Expression): Expression {
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const typeArguments = this.callTypeArguments(expr);
-
-      if (this.match(TokenType.LEFT_PAREN)) {
+      const typeArguments = this.parseTypeArgumentsInExpression();
+      if (typeArguments) {
+        expr = this.applyTypeArguments(expr, typeArguments);
+      } else if (this.match(TokenType.LEFT_PAREN)) {
         expr = this.finishCall(expr);
-        if (typeArguments) (expr as CallExpression).typeArguments = typeArguments;
       } else if (this.match(TokenType.DOT)) {
+        this.checkInstantiationAccess(expr);
         expr = this.createMemberExpression(
           expr,
           this.parsePropertyName("Expected property name after '.'"),
           false
         );
       } else if (this.match(TokenType.OPTIONAL_CHAINING)) {
-        if (this.match(TokenType.LEFT_PAREN)) {
-          expr = this.finishCall(expr);
-          (expr as CallExpression).optional = true;
-        } else if (this.match(TokenType.LEFT_BRACKET)) {
-          const property = this.expression();
-          this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property");
-          expr = this.createMemberExpression(expr, property, true);
-          (expr as MemberExpression).optional = true;
-        } else {
-          expr = this.createMemberExpression(
-            expr,
-            this.parsePropertyName("Expected property name after '?.'"),
-            false
-          );
-          (expr as MemberExpression).optional = true;
-        }
+        expr = this.optionalLink(expr);
       } else if (this.match(TokenType.LEFT_BRACKET)) {
         // Computed member expression: obj[expr]
         const property = this.expression();
@@ -2183,6 +2182,71 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  /**
+   * After `?.`: an optional call `ф?.(…)` (also with type arguments,
+   * `ф?.<Т>(…)`), element `о?.[к]` or property `о?.ном`.
+   */
+  private optionalLink(expr: Expression): Expression {
+    const typeArguments = this.parseTypeArgumentsInExpression();
+    if (this.match(TokenType.LEFT_PAREN)) {
+      const call = this.finishCall(expr, typeArguments);
+      call.optional = true;
+      return call;
+    }
+    if (typeArguments) {
+      throw new Error(this.unexpectedTokenMessage("Expected '(' after type arguments"));
+    }
+    let member: MemberExpression;
+    if (this.match(TokenType.LEFT_BRACKET)) {
+      const property = this.expression();
+      this.consume(TokenType.RIGHT_BRACKET, "Expected ']' after computed property");
+      member = this.createMemberExpression(expr, property, true);
+    } else {
+      this.checkInstantiationAccess(expr);
+      member = this.createMemberExpression(
+        expr,
+        this.parsePropertyName("Expected property name after '?.'"),
+        false
+      );
+    }
+    member.optional = true;
+    return member;
+  }
+
+  /**
+   * Type arguments after an operand: a call `ф<Т>(…)`, a tagged template
+   * `т<Т>\`…\`` or, followed by anything else, an instantiation expression `ф<Т>`.
+   */
+  private applyTypeArguments(expr: Expression, typeArguments: TypeNode[]): Expression {
+    if (this.match(TokenType.LEFT_PAREN)) return this.finishCall(expr, typeArguments);
+    if (this.check(TokenType.TEMPLATE_LITERAL)) {
+      return this.parseTaggedTemplate(expr, typeArguments);
+    }
+    return this.createInstantiation(expr, typeArguments);
+  }
+
+  private createInstantiation(
+    expression: Expression,
+    typeArguments: TypeNode[]
+  ): InstantiationExpression {
+    return {
+      type: 'InstantiationExpression',
+      expression,
+      typeArguments,
+      line: expression.line,
+      column: expression.column,
+    } as InstantiationExpression;
+  }
+
+  /** TypeScript's TS1477: `ф<Т>.ном` is an error (`(ф<Т>).ном` is not). */
+  private checkInstantiationAccess(expr: Expression): void {
+    if (expr.type !== 'InstantiationExpression' || this.parenthesized.has(expr)) return;
+    const token = this.previous();
+    this.errors.push(
+      `An instantiation expression cannot be followed by a property access at line ${token.line}, column ${token.column}`
+    );
   }
 
   /**
@@ -2222,7 +2286,10 @@ export class Parser {
    * A template literal right after a member/call expression tags it, as in
    * JavaScript (also across a line break): `тег\`…\``, `о.метод\`…\``.
    */
-  private parseTaggedTemplate(tag: Expression): TaggedTemplateExpression {
+  private parseTaggedTemplate(
+    tag: Expression,
+    typeArguments?: TypeNode[]
+  ): TaggedTemplateExpression {
     const template = this.peek();
     if (this.containsOptionalLink(tag)) {
       throw new Error(
@@ -2234,6 +2301,7 @@ export class Parser {
       type: 'TaggedTemplateExpression',
       tag,
       quasi: this.parseTemplateLiteral(true),
+      ...(typeArguments && { typeArguments }),
       line: tag.line,
       column: tag.column,
     } as TaggedTemplateExpression;
@@ -2275,74 +2343,127 @@ export class Parser {
     return /^[\p{L}_$][\p{L}\p{N}\p{M}_$]*$/u.test(token.value);
   }
 
-  private isLikelyGenericCall(): boolean {
-    // Check if the next tokens look like generic type arguments followed by a call
-    // e.g., <Type>(, <Type1, Type2>(
-    // Look ahead to see if we have the pattern: < type-like-tokens > (
-    const savedCurrent = this.current;
-
-    if (!this.match(TokenType.LESS_THAN)) {
-      this.current = savedCurrent;
-      return false;
-    }
-
-    // Check if next token is a type-like token
-    const isTypeLike =
-      this.check(TokenType.IDENTIFIER) ||
-      // Tuple and object types: `<[рақам, сатр]>`, `<{ а: рақам }>`
-      this.check(TokenType.LEFT_BRACKET) ||
-      this.check(TokenType.LEFT_BRACE) ||
-      this.check(TokenType.САТР) ||
-      this.check(TokenType.РАҚАМ) ||
-      this.check(TokenType.МАНТИҚӢ) ||
-      this.check(TokenType.ХОЛӢ) ||
-      this.check(TokenType.БЕҚИМАТ);
-
-    if (!isTypeLike) {
-      this.current = savedCurrent;
-      return false;
-    }
-
-    // Skip ahead to the closing > (`>>` closes two lists) and check that ( follows
-    const hasCallParen = this.scanTypeArgumentsClose() && this.check(TokenType.LEFT_PAREN);
-
-    // Reset position
-    this.current = savedCurrent;
-    return hasCallParen;
+  /**
+   * Type arguments in an expression, read as TypeScript reads them
+   * (`parseTypeArgumentsInExpression`): a `<…>` whose content parses as types
+   * and that is followed by `(`, a template, a line break, a binary operator
+   * or a token that cannot start an expression — `ф<рақам>(1)`, `ф<ҳар>`,
+   * `нав К<Т>()`. Otherwise nothing is consumed and the `<` compares:
+   * `а < б > в`, `а < б > +1`.
+   */
+  private parseTypeArgumentsInExpression(): TypeNode[] | undefined {
+    if (!this.check(TokenType.LESS_THAN)) return undefined;
+    const typeArguments = this.speculateCleanly(() => {
+      // As in TypeScript, the closing `>` is no part of `>>` or `>=`: `а < А<б >> в` compares
+      const list = this.parseTypeArgumentList(false);
+      return this.canFollowTypeArguments() ? list : undefined;
+    });
+    return typeArguments ?? undefined;
   }
 
-  /** Tokens that cannot be part of type arguments: a `<` before them compares. */
-  private static readonly NOT_IN_TYPE_ARGUMENTS: ReadonlySet<TokenType> = new Set([
-    TokenType.SEMICOLON,
-    TokenType.ASSIGN,
-    TokenType.AND,
+  /**
+   * `<Т, У>`, at the `<`. A `>>` closing nested lists is split; `splitClose`:
+   * the list's own `>` may be split from a `>>` or `>>>` too.
+   */
+  private parseTypeArgumentList(splitClose = true): TypeNode[] {
+    this.advance(); // '<'
+    const typeArguments: TypeNode[] = [];
+    do {
+      typeArguments.push(this.parseType());
+    } while (this.match(TokenType.COMMA));
+    if (splitClose) this.consumeTypeArgumentsClose();
+    else this.consume(TokenType.GREATER_THAN, "Expected '>' after type arguments");
+    return typeArguments;
+  }
+
+  /** TypeScript's `canFollowTypeArgumentsInExpression`. */
+  private canFollowTypeArguments(): boolean {
+    const token = this.peek();
+    switch (token.type) {
+      case TokenType.LEFT_PAREN:
+      case TokenType.TEMPLATE_LITERAL:
+        return true;
+      // `ф<Т><У>` makes no sense, `ф<Т> > х` is ambiguous with `>>`, and `+`/`-` are unary here
+      case TokenType.LESS_THAN:
+      case TokenType.GREATER_THAN:
+      case TokenType.PLUS:
+      case TokenType.MINUS:
+        return false;
+      default:
+        return (
+          this.hasLineBreakBefore() ||
+          this.isBinaryOperatorToken(token) ||
+          !this.startsOperand(token)
+        );
+    }
+  }
+
+  /** Binary operators other than `<`, `>`, `+` and `-` (see `canFollowTypeArguments`). */
+  private static readonly BINARY_OPERATOR_TOKENS: ReadonlySet<TokenType> = new Set([
+    TokenType.NULLISH_COALESCING,
     TokenType.OR,
+    TokenType.AND,
+    TokenType.BITWISE_OR,
+    TokenType.BITWISE_XOR,
+    TokenType.BITWISE_AND,
+    TokenType.EQUAL,
+    TokenType.NOT_EQUAL,
+    TokenType.STRICT_EQUAL,
+    TokenType.STRICT_NOT_EQUAL,
+    TokenType.LESS_EQUAL,
+    TokenType.GREATER_EQUAL,
+    TokenType.LEFT_SHIFT,
+    TokenType.RIGHT_SHIFT,
+    TokenType.UNSIGNED_RIGHT_SHIFT,
+    TokenType.MULTIPLY,
+    TokenType.DIVIDE,
+    TokenType.MODULO,
+    TokenType.EXPONENT,
+    TokenType.ДАР,
+    TokenType.ЧУН,
+    TokenType.БАРМЕСОЁ,
   ]);
 
-  /**
-   * After the `<` of possible type arguments: advances past their closing `>`
-   * and tells whether there is one, with brackets balanced in between.
-   */
-  private scanTypeArgumentsClose(): boolean {
-    const closes = new Map([
-      [TokenType.GREATER_THAN, 1],
-      [TokenType.RIGHT_SHIFT, 2],
-      [TokenType.UNSIGNED_RIGHT_SHIFT, 3],
-    ]);
-    const opens = new Set([TokenType.LEFT_PAREN, TokenType.LEFT_BRACKET, TokenType.LEFT_BRACE]);
-    const ends = new Set([TokenType.RIGHT_PAREN, TokenType.RIGHT_BRACKET, TokenType.RIGHT_BRACE]);
-    let depth = 1;
-    let brackets = 0;
-    while (!this.isAtEnd()) {
-      const token = this.advance();
-      if (Parser.NOT_IN_TYPE_ARGUMENTS.has(token.type)) return false;
-      if (token.type === TokenType.LESS_THAN) depth++;
-      else if (opens.has(token.type)) brackets++;
-      else if (ends.has(token.type) && --brackets < 0) return false;
-      depth -= brackets === 0 ? (closes.get(token.type) ?? 0) : 0;
-      if (depth <= 0) return depth === 0;
-    }
-    return false;
+  /** Words that are binary operators: `in`, `instanceof`, `as`, `satisfies`. */
+  private static readonly BINARY_OPERATOR_WORDS: ReadonlySet<string> = new Set([
+    'in',
+    'instanceof',
+    'as',
+    'satisfies',
+  ]);
+
+  private isBinaryOperatorToken(token: Token): boolean {
+    return (
+      Parser.BINARY_OPERATOR_TOKENS.has(token.type) ||
+      (token.type === TokenType.IDENTIFIER && Parser.BINARY_OPERATOR_WORDS.has(token.value))
+    );
+  }
+
+  /** Punctuation and literals that can start an operand. */
+  private static readonly OPERAND_START_TOKENS: ReadonlySet<TokenType> = new Set([
+    TokenType.NUMBER,
+    TokenType.STRING,
+    TokenType.TEMPLATE_LITERAL,
+    TokenType.REGEX,
+    TokenType.PRIVATE_NAME,
+    TokenType.LEFT_PAREN,
+    TokenType.LEFT_BRACKET,
+    TokenType.LEFT_BRACE,
+    TokenType.NOT,
+    TokenType.BITWISE_NOT,
+    TokenType.INCREMENT,
+    TokenType.DECREMENT,
+    TokenType.PLUS,
+    TokenType.MINUS,
+    TokenType.LESS_THAN,
+    TokenType.DIVIDE,
+    TokenType.DIVIDE_ASSIGN,
+    TokenType.AT,
+  ]);
+
+  /** Whether `token` can start an operand: a literal, a word or an opening punctuator. */
+  private startsOperand(token: Token): boolean {
+    return Parser.OPERAND_START_TOKENS.has(token.type) || this.isIdentifierNameToken(token);
   }
 
   private skipGenericTypeArguments(): void {
@@ -2398,13 +2519,15 @@ export class Parser {
     [TokenType.UNSIGNED_RIGHT_SHIFT, 3],
   ]);
 
-  private finishCall(callee: Expression): CallExpression {
+  /** The call of `callee`, after its consumed '('. */
+  private finishCall(callee: Expression, typeArguments?: TypeNode[]): CallExpression {
     const args = this.parseArguments();
 
     return {
       type: 'CallExpression',
       callee,
       arguments: args,
+      ...(typeArguments && { typeArguments }),
       line: callee.line,
       column: callee.column,
     } as CallExpression;
@@ -2484,7 +2607,7 @@ export class Parser {
       }
     }
 
-    const typeArguments = this.parseNewTypeArguments();
+    const typeArguments = this.parseTypeArgumentsInExpression();
 
     // Arguments are optional: `нав Сана`
     const args = this.match(TokenType.LEFT_PAREN) ? this.parseArguments() : [];
@@ -2499,31 +2622,14 @@ export class Parser {
   }
 
   /**
-   * Type arguments of `нав Map<сатр, рақам>()` (and of calls and heritage
-   * clauses). When the tokens after '<' are not a type argument list, they are
-   * skipped the way they were before type arguments were kept.
+   * Type arguments of a heritage clause (`мерос Асос<рақам>`). When the
+   * tokens after '<' are not a type argument list, they are skipped the way
+   * they were before type arguments were kept.
    */
   private parseNewTypeArguments(): TypeNode[] | undefined {
     if (!this.check(TokenType.LESS_THAN)) return undefined;
-    const start = this.current;
-    const tokens = [...this.tokens];
-    const errorCount = this.errors.length;
-    const omittedCount = this.omittedSemicolons.length;
-    try {
-      this.advance();
-      const typeArguments: TypeNode[] = [];
-      do {
-        typeArguments.push(this.parseType());
-      } while (this.match(TokenType.COMMA));
-      this.consumeTypeArgumentsClose();
-      if (this.errors.length === errorCount) return typeArguments;
-    } catch {
-      // Not a type argument list
-    }
-    this.tokens = tokens;
-    this.current = start;
-    this.errors.length = errorCount;
-    this.omittedSemicolons.length = omittedCount;
+    const typeArguments = this.speculateCleanly(() => this.parseTypeArgumentList());
+    if (typeArguments) return typeArguments;
     this.skipGenericTypeArguments();
     return undefined;
   }
@@ -2681,12 +2787,13 @@ export class Parser {
     }
   }
 
-  /** Expressions that only assert a type: erased in the output. */
+  /** Expressions that only assert a type (or fix type arguments): erased in the output. */
   private static readonly ASSERTION_TYPES: ReadonlySet<string> = new Set([
     'AsExpression',
     'TypeAssertion',
     'SatisfiesExpression',
     'NonNullExpression',
+    'InstantiationExpression',
   ]);
 
   private primary(): Expression {
@@ -4501,14 +4608,18 @@ export class Parser {
         column: token.column,
       } as LiteralType;
     }
-    // Parse number literals in types (e.g., 1 | 2 in union types)
-    if (this.check(TokenType.NUMBER)) {
+    // Parse number literals in types (e.g., 1 | 2 in union types), also negative ones (`-1`)
+    if (this.check(TokenType.NUMBER) || this.checkSequence(TokenType.MINUS, TokenType.NUMBER)) {
+      const start = this.peek();
+      const negative = this.match(TokenType.MINUS);
       const token = this.advance();
+      const literal = this.createNumericLiteral(token);
       return {
         type: 'LiteralType',
-        value: this.createNumericLiteral(token).value as number,
-        line: token.line,
-        column: token.column,
+        value: negative ? -(literal.value as number) : (literal.value as number),
+        ...(literal.raw.endsWith('n') && { bigint: true }),
+        line: start.line,
+        column: start.column,
       } as LiteralType;
     }
     // A template literal type: `пеш_${К}`
@@ -4849,6 +4960,7 @@ export class Parser {
     const token = this.peek();
     if (token.type === TokenType.RIGHT_SHIFT || token.type === TokenType.UNSIGNED_RIGHT_SHIFT) {
       const rest = token.value.slice(1);
+      this.tokenSplits?.push({ index: this.current, token });
       this.tokens.splice(
         this.current,
         1,
@@ -4981,20 +5093,8 @@ export class Parser {
    */
   private parseTypeParametersOrSkip(): TypeParameter[] | undefined {
     if (!this.check(TokenType.LESS_THAN)) return undefined;
-    const start = this.current;
-    const tokens = [...this.tokens];
-    const errorCount = this.errors.length;
-    const omittedCount = this.omittedSemicolons.length;
-    try {
-      const typeParameters = this.parseTypeParameters();
-      if (this.errors.length === errorCount) return typeParameters;
-    } catch (error) {
-      if (this.isNestingError(error)) throw error;
-    }
-    this.tokens = tokens;
-    this.current = start;
-    this.errors.length = errorCount;
-    this.omittedSemicolons.length = omittedCount;
+    const typeParameters = this.speculateCleanly(() => this.parseTypeParameters());
+    if (typeParameters) return typeParameters;
     this.skipGenericTypeArguments();
     return undefined;
   }

@@ -33,6 +33,7 @@ import type {
   GenericType,
   Identifier,
   ImportEqualsDeclaration,
+  InstantiationExpression,
   IndexedAccessType,
   InferType,
   InterfaceDeclaration,
@@ -384,13 +385,21 @@ export class TsEmitter extends CodeGenerator {
     return this.withParameterProperties(constructor, param => Boolean(param.typeAnnotation));
   }
 
-  protected generateAssertion(node: Expression, _minPrec: number): string {
+  protected generateAssertion(node: Expression, minPrec: number): string {
     const inner = (node as NonNullExpression).expression;
     let code: string;
     switch (node.type) {
       case 'NonNullExpression':
         // A postfix operator: binds like a member access, never needs parentheses
         return this.markPosition(node, `${this.generateExpression(inner, PREC.CALL)}!`);
+      case 'InstantiationExpression': {
+        // `ф<Т>`; parenthesized as an operand of a member access or call (TS1477)
+        const typeArguments = this.typeArgumentsText(
+          (node as InstantiationExpression).typeArguments
+        );
+        code = `${this.generateExpression(inner, PREC.CALL)}${typeArguments}`;
+        return this.markPosition(node, minPrec >= PREC.CALL ? `(${code})` : code);
+      }
       case 'AsExpression': {
         const assertion = node as AsExpression;
         const type = assertion.isConst ? 'const' : this.typeText(assertion.typeAnnotation!);
@@ -686,8 +695,10 @@ export class TsEmitter extends CodeGenerator {
         const name = (node as PrimitiveType).name;
         return TYPE_NAMES.get(name) ?? name;
       }
-      case 'LiteralType':
-        return TsEmitter.literalTypeText((node as LiteralType).value);
+      case 'LiteralType': {
+        const literal = node as LiteralType;
+        return `${TsEmitter.literalTypeText(literal.value)}${literal.bigint ? 'n' : ''}`;
+      }
       case 'GenericType': {
         const generic = node as GenericType;
         return (

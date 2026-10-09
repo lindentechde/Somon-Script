@@ -45,6 +45,7 @@ All notable changes to this project will be documented in this file. See [Conven
   * `somon repl` (`интерактив`) is an interactive session: multi-line input, declarations that stay visible in later inputs, printed expression values, `интизор` at the top level, the commands `.ёрӣ`/`.help`, `.баромад`/`.exit`, `.пок`/`.clear` and `.js`, and a history in `~/.somon_repl_history` (`SOMON_REPL_HISTORY` moves it; empty turns it off). API: `new Repl(options)`.
   * `somon migrate` (`интиқол`) converts TypeScript to SomonScript: keywords, types and globals become Tajik, and so do members of built-in types where the TypeScript checker sees them; comments and blank lines stay, and names that SomonScript reserves are renamed. TypeScript 5 syntax (decorators, `declare`, `override`, `accessor`, `using`, `import type`, `this` parameters, `in`/`out`, `import =`/`export =`) gets its SomonScript form. What has no SomonScript form is reported as a warning, never silently changed. A differential test migrates, compiles and runs 87 TypeScript programs (every construct, and LeetCode solutions) and compares their output with TypeScript's. API: `migrate(source)`.
   * For tools, `new Lexer(source, { comments: true })` keeps comments as tokens with source offsets, and `Parser.omittedSemicolons` lists the statements that ended without `;`.
+* Instantiation expressions `ф<рақам>` and `нав К<Т>` without arguments (TypeScript 4.7): erased in JavaScript, kept by the TypeScript emitter; `ф<Т>.ном` is TypeScript's error TS1477. Optional calls and tagged templates take type arguments too: `ф?.<рақам>(1)`, `тег<рақам>\`…\``.
 
 ### 🐛 Bug Fixes
 
@@ -54,6 +55,7 @@ All notable changes to this project will be documented in this file. See [Conven
 * `get х()`/`set х(қ)` in a class compile to accessors instead of a field named `get` followed by a method.
 * The docs list the `Map`/`Set` aliases and only valid `compilerOptions`.
 * `о.м<Т>(х)` is a call with type arguments; it compiled to the comparisons `о.м < Т > (х)`. Type arguments closed by `>>` (`ф<Map<К, В>>(х)`) parse.
+* `ф<ҳар>(1)` compiled to the comparisons `ф < ҳар > 1`: type arguments that are keyword types (`ҳар`, `рақам`, `сатр`, `ношинос`, `беджавоб`, `any`, …), literal, function, `калидҳои`/`навъи`, tuple, `танҳохонӣ` and template types were not read as type arguments, and neither were those of a call result, an element or a parenthesized callee (`ф()<Т>(х)`). `<` after an operand is now read exactly as TypeScript reads it: type arguments when what follows parses as types and the `>` is followed by `(`, a template, a line break, a binary operator or a token that cannot start an expression; a comparison otherwise (`а < б > в`, `а < б > +1`). Negative and bigint literal types (`-1`, `1n`) parse, and the TypeScript emitter keeps `1n`. `somon migrate` keeps every type argument list.
 * Examples with errors the TypeScript checker found work as written: a demo whose module exported nothing, `кофтан` (find) called with a value, `хато.паём` (undefined; `.message`), private members read by subclasses, and return types that did not say what the code returns.
 
 ## 0.4.0 (2026-10-09)

@@ -303,6 +303,7 @@ const ALL_FEATURES = [
   'importEquals',
   'importTypeEquals',
   'exportEquals',
+  'typeArguments',
 ];
 
 describe('migrate: constructs without a SomonScript form', () => {
@@ -378,17 +379,22 @@ describe('migrate: constructs without a SomonScript form', () => {
   });
 
   test('explicit type arguments of calls are kept when SomonScript reads them', () => {
-    expect(
-      code('declare function f<T>(x: T): T;\nf<Map<string, Map<string, number>>>(new Map());')
-    ).toContain('f<Map<сатр, Map<сатр, рақам> > >(нав Map());');
-    const dropped = migrate(
-      'function f<T>(x: T) { return x; }\nf<{ a: number }>({ a: 1 });\nf<any>(1);\nf<Partial<{}>>({});'
-    );
-    expect(dropped.code).toContain('f({ a: 1 });\nf(1);\nf({});');
-    expect(dropped.warnings).toHaveLength(3);
-    expect(code('function f<T>(x: T) { return x; }\nf<string[]>([]);\nf<null>(null);')).toContain(
-      'f<сатр[]>([]);\nf<холӣ>(холӣ);'
-    );
+    setFeatureSupport('typeArguments', false);
+    try {
+      expect(
+        code('declare function f<T>(x: T): T;\nf<Map<string, Map<string, number>>>(new Map());')
+      ).toContain('f<Map<сатр, Map<сатр, рақам> > >(нав Map());');
+      const dropped = migrate(
+        'function f<T>(x: T) { return x; }\nf<{ a: number }>({ a: 1 });\nf<any>(1);\nf<Partial<{}>>({});'
+      );
+      expect(dropped.code).toContain('f({ a: 1 });\nf(1);\nf({});');
+      expect(dropped.warnings).toHaveLength(3);
+      expect(code('function f<T>(x: T) { return x; }\nf<string[]>([]);\nf<null>(null);')).toContain(
+        'f<сатр[]>([]);\nf<холӣ>(холӣ);'
+      );
+    } finally {
+      setFeatureSupport('typeArguments', undefined);
+    }
   });
 
   test('constructs SomonScript cannot express yet are kept and reported', () => {
@@ -497,6 +503,23 @@ describe('migrate: newer constructs once SomonScript supports them', () => {
     }
     // Only the compile check may complain (`калонрақам` is pinned, not yet a type)
     expect(result.warnings.filter(warning => warning.line > 0)).toEqual([]);
+  });
+
+  test('every explicit type argument list is kept once SomonScript reads them all', () => {
+    expect(supports('typeArguments')).toBe(true);
+    const result = migrate(
+      [
+        'function f<T>(x: T) { return x; }',
+        'f<Map<string, Map<string, number>>>(new Map());',
+        'f<{ a: number }>({ a: 1 });',
+        'f<any>(1);',
+        '[1].map<unknown>(x => x);',
+      ].join('\n')
+    );
+    expect(result.code).toContain('f<Map<сатр, Map<сатр, рақам>>>(нав Map());');
+    expect(result.code).toContain('f<{ a: рақам }>({ a: 1 });\nf<ҳар>(1);');
+    expect(result.code).toContain('[1].харита<ношинос>(x => x);');
+    expect(result.warnings).toEqual([]);
   });
 
   test('supports() probes the compiler once', () => {

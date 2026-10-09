@@ -44,6 +44,7 @@ programs may still use them as ordinary names elsewhere (`тағ ҳосил = 1;
 | `x satisfies T`            | `х бармесоё Т`            | `satisfies` also works                 |
 | `<T>(x: T) => x`           | same                      | generic arrow function                 |
 | `f<T>(x)`                  | same                      | explicit type arguments                |
+| `f<T>`, `new C<T>`         | same                      | instantiation expression, no call      |
 
 ```som
 собит ҳисобҳо = нав Map<сатр, рақам>();
@@ -54,6 +55,20 @@ programs may still use them as ordinary names elsewhere (`тағ ҳосил = 1;
 собит ранг = { сурх: 255 } бармесоё сабт_навъ<сатр, рақам>;
 собит самтҳо = ["чап", "рост"] чун собит;      // танҳохонӣ ["чап", "рост"]
 собит ҳамон = <Т>(х: Т): Т => х;
+```
+
+A `<` after an operand opens type arguments, as in TypeScript, when what follows
+it parses as types and the `>` is followed by `(`, a template, a line break, a
+binary operator or a token that cannot start an expression. Any type may be a
+type argument; otherwise `<` and `>` compare. As in TypeScript,
+`ф(а < б, в > (1))` calls `а<б, в>(1)`.
+
+```som
+функсия ҳамон<Т>(х: Т): Т { бозгашт х; }
+чоп.сабт(ҳамон<ҳар>(1), ҳамон<"а" | "б">("а"), [1, 2].map<сатр>(х => `${х}`));
+собит ҳамонРақам = ҳамон<рақам>;           // instantiation expression
+собит а = 1, б = 2, в = 3;
+чоп.сабт(а < б > в, а < б > +1);         // false false: comparisons
 ```
 
 ---

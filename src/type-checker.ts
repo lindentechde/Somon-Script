@@ -87,6 +87,7 @@ import {
   ImportEqualsDeclaration,
   ExportAssignment,
   AmbientModuleDeclaration,
+  InstantiationExpression,
 } from './ast';
 import { translateMemberName } from './builtin-names';
 
@@ -567,6 +568,9 @@ export class TypeChecker {
     SatisfiesExpression: e => this.inferSatisfiesType(e as SatisfiesExpression),
     NonNullExpression: e =>
       this.removeNullish(this.inferExpressionType((e as NonNullExpression).expression)),
+    // `ф<рақам>`: the generic function (or class) itself, as calls of it are checked
+    InstantiationExpression: e =>
+      this.inferExpressionType((e as InstantiationExpression).expression),
     ImportExpression: e => {
       this.inferExpressionType((e as unknown as { source: Expression }).source);
       return UNKNOWN;
@@ -2486,6 +2490,8 @@ export class TypeChecker {
   }
 
   private resolveLiteralType(literalType: LiteralType): Type {
+    // A bigint literal type (`1n`), like a bigint literal value, is not a рақам
+    if (literalType.bigint) return UNKNOWN;
     return { kind: 'literal', value: literalType.value };
   }
 
