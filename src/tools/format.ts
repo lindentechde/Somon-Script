@@ -114,8 +114,9 @@ function withLineEndings(code: string, ending: '\n' | '\r\n'): string {
   return ending === '\n' ? code : code.replace(/\r?\n/g, ending);
 }
 
+/** The lexer and the parser (through programShape) report problems with Errors. */
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return (error as Error).message;
 }
 
 function lexWithComments(source: string): Token[] {
@@ -238,7 +239,7 @@ function buildItems(source: string, tokens: Token[], omitted: OmittedSemicolon[]
   for (const entry of omitted) {
     // `{ а: рақам }`: no `;` after the last member of a one-line object type
     const sameLine = entry.member && entry.before.type === TokenType.RIGHT_BRACE;
-    const index = positions.get(entry.before) ?? 0;
+    const index = positions.get(entry.before)!;
     if (!sameLine || hasLineBreakBefore(tokens, index)) insertBefore.add(entry.before);
   }
 
@@ -249,7 +250,8 @@ function buildItems(source: string, tokens: Token[], omitted: OmittedSemicolon[]
     if (token.type === TokenType.NEWLINE) continue;
     if (insertBefore.has(token) && lastCode >= 0) insertSemicolon(items, lastCode);
     if (token.type === TokenType.EOF) break;
-    const start = token.start ?? 0;
+    // In comment mode every token has its offsets
+    const start = token.start!;
     const gapText = source.slice(previousEnd, start);
     const item = newItem(
       token,
@@ -259,18 +261,19 @@ function buildItems(source: string, tokens: Token[], omitted: OmittedSemicolon[]
     );
     items.push(item);
     if (!item.isComment) lastCode = items.length - 1;
-    previousEnd = token.end ?? start;
+    previousEnd = token.end!;
   }
   return items;
 }
 
-/** Whether a line break separates `tokens[index]` from the code token before it. */
+/**
+ * Whether a line break separates `tokens[index]` from the code token before
+ * it; there is one (the `}` of an object type follows its members).
+ */
 function hasLineBreakBefore(tokens: Token[], index: number): boolean {
-  for (let i = index - 1; i >= 0; i--) {
-    if (tokens[i].type === TokenType.NEWLINE) return true;
-    if (tokens[i].type !== TokenType.COMMENT) return false;
-  }
-  return false;
+  let i = index - 1;
+  while (tokens[i].type === TokenType.COMMENT) i--;
+  return tokens[i].type === TokenType.NEWLINE;
 }
 
 /** Puts a `;` right after `items[index]` (before any comments that follow it). */
@@ -644,10 +647,11 @@ class Classifier {
     if (!previous?.keyword) return undefined;
     if (HEAD_KEYWORDS.has(previous.text)) return previous.text;
     const beforeAwait = this.code[index - 2];
+    // `барои интизор (`, `барои await (` (SomonScript has no English `for`)
     const forAwait =
       (previous.text === 'интизор' || previous.text === 'await') &&
       beforeAwait?.keyword === true &&
-      (beforeAwait.text === 'барои' || beforeAwait.text === 'for');
+      beforeAwait.text === 'барои';
     return forAwait ? beforeAwait.text : undefined;
   }
 
@@ -729,7 +733,8 @@ class Classifier {
       else if (closed !== undefined) {
         depth -= closed;
         if (depth <= 0) {
-          return depth === 0 && AFTER_SKIPPED_TYPE_ARGUMENTS.has(this.code[i + 1]?.text ?? '');
+          // A `;` (written or added) or a `}` always follows: `>` never ends the code
+          return depth === 0 && AFTER_SKIPPED_TYPE_ARGUMENTS.has(this.code[i + 1].text);
         }
       } else if (NOT_IN_TYPE_ARGUMENTS.has(text)) return false;
       else if (OPENERS.has(text)) brackets++;
@@ -740,7 +745,7 @@ class Classifier {
 
   private closeAngles(item: Item): void {
     item.kind = 'typeClose';
-    let count = ANGLE_CLOSERS.get(item.text) ?? 1;
+    let count = ANGLE_CLOSERS.get(item.text)!;
     let closes = 0;
     let prefix = false;
     while (count > 0 && this.frame.angle && this.stack.length > 0) {
@@ -755,7 +760,8 @@ class Classifier {
   }
 
   question(item: Item, previous: Item | undefined, next: Item | undefined): void {
-    const following = next?.text ?? '';
+    // A `?` never ends a program that parses
+    const following = next!.text;
     const optionalMember =
       (following === '(' || following === '<') && this.hasNode(previous, MEMBER_NODES);
     if (OPTIONAL_FOLLOWERS.has(following) || optionalMember) {
@@ -987,8 +993,8 @@ class Layout {
 
   private indentFor(item: Item, items: Item[], index: number): number {
     if (!item.isComment && item.closes > 0) {
-      const frame = this.stack[Math.max(0, this.stack.length - item.closes)];
-      return frame ? frame.closeIndent : 0;
+      // The frames it closes are still on the stack
+      return this.stack[this.stack.length - item.closes].closeIndent;
     }
     const anchor = item.isComment ? nextCode(items, index) : item;
     const frame = this.stack[this.stack.length - 1];
@@ -1099,7 +1105,7 @@ function reindentBlock(item: Item, column: number): string {
     if (line.trim() === '') return '';
     if (starred) return ' '.repeat(column + 1) + line.trimStart();
     if (shift >= 0) return ' '.repeat(shift) + line;
-    const removable = /^[ \t]*/.exec(line)?.[0].length ?? 0;
+    const removable = /^[ \t]*/.exec(line)![0].length;
     return line.slice(Math.min(removable, -shift));
   });
   return [lines[0], ...moved].join('\n');
@@ -1115,14 +1121,9 @@ function render(layout: { lines: Line[]; indentWidth: number }): string {
   const output: string[] = [];
   lines.forEach((line, index) => {
     if (line.blankBefore) output.push('');
-    const indent = line.text === '' ? '' : ' '.repeat(line.indent * indentWidth);
-    let text = indent + line.text;
-    if (line.trailing !== undefined) {
-      text =
-        line.text === ''
-          ? ' '.repeat(line.indent * indentWidth) + line.trailing
-          : text + ' '.repeat(pads[index]) + line.trailing;
-    }
+    // A line starts with a token, so it has text; a trailing comment follows that text
+    let text = ' '.repeat(line.indent * indentWidth) + line.text;
+    if (line.trailing !== undefined) text += ' '.repeat(pads[index]) + line.trailing;
     output.push(text);
   });
   return output.length === 0 ? '' : `${output.join('\n')}\n`;
@@ -1152,7 +1153,7 @@ function trailingCommentPads(lines: Line[], widths: number[]): number[] {
 }
 
 function hasTrailingAfterCode(line: Line): boolean {
-  return line.trailing !== undefined && line.text !== '';
+  return line.trailing !== undefined;
 }
 
 // ---------------------------------------------------------------------------

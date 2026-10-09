@@ -228,7 +228,7 @@ function createProgram(source: string): ts.Program {
   };
   host.fileExists = name =>
     name === PROGRAM_FILE || name === CONSOLE_FILE || ts.sys.fileExists(name);
-  host.writeFile = () => undefined;
+  // Nothing is emitted (`noEmit`), so the host never writes
   return ts.createProgram([PROGRAM_FILE, CONSOLE_FILE], COMPILER_OPTIONS, host);
 }
 
@@ -249,16 +249,14 @@ interface Edit {
 /**
  * Applies the edits in source order. Insertions come before a replacement at
  * the same position, and an edit inside a range that is replaced as a whole
- * (a removed declaration) is dropped.
+ * (a removed declaration) is dropped. Edits that tie keep their order (the
+ * sort is stable).
  */
 function applyEdits(source: string, edits: Edit[]): string {
   const isInsertion = (edit: Edit): number => (edit.start === edit.end ? 0 : 1);
-  const sorted = edits
-    .map((edit, order) => ({ ...edit, order }))
-    .sort(
-      (a, b) =>
-        a.start - b.start || isInsertion(a) - isInsertion(b) || b.end - a.end || a.order - b.order
-    );
+  const sorted = [...edits].sort(
+    (a, b) => a.start - b.start || isInsertion(a) - isInsertion(b) || b.end - a.end
+  );
   let result = '';
   let position = 0;
   for (const edit of sorted) {
@@ -891,9 +889,9 @@ class Converter {
     const typeArguments = node.typeArguments;
     // A compiler that reads every type argument list needs no rewriting
     if (!typeArguments?.length || supports('typeArguments')) return false;
-    const open = this.child(node, ts.SyntaxKind.LessThanToken);
-    const close = this.child(node, ts.SyntaxKind.GreaterThanToken);
-    if (!open || !close) return false;
+    // A call with type arguments has its `<` and `>` as children
+    const open = this.child(node, ts.SyntaxKind.LessThanToken)!;
+    const close = this.child(node, ts.SyntaxKind.GreaterThanToken)!;
     const callee = ts.isIdentifier(node.expression) || supports('memberTypeArguments');
     if (!callee || !this.readableTypeArguments(typeArguments)) {
       this.edits.push({ start: open.getStart(this.file), end: close.getEnd(), text: '' });
@@ -1002,9 +1000,10 @@ export function migrate(source: string, options: MigrateOptions = {}): MigrateRe
   const file =
     program?.getSourceFile(PROGRAM_FILE) ??
     ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  // Without a program, the syntax errors the parser attached to the file
   const diagnostics = program
     ? program.getSyntacticDiagnostics(file)
-    : ((file as unknown as { parseDiagnostics: ts.Diagnostic[] }).parseDiagnostics ?? []);
+    : (file as unknown as { parseDiagnostics: ts.Diagnostic[] }).parseDiagnostics;
   if (diagnostics.length > 0) {
     const messages = diagnostics.map(diagnostic => describeDiagnostic(file, diagnostic));
     throw new MigrateError(messages[0], messages);
@@ -1028,10 +1027,10 @@ export function migrate(source: string, options: MigrateOptions = {}): MigrateRe
   return { code, warnings };
 }
 
+/** A syntax error, which always has its position. */
 function describeDiagnostic(file: ts.SourceFile, diagnostic: ts.Diagnostic): string {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-  if (diagnostic.start === undefined) return message;
-  const { line, character } = file.getLineAndCharacterOfPosition(diagnostic.start);
+  const { line, character } = file.getLineAndCharacterOfPosition(diagnostic.start!);
   return `${message} at line ${line + 1}, column ${character + 1}`;
 }
 

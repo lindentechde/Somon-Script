@@ -119,8 +119,8 @@ export function isIncomplete(source: string): boolean {
   try {
     tokens = new Lexer(source).tokenize();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return /Unterminated (template literal|block comment)/.test(message);
+    // The lexer reports problems with Errors
+    return /Unterminated (template literal|block comment)/.test((error as Error).message);
   }
   let depth = 0;
   for (const token of tokens) {
@@ -221,11 +221,11 @@ function declarationAsVar(
 ): string {
   const list = statement.declarationList;
   if (!isAsync) {
-    const keyword = list.getFirstToken(file);
+    // `let`, `const` or `var`: a declaration list starts with its keyword
+    const keyword = list.getFirstToken(file)!;
     const text = statement.getText(file);
-    const offset = (keyword?.getStart(file) ?? statement.getStart(file)) - statement.getStart(file);
-    const length = keyword?.getWidth(file) ?? 0;
-    return `${text.slice(0, offset)}var${text.slice(offset + length)}`;
+    const offset = keyword.getStart(file) - statement.getStart(file);
+    return `${text.slice(0, offset)}var${text.slice(offset + keyword.getWidth(file))}`;
   }
   const assignments = list.declarations.map(declaration => {
     hoisted.push(...boundNames(declaration.name));
