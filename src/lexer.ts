@@ -364,8 +364,8 @@ export class Lexer {
     try {
       new RegExp(pattern, flags);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`${message} at line ${line}, column ${column}`);
+      // The RegExp constructor throws a SyntaxError
+      throw new Error(`${(error as Error).message} at line ${line}, column ${column}`);
     }
   }
 
@@ -1222,17 +1222,17 @@ export class Lexer {
     return this.input[this.position + 1];
   }
 
-  /** The full code point at the current position (both halves of a surrogate pair). */
+  /**
+   * The full code point at the current position (both halves of a surrogate
+   * pair). Callers check that the input has not ended.
+   */
   private currentCodePoint(): string {
-    const code = this.input.codePointAt(this.position);
-    return code === undefined ? '' : String.fromCodePoint(code);
+    return String.fromCodePoint(this.input.codePointAt(this.position)!);
   }
 
-  /** Advances past one code point, counting it as a single column. */
+  /** Advances past one code point, counting it as a single column (not at the end). */
   private advanceCodePoint(): void {
-    const length = this.currentCodePoint().length;
-    if (length === 0) return;
-    this.position += length;
+    this.position += this.currentCodePoint().length;
     this.column++;
   }
 
