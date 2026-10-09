@@ -424,7 +424,8 @@ namespace keeps its usual output.
 
 ## Not Supported
 
-- `import.meta`: the compiler emits CommonJS modules.
+- `import.meta` (`ворид.meta`) outside ES module output: see
+  [Type Checking and Module Output](15-type-checking.md).
 - `export as namespace N;`: it only appears in declaration (`.d.ts`) files.
 - `emitDecoratorMetadata`, and decorators on overload signatures or in `эълон`
   declarations (TypeScript rejects those too).

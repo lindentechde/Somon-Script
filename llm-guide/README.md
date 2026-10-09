@@ -34,6 +34,8 @@ programming language that uses Tajik Cyrillic syntax and compiles to JavaScript.
 - **[13-map-set.md](13-map-set.md)** - Map and Set (`дорадКалид`, not `дорад`)
 - **[14-operators.md](14-operators.md)** - Every TypeScript operator and
   statement in SomonScript
+- **[15-type-checking.md](15-type-checking.md)** - The SomonScript and
+  TypeScript checkers, `somon check`, declarations and ES module output
 - **[16-targets.md](16-targets.md)** - JavaScript targets (ES5 … ESNext), what
   gets lowered, `lib`, class fields, bundle formats and browser use
 - **[17-tools.md](17-tools.md)** - Formatter (`somon fmt`), REPL (`somon repl`)
