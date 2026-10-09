@@ -21,6 +21,11 @@ All notable changes to this project will be documented in this file. See [Conven
 * Destructuring patterns in `барои … аз` / `барои … дар` heads: `барои (собит [к, в] аз объект.воридот(о))`.
 * `нав Map<сатр, рақам>()` keeps its type arguments, and `ном?: сатр` class fields are optional.
 * `examples/leetcode`: solutions to LeetCode's Top 100 Liked problems with their own tests (`npm run test:leetcode`).
+* Developer tools, described in `llm-guide/17-tools.md`:
+  * `somon fmt` (`формат`) formats `.som` files in one canonical style: 4 spaces per level (`fmt.indent` in `somon.config.json` or `--indent`), `{` on the line of its statement, spaces around operators, `;` after every statement, at most one blank line. Line breaks and every comment stay; the formatter parses its result again and refuses any change to the syntax tree. `--check` lists unformatted files and exits 1 (for CI), `--stdout` prints the result. API: `format(source, { indent })`.
+  * `somon repl` (`интерактив`) is an interactive session: multi-line input, declarations that stay visible in later inputs, printed expression values, `интизор` at the top level, the commands `.ёрӣ`/`.help`, `.баромад`/`.exit`, `.пок`/`.clear` and `.js`, and a history in `~/.somon_repl_history` (`SOMON_REPL_HISTORY` moves it; empty turns it off). API: `new Repl(options)`.
+  * `somon migrate` (`интиқол`) converts TypeScript to SomonScript: keywords, types and globals become Tajik, and so do members of built-in types where the TypeScript checker sees them; comments and blank lines stay, and names that SomonScript reserves are renamed. TypeScript 5 syntax (decorators, `declare`, `override`, `accessor`, `using`, `import type`, `this` parameters, `in`/`out`, `import =`/`export =`) gets its SomonScript form. What has no SomonScript form is reported as a warning, never silently changed. A differential test migrates, compiles and runs 87 TypeScript programs (every construct, and LeetCode solutions) and compares their output with TypeScript's. API: `migrate(source)`.
+  * For tools, `new Lexer(source, { comments: true })` keeps comments as tokens with source offsets, and `Parser.omittedSemicolons` lists the statements that ended without `;`.
 
 ### 🐛 Bug Fixes
 

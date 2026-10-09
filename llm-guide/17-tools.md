@@ -207,31 +207,45 @@ export function farthest(points: Point[]): Point | undefined {
 Comments, blank lines and the order of everything stay as they were; the result
 is then formatted with `somon fmt`.
 
+### Newer TypeScript syntax
+
+TypeScript 5 constructs get their SomonScript form (see the Classes, Decorators
+and Declarations sections of [Operators](14-operators.md)):
+
+| TypeScript                                  | SomonScript                                |
+| ------------------------------------------- | ------------------------------------------ |
+| `declare const x: T`, `declare module "m"`  | `эълон собит x: T`, `эълон модул "m"`      |
+| `declare global { … }`                      | `эълон глобалӣ { … }`                      |
+| `override m()`, `accessor x = 1`            | `бознавис m()`, `дастрасӣ x = 1`           |
+| `using r = …`, `await using r = …`          | `истифода r = …`, `интизор истифода r = …` |
+| `@logged m() {}`                            | `@logged m() {}`                           |
+| `import type { T }`, `export type { T }`    | `ворид навъ { T }`, `содир навъ { T }`     |
+| `import { type T, f }`                      | `ворид { навъ T, f }`                      |
+| `function f<const T>(this: K)`              | `функсия f<собит T>(ин: K)`                |
+| `interface I<in T, out U>`                  | `интерфейс I<дар T, берун U>`              |
+| `import x = require("m")`, `import y = N.a` | `ворид x = require("m")`, `ворид y = N.a`  |
+| `export = x`                                | `содир = x`                                |
+| overload signatures, class index signatures | kept                                       |
+
+Which of these the compiler understands is found out by compiling small probes,
+so the same tool also serves an older compiler: there it leaves type-only
+constructs out (they have no runtime effect), writes `собит x = require("m")`
+and `module.exports = x`, and warns about each.
+
 ### What gets a warning
 
-| TypeScript                                             | SomonScript                                    |
-| ------------------------------------------------------ | ---------------------------------------------- |
-| `var`                                                  | `тағ` (check code that needs `var`)            |
-| overload signatures                                    | left out (no runtime effect)                   |
-| `declare …`, `override`, `in`/`out` on type parameters | left out (no runtime effect)                   |
-| `import type`, `export type`, `{ type T }`             | left out (no runtime effect)                   |
-| `this` parameters, class index signatures              | left out (no runtime effect)                   |
-| call and construct signatures in interfaces            | left out (no runtime effect)                   |
-| `get x(): T` in an interface                           | the property `x: T`                            |
-| `accessor x = 1`, `m?() {}` in a class                 | a plain field, a plain method                  |
-| `import x = require("m")`, `export = x`                | `собит x = require("m")`, `module.exports = x` |
-| `f<{ a: number }>(x)`, `f<any>(x)`                     | `f(x)`: type arguments left out                |
-| decorators, `using`, `import.meta`, `with`             | kept as written                                |
-| computed or string class member names                  | kept as written                                |
-| `export * as ns`, anonymous default exports            | kept as written                                |
+| TypeScript                                      | SomonScript                               |
+| ----------------------------------------------- | ----------------------------------------- |
+| `var`                                           | `тағ` (check code that needs `var`)       |
+| call and construct signatures in interfaces     | left out (no runtime effect)              |
+| `f<{ a: number }>(x)`, `f<any>(x)`, `o.m<T>(x)` | `f(x)`, `o.m(x)`: type arguments left out |
+| `import("m")`, `import.meta`, `with`            | kept as written                           |
+| `export * as ns`, anonymous default exports     | kept as written                           |
 
-`do x++; while (c)` quietly becomes `кун { x++; } то (c)`, and a catch clause
-type (`catch (e: unknown)`) is dropped.
+`do x++; while (c)` quietly becomes `кун { x++; } то (c)`, a catch clause type
+(`catch (e: unknown)`) is dropped, and the type `bigint` keeps its English name.
 
-The tool compiles its result: when that fails, the last warning says so. Which
-of these constructs SomonScript supports is found out by compiling small probes,
-so the tool writes the Tajik form (`эълон`, `бознавис`, `дастрасӣ`, …) as soon
-as the compiler understands it.
+The tool compiles its result: when that fails, the last warning says so.
 
 Every construct has been checked: a corpus of TypeScript programs (every
 statement, operator and type construct, and LeetCode solutions) is migrated,
