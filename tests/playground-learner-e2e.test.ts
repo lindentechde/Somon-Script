@@ -134,6 +134,9 @@ describeInBrowser(`playground for learners in Chromium${chromium ? '' : ` (skipp
     expect(await page.textContent('#run')).toContain('Иҷро');
     expect(await page.textContent('h1')).toContain('Майдони озмоиш');
     expect(await page.inputValue('#input')).toBe('2\n3\n');
+    // A link saves the page itself, for offline use
+    expect(await page.getAttribute('#download', 'href')).toBe(pageUrl);
+    expect(await page.getAttribute('#download', 'download')).toBe('somonscript.html');
     await run();
     expect(await output()).toBe('Ҷамъ: 5\n');
     expect(await page.textContent('#status')).toMatch(/^Иҷро шуд \(\d+ мс\)\.$/);

@@ -474,6 +474,8 @@
 
   function init() {
     $('version').textContent = window.SOMON_VERSION;
+    // The page itself, under whatever name it was saved
+    $('download').href = location.href.split('#')[0];
     codeInput.value = state.code;
     inputField.value = state.input;
     showJs.checked = state.showJs;

@@ -322,6 +322,9 @@ footer {
   color: var(--muted);
   font-size: 12px;
 }
+footer a {
+  color: var(--accent);
+}
 
 /* Phones and narrow windows: one column */
 @media (max-width: 820px) {

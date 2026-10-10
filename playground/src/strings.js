@@ -34,6 +34,7 @@ window.SOMON_STRINGS = {
     linkReady: 'Пайванд дар сатри суроға аст: онро нусха кунед.',
     noWorker: 'Ин браузер барномаро иҷро карда наметавонад. Браузери навтарро кушоед.',
     line: 'Сатри {n}',
+    download: 'Захира барои кор бе интернет',
   },
   ru: {
     title: 'Песочница',
@@ -64,6 +65,7 @@ window.SOMON_STRINGS = {
     linkReady: 'Ссылка в адресной строке: скопируйте её.',
     noWorker: 'Этот браузер не может выполнить программу. Откройте более новый браузер.',
     line: 'Строка {n}',
+    download: 'Сохранить для работы без интернета',
   },
   en: {
     title: 'Playground',
@@ -94,5 +96,6 @@ window.SOMON_STRINGS = {
     linkReady: 'The link is in the address bar: copy it.',
     noWorker: 'This browser cannot run the program. Open a newer browser.',
     line: 'Line {n}',
+    download: 'Save for offline use',
   },
 };
