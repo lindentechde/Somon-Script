@@ -30,6 +30,31 @@ A warning printed before `somon run` starts the program is one line:
 Огоҳӣ дар барнома.som, сатри 2: Дар навъи `рақам` хосияти `дарозӣ` нест.
 ```
 
+## Errors of the running program
+
+With a Tajik or Russian language, an error that `somon run` meets while the
+program runs and nothing catches is explained the same way: what happened, the
+line of the `.som` file with a caret, and a hint. Neither the stack of Node.js
+nor the generated JavaScript is shown; `somon run --стек` (or `--stack`) prints
+the full stack after the message. The exit code stays 1.
+
+```text
+Хатои иҷро дар барнома.som, сатри 2:
+  Хосияти `дарозӣ`-ро хондан мумкин нест: қимат `беқимат` аст.
+    2 | тағ х = р[10].дарозӣ;
+      |               ^^^^^^
+  Маслиҳат: Шояд дар рӯйхат унсуре бо ин индекс нест: индексҳо аз 0 то `дарозӣ - 1` мебошанд.
+```
+
+The engine's messages about reading a member of `беқимат`/`холӣ`, a name that is
+not defined or used before its declaration, calling what is no function, `нав`
+of what is no class, `барои … аз` over what is no list, endless recursion and an
+invalid length of a list are explained, with the program's Tajik names
+(`дарозӣ`, not `length`). An error the program throws itself
+(`партофтан нав Хато("…")`) keeps its message. The place in the `.som` file
+comes from the source map `somon run` writes for the program. In English the
+error of Node.js is printed as before.
+
 ## In the API
 
 ```ts
