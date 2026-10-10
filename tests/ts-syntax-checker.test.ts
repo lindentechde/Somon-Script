@@ -417,7 +417,11 @@ describe('decorators, `using` and the rest are checked as expressions', () => {
       check(
         'интерфейс Манбаъ { н: рақам; }\nэълон функсия кушо(): Манбаъ;\nфунксия ф() { истифода м = кушо(); тағ а: сатр = м.н; м = кушо(); }\nсодир = ф;'
       )
-    ).toEqual(["TYPE_NOT_ASSIGNABLE 3:50 Type 'рақам' is not assignable to type 'сатр'"]);
+    ).toEqual([
+      "TYPE_NOT_ASSIGNABLE 3:50 Type 'рақам' is not assignable to type 'сатр'",
+      // A new value for the constant, TypeScript's TS2588
+      "CONST_ASSIGNMENT 3:55 Cannot assign to 'м' because it is a constant",
+    ]);
   });
 
   test('`ворид х = Н.а` has the type of what it names', () => {

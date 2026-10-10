@@ -4,6 +4,15 @@ import * as path from 'node:path';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 
 import { CodeGenerator, type CodeMapping } from './codegen';
+import {
+  codegenDiagnostic,
+  detailDiagnostic,
+  formatDiagnostic,
+  syntaxDiagnostic,
+  typeDiagnostic,
+  type Diagnostic,
+  type DiagnosticLanguage,
+} from './diagnostics';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import {
@@ -100,6 +109,14 @@ export interface CompileOptions {
   checker?: 'somon' | 'typescript';
   /** Language of the TypeScript checker's diagnostics: English (default), Russian or Tajik. */
   locale?: 'en' | 'ru' | 'tj';
+  /**
+   * Report every diagnostic in this language, written for learners: `errors`
+   * and `warnings` hold the message with the line of code and a caret under
+   * the place (`Хато дар сатри 4: …`), and `diagnostics` the same as data
+   * (code, message, line, column, hint). Implies `locale`. Without it the
+   * messages are the compiler's English ones, as they always were.
+   */
+  language?: DiagnosticLanguage;
   /** Also produce a TypeScript declaration file (`CompileResult.declaration`). */
   declaration?: boolean;
   /**
@@ -129,6 +146,8 @@ export interface CompileResult {
   warnings: string[];
   /** TypeScript declarations (`.d.ts` text) when `declaration` is enabled and code was emitted. */
   declaration?: string;
+  /** With `language`: the errors and warnings as data, in that language (errors first). */
+  diagnostics?: Diagnostic[];
 }
 
 /**
@@ -144,36 +163,132 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // parse loop. The thrown error fired in a future tick, became an uncaught
   // exception, and did not interrupt CPU-bound work. If pathological inputs
   // become a problem, enforce timeouts via a worker thread at the CLI layer.
-  return compileInternal(source, options);
+  if (options.language === undefined) return compileInternal(source, options, new Problems());
+  const problems = new Problems();
+  const result = compileInternal(
+    source,
+    { ...options, locale: options.locale ?? options.language },
+    problems
+  );
+  return localize(result, problems.diagnostics(source, options.language), source, options.language);
 }
 
-function compileInternal(source: string, options: CompileOptions): CompileResult {
+/**
+ * What went wrong, as each stage reports it, for the diagnostics in another
+ * language: the stage's own message (or the checker's error) per entry of
+ * `errors` and `warnings`.
+ */
+class Problems {
+  private readonly entries: Array<
+    | { kind: 'syntax' | 'codegen' | 'option' | 'internal'; text: string }
+    | { kind: 'target'; text: string; line: number; column: number }
+    | { kind: 'type'; error: TypeCheckError }
+  > = [];
+
+  add(entry: Problems['entries'][number]): void {
+    this.entries.push(entry);
+  }
+
+  diagnostics(source: string, language: DiagnosticLanguage): Diagnostic[] {
+    const all = this.entries.map((entry): Diagnostic => {
+      switch (entry.kind) {
+        case 'syntax':
+          return syntaxDiagnostic(entry.text, source, language);
+        case 'codegen':
+          return codegenDiagnostic(entry.text, source, language);
+        case 'type':
+          return typeDiagnostic(entry.error, source, language);
+        case 'target':
+          return detailDiagnostic('TARGET_UNSUPPORTED', entry.text, language, entry);
+        case 'option':
+          return detailDiagnostic('OPTION_INVALID', entry.text, language);
+        default:
+          return detailDiagnostic('CODEGEN_INVALID', entry.text, language);
+      }
+    });
+    // After a syntax error the parser goes on from a guess; what it reports next on that
+    // line is mostly the same mistake again (`чоп(1; 2)`: a `)` and a `;`)
+    const shown = all.filter(
+      (d, index) =>
+        this.entries[index].kind !== 'syntax' ||
+        !all
+          .slice(0, index)
+          .some((e, before) => this.entries[before].kind === 'syntax' && e.line === d.line)
+    );
+    return [
+      ...shown.filter(d => d.severity === 'error'),
+      ...shown.filter(d => d.severity === 'warning'),
+    ];
+  }
+}
+
+/** The result with its messages in `language`, for learners. */
+function localize(
+  result: CompileResult,
+  diagnostics: Diagnostic[],
+  source: string,
+  language: DiagnosticLanguage
+): CompileResult {
+  const format = (d: Diagnostic) => formatDiagnostic(d, { language, source });
+  return {
+    ...result,
+    errors: diagnostics.filter(d => d.severity === 'error').map(format),
+    warnings: diagnostics.filter(d => d.severity === 'warning').map(format),
+    diagnostics,
+  };
+}
+
+function compileInternal(
+  source: string,
+  options: CompileOptions,
+  problems: Problems
+): CompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   try {
     if (routeTargetOptionErrors(options, errors)) {
+      errors.forEach(text => problems.add({ kind: 'option', text }));
       return { code: '', errors, warnings };
     }
 
-    const { ast, parserErrors } = parseSource(source);
+    const parsed = parseSource(source);
+    if ('lexerError' in parsed) {
+      errors.push(parsed.lexerError);
+      problems.add({ kind: 'syntax', text: parsed.lexerError });
+      return { code: '', errors, warnings };
+    }
+    const { ast, parserErrors } = parsed;
 
-    if (routeParserErrors(parserErrors, errors)) {
+    if (
+      routeParserErrors(
+        parserErrors.map(err => `Parse error: ${err}`),
+        errors
+      )
+    ) {
+      parserErrors.forEach(text => problems.add({ kind: 'syntax', text }));
       return { code: '', errors, warnings };
     }
 
     const typeScript = runTypeScriptStage(ast, source, options);
-    if (runTypeCheckStage(ast, source, options, { errors, warnings }, typeScript?.errors)) {
-      return { code: '', errors, warnings };
-    }
+    const stop = runTypeCheckStage(
+      ast,
+      source,
+      options,
+      { errors, warnings, problems },
+      typeScript?.errors
+    );
+    if (stop) return { code: '', errors, warnings };
 
-    const result = emitCode(ast, options, errors, warnings, source);
+    const result = emitCode(ast, options, { errors, warnings, problems }, source);
     if (typeScript?.declaration !== undefined && result.code !== '') {
       result.declaration = typeScript.declaration;
     }
     return result;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    const text = error instanceof Error ? error.message : String(error);
+    errors.push(text);
+    problems.add({ kind: 'internal', text });
     return { code: '', errors, warnings };
   }
 }
@@ -216,18 +331,26 @@ function runTypeCheckStage(
   ast: ReturnType<Parser['parse']>,
   source: string,
   options: CompileOptions,
-  { errors, warnings }: { errors: string[]; warnings: string[] },
+  { errors, warnings, problems }: Collected,
   typeScriptErrors: TypeCheckError[] | undefined
 ): boolean {
   if (options.typeCheck === false) return false;
   // With `checker: 'typescript'` and type checking on, the TypeScript stage has run
   const result =
     options.checker === 'typescript'
-      ? { errors: typeScriptErrors!.map(formatTypeError), warnings: [] }
-      : runTypeCheck(source, ast, Boolean(options.strict));
-  errors.push(...result.errors);
-  warnings.push(...result.warnings);
+      ? { errors: typeScriptErrors!, warnings: [] }
+      : new TypeChecker(source, { strict: Boolean(options.strict) }).check(ast);
+  errors.push(...result.errors.map(formatTypeError));
+  warnings.push(...result.warnings.map(formatTypeWarning));
+  [...result.errors, ...result.warnings].forEach(error => problems.add({ kind: 'type', error }));
   return Boolean(options.strict) && result.errors.length > 0;
+}
+
+/** What the stages report: the compiler's messages and, for other languages, the problems. */
+interface Collected {
+  errors: string[];
+  warnings: string[];
+  problems: Problems;
 }
 
 /**
@@ -264,11 +387,14 @@ export function formatTypeError(err: TypeCheckError): string {
   return `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`;
 }
 
+function formatTypeWarning(warn: TypeCheckError): string {
+  return `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`;
+}
+
 function emitCode(
   ast: ReturnType<Parser['parse']>,
   options: CompileOptions,
-  errors: string[],
-  warnings: string[],
+  { errors, warnings, problems }: Collected,
   source: string
 ): CompileResult {
   const generator = new CodeGenerator({
@@ -282,6 +408,7 @@ function emitCode(
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
     errors.push(...codegenErrors.map(err => `Code generation error: ${err}`));
+    codegenErrors.forEach(text => problems.add({ kind: 'codegen', text }));
     return { code: '', errors, warnings };
   }
 
@@ -297,7 +424,10 @@ function emitCode(
     downlevel: options.downlevel,
   });
   if (lowered.diagnostics.length > 0) {
-    errors.push(...targetErrors(lowered.diagnostics, generated.mappings, source));
+    for (const target of targetErrors(lowered.diagnostics, generated.mappings, source)) {
+      errors.push(target.text);
+      problems.add({ kind: 'target', ...target.diagnostic });
+    }
     return { code: '', errors, warnings };
   }
   let code = lowered.code;
@@ -335,25 +465,20 @@ function directoryImports(filePath: string): (_specifier: string) => boolean {
   };
 }
 
-function parseSource(source: string) {
-  const lexer = new Lexer(source);
-  const tokens = lexer.tokenize();
+/** The syntax tree and the parser's errors, or the lexer's error when it could not read the source. */
+function parseSource(
+  source: string
+): { ast: ReturnType<Parser['parse']>; parserErrors: string[] } | { lexerError: string } {
+  let tokens;
+  try {
+    tokens = new Lexer(source).tokenize();
+  } catch (error) {
+    // The lexer reports what it cannot read with an Error
+    return { lexerError: (error as Error).message };
+  }
   const parser = new Parser(tokens);
   const ast = parser.parse();
-  const parserErrors = parser.getErrors().map(err => `Parse error: ${err}`);
-  return { ast, parserErrors };
-}
-
-function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: boolean) {
-  const checker = new TypeChecker(source, { strict });
-  const result = checker.check(ast);
-  return {
-    errors: result.errors.map(formatTypeError),
-    warnings: result.warnings.map(
-      warn =>
-        `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`
-    ),
-  };
+  return { ast, parserErrors: parser.getErrors() };
 }
 
 /**
@@ -364,9 +489,10 @@ function targetErrors(
   diagnostics: TargetDiagnostic[],
   mappings: CodeMapping[],
   source: string
-): string[] {
+): Array<{ text: string; diagnostic: { text: string; line: number; column: number } }> {
   const sourceLines = source.split(/\r?\n/);
-  const messages = diagnostics.map(diagnostic => {
+  const errors = new Map<string, { text: string; line: number; column: number }>();
+  for (const diagnostic of diagnostics) {
     let original = { line: diagnostic.line, column: 0 };
     for (const mapping of mappings) {
       const { line, column } = mapping.generated;
@@ -375,10 +501,12 @@ function targetErrors(
     }
     // Every target error is inside a statement, which has a mapping
     const snippet = sourceLines[original.line - 1].trim();
-    return `Target error at line ${original.line}, column ${original.column + 1}: ${diagnostic.message}\n> ${snippet}`;
-  });
-  // Two literals in one statement end up at the same position
-  return [...new Set(messages)];
+    const position = { line: original.line, column: original.column + 1 };
+    const text = `Target error at line ${position.line}, column ${position.column}: ${diagnostic.message}\n> ${snippet}`;
+    // Two literals in one statement end up at the same position
+    errors.set(text, { text: diagnostic.message, ...position });
+  }
+  return [...errors].map(([text, diagnostic]) => ({ text, diagnostic }));
 }
 
 function outputFileName(sourceFileName: string): string {

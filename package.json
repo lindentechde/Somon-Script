@@ -53,6 +53,7 @@
     "examples": "node scripts/run-examples.js",
     "test:examples": "node scripts/run-examples.js --validate",
     "audit:examples": "node scripts/audit-examples.js",
+    "glossary": "node scripts/glossary-messages.js",
     "test:leetcode": "node scripts/run-leetcode.js",
     "version:patch": "node scripts/increment-version.js patch",
     "version:minor": "node scripts/increment-version.js minor",

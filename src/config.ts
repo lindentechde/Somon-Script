@@ -29,7 +29,11 @@ export interface CompilerOptions {
   module?: 'commonjs' | 'esm';
   /** Type checker: 'somon' (default) or 'typescript'. */
   checker?: 'somon' | 'typescript';
-  /** Language of the TypeScript checker's diagnostics: 'en' (default), 'ru' or 'tj'. */
+  /**
+   * Language of diagnostics: 'en' (default), 'ru' or 'tj'. In Russian and
+   * Tajik every diagnostic is written for learners (docs/reference/diagnostics.md);
+   * in English the TypeScript checker's and the compiler's messages stay as they were.
+   */
   locale?: 'en' | 'ru' | 'tj';
   /** Also write a TypeScript declaration file (`.d.ts`) next to the output. */
   declaration?: boolean;

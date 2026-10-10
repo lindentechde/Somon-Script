@@ -65,6 +65,13 @@ export function builtinObjectHasMember(objectName: string, member: string): bool
   return jsName in object;
 }
 
+/** The Tajik names of the members of a built-in object, for "did you mean". */
+export function builtinObjectMemberNames(objectName: string): string[] {
+  return [...BUILTIN_MAPPINGS.keys()].filter(
+    name => /^[\u0400-\u04ff]/.test(name) && builtinObjectHasMember(objectName, name)
+  );
+}
+
 /** Whether `name` is a built-in object that cannot be called (`математика(…)`). */
 export function isNotCallableBuiltin(name: string): boolean {
   return NOT_CALLABLE.has(name);
