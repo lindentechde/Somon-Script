@@ -172,7 +172,7 @@ describe('LSP analysis: diagnostics', () => {
         compilerOptions: { checker: 'typescript' },
         fileName,
       });
-      // Not "Cannot find module './math.js'" (TS2307): the call is checked against math.som
+      // Not "Cannot find module './math'" (TS2307): the call is checked against math.som
       expect(analysis.diagnostics).toHaveLength(1);
       // The code is the diagnostic's code; the source line is not repeated in the message
       expect(analysis.diagnostics[0]).toMatchObject({

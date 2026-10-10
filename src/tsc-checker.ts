@@ -538,7 +538,10 @@ function toTypeCheckError(
   }
   // Mapped positions are in the source
   const sourceLine = file.source.split('\n')[line - 1];
-  const raw = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+  const raw = withWrittenSpecifiers(
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+    file.emitted.specifiers
+  );
   return {
     code: `TS${diagnostic.code}`,
     message: translateMessage(raw, locale, sourceLine, column, diagnostic.code),
@@ -615,6 +618,22 @@ const TAJIK_MEMBER_NAMES: ReadonlyMap<string, string[]> = (() => {
  */
 function withSourceModuleNames(message: string): string {
   return message.replace(/(["'])([^"'\n]*?)\.som(?:\.[jt]s)?\1/g, '$1$2$1');
+}
+
+/**
+ * TypeScript names a module by the specifier of the TypeScript it checks (`"./м.js"`, the
+ * emitted spelling; TypeScript 6 also where it names the module of an import), and the
+ * message names it as the program writes it (`"./м"`).
+ */
+export function withWrittenSpecifiers(
+  message: string,
+  specifiers: ReadonlyMap<string, string> | undefined
+): string {
+  if (!specifiers?.size) return message;
+  return message.replace(/(["'])([^"'\n]+)\1/g, (quoted, quote: string, name: string) => {
+    const written = specifiers.get(name);
+    return written === undefined ? quoted : `${quote}${written}${quote}`;
+  });
 }
 
 /**

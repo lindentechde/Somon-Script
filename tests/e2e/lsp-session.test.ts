@@ -325,10 +325,7 @@ describe('somon lsp: an editing session (spawned)', () => {
     client.change(main, 3, user);
     const missing = await client.diagnostics(main, 3);
     expect(missing.diagnostics.map(d => [d.code, d.message])).toEqual([
-      [
-        'TS2305',
-        expect.stringMatching(/^Module '"\.\/math(\.js)?"' has no exported member 'ҷамъ'\./),
-      ],
+      ['TS2305', expect.stringMatching(/^Module '"\.\/math"' has no exported member 'ҷамъ'\./)],
     ]);
     expect(missing.diagnostics[0].range.start).toEqual({ line: 0, character: 8 });
 

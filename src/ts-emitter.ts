@@ -146,6 +146,11 @@ export interface TsEmitResult {
    * file of their own (see `emit`).
    */
   ambient?: { code: string; mappings: CodeMapping[] };
+  /**
+   * Module specifiers as the program writes them (`./м`), by the spelling the
+   * TypeScript gives them (`./м.js`), for messages that name a module.
+   */
+  specifiers?: ReadonlyMap<string, string>;
 }
 
 type Declarable = Statement & { declare?: boolean; exported?: boolean };
@@ -157,6 +162,8 @@ export class TsEmitter extends CodeGenerator {
   private ambientDepth = 0;
   /** Names already exported under their JavaScript name (`export { илова as push }`). */
   private exportedAliases = new Set<string>();
+  /** See `TsEmitResult.specifiers`. */
+  private writtenSpecifiers = new Map<string, string>();
 
   constructor(options: { experimentalDecorators?: boolean } = {}) {
     super({ module: 'esm', experimentalDecorators: options.experimentalDecorators });
@@ -171,6 +178,7 @@ export class TsEmitter extends CodeGenerator {
     const isAmbientModule = (stmt: Statement): boolean =>
       stmt.type === 'AmbientModuleDeclaration' && !(stmt as AmbientModuleDeclaration).global;
     const modules = ast.body.filter(isAmbientModule);
+    this.writtenSpecifiers = new Map();
     const result: TsEmitResult = this.emitProgram({
       ...ast,
       body: ast.body.filter(stmt => !isAmbientModule(stmt)),
@@ -178,7 +186,18 @@ export class TsEmitter extends CodeGenerator {
     if (modules.length > 0) {
       result.ambient = this.emitProgram({ ...ast, body: modules, shebang: undefined });
     }
+    result.specifiers = this.writtenSpecifiers;
     return result;
+  }
+
+  protected convertSourcePath(source: string): string {
+    const converted = super.convertSourcePath(source);
+    // Only a quoted specifier is converted; the first spelling that gives a name keeps it
+    const name = converted.slice(1, -1);
+    if (converted !== source && !this.writtenSpecifiers.has(name)) {
+      this.writtenSpecifiers.set(name, source.slice(1, -1));
+    }
+    return converted;
   }
 
   generate(ast: Program): string {

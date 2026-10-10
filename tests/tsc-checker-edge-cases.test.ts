@@ -9,7 +9,12 @@ import * as path from 'path';
 import ts from 'typescript';
 
 import { compile, type CompileOptions } from '../src/compiler';
-import { canonicalFileName, checkWithTypeScript, translateMessage } from '../src/tsc-checker';
+import {
+  canonicalFileName,
+  checkWithTypeScript,
+  translateMessage,
+  withWrittenSpecifiers,
+} from '../src/tsc-checker';
 import { canonicalTmpDir } from './helpers/paths';
 
 jest.setTimeout(60000);
@@ -132,6 +137,28 @@ describe('TypeScript checker: files that are not there', () => {
     } finally {
       sys.useCaseSensitiveFileNames = caseSensitive;
     }
+  });
+
+  test('messages name a module as the program writes it, not as the checked TypeScript', () => {
+    write('math.som', 'содир функсия зарб(а: рақам): рақам { бозгашт а * 2; }\n');
+    // The second import of `./math` keeps the first spelling
+    const source =
+      'ворид { ҷамъ } аз "./math";\nворид { х } аз "./нест";\nворид { зарб } аз "./math.som";';
+    const file = write('main.som', source);
+    // TypeScript 6 names the module of `./math.js` (the emitted spelling) by that specifier
+    expect(
+      compile(source, { checker: 'typescript', filePath: file }).errors.map(
+        error => error.split('\n')[0]
+      )
+    ).toEqual([
+      `Type error [TS2305] at line 1, column 9: Module '"./math"' has no exported member 'ҷамъ'.`,
+      `Type error [TS2307] at line 2, column 16: Cannot find module './нест' or its corresponding type declarations.`,
+    ]);
+    const specifiers = new Map([['./а.js', './а']]);
+    expect(withWrittenSpecifiers(`'"./а.js"', "./а.js", './б.js'`, specifiers)).toBe(
+      `'"./а"', "./а", './б.js'`
+    );
+    expect(withWrittenSpecifiers(`'./а.js'`, undefined)).toBe(`'./а.js'`);
   });
 });
 
