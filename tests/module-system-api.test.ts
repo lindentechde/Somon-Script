@@ -189,6 +189,8 @@ describe('ModuleSystem', () => {
         module: 'esm',
         checker: 'somon',
         locale: 'ru',
+        // A Russian or Tajik locale asks for diagnostics written for learners
+        language: 'ru',
         filePath: file('main.som'),
       });
     });
@@ -253,7 +255,7 @@ describe('ModuleSystem', () => {
         compilation: { checker: 'typescript', locale: 'ru' },
       }).compile(file('typed.som'));
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].message).toMatch(/TS2322/);
+      expect(result.errors[0].diagnostic?.code).toBe('TS2322');
       expect(result.errors[0].message).toMatch(/[а-яА-Я]/);
       expect(result.errors[0]).toMatchObject({ filePath: file('typed.som'), line: 1, column: 5 });
     });
@@ -291,6 +293,57 @@ describe('ModuleSystem', () => {
       expect([...result.modules.keys()]).toEqual([file('main.som')]);
       expect(result.entryPoint).toBe(file('main.som'));
       expect(result.dependencies).toEqual([file('a.som'), file('b.som'), file('main.som')]);
+    });
+
+    test('in Russian or Tajik errors and warnings come with their diagnostics', async () => {
+      project.write({
+        'main.som': 'тағ н = 1;\nчоп(н.нест);\nчоп(нм);\n',
+        'bad.json': '{',
+        'json.som': 'ворид маълумот аз "./bad.json";\nчоп(маълумот);\n',
+        'broken.som': 'агар (1) {\n',
+        'imports.som': 'ворид { а } аз "./broken";\nчоп(а);\n',
+      });
+      const system = createSystem({ compilation: { locale: 'tj' } });
+      const result = await system.compile(file('main.som'));
+      expect(result.errors).toEqual([
+        expect.objectContaining({
+          message: 'Номи `нм` эълон нашудааст.',
+          line: 3,
+          column: 5,
+          diagnostic: expect.objectContaining({ code: 'UNDEFINED_IDENTIFIER' }),
+        }),
+      ]);
+      const missing = await system.compile(file('нест.som'));
+      expect(missing.errors[0].diagnostic).toEqual({
+        code: 'MODULE_FILE_NOT_FOUND',
+        severity: 'error',
+        message: 'Файли `нест.som` ёфт нашуд.',
+      });
+      project.write({ 'needs.som': 'ворид { а } аз "./нест";\nчоп(а);\n' });
+      const notFound = await system.compile(file('needs.som'));
+      expect(notFound.errors[0].diagnostic).toEqual({
+        code: 'MODULE_NOT_FOUND',
+        severity: 'error',
+        message: 'Модули `./нест` ёфт нашуд.',
+        hint: 'Роҳ ва номи файлро санҷед.',
+        line: 1,
+        column: 1,
+      });
+      const json = await system.compile(file('json.som'));
+      expect(json.errors[0].diagnostic).toMatchObject({ code: 'MODULE_ERROR' });
+      const imported = await system.compile(file('imports.som'));
+      expect(imported.errors[0]).toMatchObject({
+        filePath: file('broken.som'),
+        line: 1,
+        diagnostic: { code: 'PARSE_MISSING_CLOSE' },
+      });
+      project.write({ 'main.som': 'тағ н = 1;\nчоп(н.нест);\n' });
+      const warned = await system.compile(file('main.som'));
+      expect(warned.warningDetails?.[0].diagnostic).toMatchObject({
+        code: 'PROPERTY_NOT_FOUND',
+        severity: 'warning',
+        message: 'Дар навъи `рақам` хосияти `нест` нест.',
+      });
     });
 
     test('warnings of the compiler name their module', async () => {
@@ -408,6 +461,25 @@ describe('ModuleSystem', () => {
         project.write({ 'v.som': 'ворид * чун У аз "./u";\nсодир собит В = 1;\n' });
         return system.compile(file('v.som'));
       }
+
+      test('in Tajik the cycle is named by its files, as an error or a warning', async () => {
+        const failed = await closeCycle(
+          createSystem({
+            loading: { circularDependencyStrategy: 'error' },
+            compilation: { locale: 'tj' },
+          })
+        );
+        expect(failed.errors[0].diagnostic).toEqual({
+          code: 'CIRCULAR_DEPENDENCY',
+          severity: 'error',
+          message: 'Модулҳо якдигарро даврвор ворид мекунанд: `u.som → v.som → u.som`.',
+        });
+        const warned = await closeCycle(createSystem({ compilation: { locale: 'tj' } }));
+        expect(warned.warningDetails?.[0].diagnostic).toMatchObject({
+          code: 'CIRCULAR_DEPENDENCY',
+          severity: 'warning',
+        });
+      });
 
       test("'error' fails the build with the cycle", async () => {
         const result = await closeCycle(

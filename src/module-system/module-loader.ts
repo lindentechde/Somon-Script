@@ -93,6 +93,8 @@ export class ModuleLoadError extends Error {
   specifier?: string;
   readonly line?: number;
   readonly column?: number;
+  /** For a module that does not parse: the lexer's or parser's message and the module's source. */
+  readonly syntax?: { message: string; source: string };
 
   constructor(
     message: string,
@@ -103,6 +105,7 @@ export class ModuleLoadError extends Error {
       line?: number;
       column?: number;
       cause?: unknown;
+      syntax?: { message: string; source: string };
     }
   ) {
     super(message);
@@ -112,6 +115,7 @@ export class ModuleLoadError extends Error {
     this.specifier = details.specifier;
     this.line = details.line;
     this.column = details.column;
+    this.syntax = details.syntax;
     if (details.cause !== undefined) {
       (this as { cause?: unknown }).cause = details.cause;
     }
@@ -314,6 +318,7 @@ export class ModuleLoader {
           filePath,
           ...locationOf(message),
           cause: error,
+          syntax: { message, source: module.source },
         });
       }
 
@@ -322,6 +327,7 @@ export class ModuleLoader {
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${parseErrors[0]}`, {
           filePath,
           ...locationOf(parseErrors[0]),
+          syntax: { message: parseErrors[0], source: module.source },
         });
       }
 

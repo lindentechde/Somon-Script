@@ -81,6 +81,26 @@ describe('somon run warnings and run time', () => {
     ]);
   });
 
+  test('in Tajik a warning reads as the learner diagnostics do, also without a file', async () => {
+    i18n.setLanguage('tj');
+    fs.writeFileSync(path.join(dir, 'а.som'), 'тағ н = 1;\nчоп(н.нест);\n');
+    await run(['а.som']);
+    fs.writeFileSync(
+      path.join(dir, 'u.som'),
+      'ворид { в } аз "./v";\nсодир собит у = 1;\nчоп(в);\n'
+    );
+    fs.writeFileSync(path.join(dir, 'v.som'), 'ворид { у } аз "./u";\nсодир собит в = 2;\n');
+    await run(['u.som']);
+    expect(warn.mock.calls).toEqual([
+      ['Огоҳӣ дар а.som, сатри 2: Дар навъи `рақам` хосияти `нест` нест.'],
+      [
+        expect.stringMatching(
+          /^Огоҳӣ: Модулҳо якдигарро даврвор ворид мекунанд: `u\.som → v\.som → u\.som`\.$/
+        ),
+      ],
+    ]);
+  });
+
   test('ES module programs report their warnings and load the run time too', async () => {
     fs.writeFileSync(path.join(dir, 'в.som'), 'тағ н = 1;\nчоп(н.нест);\n');
     await run(['--module', 'esm', 'в.som']);

@@ -115,9 +115,21 @@ describe.each(['en', 'ru', 'tj'] as const)('bundle errors in %s', lang => {
     });
     expect(result.status).toBe(1);
     expect(result.stdout).toContain(tr.commands.bundle.messages.bundling('src/broken.som'));
-    expect(result.stderr.startsWith(`${tr.commands.bundle.messages.bundleError} `)).toBe(true);
-    expect(result.stderr).toContain('Bundle process failed with 1 error(s):');
-    expect(result.stderr).toContain(`${project.file('src/broken.som')}:2:16\n`);
+    if (lang === 'en') {
+      expect(result.stderr.startsWith(`${tr.commands.bundle.messages.bundleError} `)).toBe(true);
+      expect(result.stderr).toContain('Bundle process failed with 1 error(s):');
+      expect(result.stderr).toContain(`${project.file('src/broken.som')}:2:16\n`);
+      return;
+    }
+    // Russian and Tajik: the error with its line of code, the file relative to the current directory
+    const where = path.join('src', 'broken.som');
+    expect(result.stderr).toContain(
+      lang === 'tj' ? `Хато дар ${where}, сатри 2:` : `Ошибка в ${where}, строка 2:`
+    );
+    expect(result.stderr).toContain(
+      '    2 | тағ н: рақам = "сатр";\n      |                ^^^^^^'
+    );
+    expect(result.stderr).not.toContain('Bundle process failed');
   });
 });
 

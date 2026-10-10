@@ -151,7 +151,7 @@ describe('somon run output', () => {
   test('a warning is one short line with the file relative to the current directory', () => {
     const result = run('тағ р = [1, 2, 3];\nчоп(р[0].дарозӣ);\n', ['--lang', 'tj']);
     expect(result.stderr).toBe(
-      "Огоҳӣ: барнома.som:2:10: Property 'дарозӣ' (length) does not exist on type 'рақам'\n"
+      'Огоҳӣ дар барнома.som, сатри 2: Дар навъи `рақам` хосияти `дарозӣ` нест.\n'
     );
     expect(result.stderr).not.toContain('[module-system]');
     expect(result.stdout).toBe('беқимат\n');

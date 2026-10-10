@@ -90,6 +90,7 @@ describe('Logger', () => {
 describe('src/module-system/index.ts', () => {
   test('exports the classes and helpers of the module system', () => {
     expect(moduleSystem).toMatchObject({
+      BundleError: system.BundleError,
       ModuleResolver: resolver.ModuleResolver,
       ModuleLoader: loader.ModuleLoader,
       ModuleLoadError: loader.ModuleLoadError,
@@ -105,6 +106,7 @@ describe('src/module-system/index.ts', () => {
     expect(Object.keys(moduleSystem).sort()).toEqual(
       [
         'AggregateTimeoutError',
+        'BundleError',
         'Logger',
         'ModuleLoadError',
         'ModuleLoader',

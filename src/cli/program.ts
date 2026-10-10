@@ -21,7 +21,15 @@ import {
   type LoadedConfig,
   type SomonConfig,
 } from '../config';
+import {
+  formatDiagnostic,
+  formatDiagnosticLine,
+  formatFailure,
+  type Diagnostic,
+  type DiagnosticLanguage,
+} from '../diagnostics';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
+import { BundleError } from '../module-system/module-system';
 import {
   BUNDLE_FORMATS,
   DEFAULT_TARGET,
@@ -163,6 +171,63 @@ function diagnosticLocale(config?: CompilerOptions): NonNullable<CompilerOptions
 }
 
 /**
+ * The language of diagnostics written for learners (src/diagnostics): Russian
+ * or Tajik; in English the compiler's messages stay as they always were.
+ */
+function learnerLanguage(config?: CompilerOptions): DiagnosticLanguage | undefined {
+  const locale = diagnosticLocale(config);
+  return locale === 'en' ? undefined : locale;
+}
+
+/** A path as the learner typed it: relative to the current directory. */
+function shownPath(file: string): string {
+  return path.relative(process.cwd(), file) || file;
+}
+
+/** Prints diagnostics of one file as blocks with its code; errors to stderr, warnings too. */
+function printDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  options: { language: DiagnosticLanguage; source?: string; file: string }
+): void {
+  for (const diagnostic of diagnostics) {
+    console.error(formatDiagnostic(diagnostic, options));
+  }
+}
+
+/**
+ * Reports a build that did not compile, for learners: each error with its
+ * line of code, then `Барнома компайл нашуд: N хато.` Returns false for
+ * other failures, which are reported as before.
+ */
+function reportBuildFailure(error: unknown, language: DiagnosticLanguage | undefined): boolean {
+  if (!(error instanceof BundleError) || language === undefined) return false;
+  const sources = new Map<string, string | undefined>();
+  const sourceOf = (file: string): string | undefined => {
+    if (!sources.has(file)) {
+      // The files of the program the learner runs (S8707)
+      sources.set(file, fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined); // NOSONAR
+    }
+    return sources.get(file);
+  };
+  for (const failure of error.errors) {
+    const diagnostic: Diagnostic = failure.diagnostic ?? {
+      code: 'MODULE_ERROR',
+      severity: 'error',
+      message: failure.message,
+      line: failure.line,
+      column: failure.column,
+    };
+    const file = failure.filePath;
+    console.error(
+      formatDiagnostic(diagnostic, { language, source: sourceOf(file), file: shownPath(file) })
+    );
+  }
+  console.error(formatFailure(error.errors.length, language));
+  process.exitCode = 1;
+  return true;
+}
+
+/**
  * Compiler options for the module system: config compilerOptions, then the more
  * specific moduleSystem.compilation section, then the command-line flags.
  */
@@ -240,7 +305,9 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
 
     await performBundling(moduleSystem, bundleOptions, input, outputPath);
   } catch (error) {
-    handleCliFailure(error, t().commands.bundle.messages.bundleError);
+    if (!reportBuildFailure(error, learnerLanguage(compilationLocale(input)))) {
+      handleCliFailure(error, t().commands.bundle.messages.bundleError);
+    }
   }
 }
 
@@ -397,9 +464,21 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
       module: options.module,
       checker: options.checker,
       locale: diagnosticLocale(options),
+      language: learnerLanguage(options),
       declaration: options.declaration,
       filePath: path.resolve(input),
     });
+
+    const language = learnerLanguage(options);
+    if (language && result.diagnostics) {
+      const where = { language, source, file: shownPath(path.resolve(input)) };
+      printDiagnostics(result.diagnostics, where);
+      if (result.errors.length > 0) {
+        console.error(formatFailure(result.errors.length, language));
+        process.exitCode = 1;
+      }
+      return result;
+    }
 
     if (result.errors.length > 0) {
       console.error(t().commands.compile.messages.compilationErrors);
@@ -546,6 +625,7 @@ async function executeRunCommand(
       const entryFile = await writeEsmModules(moduleSystem, input, workspace.dir, {
         sourceMaps,
         externals: config.bundle?.externals,
+        language: learnerLanguage(config.compilerOptions),
       });
       reportChildResult(
         await cliRuntime.executeCompiledFile(entryFile, scriptArgs, {
@@ -567,7 +647,7 @@ async function executeRunCommand(
       modulePaths: true,
       logWarnings: false,
     });
-    reportRunWarnings(bundle.warnings ?? []);
+    reportRunWarnings(bundle.warnings ?? [], learnerLanguage(config.compilerOptions));
 
     const workspace = createRunWorkspace(input);
     cleanup = workspace.cleanup;
@@ -588,9 +668,21 @@ async function executeRunCommand(
     });
     reportChildResult(child);
   } catch (error) {
-    handleCliFailure(error, t().common.error);
+    if (!reportBuildFailure(error, learnerLanguage(compilationLocale(input)))) {
+      handleCliFailure(error, t().common.error);
+    }
   } finally {
     cleanup?.();
+  }
+}
+
+/** The configured `locale` of the program at `input`, if its configuration can be read. */
+function compilationLocale(input: string): CompilerOptions | undefined {
+  try {
+    return loadConfigWithPath(path.dirname(path.resolve(input))).config.compilerOptions;
+  } catch {
+    // A configuration that does not load is reported by the command itself
+    return undefined;
   }
 }
 
@@ -601,8 +693,16 @@ const TYPE_WARNING_PREFIX = /^Type warning \[\w+\] at line (\d+), column (\d+): 
  * Prints the warnings of compiling a program before it runs, one line each:
  * `Огоҳӣ: барнома.som:3:5: …`, the file relative to the current directory.
  */
-function reportRunWarnings(warnings: CompilationWarning[]): void {
+function reportRunWarnings(
+  warnings: CompilationWarning[],
+  language: DiagnosticLanguage | undefined
+): void {
   for (const warning of warnings) {
+    if (warning.diagnostic && language) {
+      const file = warning.filePath === undefined ? undefined : shownPath(warning.filePath);
+      console.warn(formatDiagnosticLine(warning.diagnostic, { language, file }));
+      continue;
+    }
     const position = TYPE_WARNING_PREFIX.exec(warning.message);
     const message = warning.message.replace(TYPE_WARNING_PREFIX, '').split('\n')[0];
     const location = [
@@ -651,7 +751,7 @@ async function writeEsmModules(
   moduleSystem: ModuleSystem,
   input: string,
   dir: string,
-  options: { sourceMaps: boolean; externals?: string[] }
+  options: { sourceMaps: boolean; externals?: string[]; language?: DiagnosticLanguage }
 ): Promise<string> {
   const entry = path.resolve(input);
   const result = await moduleSystem.compile(entry, options.externals, {
@@ -660,9 +760,9 @@ async function writeEsmModules(
     sourceMap: options.sourceMaps,
   });
   if (result.errors.length > 0) {
-    throw new Error(formatCompilationErrors(result));
+    throw new BundleError(formatCompilationErrors(result), result.errors, []);
   }
-  reportRunWarnings(result.warningDetails ?? []);
+  reportRunWarnings(result.warningDetails ?? [], options.language);
   const files = [...result.modules.keys()].filter(id => path.isAbsolute(id));
   const root = commonDirectory(
     path.dirname(entry),

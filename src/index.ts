@@ -24,6 +24,9 @@
  */
 export { compile } from './compiler';
 export type { CompileOptions, CompileResult } from './compiler';
+// Diagnostics in the learner's language (`compile(source, { language })`)
+export { formatDiagnostic, formatFailure } from './diagnostics';
+export type { Diagnostic, DiagnosticLanguage } from './diagnostics';
 export { TARGETS, DEFAULT_TARGET, BUNDLE_FORMATS, defaultLib, typeScriptLibNames } from './targets';
 export type { Target, BundleFormat } from './targets';
 
@@ -37,6 +40,7 @@ export type { ReplOptions, ReplMessages } from './tools/repl';
 
 // Module system and bundler (docs/module-system.md)
 export {
+  BundleError,
   ModuleSystem,
   ModuleResolver,
   ModuleLoader,
@@ -53,6 +57,7 @@ export type {
   CompiledModule,
   CompilationResult,
   CompilationError,
+  CompilationWarning,
   BundleOptions,
   BundleOutput,
   ModuleResolutionOptions,
