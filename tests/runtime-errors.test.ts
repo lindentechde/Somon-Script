@@ -122,6 +122,15 @@ describe('finding the place of an error', () => {
       line: 7,
     });
     expect(locateError('Error\n    at x (/а.js:1:1)')).toBeUndefined();
+    // Firefox and Safari: `функсия@файл:сатр:сутун`, in a Blob URL in the playground
+    const blob = 'blob:null/0d04644e-0197';
+    expect(locateError(`ф@${blob}:3:5\n@${blob}:7:1`, blob)).toEqual({
+      file: blob,
+      line: 3,
+      column: 5,
+      functionName: 'ф',
+    });
+    expect(locateError(`ф/<@${blob}:3:5`, blob)?.functionName).toBeUndefined();
   });
 
   test('the column of the name the error is about', () => {

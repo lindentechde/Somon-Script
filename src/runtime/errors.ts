@@ -196,7 +196,10 @@ export interface ErrorLocation {
  */
 export function locateError(stack: string, file?: string): ErrorLocation | undefined {
   for (const line of stack.split('\n')) {
-    const frame = /^\s*at (?:(.*?) \()?(.+?):(\d+):(\d+)\)?$/.exec(line);
+    // V8: `    at ф (/дар/б.som:2:15)`; Firefox and Safari: `ф@/дар/б.som:2:15`
+    const frame =
+      /^\s*at (?:(.*?) \()?(.+?):(\d+):(\d+)\)?$/.exec(line) ??
+      /^([^@\s]*)@(.+?):(\d+):(\d+)$/.exec(line);
     if (frame && (frame[2].endsWith('.som') || frame[2] === file)) {
       const location: ErrorLocation = {
         file: frame[2],
@@ -204,7 +207,7 @@ export function locateError(stack: string, file?: string): ErrorLocation | undef
         column: Number(frame[4]),
       };
       // `Object.барнома.som` is a module of the bundle, not a function
-      const functionName = frame[1]?.endsWith('.som') ? undefined : frame[1]?.split('.').pop();
+      const functionName = frame[1]?.endsWith('.som') ? undefined : frame[1]?.split(/[./]/).pop();
       if (functionName && /^[\p{L}_$][\p{L}\p{N}_$]*$/u.test(functionName)) {
         location.functionName = functionName;
       }

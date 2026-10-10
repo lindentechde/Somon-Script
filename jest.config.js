@@ -37,6 +37,8 @@ const baseConfig = {
     '!src/cli.ts',
     // Loaded by the programs `somon run` starts; src/runtime/node.ts is what it runs
     '!src/runtime/node-prelude.ts',
+    // The playground's Web Worker entry; tests/playground-learner-e2e.test.ts runs it in Chromium
+    '!src/playground/worker.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {

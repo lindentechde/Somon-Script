@@ -184,6 +184,43 @@ describe('browser compiler entry', () => {
   });
 });
 
+describe('browser compiler for learners', () => {
+  test('diagnostics in the learner language, as the Node compiler gives them', () => {
+    const typo = compile('тағ х = 1;\nагр (х > 0) {\n  чоп(х);\n}\n', { language: 'tj' });
+    expect(typo.diagnostics?.map(d => [d.code, d.line])).toEqual([['PARSE_EXPECTED_SEMICOLON', 2]]);
+    expect(typo.errors[0]).toContain('Шояд `агар`-ро дар назар доштед?');
+    const typed = compile('тағ х: рақам = "а";\nчоп(х.дарозии);', { language: 'ru' });
+    expect(typed.diagnostics?.map(d => d.severity)).toEqual(['error', 'warning']);
+    expect(typed.warnings).toHaveLength(1);
+    const lexer = compile('тағ х = "а;\n', { language: 'tj' });
+    expect(lexer.diagnostics?.[0].code).toBe('LEX_UNTERMINATED_STRING');
+    expect(compile('тағ а = 1;', { language: 'tj', target: 'es1' }).errors[0]).toBe(
+      'Хато:\n  Танзимоти компилятор нодуруст аст.'
+    );
+    const generated = compile('шикастан;', { language: 'tj' });
+    expect(generated.diagnostics?.[0].severity).toBe('error');
+  });
+
+  test('what needs TypeScript in a browser, in the learner language', () => {
+    const decorated = compile('функсия ф(а: ҳар, б: ҳар) {}\n@ф синф К {}', { language: 'tj' });
+    expect(decorated.diagnostics?.map(d => d.code)).toEqual(['BROWSER_NEEDS_TYPESCRIPT']);
+    expect(decorated.errors[0]).toContain('дар браузер иҷро кардан мумкин нест');
+    const old = compile('тағ а = 1;', { language: 'tj', target: 'es5' });
+    expect(old.diagnostics?.map(d => d.code)).toEqual(['TARGET_UNSUPPORTED']);
+  });
+
+  test('the positions of statements, unless TypeScript lowered the code', () => {
+    const result = compile('тағ а = 1;\n\nчоп(а);', { mappings: true });
+    expect(result.mappings).toEqual([
+      { generated: { line: 1, column: 0 }, original: { line: 1, column: 0 } },
+      { generated: { line: 2, column: 0 }, original: { line: 3, column: 0 } },
+    ]);
+    expect(compile('тағ а = 1;').mappings).toBeUndefined();
+    const lowered = compile('тағ а = 1;', { mappings: true, target: 'es5', typescript });
+    expect(lowered.mappings).toBeUndefined();
+  });
+});
+
 /** Node.js globals that code (not strings or property names) refers to. */
 function nodeGlobalsUsed(code: string): string[] {
   const forbidden = new Set(['process', 'Buffer', '__dirname', '__filename', 'setImmediate']);

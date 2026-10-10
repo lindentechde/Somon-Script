@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="tg">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SomonScript — Майдони озмоиш</title>
+    <meta
+      name="description"
+      content="SomonScript: барномасозӣ бо забони модарӣ. Барномаро нависед ва дар браузер иҷро кунед."
+    />
+    <style>
+      /*STYLE*/
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>SomonScript <span data-text="title">Майдони озмоиш</span></h1>
+      <div class="controls">
+        <button id="run" class="primary" type="button" title="Ctrl+Enter">
+          ▶ <span data-text="run">Иҷро</span>
+        </button>
+        <button id="stop" type="button" hidden>■ <span data-text="stop">Қатъ</span></button>
+        <label>
+          <span data-text="example">Намуна</span>
+          <select id="example"></select>
+        </label>
+        <button id="share" type="button">🔗 <span data-text="share">Пайванд</span></button>
+        <label class="check">
+          <input id="show-js" type="checkbox" />
+          <span data-text="showJs">Нишон додани JavaScript</span>
+        </label>
+        <label>
+          <span data-text="timeLimit">Вақти иҷро</span>
+          <select id="timeout"></select>
+        </label>
+        <label>
+          <span data-text="language">Забон</span>
+          <select id="language">
+            <option value="tj">Тоҷикӣ</option>
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <main>
+      <section class="editor-panel">
+        <h2 data-text="code">Барнома</h2>
+        <div class="editor" id="editor">
+          <div class="editor-inner">
+            <pre class="gutter" id="gutter" aria-hidden="true">1</pre>
+            <div class="code-area">
+              <div class="marks" id="marks" aria-hidden="true"></div>
+              <pre class="highlight" id="highlight" aria-hidden="true"></pre>
+              <textarea
+                id="code"
+                spellcheck="false"
+                autocomplete="off"
+                autocapitalize="off"
+                wrap="off"
+                aria-label="Коди барнома"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="side-panel">
+        <div class="input-panel">
+          <h2><label for="input" data-text="input">Вуруд</label></h2>
+          <textarea id="input" spellcheck="false" wrap="off" rows="3"></textarea>
+        </div>
+        <div class="output-panel">
+          <h2 data-text="output">Натиҷа</h2>
+          <pre id="output" aria-live="polite"></pre>
+          <p id="status" role="status"></p>
+        </div>
+        <div class="js-panel" id="js-panel" hidden>
+          <h2 data-text="javascript">JavaScript</h2>
+          <pre id="js"></pre>
+        </div>
+      </section>
+    </main>
+    <footer>SomonScript <span id="version"></span></footer>
+    <script>
+      /*SCRIPT*/
+    </script>
+  </body>
+</html>

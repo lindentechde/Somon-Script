@@ -28,8 +28,19 @@ function walk(dir: string): string[] {
 
 const files = walk(ROOT);
 
+/** Playground examples with a mistake on purpose: the playground shows their errors. */
+const WITH_MISTAKES = new Set(
+  (
+    JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'playground', 'examples', 'examples.json'), 'utf8')
+    ) as Array<{ file: string; expectErrors?: boolean }>
+  )
+    .filter(example => example.expectErrors)
+    .map(example => path.join(ROOT, 'playground', 'examples', example.file))
+);
+
 const somFiles = files
-  .filter(file => file.endsWith('.som'))
+  .filter(file => file.endsWith('.som') && !WITH_MISTAKES.has(file))
   .map(file => [path.relative(ROOT, file), fs.readFileSync(file, 'utf8')] as const);
 
 /** ```som blocks of the files that tests/docs-snippets.test.ts checks. */

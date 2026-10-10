@@ -117,6 +117,12 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
     { detail: 'BigInt literals are not available when targeting lower than ES2020' },
   ],
   OPTION_INVALID: [{ detail: "Unknown target 'es1'" }],
+  BROWSER_NEEDS_TYPESCRIPT: [
+    {
+      detail:
+        'This program uses decorators, accessors or `истифода`, which TypeScript lowers: load TypeScript (typescript.js) and compile again',
+    },
+  ],
   MODULE_NOT_FOUND: [{ specifier: './нест' }],
   MODULE_FILE_NOT_FOUND: [{ file: 'барнома.som' }],
   CIRCULAR_DEPENDENCY: [{ cycle: 'а.som → б.som → а.som' }],
@@ -132,6 +138,7 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
   RUNTIME_INVALID_ARRAY_LENGTH: [{}],
   RUNTIME_CONST_ASSIGNMENT: [{}],
   RUNTIME_INPUT_ENDED: [{ name: 'хонданиРақам' }],
+  RUNTIME_NO_MODULES: [{ name: './м' }],
   RUNTIME_INPUT_NOT_A_NUMBER: [
     { name: 'хонданиРақам', text: 'се' },
     { name: 'хонданиРақам', text: '' },

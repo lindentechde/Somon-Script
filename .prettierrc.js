@@ -50,5 +50,17 @@ module.exports = {
         parser: 'babel',
       },
     },
+    {
+      files: '*.html',
+      options: {
+        parser: 'html',
+      },
+    },
+    {
+      files: '*.css',
+      options: {
+        parser: 'css',
+      },
+    },
   ],
 };

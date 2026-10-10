@@ -72,6 +72,14 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     tj: p =>
       `${p.text === '' ? 'Сатри холӣ' : code(p.text)} рақам нест: ${code(`${text(p.name)}()`)} рақам интизор буд.`,
   },
+  RUNTIME_NO_MODULES: {
+    en: p =>
+      `The playground cannot import the module ${code(p.name)}: write the whole program in one file.`,
+    ru: p =>
+      `В песочнице нельзя подключить модуль ${code(p.name)}: напишите всю программу в одном файле.`,
+    tj: p =>
+      `Дар майдони озмоиш модули ${code(p.name)}-ро ворид кардан мумкин нест: тамоми барномаро дар як файл нависед.`,
+  },
   INPUT_ASK_AGAIN: {
     en: p => `${p.text === '' ? 'That' : code(p.text)} is not a number. Type a number again:`,
     ru: p => `${p.text === '' ? 'Это' : code(p.text)} — не число. Введите число ещё раз:`,

@@ -15,7 +15,9 @@
  */
 
 import type { Program } from './ast';
-import { CodeGenerator, type LoweringNeeds } from './codegen';
+import { CodeGenerator, type CodeMapping, type LoweringNeeds } from './codegen';
+import { localizedMessages, Problems } from './diagnostics/problems';
+import type { Diagnostic, DiagnosticLanguage } from './diagnostics/types';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { TypeChecker } from './type-checker';
@@ -44,6 +46,17 @@ export interface BrowserCompileOptions {
   locale?: 'en' | 'ru' | 'tj';
   /** TypeScript, for lowering; `globalThis.ts` is used when omitted. */
   typescript?: TypeScriptApi;
+  /**
+   * Report every diagnostic in this language, for learners, as `compile` of
+   * the Node.js compiler does (`CompileOptions.language`): `errors` and
+   * `warnings` show the line of code with a caret, `diagnostics` holds them as data.
+   */
+  language?: DiagnosticLanguage;
+  /**
+   * Also return where the statements of the source are in the code
+   * (`mappings`), to place the errors of the running program.
+   */
+  mappings?: boolean;
 }
 
 export interface BrowserCompileResult {
@@ -56,6 +69,13 @@ export interface BrowserCompileResult {
    * it (`globalThis.ts`) and compile again.
    */
   needsTypeScript?: boolean;
+  /** With `language`: the errors and warnings as data, in that language (errors first). */
+  diagnostics?: Diagnostic[];
+  /**
+   * With `mappings`: the positions of statements in the code (lines from 1,
+   * columns from 0), unless TypeScript lowered it.
+   */
+  mappings?: CodeMapping[];
 }
 
 /** The targets of src/targets.ts, oldest first. */
@@ -79,6 +99,18 @@ const TARGETS = [
 const NATIVE_FROM = TARGETS.indexOf('es2022');
 
 export function compile(source: string, options: BrowserCompileOptions = {}): BrowserCompileResult {
+  const problems = new Problems();
+  const result = compileProgram(source, options, problems);
+  if (options.language === undefined) return result;
+  const diagnostics = problems.diagnostics(source, options.language);
+  return { ...result, ...localizedMessages(diagnostics, source, options.language) };
+}
+
+function compileProgram(
+  source: string,
+  options: BrowserCompileOptions,
+  problems: Problems
+): BrowserCompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const fail = (): BrowserCompileResult => ({ code: '', errors, warnings });
@@ -87,10 +119,14 @@ export function compile(source: string, options: BrowserCompileOptions = {}): Br
   try {
     const parser = new Parser(new Lexer(source).tokenize());
     program = parser.parse();
-    errors.push(...parser.getErrors().map(error => `Parse error: ${error}`));
+    for (const error of parser.getErrors()) {
+      errors.push(`Parse error: ${error}`);
+      problems.add({ kind: 'syntax', text: error });
+    }
   } catch (error) {
     // The lexer reports a problem with an Error; the parser collects its own
     errors.push((error as Error).message);
+    problems.add({ kind: 'syntax', text: (error as Error).message });
     return fail();
   }
   if (errors.length > 0) return fail();
@@ -109,17 +145,39 @@ export function compile(source: string, options: BrowserCompileOptions = {}): Br
           `Type warning [${warning.code}] at line ${warning.line}, column ${warning.column}: ${warning.message}\n> ${warning.snippet}`
       )
     );
+    [...checked.errors, ...checked.warnings].forEach(error =>
+      problems.add({ kind: 'type', error })
+    );
     if (options.strict && checked.errors.length > 0) return fail();
   }
 
   const generator = new CodeGenerator({ experimentalDecorators: options.experimentalDecorators });
-  const generated = generator.generate(program);
+  const generated = options.mappings
+    ? generator.generateWithMappings(program)
+    : { code: generator.generate(program), mappings: undefined };
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
-    errors.push(...codegenErrors.map(error => `Code generation error: ${error}`));
+    for (const error of codegenErrors) {
+      errors.push(`Code generation error: ${error}`);
+      problems.add({ kind: 'codegen', text: error });
+    }
     return fail();
   }
-  return lower(generated, generator.getLoweringNeeds(), options, errors, warnings);
+  const result = lower(generated.code, generator.getLoweringNeeds(), options, {
+    errors,
+    warnings,
+    problems,
+  });
+  // Lowered code has other positions
+  if (generated.mappings && result.code === generated.code) result.mappings = generated.mappings;
+  return result;
+}
+
+/** What the stages report: the messages and, for other languages, the problems. */
+interface Collected {
+  errors: string[];
+  warnings: string[];
+  problems: Problems;
 }
 
 /** A `"use strict"` directive on the first line (after a `#!` line). */
@@ -130,13 +188,14 @@ function lower(
   code: string,
   needs: LoweringNeeds,
   options: BrowserCompileOptions,
-  errors: string[],
-  warnings: string[]
+  { errors, warnings, problems }: Collected
 ): BrowserCompileResult {
   const target = (options.target ?? 'es2022').toLowerCase();
   const index = TARGETS.indexOf(target);
   if (index === -1) {
-    errors.push(`Unknown target '${target}'. Targets: ${TARGETS.join(', ')}`);
+    const text = `Unknown target '${target}'. Targets: ${TARGETS.join(', ')}`;
+    errors.push(text);
+    problems.add({ kind: 'option', text });
     return { code: '', errors, warnings };
   }
   // Decorators, `accessor` and `using`: no runtime runs them yet
@@ -145,14 +204,7 @@ function lower(
   if (!neverNative && index >= NATIVE_FROM) return { code, errors, warnings };
 
   const ts = options.typescript ?? globalTypeScript();
-  if (!ts) {
-    errors.push(
-      neverNative
-        ? 'This program uses decorators, accessors or `истифода`, which TypeScript lowers: load TypeScript (typescript.js) and compile again'
-        : `The '${target}' target needs TypeScript to lower the code: load TypeScript (typescript.js) and compile again`
-    );
-    return { code: '', errors, warnings, needsTypeScript: true };
-  }
+  if (!ts) return missingTypeScript(neverNative, target, { errors, warnings, problems });
   // As src/targets.ts does: TypeScript keeps decorators for ESNext, so lower them as for es2025
   const lowerTo = neverNative && target === 'esnext' ? 'es2025' : target;
   const output = ts.transpileModule(code, {
@@ -170,6 +222,24 @@ function lower(
     },
   });
   return { code: keepMode(code, output.outputText), errors, warnings };
+}
+
+/** The result when the code needs lowering and no TypeScript is loaded. */
+function missingTypeScript(
+  neverNative: boolean,
+  target: string,
+  { errors, warnings, problems }: Collected
+): BrowserCompileResult {
+  const text = neverNative
+    ? 'This program uses decorators, accessors or `истифода`, which TypeScript lowers: load TypeScript (typescript.js) and compile again'
+    : `The '${target}' target needs TypeScript to lower the code: load TypeScript (typescript.js) and compile again`;
+  errors.push(text);
+  problems.add({
+    kind: 'detail',
+    id: neverNative ? 'BROWSER_NEEDS_TYPESCRIPT' : 'TARGET_UNSUPPORTED',
+    text,
+  });
+  return { code: '', errors, warnings, needsTypeScript: true };
 }
 
 /**
