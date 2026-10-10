@@ -211,23 +211,25 @@ is then formatted with `somon fmt`.
 
 ### Newer TypeScript syntax
 
-TypeScript 5 constructs get their SomonScript form (see the Classes, Decorators
-and Declarations sections of [Operators](14-operators.md)):
+TypeScript 5 and 6 constructs get their SomonScript form (see the Classes,
+Decorators and Declarations sections of [Operators](14-operators.md)):
 
-| TypeScript                                  | SomonScript                                |
-| ------------------------------------------- | ------------------------------------------ |
-| `declare const x: T`, `declare module "m"`  | `эълон собит x: T`, `эълон модул "m"`      |
-| `declare global { … }`                      | `эълон глобалӣ { … }`                      |
-| `override m()`, `accessor x = 1`            | `бознавис m()`, `дастрасӣ x = 1`           |
-| `using r = …`, `await using r = …`          | `истифода r = …`, `интизор истифода r = …` |
-| `@logged m() {}`                            | `@logged m() {}`                           |
-| `import type { T }`, `export type { T }`    | `ворид навъ { T }`, `содир навъ { T }`     |
-| `import { type T, f }`                      | `ворид { навъ T, f }`                      |
-| `function f<const T>(this: K)`              | `функсия f<собит T>(ин: K)`                |
-| `interface I<in T, out U>`                  | `интерфейс I<дар T, берун U>`              |
-| `import x = require("m")`, `import y = N.a` | `ворид x = require("m")`, `ворид y = N.a`  |
-| `export = x`                                | `содир = x`                                |
-| overload signatures, class index signatures | kept                                       |
+| TypeScript                                       | SomonScript                                      |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `declare const x: T`, `declare module "m"`       | `эълон собит x: T`, `эълон модул "m"`            |
+| `declare global { … }`                           | `эълон глобалӣ { … }`                            |
+| `override m()`, `accessor x = 1`                 | `бознавис m()`, `дастрасӣ x = 1`                 |
+| `using r = …`, `await using r = …`               | `истифода r = …`, `интизор истифода r = …`       |
+| `@logged m() {}`                                 | `@logged m() {}`                                 |
+| `import type { T }`, `export type { T }`         | `ворид навъ { T }`, `содир навъ { T }`           |
+| `import { type T, f }`                           | `ворид { навъ T, f }`                            |
+| `function f<const T>(this: K)`                   | `функсия f<собит T>(ин: K)`                      |
+| `interface I<in T, out U>`                       | `интерфейс I<дар T, берун U>`                    |
+| `import x = require("m")`, `import y = N.a`      | `ворид x = require("m")`, `ворид y = N.a`        |
+| `export = x`                                     | `содир = x`                                      |
+| `import defer * as M`, `import.defer("m")`       | `ворид мавқуф * чун M`, `ворид.мавқуф("m")`      |
+| `export { x as "a-b" }`, `import { "a-b" as x }` | `содир { x чун "а-б" }`, `ворид { "a-b" чун x }` |
+| overload signatures, class index signatures      | kept                                             |
 
 Which of these the compiler understands is found out by compiling small probes,
 so the same tool also serves an older compiler: there it leaves type-only

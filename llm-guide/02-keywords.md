@@ -107,17 +107,24 @@ every operator and statement.
 
 ## Modules
 
-| Tajik   | JavaScript | Purpose          |
-| ------- | ---------- | ---------------- |
-| `ворид` | `import`   | Import statement |
-| `содир` | `export`   | Export statement |
-| `чун`   | `as`       | Alias            |
+| Tajik    | JavaScript | Purpose                          |
+| -------- | ---------- | -------------------------------- |
+| `ворид`  | `import`   | Import statement                 |
+| `содир`  | `export`   | Export statement                 |
+| `чун`    | `as`       | Alias                            |
+| `мавқуф` | `defer`    | Deferred import (`ворид мавқуф`) |
 
 ```som
 ворид { ҷамъ } аз "./math";             // import { sum } from "./math.js";
 содир функсия тафриқ() { }             // export function subtract() { }
 ворид * чун Utils аз "./utils";        // import * as Utils from "./utils.js";
+ворид мавқуф * чун Ҳисоб аз "./ҳисоб";  // import defer * as Ҳисоб from "./ҳисоб.js";
 ```
+
+`мавқуф` means "postponed, put off" (`мавқуф гузоштан`, to defer): the import is
+kept, its module runs later, when it is first used. Like `эълон`, `дастрасӣ` and
+`истифода`, it is a single common word for the English one, and it is a keyword
+only right after `ворид`.
 
 ---
 
@@ -213,10 +220,10 @@ one does, so code moved from TypeScript keeps working while it is translated:
 
 `typeof`, `void`, `delete`, `instanceof`, `do`, `yield`, `as`, `satisfies`,
 `is`, `asserts`, `infer`, `declare`, `override`, `accessor`, `using`, `enum`,
-`type`, `module`, `global` and `unique` work as well. `async`, `of`, `readonly`,
-`abstract`, `keyof` and `unique` remain usable as names, and every keyword,
-English or Tajik, may name a member (`о.return`, `{ нав: 1 }`). The other
-statement keywords (`if`, `for`, `while`, `let`, `const`, `class`, `try`,
+`type`, `module`, `global`, `unique` and `defer` work as well. `async`, `of`,
+`readonly`, `abstract`, `keyof` and `unique` remain usable as names, and every
+keyword, English or Tajik, may name a member (`о.return`, `{ нав: 1 }`). The
+other statement keywords (`if`, `for`, `while`, `let`, `const`, `class`, `try`,
 `import`, `export`, …) have only their Tajik form.
 
 ```som

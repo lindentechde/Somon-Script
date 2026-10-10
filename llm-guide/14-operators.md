@@ -277,32 +277,36 @@ types it needs.
 
 ## Declarations
 
-| TypeScript                       | SomonScript                         | Notes                                     |
-| -------------------------------- | ----------------------------------- | ----------------------------------------- |
-| `declare const x: T;`            | `эълон собит х: Т;`                 | also `эълон тағ`                          |
-| `declare function f(x: T): U;`   | `эълон функсия ф(х: Т): У;`         |                                           |
-| `declare class C { m(): T; }`    | `эълон синф К { м(): Т; }`          | members without bodies                    |
-| `declare enum E { }`             | `эълон шумориш Э { }`               |                                           |
-| `declare namespace N { }`        | `эълон номфазо Н { }`               | also `эълон модул Н { }`                  |
-| `declare module "m" { }`         | `эълон модул "м" { }`               | types what `"м"` exports                  |
-| `declare global { }`             | `эълон глобалӣ { }`                 | global names, built-in types              |
-| `using r = open();`              | `истифода р = кушодан();`           | contextual; `using` too                   |
-| `await using r = open();`        | `интизор истифода р = кушодан();`   | in `ҳамзамон` functions                   |
-| `for (using r of rs)`            | `барои (истифода р аз рҳо)`         | also `барои интизор (интизор истифода …)` |
-| `import type { T } from "m";`    | `ворид навъ { Т } аз "м";`          | no `require` in the output                |
-| `import { type T, x } from "m";` | `ворид { навъ Т, х } аз "м";`       |                                           |
-| `export type { T };`             | `содир навъ { Т };`                 | also `содир навъ { Т } аз "м";`           |
-| `import x = require("m");`       | `ворид х = require("м");`           | CommonJS interop                          |
-| `import x = N.a;`                | `ворид х = Н.а;`                    | alias                                     |
-| `export = x;`                    | `содир = х;`                        | the only export of the module             |
-| `export { x as default }`        | `содир { х чун пешфарз };`          | also `содир { пешфарз } аз "м";`          |
-| `import { default as x }`        | `ворид { пешфарз чун х } аз "м";`   | any keyword with `чун`                    |
-| `export default function () {}`  | `содир пешфарз функсия () {}`       | also `синф {}`, `ҳамзамон функсия* () {}` |
-| `namespace A.B { }`              | `номфазо А.Б { }`                   | `номфазо А { содир номфазо Б { } }`       |
-| `#!/usr/bin/env node`            | same, on the first line             | kept as the output's first line           |
-| `function f(x: number): number;` | `функсия ф(х: рақам): рақам;`       | overload signature                        |
-| `function f(this: T, x: U)`      | `функсия ф(ин: Т, х: У)`            | `this` parameter, erased                  |
-| `<const T>`, `<in T>`, `<out T>` | `<собит Т>`, `<дар Т>`, `<берун Т>` | type parameter modifiers                  |
+| TypeScript                        | SomonScript                         | Notes                                     |
+| --------------------------------- | ----------------------------------- | ----------------------------------------- |
+| `declare const x: T;`             | `эълон собит х: Т;`                 | also `эълон тағ`                          |
+| `declare function f(x: T): U;`    | `эълон функсия ф(х: Т): У;`         |                                           |
+| `declare class C { m(): T; }`     | `эълон синф К { м(): Т; }`          | members without bodies                    |
+| `declare enum E { }`              | `эълон шумориш Э { }`               |                                           |
+| `declare namespace N { }`         | `эълон номфазо Н { }`               | also `эълон модул Н { }`                  |
+| `declare module "m" { }`          | `эълон модул "м" { }`               | types what `"м"` exports                  |
+| `declare global { }`              | `эълон глобалӣ { }`                 | global names, built-in types              |
+| `using r = open();`               | `истифода р = кушодан();`           | contextual; `using` too                   |
+| `await using r = open();`         | `интизор истифода р = кушодан();`   | in `ҳамзамон` functions                   |
+| `for (using r of rs)`             | `барои (истифода р аз рҳо)`         | also `барои интизор (интизор истифода …)` |
+| `import type { T } from "m";`     | `ворид навъ { Т } аз "м";`          | no `require` in the output                |
+| `import { type T, x } from "m";`  | `ворид { навъ Т, х } аз "м";`       |                                           |
+| `export type { T };`              | `содир навъ { Т };`                 | also `содир навъ { Т } аз "м";`           |
+| `import x = require("m");`        | `ворид х = require("м");`           | CommonJS interop                          |
+| `import x = N.a;`                 | `ворид х = Н.а;`                    | alias                                     |
+| `import defer * as N from "m";`   | `ворид мавқуф * чун Н аз "м";`      | `"м"` runs when `Н` is first used         |
+| `import.defer("m")`               | `ворид.мавқуф("м")`                 | a promise of such a namespace             |
+| `export { x as "a-b" };`          | `содир { х чун "а-б" };`            | any string as the exported name           |
+| `import { "a-b" as x } from "m";` | `ворид { "а-б" чун х } аз "м";`     | also `содир { "а-б" } аз "м";`            |
+| `export = x;`                     | `содир = х;`                        | the only export of the module             |
+| `export { x as default }`         | `содир { х чун пешфарз };`          | also `содир { пешфарз } аз "м";`          |
+| `import { default as x }`         | `ворид { пешфарз чун х } аз "м";`   | any keyword with `чун`                    |
+| `export default function () {}`   | `содир пешфарз функсия () {}`       | also `синф {}`, `ҳамзамон функсия* () {}` |
+| `namespace A.B { }`               | `номфазо А.Б { }`                   | `номфазо А { содир номфазо Б { } }`       |
+| `#!/usr/bin/env node`             | same, on the first line             | kept as the output's first line           |
+| `function f(x: number): number;`  | `функсия ф(х: рақам): рақам;`       | overload signature                        |
+| `function f(this: T, x: U)`       | `функсия ф(ин: Т, х: У)`            | `this` parameter, erased                  |
+| `<const T>`, `<in T>`, `<out T>`  | `<собит Т>`, `<дар Т>`, `<берун Т>` | type parameter modifiers                  |
 
 `эълон` (`declare`) declares what exists at run time elsewhere (the host,
 another script): it is erased from the output, and the type checker uses the
@@ -327,6 +331,26 @@ English `declare`, `module`, `global`, `using`, `type` work as well.
 ворид { салом } аз "китобхона";      // салом: (ном: сатр) => сатр
 ворид навъ { Танзимот } аз "./танзимот";   // types only: nothing is loaded
 ```
+
+`ворид мавқуф` (TypeScript 5.9 `import defer`) imports a module without running
+it: the module runs when a member of its namespace is first read, so a program
+that may not need a heavy module does not pay for loading it. Only the namespace
+form exists (`ворид мавқуф * чун Н аз …`); a default or named import is a
+compile error, as in TypeScript. `ворид.мавқуф("м")` is its dynamic form: a
+promise of a namespace that runs the module on first use. The word is contextual
+(`мавқуф` and `defer` remain usable as names). How each target runs it: see
+[Targets](16-targets.md#errors-instead-of-lowering).
+
+Names written as strings (ES2022) export and import names that are not
+identifiers, as other modules (or other languages) spell them:
+
+```som
+собит версия = "1.0";
+содир { версия чун "version-string" };
+```
+
+The name after `чун` in an import must be an identifier, since it becomes a
+local name: `ворид { "version-string" чун версия } аз "./м";`.
 
 `истифода` declares a constant whose value is disposed of when its block ends,
 also by a `бозгашт` or an exception: `[Symbol.dispose]()` is called, and
@@ -479,9 +503,8 @@ namespace keeps its usual output.
 - `import.meta` (`ворид.meta`) outside ES module output: see
   [Type Checking and Module Output](15-type-checking.md).
 - `export as namespace N;`: it only appears in declaration (`.d.ts`) files.
-- Import attributes (`import data from "./d.json" with { type: "json" }`) and
-  module export names written as strings (`import { "a-b" as x }`): SomonScript
-  has no form for them yet.
+- Import attributes (`import data from "./d.json" with { type: "json" }`):
+  SomonScript has no form for them yet.
 - `emitDecoratorMetadata`, and decorators on overload signatures or in `эълон`
   declarations (TypeScript rejects those too).
 

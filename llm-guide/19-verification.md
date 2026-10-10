@@ -93,9 +93,7 @@ they cannot change the program. The properties:
 
 The seed is fixed, so every run checks the same programs. Programs that
 TypeScript cannot express the same way (`а << (б > (в))` reads as a call with
-type arguments) or that TypeScript 5.4 itself crashes on while it lowers them
-(the compile error then starts with
-`TypeScript 5.4.5 crashed while lowering the code`) are skipped, not failed.
+type arguments) are skipped, not failed.
 
 ### Reproducing a failure
 

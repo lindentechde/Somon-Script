@@ -12,13 +12,19 @@ transformers, and reports what no transformer can express.
 
 ## Choosing a Target
 
-| Value               | Runs on                                                       |
-| ------------------- | ------------------------------------------------------------- |
-| `es5`               | ES5 engines (Internet Explorer 11, old WebKit)                |
-| `es2015` … `es2021` | engines of that edition                                       |
-| `es2022` (default)  | Node.js 16.11+ (so every supported Node.js), current browsers |
-| `es2023`, `es2024`  | engines of that edition                                       |
-| `esnext`            | the newest engines: nothing is lowered                        |
+| Value                        | Runs on                                                       |
+| ---------------------------- | ------------------------------------------------------------- |
+| `es5`                        | ES5 engines (Internet Explorer 11, old WebKit)                |
+| `es2015` … `es2021`          | engines of that edition                                       |
+| `es2022` (default)           | Node.js 16.11+ (so every supported Node.js), current browsers |
+| `es2023`, `es2024`, `es2025` | engines of that edition (Node.js 20 lacks parts of ES2024)    |
+| `esnext`                     | the newest engines: nothing is lowered                        |
+
+The default stays `es2022`: every Node.js SomonScript supports (20 and newer)
+runs all of it. ES2025 adds regular expression modifiers, duplicate named groups
+in alternatives, iterator helpers, `Set` methods, `Promise.try`, `RegExp.escape`
+and `Float16Array`: Node.js 24 runs all of it, Node.js 22 has the iterator
+helpers and `Set` methods only.
 
 ```bash
 somon compile app.som --target es2015
@@ -62,12 +68,18 @@ the output: there is no `tslib` dependency at run time.
 | `&&=`, `\|\|=`, `??=`, numeric separators `1_000`            | es2021 | plain assignments, `1000`                          |
 | class fields, `#хосусӣ` members, `#х дар о`, static blocks   | es2022 | constructor code, `WeakMap`/`WeakSet`, functions   |
 | decorators `@ном`, `дастрасӣ` (accessor), `истифода` (using) | never  | TypeScript's helpers, on every target              |
+| `ворид мавқуф * чун Н`, `ворид.мавқуф(…)` (deferred imports) | never  | CommonJS: `require` on first use (see below)       |
 
 The default target, `es2022`, has everything the code generator emits except
 decorators, `дастрасӣ` and `истифода`, so the default output of any other
 program is the generated code itself. `--target es2020` or older lowers class
 fields, private members and static blocks too; a program without newer syntax is
 still emitted exactly as generated.
+
+Lowering changes syntax, not the mode the code runs in. TypeScript 6 writes
+every file as strict mode code (it adds `"use strict"` to a script); the
+compiler takes that line out again, so a script without imports or exports runs
+in the same (sloppy) mode on every target, as it does without lowering.
 
 ```som
 синф Ҳисоб {
@@ -94,8 +106,13 @@ still emitted exactly as generated.
 - Subclasses of `Хато` (`Error`), its relatives and `Array` keep their
   prototype, so `instanceof` and their own methods work.
 - Classes cannot extend built-ins that only work with `нав` (`Map`, `Set`,
-  `WeakMap`, `Promise`, `Date`, typed arrays, …): that is a compile error, since
-  an ES5 class calls its base as a function.
+  `WeakMap`, `Promise`, `Date`, typed arrays, `Iterator`, …): that is a compile
+  error, since an ES5 class calls its base as a function.
+- es5 relies on what TypeScript 6 deprecates and TypeScript 7 removes: the `es5`
+  target and `downlevelIteration`. They still work in TypeScript 6 with
+  `ignoreDeprecations: "6.0"`, which the compiler and the TypeScript checker
+  pass for es5 only, so no deprecation error appears. A TypeScript without them
+  (7) would need another lowering for es5, or es5 would go.
 
 ### Errors Instead of Lowering
 
@@ -109,8 +126,10 @@ compile error naming the construct and the oldest target that has it:
 | flag `s`, named groups `(?<ном>…)`, lookbehind, `\p{…}` | es2018 |
 | flag `d`                                                | es2022 |
 | flag `v`                                                | es2024 |
-| modifiers `(?i:…)`                                      | esnext |
+| modifiers `(?i:…)`, one group name in alternatives      | es2025 |
 | top-level `интизор` / `барои интизор`                   | es2022 |
+| ES modules: names written as strings (`х чун "а-б"`)    | es2022 |
+| ES modules: `ворид мавқуф`, `ворид.мавқуф(…)`           | esnext |
 
 ```text
 Target error at line 3, column 1: BigInt literals are only available when targeting es2020 or later (target is es2015).
@@ -126,7 +145,17 @@ declarations yet, so they are lowered for every target, `esnext` included (which
 is then lowered as the newest edition): standard decorators with `__esDecorate`,
 or TypeScript's legacy ones with `__decorate`/`__param` when
 `experimentalDecorators` is set (`--experimental-decorators`). `истифода` needs
-`Symbol.dispose` (`Symbol.asyncDispose` for `интизор истифода`) at run time.
+`Symbol.dispose` (`Symbol.asyncDispose` for `интизор истифода`) at run time. The
+newest edition is es2025.
+
+No engine runs deferred imports (`ворид мавқуф * чун Н аз "./м";`, TypeScript
+5.9 `import defer`) yet either. CommonJS output (the default, and every module
+of a bundle) defers the `require` on every target: `Н` is a namespace that
+requires the module when one of its members is first read; it needs `Proxy` and
+`Reflect` at run time. ES module output keeps `import defer` and
+`import.defer(…)` as TypeScript does, for runtimes and bundlers that have them,
+so it needs `--target esnext`; Node.js 20 to 24 do not load it. See
+[Operators](14-operators.md#declarations).
 
 ---
 
@@ -146,7 +175,7 @@ exist there.
 somon compile app.som --target es5 --lib es2015,dom
 ```
 
-- Names are TypeScript's: `es5` … `es2023`, `esnext`, `dom`, `dom.iterable`,
+- Names are TypeScript's: `es5` … `es2025`, `esnext`, `dom`, `dom.iterable`,
   `webworker`, `scripthost` and parts such as `es2015.promise` or
   `es2022.array`. Case does not matter; an unknown name is an error.
 - Default: the target's ECMAScript lib and the DOM, as in TypeScript
