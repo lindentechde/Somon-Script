@@ -136,6 +136,15 @@ export const TAJIK_DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>> = {
     "Дар навъи '{1}' имзои индекс бо параметри навъи '{0}' ёфт нашуд.",
   this_implicitly_has_type_any_because_it_does_not_have_a_type_annotation_2683:
     "'ин' ба таври ғайримустақим навъи 'any' дорад, зеро навъаш нишон дода нашудааст.",
+  Generator_implicitly_has_yield_type_0_Consider_supplying_a_return_type_annotation_7025:
+    "Генератор ба таври ғайримустақим навъи ҳосили '{0}' дорад. Навъи бозгаштро нишон диҳед.",
+
+  // Conditions and `??` that are decided by their syntax (TypeScript 5.6)
+  Right_operand_of_is_unreachable_because_the_left_operand_is_never_nullish_2869:
+    "Тарафи рости ?? ҳеҷ гоҳ ҳисоб намешавад, зеро тарафи чап ҳеҷ гоҳ 'null' ё 'undefined' нест.",
+  This_expression_is_always_nullish_2871: "Ин ифода ҳамеша 'null' ё 'undefined' аст.",
+  This_kind_of_expression_is_always_truthy_2872: 'Чунин ифода ҳамеша ҳамчун дуруст ҳисоб мешавад.',
+  This_kind_of_expression_is_always_falsy_2873: 'Чунин ифода ҳамеша ҳамчун нодуруст ҳисоб мешавад.',
 
   // Arithmetic and operators
   Operator_0_cannot_be_applied_to_types_1_and_2_2365:
@@ -161,8 +170,21 @@ export const TAJIK_DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>> = {
     "Хосияти '{0}' қимати ибтидоӣ надорад ва дар конструктор ҳатман таъин намешавад.",
   Class_0_incorrectly_implements_interface_1_2420:
     "Синфи '{0}' интерфейси '{1}'-ро нодуруст татбиқ мекунад.",
+  // TypeScript 6 writes the member without quotes (`member {1}`, 5: `member '{1}'`); the
+  // Tajik text keeps them, as for the other names
   Non_abstract_class_0_does_not_implement_inherited_abstract_member_1_from_class_2_2515:
     "Синфи ғайримавҳуми '{0}' узви мавҳуми '{1}'-и аз синфи '{2}' меросгирифтаро татбиқ намекунад.",
+  Non_abstract_class_expression_does_not_implement_inherited_abstract_member_0_from_class_1_2653:
+    "Ифодаи синфи ғайримавҳум узви мавҳуми '{0}'-и аз синфи '{1}' меросгирифтаро татбиқ намекунад.",
+  // TypeScript 6: several missing abstract members (TypeScript 5: TS18052)
+  Non_abstract_class_0_is_missing_implementations_for_the_following_members_of_1_Colon_2_2654:
+    "Дар синфи ғайримавҳуми '{0}' татбиқи ин узвҳои '{1}' нест: {2}.",
+  Non_abstract_class_0_is_missing_implementations_for_the_following_members_of_1_Colon_2_and_3_more_2655:
+    "Дар синфи ғайримавҳуми '{0}' татбиқи ин узвҳои '{1}' нест: {2} ва {3} узви дигар.",
+  Non_abstract_class_expression_is_missing_implementations_for_the_following_members_of_0_Colon_1_2656:
+    "Дар ифодаи синфи ғайримавҳум татбиқи ин узвҳои '{0}' нест: {1}.",
+  Non_abstract_class_expression_is_missing_implementations_for_the_following_members_of_0_Colon_1_and__2650:
+    "Дар ифодаи синфи ғайримавҳум татбиқи ин узвҳои '{0}' нест: {1} ва {2} узви дигар.",
   Cannot_create_an_instance_of_an_abstract_class_2511: 'Аз синфи мавҳум намуна сохтан мумкин нест.',
   Property_0_in_type_1_is_not_assignable_to_the_same_property_in_base_type_2_2416:
     "Хосияти '{0}' дар навъи '{1}' ба ҳамон хосият дар навъи асосии '{2}' мувофиқ нест.",
@@ -189,4 +211,17 @@ export const TAJIK_DIAGNOSTIC_MESSAGES: Readonly<Record<string, string>> = {
   Type_0_is_not_generic_2315: "Навъи '{0}' умумӣ нест.",
   Type_instantiation_is_excessively_deep_and_possibly_infinite_2589:
     'Сохтани навъ хеле амиқ ва шояд беохир аст.',
+
+  // Regular expressions (checked since TypeScript 5.5) that JavaScript itself accepts: the
+  // lexer already rejects what JavaScript rejects
+  This_regular_expression_flag_is_only_available_when_targeting_0_or_later_1501:
+    "Ин парчами ифодаи муқаррарӣ танҳо аз ҳадафи '{0}' ва навтар дастрас аст.",
+  Named_capturing_groups_are_only_available_when_targeting_ES2018_or_later_1503:
+    "Гурӯҳҳои гирандаи номдор танҳо аз ҳадафи 'ES2018' ва навтар дастрасанд.",
+  There_is_no_capturing_group_named_0_in_this_regular_expression_1532:
+    "Дар ин ифодаи муқаррарӣ гурӯҳи гиранда бо номи '{0}' нест.",
+  This_backreference_refers_to_a_group_that_does_not_exist_There_are_only_0_capturing_groups_in_this_r_1533:
+    'Ин истинод ба гурӯҳи вуҷуднадошта ишора мекунад. Дар ин ифодаи муқаррарӣ танҳо {0} гурӯҳи гиранда ҳаст.',
+  This_backreference_refers_to_a_group_that_does_not_exist_There_are_no_capturing_groups_in_this_regul_1534:
+    'Ин истинод ба гурӯҳи вуҷуднадошта ишора мекунад. Дар ин ифодаи муқаррарӣ гурӯҳи гиранда нест.',
 };

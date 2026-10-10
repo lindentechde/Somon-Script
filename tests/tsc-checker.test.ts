@@ -199,6 +199,37 @@ describe('TypeScript checker: messages', () => {
     expect(result.errors[2]).toContain('Тарафи рости амали арифметикӣ');
   });
 
+  test('the diagnostics of TypeScript 5.5 to 6.0 in Tajik and in TypeScript’s Russian', () => {
+    const source = [
+      'мавҳум синф Ш { мавҳум а(): рақам; мавҳум б(): рақам; }',
+      'синф Д мерос Ш {}',
+      'мавҳум синф Я { мавҳум в(): рақам; }',
+      'синф Е мерос Я {}',
+      'чоп.сабт(0 ?? 4, холӣ ?? 1);',
+      'агар (/а/) {}',
+      'то ("") {}',
+      'тағ р = /(а)\\2/;',
+    ].join('\n');
+    const messages = (locale: 'tj' | 'ru'): string[] =>
+      check(source, { locale, strict: true }).errors.map(error =>
+        error.slice(error.indexOf(': ') + 2, error.indexOf('\n'))
+      );
+    expect(messages('tj')).toEqual([
+      "Дар синфи ғайримавҳуми 'Д' татбиқи ин узвҳои 'Ш' нест: 'а', 'б'.",
+      "Синфи ғайримавҳуми 'Е' узви мавҳуми 'в'-и аз синфи 'Я' меросгирифтаро татбиқ намекунад.",
+      "Тарафи рости ?? ҳеҷ гоҳ ҳисоб намешавад, зеро тарафи чап ҳеҷ гоҳ 'холӣ' ё 'беқимат' нест.",
+      "Ин ифода ҳамеша 'холӣ' ё 'беқимат' аст.",
+      'Чунин ифода ҳамеша ҳамчун дуруст ҳисоб мешавад.',
+      'Чунин ифода ҳамеша ҳамчун нодуруст ҳисоб мешавад.',
+      'Ин истинод ба гурӯҳи вуҷуднадошта ишора мекунад. Дар ин ифодаи муқаррарӣ танҳо 1 гурӯҳи гиранда ҳаст.',
+    ]);
+    // TypeScript 6 ships Russian texts of its new diagnostics
+    const russian = messages('ru');
+    expect(russian).toHaveLength(7);
+    expect(russian[0]).toContain('отсутствуют реализации');
+    expect(russian[2]).toContain('Правый операнд ?? недоступен');
+  });
+
   test('the locale is reset after a check', () => {
     check('тағ х: рақам = "а";', { locale: 'ru' });
     expect(check('тағ х: рақам = "а";').errors[0]).toContain("Type 'сатр' is not assignable");
