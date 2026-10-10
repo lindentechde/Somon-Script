@@ -14,6 +14,15 @@ specific language constructs.
 
 Essential syntax reference and cheat sheet for rapid development.
 
+### **[⌨️ Reading input](input.md)**
+
+`хондан()` and `хонданиРақам()`: reading lines and numbers the learner types or
+a file holds.
+
+### **[🩺 Diagnostics](diagnostics.md)**
+
+Compiler and run-time messages in Tajik, Russian and English, and their codes.
+
 ### Language Features
 
 #### Core Language

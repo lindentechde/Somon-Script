@@ -586,6 +586,7 @@ npm run audit:examples
 - [🎯 Quick Reference](docs/reference/quick-start.md) - Essential syntax guide
 - [🩺 Compiler messages in Tajik and Russian](docs/reference/diagnostics.md) -
   what the errors say and their codes
+- [⌨️ Reading input](docs/reference/input.md) - `хондан()` and `хонданиРақам()`
 
 ### **For Technical Teams**
 

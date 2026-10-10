@@ -65,6 +65,26 @@ false.
 
 ---
 
+## Input
+
+`хондан(савол?)` reads the next line of input as a `сатр`,
+`хонданиРақам(савол?)` reads it as a `рақам` (`42`, `2,5`, `2.5`). Both are
+synchronous and need no import; `савол` is printed before reading. They work in
+`somon run` (keyboard, `< файл.txt`, a pipe) and in the playground; compiled
+JavaScript run with `node` throws when it calls them.
+
+```som
+тағ а = хонданиРақам("Рақами якум: ");
+тағ б = хонданиРақам("Рақами дуюм: ");
+чоп("Ҷамъ:", а + б);
+```
+
+At the end of the input both throw (`RUNTIME_INPUT_ENDED`). A line that is no
+number is asked again at a terminal and throws when the input is redirected
+(`RUNTIME_INPUT_NOT_A_NUMBER`). See `docs/reference/input.md`.
+
+---
+
 ## Structured Output
 
 | Tajik              | JavaScript         | Purpose        |
