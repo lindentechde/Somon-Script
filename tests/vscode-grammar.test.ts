@@ -323,6 +323,7 @@ describe('VS Code extension: keyword coverage', () => {
       бознавис: 'бознавис м() { }',
       дастрасӣ: 'дастрасӣ х = 1;',
       берун: 'функсия ф<берун Т>() {}',
+      мавқуф: 'ворид мавқуф * чун Н аз "./м";',
     };
     expect(Object.keys(contexts).sort()).toEqual([...CONTEXTUAL_KEYWORDS].sort());
     for (const [word, source] of Object.entries(contexts)) {
@@ -338,6 +339,7 @@ describe('VS Code extension: keyword coverage', () => {
       declare: 'declare const х: рақам;',
       enum: 'enum Р { А }',
       using: 'using р = ф();',
+      defer: 'ворид defer * чун Н аз "./м";',
       override: 'override м() {}',
       accessor: 'accessor х = 1;',
       yield: 'yield 1;',

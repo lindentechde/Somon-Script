@@ -414,6 +414,8 @@ class SyntaxScanner {
       [kind.ClassDeclaration, node => this.checkClass(node as ts.ClassDeclaration)],
       [kind.ClassExpression, node => this.checkClass(node as ts.ClassExpression)],
       [kind.Decorator, () => this.needLowering()],
+      [kind.ImportDeclaration, node => this.checkDeferredImport(node as ts.ImportDeclaration)],
+      [kind.MetaProperty, node => this.checkDeferredImportCall(node as ts.MetaProperty)],
     ]);
   }
 
@@ -577,6 +579,24 @@ class SyntaxScanner {
     const features = regExpFeatures(text.slice(1, closing), /[uv]/.test(flags));
     for (const [feature, minimum] of features) {
       this.requireNative(node, feature, minimum);
+    }
+  }
+
+  /**
+   * `import defer * as н from …` in ES module output (TypeScript 5.9): no
+   * transformer lowers it and no edition has it yet. CommonJS output defers
+   * the `require` instead.
+   */
+  private checkDeferredImport(node: ts.ImportDeclaration): void {
+    if (node.importClause?.phaseModifier === ts.SyntaxKind.DeferKeyword) {
+      this.requireNative(node, 'Deferred imports are', 'esnext');
+    }
+  }
+
+  /** `import.defer(…)`, as `import defer`. */
+  private checkDeferredImportCall(node: ts.MetaProperty): void {
+    if (node.keywordToken === ts.SyntaxKind.ImportKeyword && node.name.text === 'defer') {
+      this.requireNative(node, 'Deferred imports are', 'esnext');
     }
   }
 

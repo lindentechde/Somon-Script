@@ -404,6 +404,11 @@ export interface ImportDeclaration extends Statement {
   source: Literal;
   /** `ворид навъ { Т } аз "./м";`: imports types only, erased in the output. */
   importKind?: 'type';
+  /**
+   * `ворид мавқуф * чун Н аз "./м";` (TypeScript 5.9 `import defer`): the
+   * module is loaded, but runs only when a member of `Н` is first read.
+   */
+  phase?: 'defer';
 }
 
 export interface ImportSpecifier extends ASTNode {
@@ -713,6 +718,8 @@ export interface RestElement extends ASTNode {
 export interface ImportExpression extends Expression {
   type: 'ImportExpression';
   source: Expression;
+  /** `ворид.мавқуф("./м")` (`import.defer`): a promise of the deferred namespace. */
+  phase?: 'defer';
 }
 
 /**

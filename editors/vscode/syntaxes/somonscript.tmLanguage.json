@@ -1036,7 +1036,11 @@
           "name": "keyword.control.loop.somonscript"
         },
         {
-          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:export|import|ворид|содир)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:export|import|мавқуф|ворид|содир)(?![\\p{L}\\p{N}\\p{M}_$])",
+          "name": "keyword.control.import.somonscript"
+        },
+        {
+          "match": "(?<![\\p{L}\\p{N}\\p{M}_$]|[^.]\\.|^\\.)(?:defer)(?![\\p{L}\\p{N}\\p{M}_$])(?=\\s*\\*)",
           "name": "keyword.control.import.somonscript"
         },
         {

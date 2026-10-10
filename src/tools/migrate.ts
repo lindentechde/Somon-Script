@@ -129,6 +129,10 @@ const FEATURE_PROBES: Readonly<Record<string, Probe>> = {
   exportDefaultFunction: { source: 'содир пешфарз функсия () {}' },
   exportDefaultClass: { source: 'содир пешфарз синф {}' },
   importMeta: { source: 'тағ м = ворид.meta;' },
+  importDefer: {
+    source: 'ворид мавқуф * чун Н аз "./а";\nворид.мавқуф("./а");',
+    absent: ['мавқуф'],
+  },
   // `о.м<Т>(х)`: older parsers read the type arguments of a method call as `<` and `>`
   memberTypeArguments: { source: 'тағ а = [1].map<рақам>(х => х);', absent: ['<'] },
   // Any type as a type argument: older parsers compared `ф < ҳар > 1`
@@ -457,8 +461,17 @@ class Converter {
     );
   }
 
-  /** `import(…)` and `import.meta`. */
+  /** `import(…)`, `import.defer(…)` and `import.meta`. */
   private importKeyword(node: ts.Node, parent: ts.Node): void {
+    if (ts.isMetaProperty(parent) && parent.name.text === 'defer') {
+      if (supports('importDefer')) {
+        this.replace(node, 'ворид');
+        this.replace(parent.name, 'мавқуф');
+      } else {
+        this.warn(node, "'import.defer' is not supported by SomonScript yet");
+      }
+      return;
+    }
     if (ts.isMetaProperty(parent)) {
       if (supports('importMeta')) this.replace(node, 'ворид');
       else this.warn(node, "'import.meta' is not supported by SomonScript");

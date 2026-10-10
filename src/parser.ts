@@ -2819,8 +2819,8 @@ export class Parser {
     return this.check(TokenType.LESS_THAN) ? this.parseTypeArgumentList() : undefined;
   }
 
-  private parseDynamicImport(importToken: Token): ImportExpression {
-    this.consume(TokenType.LEFT_PAREN, "Expected '(' after 'ворид'");
+  private parseDynamicImport(importToken: Token, keyword = 'ворид'): ImportExpression {
+    this.consume(TokenType.LEFT_PAREN, `Expected '(' after '${keyword}'`);
     const source = this.assignment();
     this.consume(TokenType.RIGHT_PAREN, "Expected ')' after import specifier");
     return {
@@ -3071,7 +3071,10 @@ export class Parser {
     };
   }
 
-  /** `ворид(…)` (dynamic import) or `ворид.meta`; null when `ворид` starts no expression. */
+  /**
+   * `ворид(…)` (dynamic import), `ворид.мавқуф(…)` (`import.defer`) or
+   * `ворид.meta`; null when `ворид` starts no expression.
+   */
   private parseImportExpressionOrMeta(): Expression | null {
     if (!this.check(TokenType.ВОРИД)) return null;
     const next = this.peekNext()?.type;
@@ -3079,14 +3082,22 @@ export class Parser {
     return next === TokenType.DOT ? this.parseImportMeta() : null;
   }
 
-  /** `ворид.meta` (`import.meta`); the only meta property of `ворид`. */
-  private parseImportMeta(): MetaProperty {
+  /**
+   * `ворид.meta` (`import.meta`), or `ворид.мавқуф(…)` (`import.defer(…)`,
+   * TypeScript 5.9): a promise of the module's deferred namespace.
+   */
+  private parseImportMeta(): MetaProperty | ImportExpression {
     const importToken = this.advance();
     this.advance(); // '.'
     const property = this.peek();
+    if (property.type === TokenType.IDENTIFIER && Parser.DEFER_KEYWORDS.has(property.value)) {
+      this.advance();
+      const call = this.parseDynamicImport(importToken, `ворид.${property.value}`);
+      return { ...call, phase: 'defer' };
+    }
     if (property.type !== TokenType.IDENTIFIER || property.value !== 'meta') {
       throw new Error(
-        `The only valid meta property for 'ворид' is 'ворид.meta' at line ${property.line}, column ${property.column}`
+        `The only valid meta properties for 'ворид' are 'ворид.meta' and 'ворид.мавқуф(…)' at line ${property.line}, column ${property.column}`
       );
     }
     this.advance();
@@ -3557,6 +3568,38 @@ export class Parser {
       };
     }
 
+    // `ворид мавқуф * чун Н аз "./м";`: the module runs when a member of `Н` is first read
+    const deferred = !typeOnly && this.isDeferredImport();
+    if (deferred) this.advance();
+    this.parseImportClause(specifiers);
+
+    this.consume(TokenType.АЗ, "Expected 'аз' after import specifiers");
+    const source = this.consume(TokenType.STRING, 'Expected module path');
+    this.consumeSemicolon("Expected ';' after import");
+    if (typeOnly) this.checkTypeOnlyImport(specifiers, importToken);
+    if (deferred) this.checkDeferredImport(specifiers);
+
+    return {
+      type: 'ImportDeclaration',
+      specifiers,
+      source: {
+        type: 'Literal',
+        value: source.value,
+        raw: `"${source.value}"`,
+        line: source.line,
+        column: source.column,
+      } as Literal,
+      ...(typeOnly && { importKind: 'type' as const }),
+      ...(deferred && { phase: 'defer' as const }),
+      line: importToken.line,
+      column: importToken.column,
+    };
+  }
+
+  /** The bindings of an import: `а`, `* чун Н`, `{ б, в чун г }`, `а, { б }`, `а, * чун Н`. */
+  private parseImportClause(
+    specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier>
+  ): void {
     // A default import binds any name a variable may have (`маълумот`, `рӯйхат`, …)
     if (this.isPlainIdentifierToken(this.peek())) {
       const local = this.advance();
@@ -3590,26 +3633,46 @@ export class Parser {
       this.parseNamedImports(specifiers);
       this.consume(TokenType.RIGHT_BRACE, "Expected '}' after named imports");
     }
+  }
 
-    this.consume(TokenType.АЗ, "Expected 'аз' after import specifiers");
-    const source = this.consume(TokenType.STRING, 'Expected module path');
-    this.consumeSemicolon("Expected ';' after import");
-    if (typeOnly) this.checkTypeOnlyImport(specifiers, importToken);
+  /** `мавқуф` / `defer`, which defers an import (TypeScript 5.9 `import defer`). */
+  private static readonly DEFER_KEYWORDS: ReadonlySet<string> = new Set(['мавқуф', 'defer']);
 
-    return {
-      type: 'ImportDeclaration',
-      specifiers,
-      source: {
-        type: 'Literal',
-        value: source.value,
-        raw: `"${source.value}"`,
-        line: source.line,
-        column: source.column,
-      } as Literal,
-      ...(typeOnly && { importKind: 'type' as const }),
-      line: importToken.line,
-      column: importToken.column,
-    };
+  /**
+   * `ворид мавқуф * чун Н …`: the word defers the import when an import
+   * clause follows it. `ворид мавқуф аз "./м";` imports a default named
+   * `мавқуф`, as `import defer from "./m"` does in TypeScript.
+   */
+  private isDeferredImport(): boolean {
+    const token = this.peek();
+    const next = this.peekNext();
+    if (!next || token.type !== TokenType.IDENTIFIER || !Parser.DEFER_KEYWORDS.has(token.value)) {
+      return false;
+    }
+    if (next.type === TokenType.MULTIPLY || next.type === TokenType.LEFT_BRACE) return true;
+    // `ворид мавқуф х аз "./м";`: a deferred default import, which is an error
+    return (
+      this.isPlainIdentifierToken(next) && this.tokens[this.current + 2]?.type === TokenType.АЗ
+    );
+  }
+
+  /**
+   * TypeScript's rule for `ворид мавқуф`: only the namespace is imported
+   * (TS18058, TS18059), since no other binding can wait for the module to run.
+   */
+  private checkDeferredImport(
+    specifiers: Array<ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier>
+  ): void {
+    const reported = new Set<string>();
+    for (const spec of specifiers) {
+      if (spec.type === 'ImportNamespaceSpecifier') continue;
+      const kind = spec.type === 'ImportDefaultSpecifier' ? 'Default' : 'Named';
+      if (reported.has(kind)) continue;
+      reported.add(kind);
+      this.errors.push(
+        `${kind} imports are not allowed in a deferred import; import the namespace: 'ворид мавқуф * чун Н аз …' at line ${spec.line}, column ${spec.column}`
+      );
+    }
   }
 
   /** TypeScript's rules for `ворид навъ`: a default import or named imports, not both. */

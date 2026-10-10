@@ -61,12 +61,15 @@ describe('LSP keywords', () => {
       expect.arrayContaining(['кун', 'ҳосил', 'шумориш', 'эълон', 'модул', 'глобалӣ'])
     );
     expect(CONTEXTUAL_KEYWORDS).toEqual(
-      expect.arrayContaining(['истифода', 'бознавис', 'дастрасӣ', 'берун'])
+      expect.arrayContaining(['истифода', 'бознавис', 'дастрасӣ', 'берун', 'мавқуф'])
     );
     for (const word of CONTEXTUAL_KEYWORDS) {
       expect(KEYWORD_INFO.get(word)?.contextual).toBe(true);
     }
-    expect(ENGLISH_KEYWORDS).toEqual(expect.arrayContaining(['typeof', 'satisfies', 'declare']));
+    expect(ENGLISH_KEYWORDS).toEqual(
+      expect.arrayContaining(['typeof', 'satisfies', 'declare', 'defer'])
+    );
+    expect(KEYWORD_INFO.get('мавқуф')).toMatchObject({ english: 'defer', contextual: true });
   });
 
   test('tells syntax keywords from built-in names', () => {

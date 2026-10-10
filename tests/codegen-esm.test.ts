@@ -164,7 +164,7 @@ describe('module-only syntax', () => {
   test('only ворид.meta is a meta property of ворид', () => {
     const result = compile('тағ у = ворид.url;', { typeCheck: false });
     expect(result.errors).toEqual([
-      expect.stringMatching(/The only valid meta property for 'ворид' is 'ворид\.meta'/),
+      expect.stringMatching(/The only valid meta properties for 'ворид' are 'ворид\.meta' and/),
     ]);
   });
 });

@@ -52,6 +52,13 @@ export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: st
       'in its CommonJS output; SomonScript’s CommonJS output of a script (no imports or ' +
       'exports) is sloppy mode code, as JavaScript and TypeScript 5 have it: the global object',
   },
+  'ts-syntax-newer.test.ts › ворид.мавқуф("path");': {
+    cells: ['*/cjs'],
+    reason:
+      'TypeScript leaves `import.defer(…)` as it is in CommonJS output (its checker reports ' +
+      'TS18060 there), which no runtime runs; SomonScript loads the module with `require` ' +
+      'when the namespace is first read',
+  },
   'migrate/38-errors.ts': {
     cells: ['es5/cjs', 'es5/esm'],
     reason:
@@ -60,6 +67,12 @@ export const KNOWN_PATH_DIFFERENCES: Readonly<Record<string, Known & { cells: st
       'es5 output breaks it',
   },
 };
+
+/** Why ES module output with `import defer` (only the esnext target has it) does not load. */
+const DEFERRED_IMPORT_IN_ESM =
+  'ES module output keeps `import defer` and `import.defer(…)`, as TypeScript does, and no ' +
+  'JavaScript runtime runs them yet (Node.js 20 to 24 reject the syntax): the program does ' +
+  'not load, in either path';
 
 /**
  * Programs whose output depends on the target or the module format, alike in
@@ -76,6 +89,18 @@ export const KNOWN_CELL_DIFFERENCES: Readonly<Record<string, Known & { cells: st
   'ts-syntax-parser.test.ts › содир навъ { Т };': {
     cells: ['*/esm'],
     reason: 'exporting an undeclared name is a link error in an ES module',
+  },
+  'ts-syntax-newer.test.ts › ворид мавқуф * чун роҳ аз "path";': {
+    cells: ['esnext/esm'],
+    reason: DEFERRED_IMPORT_IN_ESM,
+  },
+  'ts-syntax-newer.test.ts › ворид мавқуф * чун роҳ аз "path"; (2)': {
+    cells: ['esnext/esm'],
+    reason: DEFERRED_IMPORT_IN_ESM,
+  },
+  'ts-syntax-newer.test.ts › ворид.мавқуф("path");': {
+    cells: ['esnext/esm'],
+    reason: DEFERRED_IMPORT_IN_ESM,
   },
   'migrate/44-object-literals.ts': {
     cells: ['es5/cjs', 'es5/esm'],

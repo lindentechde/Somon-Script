@@ -292,6 +292,57 @@ const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
   YieldExpression: PREC.ASSIGNMENT,
 };
 
+/**
+ * The namespace of a deferred import (`ворид мавқуф * чун Н аз "./м";`) in
+ * CommonJS output: the module is required when one of its members is first
+ * read (`Н.х`, `"х" дар Н`, `Object.keys(Н)`), as `import defer` (TypeScript
+ * 5.9) runs a module. `then` and symbols do not run it, so that a promise can
+ * resolve to the namespace (`ворид.мавқуф(…)`); its members are read-only.
+ * Written in ES5 syntax for every target; it needs `Proxy` and `Reflect`.
+ */
+const DEFER_HELPER = [
+  'function __somonDefer(load) {',
+  '  var loaded;',
+  '  var target = Object.create(null);',
+  '  function exports() {',
+  '    if (!loaded) {',
+  '      loaded = { value: load() };',
+  '      Object.assign(target, loaded.value);',
+  '    }',
+  '    return loaded.value;',
+  '  }',
+  '  function passive(key) {',
+  "    return typeof key === 'symbol' || key === 'then';",
+  '  }',
+  '  return new Proxy(target, {',
+  '    get: function (_, key) {',
+  '      return passive(key) ? undefined : Reflect.get(exports(), key);',
+  '    },',
+  '    has: function (_, key) {',
+  '      return !passive(key) && Reflect.has(exports(), key);',
+  '    },',
+  '    ownKeys: function () {',
+  '      return Reflect.ownKeys(exports());',
+  '    },',
+  '    getOwnPropertyDescriptor: function (_, key) {',
+  '      if (passive(key)) return undefined;',
+  '      var descriptor = Reflect.getOwnPropertyDescriptor(exports(), key);',
+  '      if (descriptor) descriptor.configurable = true;',
+  '      return descriptor;',
+  '    },',
+  '    set: function () {',
+  '      return false;',
+  '    },',
+  '    defineProperty: function () {',
+  '      return false;',
+  '    },',
+  '    deleteProperty: function () {',
+  '      return false;',
+  '    }',
+  '  });',
+  '}',
+].join('\n');
+
 /** Statements `давом` may continue: the loops. */
 const LOOP_TYPES: ReadonlySet<string> = new Set([
   'WhileStatement',
@@ -339,6 +390,8 @@ export class CodeGenerator {
   private inStaticBlock = false;
   /** What `ts.transpileModule` must lower in the generated code (see `getLoweringNeeds`). */
   private lowering: LoweringNeeds = CodeGenerator.noLowering();
+  /** CommonJS output defers an import, with `__somonDefer` (see `DEFER_HELPER`). */
+  private usesDeferHelper = false;
   /** Declarations that merge with others of their name (namespaces, enums). */
   private readonly mergeGroups = new WeakMap<Statement, MergeGroup>();
   /**
@@ -515,6 +568,7 @@ export class CodeGenerator {
 
   private generateProgram(node: Program): string {
     this.lowering = CodeGenerator.noLowering();
+    this.usesDeferHelper = false;
     this.esmExportedNames = new Set();
     if (this.module === 'esm' && this.elidesTypes()) {
       this.valueNames = CodeGenerator.collectValueNames(node);
@@ -525,6 +579,7 @@ export class CodeGenerator {
     const statements = this.withScope(this.declaredNames(node.body), () =>
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
+    if (this.usesDeferHelper) statements.unshift(DEFER_HELPER);
     // A module is strict mode code; in CommonJS (as in TypeScript's output) only by the directive
     if (this.module === 'commonjs' && statements.length > 0 && CodeGenerator.isModule(node.body)) {
       statements.unshift('"use strict";');
@@ -1355,8 +1410,16 @@ export class CodeGenerator {
     // Dynamic import: ворид(specifier) -> import(specifier)
     // Handle .som extension conversion for dynamic imports (string specifiers only)
     const source = this.convertSourcePath(this.generateExpression(node.source, PREC.ASSIGNMENT));
-
-    return `import(${source})`;
+    if (node.phase !== 'defer') return `import(${source})`;
+    // `ворид.мавқуф(…)`: a promise of the module's deferred namespace
+    if (this.module === 'esm') return `import.defer(${source})`;
+    this.usesDeferHelper = true;
+    const load = (specifier: string): string =>
+      `Promise.resolve().then(() => __somonDefer(() => require(${specifier})))`;
+    // The specifier is computed once, when the call runs
+    return node.source.type === 'Literal'
+      ? load(source)
+      : `((__somon_specifier) => ${load('__somon_specifier')})(${source})`;
   }
 
   private generateImportDeclaration(node: ImportDeclaration): string {
@@ -1374,6 +1437,16 @@ export class CodeGenerator {
     // `ворид "./м";` only runs the module
     if (specifiers.length === 0) {
       return this.indent(`require(${source});`);
+    }
+    // `ворид мавқуф * чун Н аз "./м";`: `Н` requires the module when a member is first read
+    if (node.phase === 'defer') {
+      this.usesDeferHelper = true;
+      return specifiers
+        .map(spec => {
+          const local = this.generateIdentifier(spec.local, true);
+          return this.indent(`const ${local} = __somonDefer(() => require(${source}));`);
+        })
+        .join('\n');
     }
 
     const results: string[] = [];
@@ -1464,18 +1537,25 @@ export class CodeGenerator {
       } else if (spec.type === 'ImportNamespaceSpecifier') {
         clauses.push(`* as ${local}`);
       } else {
-        // Exported names are member names: `содир функсия илова` exports `push`
-        const imported = translateMemberName((spec as ImportSpecifier).imported.name);
-        const typeOnly = (spec as ImportSpecifier).importKind === 'type' ? 'type ' : '';
-        named.push(
-          `${typeOnly}${imported === stripPositionMarkers(local) ? local : `${imported} as ${local}`}`
-        );
+        named.push(CodeGenerator.esmNamedImport(spec as ImportSpecifier, local));
       }
     }
     if (named.length > 0) clauses.push(`{ ${named.join(', ')} }`);
-    if (clauses.length === 0) return this.indent(`import ${source};`);
+    // A deferred module whose namespace is never read never runs: nothing to import
+    if (clauses.length === 0) return node.phase === 'defer' ? '' : this.indent(`import ${source};`);
     const typeOnly = node.importKind === 'type' ? 'type ' : '';
-    return this.indent(`import ${typeOnly}${clauses.join(', ')} from ${source};`);
+    const phase = node.phase === 'defer' ? 'defer ' : '';
+    return this.indent(`import ${typeOnly}${phase}${clauses.join(', ')} from ${source};`);
+  }
+
+  /**
+   * `б as в` or `type Т` in `import { … }`. Exported names are member names:
+   * `содир функсия илова` exports `push`.
+   */
+  private static esmNamedImport(spec: ImportSpecifier, local: string): string {
+    const imported = translateMemberName(spec.imported.name);
+    const typeOnly = spec.importKind === 'type' ? 'type ' : '';
+    return `${typeOnly}${imported === stripPositionMarkers(local) ? local : `${imported} as ${local}`}`;
   }
 
   private generateExportDeclaration(node: ExportDeclaration): string {
