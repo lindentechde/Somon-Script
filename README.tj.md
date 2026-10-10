@@ -6,6 +6,11 @@
 
 **Барномарезиро бо забони модарӣ омӯзед — қадами аввал сӯи JavaScript**
 
+**▶
+[СомонСкриптро дар браузер санҷед](https://lindentechde.github.io/Somon-Script/)**
+— чизе насб кардан лозим нест; нусхаи захирашудаи саҳифа бе интернет ҳам кор
+мекунад.
+
 [![Версия](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![Васеъшавии VS Code](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
 [![Ҳолати Сохтан](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)

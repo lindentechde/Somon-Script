@@ -14,6 +14,11 @@ specific language constructs.
 
 Essential syntax reference and cheat sheet for rapid development.
 
+### **[▶ Playground](https://lindentechde.github.io/Somon-Script/)**
+
+Write and run SomonScript in the browser, also offline
+([how it works](../../playground/README.md)).
+
 ### **[⌨️ Reading input](input.md)**
 
 `хондан()` and `хонданиРақам()`: reading lines and numbers the learner types or

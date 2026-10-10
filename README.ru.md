@@ -6,6 +6,10 @@
 
 **Учитесь программировать на родном языке — первый шаг к JavaScript**
 
+**▶
+[Попробуйте SomonScript в браузере](https://lindentechde.github.io/Somon-Script/)**
+— ничего не нужно устанавливать; сохранённая страница работает и без интернета.
+
 [![Версия](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![Расширение VS Code](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
 [![Статус Сборки](https://img.shields.io/github/actions/workflow/status/lindentechde/Somon-Script/automated-release.yml?branch=main&label=build)](https://github.com/lindentechde/Somon-Script/actions)
