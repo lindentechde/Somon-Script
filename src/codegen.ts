@@ -124,6 +124,31 @@ export interface CodeMapping {
 }
 
 /**
+ * The `.som` position (line 1-based, column 0-based) of a position in the
+ * generated code: that of the nearest mapping at or before it.
+ */
+export function originalPosition(
+  mappings: CodeMapping[],
+  line: number,
+  column: number
+): { line: number; column: number } | undefined {
+  let low = 0;
+  let high = mappings.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const generated = mappings[middle].generated;
+    if (generated.line < line || (generated.line === line && generated.column <= column)) {
+      found = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return found === -1 ? undefined : mappings[found].original;
+}
+
+/**
  * TypeScript syntax the generated code keeps because no JavaScript runtime
  * runs it yet: the compiler lowers it with `ts.transpileModule`.
  */

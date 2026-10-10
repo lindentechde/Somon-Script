@@ -1,18 +1,11 @@
-import { transformSync, type PluginItem } from '@babel/core';
+import type { PluginItem } from '@babel/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 
 import { CodeGenerator, type CodeMapping } from './codegen';
-import {
-  codegenDiagnostic,
-  detailDiagnostic,
-  formatDiagnostic,
-  syntaxDiagnostic,
-  typeDiagnostic,
-  type Diagnostic,
-  type DiagnosticLanguage,
-} from './diagnostics';
+import type { Diagnostic, DiagnosticLanguage } from './diagnostics';
+import { localizedMessages, Problems } from './diagnostics/problems';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import {
@@ -173,55 +166,6 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   return localize(result, problems.diagnostics(source, options.language), source, options.language);
 }
 
-/**
- * What went wrong, as each stage reports it, for the diagnostics in another
- * language: the stage's own message (or the checker's error) per entry of
- * `errors` and `warnings`.
- */
-class Problems {
-  private readonly entries: Array<
-    | { kind: 'syntax' | 'codegen' | 'option' | 'internal'; text: string }
-    | { kind: 'target'; text: string; line: number; column: number }
-    | { kind: 'type'; error: TypeCheckError }
-  > = [];
-
-  add(entry: Problems['entries'][number]): void {
-    this.entries.push(entry);
-  }
-
-  diagnostics(source: string, language: DiagnosticLanguage): Diagnostic[] {
-    const all = this.entries.map((entry): Diagnostic => {
-      switch (entry.kind) {
-        case 'syntax':
-          return syntaxDiagnostic(entry.text, source, language);
-        case 'codegen':
-          return codegenDiagnostic(entry.text, source, language);
-        case 'type':
-          return typeDiagnostic(entry.error, source, language);
-        case 'target':
-          return detailDiagnostic('TARGET_UNSUPPORTED', entry.text, language, entry);
-        case 'option':
-          return detailDiagnostic('OPTION_INVALID', entry.text, language);
-        default:
-          return detailDiagnostic('CODEGEN_INVALID', entry.text, language);
-      }
-    });
-    // After a syntax error the parser goes on from a guess; what it reports next on that
-    // line is mostly the same mistake again (`чоп(1; 2)`: a `)` and a `;`)
-    const shown = all.filter(
-      (d, index) =>
-        this.entries[index].kind !== 'syntax' ||
-        !all
-          .slice(0, index)
-          .some((e, before) => this.entries[before].kind === 'syntax' && e.line === d.line)
-    );
-    return [
-      ...shown.filter(d => d.severity === 'error'),
-      ...shown.filter(d => d.severity === 'warning'),
-    ];
-  }
-}
-
 /** The result with its messages in `language`, for learners. */
 function localize(
   result: CompileResult,
@@ -229,13 +173,7 @@ function localize(
   source: string,
   language: DiagnosticLanguage
 ): CompileResult {
-  const format = (d: Diagnostic) => formatDiagnostic(d, { language, source });
-  return {
-    ...result,
-    errors: diagnostics.filter(d => d.severity === 'error').map(format),
-    warnings: diagnostics.filter(d => d.severity === 'warning').map(format),
-    diagnostics,
-  };
+  return { ...result, ...localizedMessages(diagnostics, source, language) };
 }
 
 function compileInternal(
@@ -551,6 +489,9 @@ function minifyCode(
   map: RawSourceMap | undefined,
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
+  // Babel is loaded only to minify (and the compiler for browsers does without it)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { transformSync } = require('@babel/core') as typeof import('@babel/core');
   const babel = transformSync(code, {
     // The options here are the whole configuration: no babel.config.json or .babelrc
     configFile: false,
