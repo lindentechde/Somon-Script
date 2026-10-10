@@ -27,6 +27,10 @@ page, the compiler's messages and the errors of the running program are in Tajik
 - **Реҷаи таълимӣ** (the learning mode, on by default) warns about mistakes that
   are valid JavaScript, such as `хондан() + 1`
   ([docs/reference/learning-mode.md](../docs/reference/learning-mode.md)).
+- **✓ Санҷидан** (check), on a link to a task of the tutorial: runs the program
+  on each test of the task (in a worker of its own, with the time limit) and
+  says which pass, and for the others what was expected and what the program
+  printed, as `npm run check-task` does.
 - **Нишон додани JavaScript** shows the JavaScript the program compiles to.
 - 15 examples, from «Салом, ҷаҳон!» to an endless loop.
 - **Пайванд** (link) copies a link that holds the program and its input.
@@ -43,12 +47,13 @@ same sources always give the same file.
 
 ## Links
 
-| Link                  | Opens                                      |
-| --------------------- | ------------------------------------------ |
-| `#example=jam`        | an example, by its `id` in `examples.json` |
-| `#c=<code>&i=<input>` | a program and its input (UTF-8, base64url) |
-| `?lang=ru`            | the page in Russian (`tj`, `ru`, `en`)     |
-| `?timeout=10`         | a time limit of 10 seconds                 |
+| Link                  | Opens                                             |
+| --------------------- | ------------------------------------------------- |
+| `#example=jam`        | an example, by its `id` in `examples.json`        |
+| `#c=<code>&i=<input>` | a program and its input (UTF-8, base64url)        |
+| `…&t=<tests>`         | and the tests of a task, as JSON `[{ "i", "o" }]` |
+| `?lang=ru`            | the page in Russian (`tj`, `ru`, `en`)            |
+| `?timeout=10`         | a time limit of 10 seconds                        |
 
 ## What it does not do
 
