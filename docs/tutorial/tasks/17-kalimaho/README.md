@@ -34,7 +34,7 @@
 ман барномасозиро дӯст медорам
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTcta2FsaW1haG86INCa0LDQu9C40LzQsNKz0L4KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=0LzQsNC9INCx0LDRgNC90L7QvNCw0YHQvtC30LjRgNC-INC006_RgdGCINC80LXQtNC-0YDQsNC8Cg&t=W3siaSI6ItC80LDQvSDQsdCw0YDQvdC-0LzQsNGB0L7Qt9C40YDQviDQtNOv0YHRgiDQvNC10LTQvtGA0LDQvFxuIiwibyI6IjRcbiJ9LHsiaSI6ItGB0LDQu9C-0LxcbiIsIm8iOiIxXG4ifV0)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTcta2FsaW1haG86INCa0LDQu9C40LzQsNKz0L4KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=0LzQsNC9INCx0LDRgNC90L7QvNCw0YHQvtC30LjRgNC-INC006_RgdGCINC80LXQtNC-0YDQsNC8Cg&t=W3siaSI6ItC80LDQvSDQsdCw0YDQvdC-0LzQsNGB0L7Qt9C40YDQviDQtNOv0YHRgiDQvNC10LTQvtGA0LDQvFxuIiwibyI6IjRcbiJ9LHsiaSI6ItGB0LDQu9C-0LxcbiIsIm8iOiIxXG4ifV0&task=17-kalimaho)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -83,7 +83,7 @@ npm run check-task -- 17-kalimaho барнома.som
 ман барномасозиро дӯст медорам
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE3LWthbGltYWhvOiDQodC70L7QstCwCi8vINCd0LDQv9C40YjQuNGC0LUg0YHQstC-0Y4g0L_RgNC-0LPRgNCw0LzQvNGDINC30LTQtdGB0YwK&i=0LzQsNC9INCx0LDRgNC90L7QvNCw0YHQvtC30LjRgNC-INC006_RgdGCINC80LXQtNC-0YDQsNC8Cg&t=W3siaSI6ItC80LDQvSDQsdCw0YDQvdC-0LzQsNGB0L7Qt9C40YDQviDQtNOv0YHRgiDQvNC10LTQvtGA0LDQvFxuIiwibyI6IjRcbiJ9LHsiaSI6ItGB0LDQu9C-0LxcbiIsIm8iOiIxXG4ifV0)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE3LWthbGltYWhvOiDQodC70L7QstCwCi8vINCd0LDQv9C40YjQuNGC0LUg0YHQstC-0Y4g0L_RgNC-0LPRgNCw0LzQvNGDINC30LTQtdGB0YwK&i=0LzQsNC9INCx0LDRgNC90L7QvNCw0YHQvtC30LjRgNC-INC006_RgdGCINC80LXQtNC-0YDQsNC8Cg&t=W3siaSI6ItC80LDQvSDQsdCw0YDQvdC-0LzQsNGB0L7Qt9C40YDQviDQtNOv0YHRgiDQvNC10LTQvtGA0LDQvFxuIiwibyI6IjRcbiJ9LHsiaSI6ItGB0LDQu9C-0LxcbiIsIm8iOiIxXG4ifV0&task=17-kalimaho)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

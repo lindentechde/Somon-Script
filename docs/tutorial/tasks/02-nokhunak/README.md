@@ -24,7 +24,7 @@
 чоп("Ман хатоҳоро ислоҳ мекунам.");
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hKTsK0YfQvtC_KCLQnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LiIpOwo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hXG7QnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LlxuIn1d)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hKTsK0YfQvtC_KCLQnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LiIpOwo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hXG7QnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LlxuIn1d&task=02-nokhunak)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -63,7 +63,7 @@ npm run check-task -- 02-nokhunak барнома.som
 чоп("Ман хатоҳоро ислоҳ мекунам.");
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hKTsK0YfQvtC_KCLQnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LiIpOwo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hXG7QnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LlxuIn1d)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hKTsK0YfQvtC_KCLQnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LiIpOwo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hXG7QnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LlxuIn1d&task=02-nokhunak)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

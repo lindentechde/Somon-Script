@@ -117,7 +117,7 @@ describe('tutorial tasks', () => {
   test('the playground links of a task page carry its tests; lessons carry none', () => {
     for (const id of taskIds) {
       const readme = fs.readFileSync(path.join(TASKS, id, 'README.md'), 'utf8');
-      const links = [...readme.matchAll(/&t=([\w-]+)\)/g)];
+      const links = [...readme.matchAll(/&t=([\w-]+)&task=([\w-]+)\)/g)];
       expect([id, links.length]).toEqual([id, 2]);
       const tests = readTests(path.join(TASKS, id)).map(
         (test: { input: string; expected: string }) => ({
@@ -127,6 +127,7 @@ describe('tutorial tasks', () => {
       );
       for (const link of links) {
         expect(JSON.parse(Buffer.from(link[1], 'base64url').toString('utf8'))).toEqual(tests);
+        expect(link[2]).toBe(id);
       }
     }
     for (const language of ['tj', 'ru']) {

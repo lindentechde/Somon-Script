@@ -36,7 +36,7 @@
 3
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTItcm9zdGt1bmphOiDQoNC-0YHRgtC60YPQvdK30LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiIqKipcbioqKlxuIn0seyJpIjoiM1xuMVxuIiwibyI6IipcbipcbipcbiJ9XQ)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTItcm9zdGt1bmphOiDQoNC-0YHRgtC60YPQvdK30LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiIqKipcbioqKlxuIn0seyJpIjoiM1xuMVxuIiwibyI6IipcbipcbipcbiJ9XQ&task=12-rostkunja)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -87,7 +87,7 @@ npm run check-task -- 12-rostkunja барнома.som
 3
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDEyLXJvc3RrdW5qYTog0J_RgNGP0LzQvtGD0LPQvtC70YzQvdC40LoKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiIqKipcbioqKlxuIn0seyJpIjoiM1xuMVxuIiwibyI6IipcbipcbipcbiJ9XQ)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDEyLXJvc3RrdW5qYTog0J_RgNGP0LzQvtGD0LPQvtC70YzQvdC40LoKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiIqKipcbioqKlxuIn0seyJpIjoiM1xuMVxuIiwibyI6IipcbipcbipcbiJ9XQ&task=12-rostkunja)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

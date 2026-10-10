@@ -34,7 +34,7 @@
 50
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDgtaW10aWhvbjog0JjQvNGC0LjSs9C-0L0KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=NTAK&t=W3siaSI6IjUwXG4iLCJvIjoi0JPRg9C30LDRiNGCXG4ifSx7ImkiOiI0OVxuIiwibyI6ItCd0LDQs9GD0LfQsNGI0YJcbiJ9LHsiaSI6IjEwMFxuIiwibyI6ItCT0YPQt9Cw0YjRglxuIn1d)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDgtaW10aWhvbjog0JjQvNGC0LjSs9C-0L0KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=NTAK&t=W3siaSI6IjUwXG4iLCJvIjoi0JPRg9C30LDRiNGCXG4ifSx7ImkiOiI0OVxuIiwibyI6ItCd0LDQs9GD0LfQsNGI0YJcbiJ9LHsiaSI6IjEwMFxuIiwibyI6ItCT0YPQt9Cw0YjRglxuIn1d&task=08-imtihon)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -83,7 +83,7 @@ npm run check-task -- 08-imtihon барнома.som
 50
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA4LWltdGlob246INCt0LrQt9Cw0LzQtdC9Ci8vINCd0LDQv9C40YjQuNGC0LUg0YHQstC-0Y4g0L_RgNC-0LPRgNCw0LzQvNGDINC30LTQtdGB0YwK&i=NTAK&t=W3siaSI6IjUwXG4iLCJvIjoi0JPRg9C30LDRiNGCXG4ifSx7ImkiOiI0OVxuIiwibyI6ItCd0LDQs9GD0LfQsNGI0YJcbiJ9LHsiaSI6IjEwMFxuIiwibyI6ItCT0YPQt9Cw0YjRglxuIn1d)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA4LWltdGlob246INCt0LrQt9Cw0LzQtdC9Ci8vINCd0LDQv9C40YjQuNGC0LUg0YHQstC-0Y4g0L_RgNC-0LPRgNCw0LzQvNGDINC30LTQtdGB0YwK&i=NTAK&t=W3siaSI6IjUwXG4iLCJvIjoi0JPRg9C30LDRiNGCXG4ifSx7ImkiOiI0OVxuIiwibyI6ItCd0LDQs9GD0LfQsNGI0YJcbiJ9LHsiaSI6IjEwMFxuIiwibyI6ItCT0YPQt9Cw0YjRglxuIn1d&task=08-imtihon)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

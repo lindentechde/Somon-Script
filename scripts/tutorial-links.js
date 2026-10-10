@@ -9,7 +9,8 @@
  * The code is in the link (#c=, UTF-8 in base64url, as playground/src/app.js
  * reads it), so a link changes with its code: run this after editing a
  * lesson. A link on the page of a task (docs/tutorial/tasks/<id>/README.md)
- * also carries the task's tests (&t=), for the playground's «Санҷидан».
+ * also carries the task's tests (&t=), for the playground's «Санҷидан», and
+ * its id (&task=), whose statement the playground shows.
  * `--check` changes nothing and fails when a link is out of date.
  *
  * Usage: node scripts/tutorial-links.js [--check]
@@ -31,17 +32,18 @@ function encode(text) {
   return Buffer.from(text, 'utf8').toString('base64url');
 }
 
-/** The playground link of a program, its input and the tests of a task. */
-function playgroundLink(code, input, tests) {
-  const testsPart = tests ? `&t=${encode(JSON.stringify(tests))}` : '';
-  return `${PLAYGROUND}#c=${encode(code)}${input ? `&i=${encode(input)}` : ''}${testsPart}`;
+/** The playground link of a program, its input, and the tests and id of a task. */
+function playgroundLink(code, input, task) {
+  const taskPart = task ? `&t=${encode(JSON.stringify(task.tests))}&task=${task.id}` : '';
+  return `${PLAYGROUND}#c=${encode(code)}${input ? `&i=${encode(input)}` : ''}${taskPart}`;
 }
 
-/** The tests of the task whose page `file` is, as the playground reads them: [{ i, o }]. */
-function taskTests(file) {
+/** The task whose page `file` is: its id and its tests as the playground reads them, [{ i, o }]. */
+function taskOf(file) {
   const testsDir = path.join(path.dirname(file), 'tests');
   if (path.basename(file) !== 'README.md' || !fs.existsSync(testsDir)) return undefined;
-  return readTests(path.dirname(file)).map(test => ({ i: test.input, o: test.expected }));
+  const tests = readTests(path.dirname(file)).map(test => ({ i: test.input, o: test.expected }));
+  return { id: path.basename(path.dirname(file)), tests };
 }
 
 /** Fenced code blocks of a page: { start, end, text, label } (the line before them). */
@@ -64,7 +66,7 @@ function codeBlocks(lines) {
 }
 
 /** The page with its links made from the code above them. */
-function updateLinks(source, file, tests) {
+function updateLinks(source, file, task) {
   const lines = source.split('\n');
   const blocks = codeBlocks(lines);
   return lines
@@ -80,7 +82,7 @@ function updateLinks(source, file, tests) {
       }
       if (!program)
         throw new Error(`${file}:${index + 1}: a playground link without code above it`);
-      return `${link[1]}${playgroundLink(program.text, input, tests)}${link[2]}`;
+      return `${link[1]}${playgroundLink(program.text, input, task)}${link[2]}`;
     })
     .join('\n');
 }
@@ -98,7 +100,7 @@ function processTutorial({ write }) {
   const stale = [];
   for (const file of markdownFiles(TUTORIAL).sort()) {
     const source = fs.readFileSync(file, 'utf8');
-    const updated = updateLinks(source, path.relative(ROOT, file), taskTests(file));
+    const updated = updateLinks(source, path.relative(ROOT, file), taskOf(file));
     if (updated === source) continue;
     stale.push(path.relative(ROOT, file));
     if (write) fs.writeFileSync(file, updated);

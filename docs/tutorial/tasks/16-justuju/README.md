@@ -44,7 +44,7 @@
 8
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTYtanVzdHVqdTog0rbRg9GB0YLRg9K3068KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=NAo1CjgKMgo4CjgK&t=W3siaSI6IjRcbjVcbjhcbjJcbjhcbjhcbiIsIm8iOiIxXG4ifSx7ImkiOiIzXG4xXG4yXG4zXG43XG4iLCJvIjoiLTFcbiJ9XQ)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTYtanVzdHVqdTog0rbRg9GB0YLRg9K3068KLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=NAo1CjgKMgo4CjgK&t=W3siaSI6IjRcbjVcbjhcbjJcbjhcbjhcbiIsIm8iOiIxXG4ifSx7ImkiOiIzXG4xXG4yXG4zXG43XG4iLCJvIjoiLTFcbiJ9XQ&task=16-justuju)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -103,7 +103,7 @@ npm run check-task -- 16-justuju барнома.som
 8
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE2LWp1c3R1anU6INCf0L7QuNGB0LoKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=NAo1CjgKMgo4CjgK&t=W3siaSI6IjRcbjVcbjhcbjJcbjhcbjhcbiIsIm8iOiIxXG4ifSx7ImkiOiIzXG4xXG4yXG4zXG43XG4iLCJvIjoiLTFcbiJ9XQ)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE2LWp1c3R1anU6INCf0L7QuNGB0LoKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=NAo1CjgKMgo4CjgK&t=W3siaSI6IjRcbjVcbjhcbjJcbjhcbjhcbiIsIm8iOiIxXG4ifSx7ImkiOiIzXG4xXG4yXG4zXG43XG4iLCJvIjoiLTFcbiJ9XQ&task=16-justuju)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

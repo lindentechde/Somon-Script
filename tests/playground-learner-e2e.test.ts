@@ -15,7 +15,7 @@ import { buildCliOnce, canonicalTmpDir } from './helpers/paths';
  */
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { buildPlayground, MAX_BYTES } = require('../scripts/build-playground.js');
+const { buildPlayground, tasks, MAX_BYTES } = require('../scripts/build-playground.js');
 
 type Chromium = typeof import('playwright-core').chromium;
 type Browser = import('playwright-core').Browser;
@@ -52,6 +52,42 @@ describe('playground build', () => {
     expect(Buffer.byteLength(html)).toBeLessThanOrEqual(MAX_BYTES);
     expect(MAX_BYTES).toBe(1.5 * 1024 * 1024);
     expect(buildPlayground().html).toBe(html);
+  });
+
+  test('has every task of the tutorial, in the order of the lessons, with its tests', () => {
+    const tasksDir = path.join(__dirname, '..', 'docs', 'tutorial', 'tasks');
+    const ids = fs
+      .readdirSync(tasksDir)
+      .filter(id => fs.existsSync(path.join(tasksDir, id, 'tests')));
+    const embedded: Array<{
+      id: string;
+      lesson: number;
+      title: { tj: string; ru: string };
+      text: { tj: string; ru: string };
+      code: string;
+      tests: Array<{ i: string; o: string }>;
+    }> = tasks();
+    expect(embedded.map(task => task.id).sort()).toEqual(ids.sort());
+    expect(embedded.slice(0, 3).map(task => task.id)).toEqual([
+      '01-salom',
+      '01-se-satr',
+      '01-khona',
+    ]);
+    for (const task of embedded) {
+      expect(task.lesson).toBe(Number(task.id.slice(0, 2)));
+      expect(task.text.tj).toContain('<strong>Вуруд:</strong>');
+      expect(task.text.ru).toContain('<strong>Ввод:</strong>');
+      expect(task.tests.length).toBe(
+        fs.readdirSync(path.join(tasksDir, task.id, 'tests')).filter(f => f.endsWith('.in')).length
+      );
+      expect(task.tests[0].o).toBe(
+        fs.readFileSync(path.join(tasksDir, task.id, 'tests', '1.out'), 'utf8')
+      );
+    }
+    // A code block of a statement, and the text around it, escaped
+    const house = embedded.find(task => task.id === '01-khona')!;
+    expect(house.text.tj).toContain('<pre>    *\n   ***');
+    expect(house.text.tj).toContain('|___|</pre>');
   });
 
   test('loads nothing from the network', () => {
@@ -275,6 +311,42 @@ describeInBrowser(`playground for learners in Chromium${chromium ? '' : ` (skipp
     expect(page.url()).toContain('&t=');
     await page.selectOption('#example', 'salom');
     expect(await page.isVisible('#check')).toBe(false);
+  }, 90000);
+
+  test('the tasks are in the page: chosen from the list, offline, with their statement', async () => {
+    await page.goto(pageUrl);
+    expect(await page.locator('#task optgroup').count()).toBe(18);
+    expect(await page.locator('#task optgroup').first().getAttribute('label')).toBe('Дарси 1');
+    expect(await page.isVisible('#task-panel')).toBe(false);
+    await page.selectOption('#task', '05-jam');
+    expect(await page.textContent('#task-title')).toBe('Масъала 05-jam: Ҷамъ');
+    expect(await page.textContent('#task-text')).toContain(
+      'Ду рақамро хонед ва ҷамъи онҳоро чоп кунед.'
+    );
+    expect(await page.inputValue('#input')).toBe('2\n3\n');
+    expect(await page.inputValue('#code')).toContain('// Масъала 05-jam: Ҷамъ');
+    await page.fill('#code', 'тағ а = хонданиРақам();\nтағ б = хонданиРақам();\nчоп(а + б);');
+    expect((await check()).trimEnd().split('\n').pop()).toBe('Натиҷа: 3 аз 3 санҷиш гузашт.');
+    // Kept in the browser, and in a link
+    await page.waitForTimeout(500);
+    await page.goto(pageUrl);
+    expect(await page.inputValue('#task')).toBe('05-jam');
+    expect(await page.isVisible('#check')).toBe(true);
+    await page.click('#share');
+    expect(page.url()).toContain('&task=05-jam');
+    // In Russian
+    await page.selectOption('#language', 'ru');
+    expect(await page.textContent('#task-title')).toBe('Задача 05-jam: Сумма');
+    expect(await page.textContent('#task-text')).toContain('Прочитайте два числа');
+    // An example is no task
+    await page.selectOption('#example', 'salom');
+    expect(await page.inputValue('#task')).toBe('');
+    expect(await page.isVisible('#task-panel')).toBe(false);
+    expect(await page.isVisible('#check')).toBe(false);
+    // A link to a task by its id (the page stays in the language chosen)
+    await page.goto(`${pageUrl}#task=01-khona`);
+    expect(await page.textContent('#task-title')).toBe('Задача 01-khona: Домик');
+    expect(await page.locator('#task-text pre').count()).toBe(1);
   }, 90000);
 
   test('a check fails a test whose program runs too long, or fails, and can be stopped', async () => {

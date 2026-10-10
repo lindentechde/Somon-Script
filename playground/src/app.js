@@ -8,15 +8,18 @@
  * Works from a web server and from a file opened from disk (file://): the
  * worker starts from a Blob URL, and nothing is loaded from the network.
  *
- * A link to a task of the tutorial carries its tests (`&t=`): «Санҷидан» then
- * runs the program on each, as `npm run check-task` does (scripts/check-task.js),
- * and says which pass.
+ * The tasks of the tutorial are in the page too (`window.SOMON_TASKS`, from
+ * docs/tutorial/tasks): «Масъала» shows a task's statement and starting
+ * program, also offline. A task, or a link to one (`&t=` carries its tests),
+ * has «Санҷидан», which runs the program on each test, as `npm run check-task`
+ * does (scripts/check-task.js), and says which pass.
  */
 (function () {
   'use strict';
 
   var STRINGS = window.SOMON_STRINGS;
   var EXAMPLES = window.SOMON_EXAMPLES;
+  var TASKS = window.SOMON_TASKS;
   var STORAGE_KEY = 'somon-playground';
   var TIMEOUTS = [2, 5, 10, 30, 60];
   var DEFAULT_TIMEOUT = 5;
@@ -38,6 +41,8 @@
   var stopButton = $('stop');
   var checkButton = $('check');
   var exampleSelect = $('example');
+  var taskSelect = $('task');
+  var taskPanel = $('task-panel');
   var languageSelect = $('language');
   var timeoutSelect = $('timeout');
   var showJs = $('show-js');
@@ -71,6 +76,8 @@
       example: saved.example || '',
       // The tests of the task a link opened: [{ i: input, o: expected output }]
       tests: validTests(saved.tests),
+      // The task of the tutorial being solved, by its id
+      task: findTask(saved.task) ? saved.task : '',
     };
     var query = new URLSearchParams(location.search);
     if (STRINGS[query.get('lang')]) state.language = query.get('lang');
@@ -82,6 +89,7 @@
       state.input = linked.input;
       state.example = linked.example || '';
       state.tests = linked.tests;
+      state.task = linked.task || '';
     }
     if (typeof state.code !== 'string') {
       state.code = EXAMPLES[0].code;
@@ -113,7 +121,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Links: #c=<code>&i=<input>&t=<tests> (UTF-8 in base64url), or #example=<id>
+  // Links: #c=<code>&i=<input>&t=<tests>&task=<id> (UTF-8 in base64url),
+  // #task=<id> or #example=<id>
   // ---------------------------------------------------------------------------
 
   function encode(text) {
@@ -136,17 +145,22 @@
 
   function fromHash(hash) {
     var params = new URLSearchParams(hash.replace(/^#/, ''));
+    var task = findTask(params.get('task'));
     try {
       if (params.has('c')) {
         return {
           code: decode(params.get('c')),
           input: params.has('i') ? decode(params.get('i')) : '',
-          tests: params.has('t') ? validTests(JSON.parse(decode(params.get('t')))) : null,
+          tests: params.has('t')
+            ? validTests(JSON.parse(decode(params.get('t'))))
+            : task && task.tests,
+          task: task ? task.id : '',
         };
       }
     } catch (error) {
       return null;
     }
+    if (task) return { code: task.code, input: task.input, tests: task.tests, task: task.id };
     var example = findExample(params.get('example'));
     return example
       ? { code: example.code, input: example.input || '', example: example.id, tests: null }
@@ -164,13 +178,26 @@
     return valid ? tests : null;
   }
 
-  function linkTo(code, input, tests) {
+  function linkTo(code, input, tests, task) {
     var hash =
       '#c=' +
       encode(code) +
       (input ? '&i=' + encode(input) : '') +
-      (tests ? '&t=' + encode(JSON.stringify(tests)) : '');
+      (tests ? '&t=' + encode(JSON.stringify(tests)) : '') +
+      (task ? '&task=' + task : '');
     return location.href.split('#')[0] + hash;
+  }
+
+  function findTask(id) {
+    for (var index = 0; index < TASKS.length; index++) {
+      if (TASKS[index].id === id) return TASKS[index];
+    }
+    return null;
+  }
+
+  /** The language of task statements: Tajik or Russian. */
+  function taskLanguage() {
+    return state.language === 'ru' ? 'ru' : 'tj';
   }
 
   function findExample(id) {
@@ -208,6 +235,22 @@
       addOption(exampleSelect, example.id, example.name[state.language] || example.name.tj);
     });
     exampleSelect.value = state.example;
+
+    // The tasks, by lesson
+    taskSelect.innerHTML = '';
+    addOption(taskSelect, '', text('chooseTask'));
+    var group = null;
+    TASKS.forEach(function (task) {
+      if (!group || group.lesson !== task.lesson) {
+        group = document.createElement('optgroup');
+        group.lesson = task.lesson;
+        group.label = text('lesson', { n: task.lesson });
+        taskSelect.appendChild(group);
+      }
+      addOption(group, task.id, task.title[taskLanguage()]);
+    });
+    taskSelect.value = state.task;
+    showTask();
 
     timeoutSelect.innerHTML = '';
     var timeouts =
@@ -347,6 +390,16 @@
 
   function showCheckButton() {
     checkButton.hidden = !state.tests;
+  }
+
+  /** The statement of the task being solved, if any. */
+  function showTask() {
+    var task = findTask(state.task);
+    taskPanel.hidden = !task;
+    if (!task) return;
+    $('task-title').textContent = text('task') + ' ' + task.id + ': ' + task.title[taskLanguage()];
+    // The statement is HTML the build made from the task's page in the repository
+    $('task-text').innerHTML = task.text[taskLanguage()];
   }
 
   function showCode(code) {
@@ -616,7 +669,7 @@
   // ---------------------------------------------------------------------------
 
   function share() {
-    var url = linkTo(state.code, state.input, state.tests);
+    var url = linkTo(state.code, state.input, state.tests, state.task);
     try {
       history.replaceState(null, '', url);
     } catch (error) {
@@ -644,7 +697,30 @@
     state.code = example.code;
     state.input = example.input || '';
     state.tests = null;
+    state.task = '';
+    taskSelect.value = '';
     showCheckButton();
+    showTask();
+    codeInput.value = state.code;
+    inputField.value = state.input;
+    clearOutput();
+    showCode('');
+    clearMarks();
+    save();
+  }
+
+  function chooseTask() {
+    var task = findTask(taskSelect.value);
+    if (!task) return;
+    stop(null);
+    state.task = task.id;
+    state.code = task.code;
+    state.input = task.input;
+    state.tests = task.tests;
+    state.example = '';
+    exampleSelect.value = '';
+    showCheckButton();
+    showTask();
     codeInput.value = state.code;
     inputField.value = state.input;
     clearOutput();
@@ -702,6 +778,7 @@
     });
     $('share').addEventListener('click', share);
     exampleSelect.addEventListener('change', chooseExample);
+    taskSelect.addEventListener('change', chooseTask);
     languageSelect.addEventListener('change', function () {
       state.language = languageSelect.value;
       applyLanguage();
@@ -727,10 +804,13 @@
       state.input = linked.input;
       state.example = linked.example || '';
       state.tests = linked.tests;
+      state.task = linked.task || '';
       showCheckButton();
+      showTask();
       codeInput.value = state.code;
       inputField.value = state.input;
       exampleSelect.value = state.example;
+      taskSelect.value = state.task;
       clearMarks();
       save();
     });

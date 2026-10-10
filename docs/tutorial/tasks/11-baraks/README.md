@@ -34,7 +34,7 @@
 123
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTEtYmFyYWtzOiDQkdCw0YDRitCw0LrRgQovLyDQkdCw0YDQvdC-0LzQsNC4INGF0YPQtNGA0L4g0LjQvSDSt9C-INC90LDQstC40YHQtdC0Cg&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjMyMVxuIn0seyJpIjoiMTIwMFxuIiwibyI6IjIxXG4ifSx7ImkiOiI1XG4iLCJvIjoiNVxuIn1d)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTEtYmFyYWtzOiDQkdCw0YDRitCw0LrRgQovLyDQkdCw0YDQvdC-0LzQsNC4INGF0YPQtNGA0L4g0LjQvSDSt9C-INC90LDQstC40YHQtdC0Cg&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjMyMVxuIn0seyJpIjoiMTIwMFxuIiwibyI6IjIxXG4ifSx7ImkiOiI1XG4iLCJvIjoiNVxuIn1d&task=11-baraks)
 
 Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
 месанҷад.
@@ -83,7 +83,7 @@ npm run check-task -- 11-baraks барнома.som
 123
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDExLWJhcmFrczog0J3QsNC-0LHQvtGA0L7RggovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjMyMVxuIn0seyJpIjoiMTIwMFxuIiwibyI6IjIxXG4ifSx7ImkiOiI1XG4iLCJvIjoiNVxuIn1d)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDExLWJhcmFrczog0J3QsNC-0LHQvtGA0L7RggovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjMyMVxuIn0seyJpIjoiMTIwMFxuIiwibyI6IjIxXG4ifSx7ImkiOiI1XG4iLCJvIjoiNVxuIn1d&task=11-baraks)
 
 В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
 тестах этой задачи.

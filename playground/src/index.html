@@ -27,6 +27,10 @@
           <span data-text="example">Намуна</span>
           <select id="example"></select>
         </label>
+        <label>
+          <span data-text="task">Масъала</span>
+          <select id="task"></select>
+        </label>
         <button id="share" type="button">🔗 <span data-text="share">Пайванд</span></button>
         <label class="check">
           <input id="learning-mode" type="checkbox" />
@@ -72,6 +76,10 @@
         </div>
       </section>
       <section class="side-panel">
+        <div class="task-panel" id="task-panel" hidden>
+          <h2 id="task-title">Масъала</h2>
+          <div class="task-text" id="task-text"></div>
+        </div>
         <div class="input-panel">
           <h2><label for="input" data-text="input">Вуруд</label></h2>
           <textarea id="input" spellcheck="false" wrap="off" rows="3"></textarea>
