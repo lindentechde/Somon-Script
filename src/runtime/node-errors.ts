@@ -12,8 +12,15 @@ import { fileURLToPath } from 'node:url';
 import { codeOf, message, renderHint, renderMessage } from '../diagnostics/catalog';
 import { formatDiagnostic } from '../diagnostics/format';
 import { nameLength } from '../diagnostics/text';
-import type { Diagnostic, DiagnosticLanguage } from '../diagnostics/types';
-import { columnOfName, explainError, locateError, readsByIndex } from './errors';
+import type { Diagnostic, DiagnosticLanguage, DiagnosticMessage } from '../diagnostics/types';
+import {
+  columnOfName,
+  explainError,
+  locateError,
+  readsByIndex,
+  type ErrorLocation,
+  type ExplainedError,
+} from './errors';
 
 export interface ErrorReporterOptions {
   language: DiagnosticLanguage;
@@ -31,33 +38,46 @@ export function reportError(thrown: unknown, options: ErrorReporterOptions): str
   const location = locateError(stack);
   const file = location && filePath(location.file);
   const source = file && readSource(file);
-  const code = location && source?.split(/\r?\n/)[location.line - 1];
 
   const diagnostic: Diagnostic = {
     code: codeOf(explained.message.id),
     severity: 'error',
     message: renderMessage(explained.message, language),
   };
-  let hint = explained.hint;
-  if (location && code !== undefined) {
-    const column = columnOfName(code, location.column, explained, location.functionName);
-    Object.assign(diagnostic, {
-      line: location.line,
-      column,
-      length: nameLength(source!, location.line, column),
-    });
-    if (explained.message.id === 'RUNTIME_READ_OF_NOTHING' && readsByIndex(code, column)) {
-      hint = message('INDEX_OUT_OF_RANGE');
-    }
-  } else if (location) {
-    Object.assign(diagnostic, { line: location.line, column: location.column });
-  }
+  const hint = location ? place(diagnostic, explained, location, source) : explained.hint;
   if (hint) diagnostic.hint = renderHint(hint, language);
 
   const shownFile = file && path.relative(options.cwd ?? process.cwd(), file);
   let text = formatDiagnostic(diagnostic, { language, source, file: shownFile, runtime: true });
   if (options.showStack && stack) text += `\n${stack}`;
   return `${text}\n`;
+}
+
+/**
+ * Puts `diagnostic` at the place of the error in `source`: under the name the
+ * error is about, when the line is there. Returns the hint for the place.
+ */
+function place(
+  diagnostic: Diagnostic,
+  explained: ExplainedError,
+  location: ErrorLocation,
+  source: string | undefined
+): DiagnosticMessage | undefined {
+  const code = source?.split(/\r?\n/)[location.line - 1];
+  if (code === undefined) {
+    Object.assign(diagnostic, { line: location.line, column: location.column });
+    return explained.hint;
+  }
+  const column = columnOfName(code, location.column, explained, location.functionName);
+  Object.assign(diagnostic, {
+    line: location.line,
+    column,
+    length: nameLength(source!, location.line, column),
+  });
+  if (explained.message.id === 'RUNTIME_READ_OF_NOTHING' && readsByIndex(code, column)) {
+    return message('INDEX_OUT_OF_RANGE');
+  }
+  return explained.hint;
 }
 
 /** A path named by a stack: Node.js names the sources of source maps by `file://` URLs. */

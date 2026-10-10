@@ -9,6 +9,7 @@ import {
   readsByIndex,
   tajikNames,
 } from '../src/runtime/errors';
+import { InputError } from '../src/runtime/input';
 import {
   installErrorReporter,
   reportError,
@@ -171,6 +172,25 @@ describe('reporting errors in somon run', () => {
         '  Маслиҳат: Шояд дар рӯйхат унсуре бо ин индекс нест: индексҳо аз 0 то `дарозӣ - 1` мебошанд.',
         '',
       ].join('\n')
+    );
+  });
+
+  test('the hint of the error where no element is read by index', () => {
+    fs.writeFileSync(file, 'тағ о = {};\nо.ф();\n');
+    const error = Object.assign(new TypeError('о.ф is not a function'), {
+      stack: `TypeError: о.ф is not a function\n    at ${file}:2:1`,
+    });
+    expect(reportError(error, { language: 'tj', cwd: dir }).split('\n').slice(0, 4)).toEqual([
+      'Хатои иҷро дар барнома.som, сатри 2:',
+      '  `о.ф` функсия нест ва онро даъват кардан мумкин нест.',
+      '    2 | о.ф();',
+      '      |   ^',
+    ]);
+    const input = Object.assign(new InputError('ended', 'хондан'), {
+      stack: `InputError: The input ended\n    at ${file}:1:9`,
+    });
+    expect(reportError(input, { language: 'tj', cwd: dir })).toContain(
+      'Маслиҳат: Ба барнома ҳамон қадар сатри вуруд диҳед, ки он мехонад.'
     );
   });
 

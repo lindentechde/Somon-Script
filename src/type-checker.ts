@@ -301,6 +301,26 @@ const NULL_TYPE: Type = { kind: 'primitive', name: 'null' };
 const UNDEFINED_TYPE: Type = { kind: 'primitive', name: 'undefined' };
 const NUMBER_TYPE: Type = { kind: 'primitive', name: 'number' };
 const STRING_TYPE: Type = { kind: 'primitive', name: 'string' };
+
+/** `хондан(савол?)` and `хонданиРақам(савол?)`: the input functions of the run time. */
+const INPUT_FUNCTION_TYPES: ReadonlyMap<string, Type> = new Map(
+  (
+    [
+      ['хондан', STRING_TYPE],
+      ['хонданиРақам', NUMBER_TYPE],
+    ] as const
+  ).map(([name, returnType]) => [
+    name,
+    {
+      kind: 'function',
+      name,
+      paramTypes: [{ kind: 'primitive', name: 'any' }],
+      paramNames: ['савол'],
+      paramOptional: [true],
+      returnType,
+    },
+  ])
+);
 const BOOLEAN_TYPE: Type = { kind: 'primitive', name: 'boolean' };
 const VOID_TYPE: Type = { kind: 'primitive', name: 'void' };
 /** `ин` as a type; bound to the receiver's type where a member is used. */
@@ -2928,6 +2948,8 @@ export class TypeChecker {
       return this.narrowed.get(this.referenceKey(identifier)!) ?? sym;
     }
     if (identifier.name === 'беқимат' || identifier.name === 'undefined') return UNDEFINED_TYPE;
+    const input = INPUT_FUNCTION_TYPES.get(identifier.name);
+    if (input) return input;
     // Empty names are parser error-recovery placeholders
     if (!identifier.name || this.isBuiltinValueName(identifier.name)) {
       return UNKNOWN;

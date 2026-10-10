@@ -293,6 +293,24 @@ const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
 };
 
 /**
+ * The input functions of a program that reads input (`хондан`,
+ * `хонданиРақам`): the run time of `somon run` and the playground provide them
+ * (src/runtime/input.ts); elsewhere a call says where they work.
+ */
+const INPUT_PROLOGUE = [
+  'const { хондан, хонданиРақам } = globalThis.__somonInput || {',
+  '  хондан: __somonNoInput,',
+  '  хонданиРақам: __somonNoInput,',
+  '};',
+  'function __somonNoInput() {',
+  '  throw new Error("хондан() and хонданиРақам() read input when the program runs with \'somon run\' or in the playground");',
+  '}',
+].join('\n');
+
+/** The names of the input functions. */
+const INPUT_FUNCTIONS: ReadonlySet<string> = new Set(['хондан', 'хонданиРақам']);
+
+/**
  * The namespace of a deferred import (`ворид мавқуф * чун Н аз "./м";`) in
  * CommonJS output: the module is required when one of its members is first
  * read (`Н.х`, `"х" дар Н`, `Object.keys(Н)`), as `import defer` (TypeScript
@@ -395,6 +413,8 @@ export class CodeGenerator {
   private lowering: LoweringNeeds = CodeGenerator.noLowering();
   /** CommonJS output defers an import, with `__somonDefer` (see `DEFER_HELPER`). */
   private usesDeferHelper = false;
+  /** The program reads input with `хондан`/`хонданиРақам` it does not declare. */
+  private usesInput = false;
   /** Declarations that merge with others of their name (namespaces, enums). */
   private readonly mergeGroups = new WeakMap<Statement, MergeGroup>();
   /**
@@ -572,6 +592,7 @@ export class CodeGenerator {
   private generateProgram(node: Program): string {
     this.lowering = CodeGenerator.noLowering();
     this.usesDeferHelper = false;
+    this.usesInput = false;
     this.esmExportedNames = new Set();
     if (this.module === 'esm' && this.elidesTypes()) {
       this.valueNames = CodeGenerator.collectValueNames(node);
@@ -583,6 +604,7 @@ export class CodeGenerator {
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
     if (this.usesDeferHelper) statements.unshift(DEFER_HELPER);
+    if (this.usesInput) statements.unshift(this.inputPrologue());
     // A module is strict mode code; in CommonJS (as in TypeScript's output) only by the directive
     if (this.module === 'commonjs' && statements.length > 0 && CodeGenerator.isModule(node.body)) {
       statements.unshift('"use strict";');
@@ -591,6 +613,11 @@ export class CodeGenerator {
     if (node.shebang !== undefined) statements.unshift(node.shebang);
 
     return statements.join('\n');
+  }
+
+  /** Where a program that reads input gets `хондан` and `хонданиРақам` (see `INPUT_PROLOGUE`). */
+  protected inputPrologue(): string {
+    return INPUT_PROLOGUE;
   }
 
   /**
@@ -1886,7 +1913,9 @@ export class CodeGenerator {
     // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
     // when the program does not declare a binding of that name in scope;
     // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
-    const mapped = this.isDeclared(node.name) ? undefined : this.mapBuiltinIdentifier(node.name);
+    const declared = this.isDeclared(node.name);
+    if (!declared && !binding && INPUT_FUNCTIONS.has(node.name)) this.usesInput = true;
+    const mapped = declared ? undefined : this.mapBuiltinIdentifier(node.name);
     if (mapped) {
       return mapped;
     }

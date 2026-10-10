@@ -12,6 +12,7 @@ import { BUILTIN_MAPPINGS, MEMBER_ALIASES } from '../builtin-names';
 import { message } from '../diagnostics/catalog';
 import type { DiagnosticMessage } from '../diagnostics/types';
 import { formatValue } from './format';
+import { InputError } from './input';
 
 /** An error explained: its message and, where it helps, a hint. */
 export interface ExplainedError {
@@ -132,6 +133,7 @@ const ENGINE_ERRORS: ReadonlySet<string> = new Set([
  * throws itself (`партофтан нав Хато("…")`, or any value) keeps its message.
  */
 export function explainError(thrown: unknown): ExplainedError {
+  if (thrown instanceof InputError) return explainInputError(thrown);
   if (!(thrown instanceof Error) && !isErrorLike(thrown)) {
     return { message: message('RUNTIME_THROWN', { message: formatValue(thrown) }) };
   }
@@ -154,6 +156,17 @@ export function explainError(thrown: unknown): ExplainedError {
     };
   }
   return { message: message('RUNTIME_THROWN', { message: text }) };
+}
+
+/** The input ended, or held no number where `хонданиРақам` read one. */
+function explainInputError(error: InputError): ExplainedError {
+  const name = error.functionName;
+  return error.kind === 'ended'
+    ? { message: message('RUNTIME_INPUT_ENDED', { name }), hint: message('INPUT_LINES') }
+    : {
+        message: message('RUNTIME_INPUT_NOT_A_NUMBER', { name, text: error.text }),
+        hint: message('INPUT_NUMBER'),
+      };
 }
 
 /** An error of another realm (a worker, a vm context): its own Error class. */

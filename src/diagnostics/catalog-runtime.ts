@@ -59,6 +59,24 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     ru: () => `Значению ${code('собит')} нельзя присвоить новое значение.`,
     tj: () => `Ба ${code('собит')} қимати нав додан мумкин нест.`,
   },
+  RUNTIME_INPUT_ENDED: {
+    en: p => `The input ended: ${code(`${text(p.name)}()`)} expected another line.`,
+    ru: p => `Ввод закончился: ${code(`${text(p.name)}()`)} ждала ещё одну строку.`,
+    tj: p => `Вуруд тамом шуд: ${code(`${text(p.name)}()`)} боз як сатр интизор буд.`,
+  },
+  RUNTIME_INPUT_NOT_A_NUMBER: {
+    en: p =>
+      `${p.text === '' ? 'An empty line' : code(p.text)} is not a number: ${code(`${text(p.name)}()`)} expected one.`,
+    ru: p =>
+      `${p.text === '' ? 'Пустая строка' : code(p.text)} — не число: ${code(`${text(p.name)}()`)} ждала число.`,
+    tj: p =>
+      `${p.text === '' ? 'Сатри холӣ' : code(p.text)} рақам нест: ${code(`${text(p.name)}()`)} рақам интизор буд.`,
+  },
+  INPUT_ASK_AGAIN: {
+    en: p => `${p.text === '' ? 'That' : code(p.text)} is not a number. Type a number again:`,
+    ru: p => `${p.text === '' ? 'Это' : code(p.text)} — не число. Введите число ещё раз:`,
+    tj: p => `${p.text === '' ? 'Ин' : code(p.text)} рақам нест. Боз як бор рақам нависед:`,
+  },
   RUNTIME_THROWN: {
     en: p => `The program threw an error: ${text(p.message)}`,
     ru: p => `Программа выбросила ошибку: ${text(p.message)}`,
@@ -98,6 +116,16 @@ export const RUNTIME_HINTS: Readonly<Record<string, CatalogEntry>> = {
     en: () => 'Move the declaration above the line that uses the name.',
     ru: () => 'Перенесите объявление выше строки, где используется имя.',
     tj: () => 'Эълонро аз сатре, ки номро истифода мебарад, болотар гузоред.',
+  },
+  INPUT_LINES: {
+    en: () => 'Give the program as many lines of input as it reads.',
+    ru: () => 'Дайте программе столько строк ввода, сколько она читает.',
+    tj: () => 'Ба барнома ҳамон қадар сатри вуруд диҳед, ки он мехонад.',
+  },
+  INPUT_NUMBER: {
+    en: () => `Write a number in this line of the input, such as ${code('42')} or ${code('2,5')}.`,
+    ru: () => `Напишите в этой строке ввода число, например ${code('42')} или ${code('2,5')}.`,
+    tj: () => `Дар ин сатри вуруд рақам нависед, масалан ${code('42')} ё ${code('2,5')}.`,
   },
   SHOW_STACK: {
     en: () => `${code('somon run --stack')} shows where the error came from in full.`,

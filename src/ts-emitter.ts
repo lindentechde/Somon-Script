@@ -248,6 +248,14 @@ export class TsEmitter extends CodeGenerator {
   // Hooks of the JavaScript generator
   // ---------------------------------------------------------------------------
 
+  /** For TypeScript, the input functions are declared: the run time provides them. */
+  protected inputPrologue(): string {
+    return [
+      'declare function хондан(савол?: unknown): string;',
+      'declare function хонданиРақам(савол?: unknown): number;',
+    ].join('\n');
+  }
+
   protected elidesTypes(): boolean {
     return false;
   }

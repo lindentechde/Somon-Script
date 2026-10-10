@@ -131,6 +131,12 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
   RUNTIME_STACK_OVERFLOW: [{}],
   RUNTIME_INVALID_ARRAY_LENGTH: [{}],
   RUNTIME_CONST_ASSIGNMENT: [{}],
+  RUNTIME_INPUT_ENDED: [{ name: 'хонданиРақам' }],
+  RUNTIME_INPUT_NOT_A_NUMBER: [
+    { name: 'хонданиРақам', text: 'се' },
+    { name: 'хонданиРақам', text: '' },
+  ],
+  INPUT_ASK_AGAIN: [{ text: 'се' }, { text: '' }],
   RUNTIME_THROWN: [{ message: 'Ба сифр тақсим кардан мумкин нест' }],
   RUNTIME_ERROR: [{ name: 'SyntaxError', message: 'Unexpected end of JSON input' }],
 };
@@ -151,5 +157,7 @@ export const HINT_SAMPLES: Readonly<Record<string, DiagnosticParams>> = {
   CHECK_VALUE: { value: 'беқимат' },
   STOP_CONDITION: {},
   DECLARE_BEFORE_USE: {},
+  INPUT_LINES: {},
+  INPUT_NUMBER: {},
   SHOW_STACK: {},
 };
