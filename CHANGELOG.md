@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file. See [Conven
 
 ### ⚠ Breaking Changes
 
+* `somon run` prints values with SomonScript's names, as a learner writes them: `дуруст`/`нодуруст`, `холӣ`, `беқимат`, `ғайрирақам` (NaN) and `беохир` (Infinity), also inside arrays and objects, whose strings are in double quotes (`[ "а", дуруст ]`). Only printing changes (`чоп.сабт`, `чоп.хато`, `чоп.огоҳӣ`, `чоп.маълумот`, `чоп.исфти`), not values: `"х" + дуруст` is still `"хtrue"`. A failed `чоп.тасдиқ` prints `Тасдиқ нашуд`. Compiled JavaScript run with `node` prints as before.
+* The type checker reports, as errors, members that `чоп`, `математика` and `Риёзӣ` do not have (`чоп.сабтт(…)`, `PROPERTY_NOT_FOUND`), calling `математика`/`Риёзӣ` (`NOT_CALLABLE`), and `хато` used as a name without being declared (`UNDEFINED_IDENTIFIER`). Each failed when the program ran.
+
 * `--strict` (`compile(source, { strict: true })`) checks for `холӣ`/`беқимат` like TypeScript's `strictNullChecks`: they are only assignable to types that include them, and a value that may be `холӣ`/`беқимат` can't be dereferenced or computed with until a check (`!== холӣ`, `агар (х)`, an early `бозгашт`, …) narrows it. `Array` `.баровардан()`/`.ҳазфиАввал()`/`.дар()`/`.кофтан()`/`.охиринЁфтан()`, `String` `.дар()` and `Map` `.бозгирифтан()` return `Т | беқимат`, and optional parameters and properties include `беқимат`. Programs compiled with `--strict` may need such checks.
 * Reading a member that an array, string, number, `Map`, `Set`, `Promise`, class, interface or object type doesn't have is reported (`PROPERTY_NOT_FOUND`): an error with `--strict`, a warning otherwise. `с.дорад(1)` on a `Set` (`includes`) now points to `дорадКалид` (`has`).
 * Assigning to a `танҳохонӣ` (readonly) property, element or array outside its initialisation is reported (`READONLY_ASSIGNMENT`): an error with `--strict`, a warning otherwise.
@@ -20,6 +23,8 @@ All notable changes to this project will be documented in this file. See [Conven
 
 ### ✨ Features
 
+* `чоп(…)` prints, as `чоп.сабт(…)` does: the first program of a learner, `чоп("Салом");`, works. A program that declares its own `чоп` calls it.
+* `somon run` prints the warnings of the compiler as one short line each, with the file relative to the current directory (`Огоҳӣ: барнома.som:2:7: …`), instead of the module system's log record. `BundleOptions.logWarnings: false` turns that log off, `BundleOutput.warnings` and `CompilationResult.warningDetails` give the warnings with their files.
 * Every TypeScript operator and statement has a SomonScript form; `llm-guide/14-operators.md` lists them and `tests/operators.test.ts` runs each one:
   * Type operators in expressions: `х чун Т` (`as`), `х чун собит`, `<Т>х`, the non-null assertion `х!`, `х бармесоё Т` (`satisfies`), definite assignment `тағ х!: Т`, generic arrow functions `<Т>(х: Т) => х`.
   * Statements: `кун { … } то (…);` (do-while), labels with `шикастан`/`давом нишона`, `барои интизор` (for await), `debugger`, the empty statement, `шумориш` enums (and `собит шумориш`), generators `функсия*` with `ҳосил`/`ҳосил*` (yield), and several variables in one declaration (`тағ а = 1, б = 2;`, also in `барои` heads). `кун`, `шумориш` and `ҳосил` are contextual: they remain usable as names.

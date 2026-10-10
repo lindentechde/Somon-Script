@@ -296,7 +296,7 @@ typeof қимат;                 // typeof
 кӯшиш {
     // хатарнок код
 } гирифтан (хато) {
-    чоп.хато("Хато рух дод:", хато.паём);
+    чоп.хато("Хато рух дод:", хато);
 } ниҳоят {
     // ҳамеша иҷро мешавад
 }
@@ -453,12 +453,12 @@ primary        → "дуруст" | "нодуруст" | "холӣ" | "ин"
 
 ## API Documentation
 
-For detailed API documentation and interactive examples, visit:
-
-- [Online API Reference](https://api.somoni-script.org)
-- [TypeScript Definitions](https://github.com/Slashmsu/somoni-script/tree/main/types)
+The compiler API (`compile`, `format`, `migrate`, the module system) is
+described by the TypeScript declarations shipped with the package
+(`dist/index.d.ts`); `npm run docs` generates HTML documentation from them with
+TypeDoc.
 
 ---
 
-This reference is continuously updated. For the latest information, see the
-[GitHub repository](https://github.com/Slashmsu/somoni-script).
+For the latest information, see the
+[GitHub repository](https://github.com/lindentechde/Somon-Script).

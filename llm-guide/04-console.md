@@ -22,6 +22,47 @@ The `чоп` object maps to JavaScript's `console` object.
 чоп.огоҳӣ("Огоҳӣ");                // console.warn("Warning");
 ```
 
+`чоп(…)` called directly prints like `чоп.сабт(…)`: `чоп("Салом")` compiles to
+`console.log("Салом")`. A program that declares its own `чоп` calls that one.
+
+```som
+чоп("Салом, ҷаҳон!");              // console.log("Салом, ҷаҳон!");
+чоп("Ҷавоб:", 6 * 7);
+```
+
+---
+
+## Printed values
+
+Programs started with `somon run` (and in the playground) print values with
+SomonScript's names, also inside arrays and objects:
+
+| Value                         | Printed as                      |
+| ----------------------------- | ------------------------------- |
+| `true` / `false`              | `дуруст` / `нодуруст`           |
+| `null` / `undefined`          | `холӣ` / `беқимат`              |
+| `NaN`                         | `ғайрирақам`                    |
+| `Infinity` / `-Infinity`      | `беохир` / `-беохир`            |
+| a string at the top level     | as it is: `Салом`               |
+| a string in an array/object   | in double quotes: `"Салом"`     |
+| `[1, дуруст]`, `{ ном: "А" }` | `[ 1, дуруст ]`, `{ ном: "А" }` |
+| a function / class            | `[функсия ном]` / `[синф Ном]`  |
+| an error                      | `Хато: паём` (no stack)         |
+
+```som
+чоп.сабт(дуруст, холӣ);            // дуруст холӣ
+чоп.сабт([1, нодуруст, беқимат]);  // [ 1, нодуруст, беқимат ]
+```
+
+Only printing changes; values stay JavaScript's. Converting a value to a string
+in the program itself follows JavaScript: `"ҷавоб: " + дуруст` is
+`"ҷавоб: true"`, `` `${холӣ}` `` is `"null"`. Pass the value as a separate
+argument to print its SomonScript name: `чоп("ҷавоб:", дуруст)`. Compiled
+JavaScript run with `node` prints with JavaScript's names (`true`, `null`).
+
+`чоп.тасдиқ(шарт, паём)` prints `Тасдиқ нашуд: паём` when the condition is
+false.
+
 ---
 
 ## Structured Output
