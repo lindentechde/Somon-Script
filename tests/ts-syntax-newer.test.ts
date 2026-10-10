@@ -311,6 +311,16 @@ describe('ворид мавқуф (import defer)', () => {
     expect(migrated.code).toBe(
       'ворид мавқуф * чун ns аз "./m";\nсобит p = ворид.мавқуф("./m");\nчоп.сабт(ns.x, p);\n'
     );
+    // For a compiler without them, migrate says so
+    setFeatureSupport('importDefer', false);
+    try {
+      const warnings = migrate('const p = import.defer("./m");\n', { format: false }).warnings;
+      expect(warnings.map(w => w.message)).toContain(
+        "'import.defer' is not supported by SomonScript yet"
+      );
+    } finally {
+      setFeatureSupport('importDefer', undefined);
+    }
   });
 });
 
