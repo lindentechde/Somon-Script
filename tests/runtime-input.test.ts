@@ -241,6 +241,11 @@ describe('programs that read input', () => {
     expect(wrong.errors[0]).toContain('сатр');
   });
 
+  test('a misspelt name of an input function is suggested', () => {
+    const typo = compile('тағ а = хонданиРакам();', { language: 'tj' });
+    expect(typo.diagnostics?.[0].hint).toBe('Шояд `хонданиРақам`-ро дар назар доштед?');
+  });
+
   test('TypeScript output declares them', () => {
     const result = compile('тағ а: рақам = хонданиРақам();\nтағ б: сатр = хонданиРақам();', {
       checker: 'typescript',

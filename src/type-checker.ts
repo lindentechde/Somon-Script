@@ -2905,6 +2905,7 @@ export class TypeChecker {
     const names = new Set<string>();
     this.scopes.forEach(scope => scope.forEach((_type, declared) => names.add(declared)));
     TypeChecker.BUILTIN_VALUE_NAMES.forEach(builtin => names.add(builtin));
+    INPUT_FUNCTION_TYPES.forEach((_type, input) => names.add(input));
     return closestName(name, names);
   }
 
