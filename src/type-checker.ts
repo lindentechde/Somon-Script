@@ -89,6 +89,12 @@ import {
   AmbientModuleDeclaration,
   InstantiationExpression,
 } from './ast';
+import {
+  builtinObjectHasMember,
+  builtinObjectMemberName,
+  isCheckedBuiltinObject,
+  isNotCallableBuiltin,
+} from './builtin-globals';
 import { translateMemberName } from './builtin-names';
 import { nullishSemantics, skipOuterExpressions, truthySemantics } from './syntactic-conditions';
 
@@ -125,6 +131,8 @@ export const TypeCheckErrorCode = {
   AbstractInstantiation: 'ABSTRACT_INSTANTIATION',
   /** A condition or `??` operand its syntax decides (TypeScript 5.6: TS2869, TS2871 to TS2873). */
   ConstantCondition: 'CONSTANT_CONDITION',
+  /** A call of a value that is not a function: `математика(1)`. */
+  NotCallable: 'NOT_CALLABLE',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -406,7 +414,6 @@ export class TypeChecker {
     'Риёзӣ',
     'объект',
     'сатрМетодҳо',
-    'хато',
     'Хато',
     'рӯйхат',
     'сатр',
@@ -2845,6 +2852,15 @@ export class TypeChecker {
     return { kind: 'literal', value: literal.value };
   }
 
+  /** `чоп`, `математика`, … naming the built-in object, not a binding of that name. */
+  private isBuiltinReference(expression: Expression): boolean {
+    return (
+      expression.type === 'Identifier' &&
+      isCheckedBuiltinObject((expression as Identifier).name) &&
+      !this.lookup((expression as Identifier).name)
+    );
+  }
+
   private isBuiltinValueName(name: string): boolean {
     return TypeChecker.BUILTIN_VALUE_NAMES.has(name) || name in global;
   }
@@ -3132,6 +3148,21 @@ export class TypeChecker {
    */
   private namedMemberType(member: MemberExpression, objectType: Type, property: Identifier): Type {
     const name = property.name;
+    // `чоп.сабтт`, `математика.решаа`: built-in objects have a fixed set of members
+    if (this.isBuiltinReference(member.object)) {
+      const objectName = (member.object as Identifier).name;
+      if (!builtinObjectHasMember(objectName, name)) {
+        const jsName = builtinObjectMemberName(objectName, name);
+        const shown = jsName === name ? `'${name}'` : `'${name}' (${jsName})`;
+        this.addError(
+          TypeCheckErrorCode.PropertyNotFound,
+          `Property ${shown} does not exist on '${objectName}'`,
+          property.line,
+          property.column
+        );
+      }
+      return UNKNOWN;
+    }
     const jsName = translateMemberName(name);
     // `Синф.статикӣ`: the class itself, not an instance
     if (
@@ -3852,6 +3883,14 @@ export class TypeChecker {
 
   private inferCallType(callExpr: CallExpression): Type {
     const callee = callExpr.callee;
+    if (this.isBuiltinReference(callee) && isNotCallableBuiltin((callee as Identifier).name)) {
+      this.addError(
+        TypeCheckErrorCode.NotCallable,
+        `'${(callee as Identifier).name}' is not a function and cannot be called`,
+        callee.line,
+        callee.column
+      );
+    }
     // Route identifiers through inferIdentifierType so undefined callees
     // produce a single UndefinedIdentifier diagnostic.
     const functionType = this.callableType(this.inferExpressionType(callee));

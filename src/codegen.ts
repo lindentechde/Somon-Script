@@ -1913,6 +1913,7 @@ export class CodeGenerator {
 
     // Map built-in constructors/objects (when used as identifiers)
     const builtinConstructors = [
+      'чоп',
       'сатр',
       'рӯйхат',
       'объект',
@@ -2322,14 +2323,23 @@ export class CodeGenerator {
   private generateCallExpression(node: CallExpression): string {
     let callee = this.generateExpression(node.callee, PREC.CALL);
 
-    // Special handling for нишондиҳӣ function
-    if (stripPositionMarkers(callee) === 'нишондиҳӣ') {
+    // `чоп(…)` prints as `чоп.сабт(…)` does; so does the older `нишондиҳӣ(…)`
+    if (this.isPrintCall(node) || stripPositionMarkers(callee) === 'нишондиҳӣ') {
       callee = this.markPosition(node.callee, 'console.log');
     }
 
     const args = this.generateArguments(node.arguments);
     const typeArguments = this.typeArgumentsText(node.typeArguments);
     return `${callee}${node.optional ? '?.' : ''}${typeArguments}(${args})`;
+  }
+
+  /** `чоп(…)`, calling the built-in `чоп` (not a binding of that name). */
+  private isPrintCall(node: CallExpression): boolean {
+    return (
+      node.callee.type === 'Identifier' &&
+      (node.callee as Identifier).name === 'чоп' &&
+      !this.isDeclared('чоп')
+    );
   }
 
   /** Call/new argument list; elements may be `SpreadElement`s. */
