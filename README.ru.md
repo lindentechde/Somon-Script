@@ -378,6 +378,9 @@ npm run audit:examples
 
 ### **Для учеников и учителей**
 
+- [🎒 Уроки для начинающих](docs/tutorial/ru/README.md) - 18 уроков на русском
+  ([на таджикском](docs/tutorial/tj/README.md)) с автоматически проверяемыми
+  задачами и [памяткой для учителя](docs/tutorial/uchitelyu.md)
 - [🎓 Учебник](docs/tutorial/) - Структурированный путь обучения
 - [📋 Примеры](examples/) - Примеры программ
 - [🎯 Краткий справочник](docs/reference/quick-start.md) - Руководство по

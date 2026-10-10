@@ -585,6 +585,9 @@ npm run audit:examples
 
 ### **For Learners and Teachers**
 
+- [🎒 Lessons for beginners](docs/tutorial/tj/README.md) - 18 lessons in Tajik
+  ([in Russian](docs/tutorial/ru/README.md)) with tasks that check themselves,
+  and [a guide for teachers](docs/tutorial/omuzgor.md)
 - [🎓 Tutorial](docs/tutorial/) - Structured learning pathway
 - [📋 Examples](examples/) - Example programs
 - [🎯 Quick Reference](docs/reference/quick-start.md) - Essential syntax guide

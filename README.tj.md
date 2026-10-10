@@ -378,6 +378,9 @@ npm run audit:examples
 
 ### **Барои хонандагон ва омӯзгорон**
 
+- [🎒 Дарсҳо барои навомӯзон](docs/tutorial/tj/README.md) - 18 дарс бо забони
+  тоҷикӣ ([бо русӣ](docs/tutorial/ru/README.md)) бо масъалаҳое, ки худкор
+  санҷида мешаванд, ва [дастур барои омӯзгор](docs/tutorial/omuzgor.md)
 - [🎓 Дастур](docs/tutorial/) - Роҳи омӯзиши сохторӣ
 - [📋 Намунаҳо](examples/) - Намунаи барномаҳо
 - [🎯 Маълумотномаи зуд](docs/reference/quick-start.md) - Дастури синтаксиси
