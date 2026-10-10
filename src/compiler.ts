@@ -18,7 +18,8 @@ import {
   type Target,
   type TargetDiagnostic,
 } from './targets';
-import { TypeChecker, type TypeCheckError } from './type-checker';
+import { checkForLearners } from './learner/warnings';
+import { TypeChecker, type TypeCheckError, type TypeCheckResult } from './type-checker';
 
 /**
  * Configuration flags that control how SomonScript source is transformed into JavaScript.
@@ -112,6 +113,11 @@ export interface CompileOptions {
   language?: DiagnosticLanguage;
   /** Also produce a TypeScript declaration file (`CompileResult.declaration`). */
   declaration?: boolean;
+  /**
+   * The learning mode: warnings about what beginners write by mistake but runs
+   * without an error (src/learner/warnings.ts), with SomonScript's checker.
+   */
+  learningMode?: boolean;
   /**
    * Path of the source file. The TypeScript checker (and `declaration`)
    * resolve imports and node_modules typings from it; defaults to
@@ -274,10 +280,14 @@ function runTypeCheckStage(
 ): boolean {
   if (options.typeCheck === false) return false;
   // With `checker: 'typescript'` and type checking on, the TypeScript stage has run
-  const result =
-    options.checker === 'typescript'
-      ? { errors: typeScriptErrors!, warnings: [] }
-      : new TypeChecker(source, { strict: Boolean(options.strict) }).check(ast);
+  let result: TypeCheckResult;
+  if (options.checker === 'typescript') {
+    result = { errors: typeScriptErrors!, warnings: [] };
+  } else if (options.learningMode) {
+    result = checkForLearners(ast, source, Boolean(options.strict));
+  } else {
+    result = new TypeChecker(source, { strict: Boolean(options.strict) }).check(ast);
+  }
   errors.push(...result.errors.map(formatTypeError));
   warnings.push(...result.warnings.map(formatTypeWarning));
   [...result.errors, ...result.warnings].forEach(error => problems.add({ kind: 'type', error }));

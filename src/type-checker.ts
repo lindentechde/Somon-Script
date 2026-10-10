@@ -167,6 +167,11 @@ export interface TypeCheckOptions {
    * (hover, completion). Not called while expressions are re-inferred quietly.
    */
   onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
+  /**
+   * Called with each binary expression the checker infers and the types of
+   * its operands, for the warnings of the learning mode (src/learner).
+   */
+  onBinaryTypes?: (_binary: BinaryExpression, _left: Type, _right: Type) => void;
 }
 
 /**
@@ -506,6 +511,7 @@ export class TypeChecker {
   private warnings: TypeCheckError[] = [];
   private readonly strict: boolean;
   private readonly onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
+  private readonly onBinaryTypes?: (_binary: BinaryExpression, _left: Type, _right: Type) => void;
   /** Lexical scope chain; index 0 is the global scope. */
   private scopes: Map<string, Type>[] = [];
   /** Unique id of each scope in `scopes`, so narrowing facts survive shadowing. */
@@ -653,6 +659,7 @@ export class TypeChecker {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
     this.strict = Boolean(options.strict);
     this.onIdentifierType = options.onIdentifierType;
+    this.onBinaryTypes = options.onBinaryTypes;
   }
 
   /** Reports the type of a declared or read name to `onIdentifierType`. */
@@ -3604,6 +3611,7 @@ export class TypeChecker {
     this.checkConstantOperand(binary);
     let left = this.inferExpressionType(binary.left);
     let right = this.inferRightOperand(binary);
+    if (this.silent === 0) this.onBinaryTypes?.(binary, left, right);
 
     if (op === '??') {
       if (this.isAnyLike(left) || this.isAnyLike(right)) return UNKNOWN;

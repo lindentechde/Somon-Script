@@ -137,6 +137,11 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
   RUNTIME_STACK_OVERFLOW: [{}],
   RUNTIME_INVALID_ARRAY_LENGTH: [{}],
   RUNTIME_CONST_ASSIGNMENT: [{}],
+  LEARNER_STRING_ARITHMETIC: [{ operator: '*' }],
+  LEARNER_STRING_PLUS_NUMBER: [{}],
+  LEARNER_COMPARE_TYPES: [{ left: 'рақам', right: 'сатр', operator: '===' }],
+  LEARNER_UNUSED_VARIABLE: [{ name: 'а' }],
+  LEARNER_BUILTIN_MEMBER_NAME: [{ name: 'дарозӣ', js: 'length' }],
   RUNTIME_INPUT_ENDED: [{ name: 'хонданиРақам' }],
   RUNTIME_NO_MODULES: [{ name: './м' }],
   RUNTIME_INPUT_NOT_A_NUMBER: [

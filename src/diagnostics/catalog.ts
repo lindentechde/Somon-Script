@@ -2,6 +2,7 @@
  * The catalog of diagnostics: every message the compiler reports, by id, in
  * English, Russian and Tajik (docs/glossary.tj.md lists the Tajik terms).
  */
+import { LEARNER_MESSAGES } from './catalog-learner';
 import { HINTS, PROGRAM_MESSAGES } from './catalog-program';
 import { RUNTIME_HINTS, RUNTIME_MESSAGES } from './catalog-runtime';
 import { SYNTAX_MESSAGES } from './catalog-syntax';
@@ -14,6 +15,7 @@ const MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   ...TYPE_MESSAGES,
   ...PROGRAM_MESSAGES,
   ...RUNTIME_MESSAGES,
+  ...LEARNER_MESSAGES,
 };
 
 const ALL_HINTS: Readonly<Record<string, CatalogEntry>> = { ...HINTS, ...RUNTIME_HINTS };

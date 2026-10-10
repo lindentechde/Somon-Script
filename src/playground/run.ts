@@ -25,6 +25,8 @@ export interface RunRequest {
   /** The text of the input field. */
   input: string;
   language: DiagnosticLanguage;
+  /** Warnings for beginners (src/learner/warnings.ts). */
+  learningMode?: boolean;
 }
 
 /** A problem as the page shows it: its text, and the line to mark. */
@@ -96,7 +98,7 @@ export class PlaygroundModuleError extends Error {
 
 export function runProgram(request: RunRequest, host: RunHost): RunningProgram {
   const { source, language } = request;
-  const result = compile(source, { language, mappings: true });
+  const result = compile(source, { language, mappings: true, learningMode: request.learningMode });
   // Given with `language`
   const diagnostics = result.diagnostics!;
   const errors = diagnostics.filter(d => d.severity === 'error');

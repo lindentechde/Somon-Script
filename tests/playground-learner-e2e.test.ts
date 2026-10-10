@@ -222,6 +222,20 @@ describeInBrowser(`playground for learners in Chromium${chromium ? '' : ` (skipp
     expect(await page.inputValue('#input')).toBe('Зарина');
   }, 60000);
 
+  test('the learning mode warns about beginner mistakes; it can be turned off', async () => {
+    await page.goto(pageUrl);
+    await page.fill('#code', 'тағ а = хондан();\nчоп(а + 1);');
+    await page.fill('#input', '2');
+    expect(await page.isChecked('#learning-mode')).toBe(true);
+    await run();
+    expect(await output()).toContain('`+` онро бо рақам ҷамъ намекунад, балки мепайвандад');
+    expect(await output()).toContain('21');
+    expect(await page.textContent('#gutter .warning')).toBe('2');
+    await page.uncheck('#learning-mode');
+    await run();
+    expect(await output()).toBe('21\n');
+  }, 60000);
+
   test('Russian and English pages, with messages in that language', async () => {
     await page.goto(`${pageUrl}?lang=ru#example=khatoi-kompayl`);
     expect(await page.textContent('#run')).toContain('Запустить');

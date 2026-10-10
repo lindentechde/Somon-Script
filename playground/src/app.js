@@ -36,6 +36,7 @@
   var languageSelect = $('language');
   var timeoutSelect = $('timeout');
   var showJs = $('show-js');
+  var learningMode = $('learning-mode');
 
   var state = initialState();
   /** Lines with problems: { line: 'error' | 'warning' }. */
@@ -57,6 +58,8 @@
       input: saved.input || '',
       language: STRINGS[saved.language] ? saved.language : 'tj',
       showJs: Boolean(saved.showJs),
+      // Warnings for beginners are on unless turned off
+      learningMode: saved.learningMode !== false,
       timeout: TIMEOUTS.indexOf(saved.timeout) !== -1 ? saved.timeout : DEFAULT_TIMEOUT,
       example: saved.example || '',
     };
@@ -362,7 +365,12 @@
         finish(text('failed'));
       }
     };
-    worker.postMessage({ source: state.code, input: state.input, language: state.language });
+    worker.postMessage({
+      source: state.code,
+      input: state.input,
+      language: state.language,
+      learningMode: state.learningMode,
+    });
     setRunning(true);
     setStatus(text('running'));
     setTimeout(prepareSpare, 50);
@@ -479,6 +487,7 @@
     codeInput.value = state.code;
     inputField.value = state.input;
     showJs.checked = state.showJs;
+    learningMode.checked = state.learningMode;
     jsPanel.hidden = !state.showJs;
     applyLanguage();
     renderEditor();
@@ -525,6 +534,10 @@
     });
     timeoutSelect.addEventListener('change', function () {
       state.timeout = Number(timeoutSelect.value);
+      save();
+    });
+    learningMode.addEventListener('change', function () {
+      state.learningMode = learningMode.checked;
       save();
     });
     showJs.addEventListener('change', function () {

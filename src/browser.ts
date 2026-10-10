@@ -18,6 +18,7 @@ import type { Program } from './ast';
 import { CodeGenerator, type CodeMapping, type LoweringNeeds } from './codegen';
 import { localizedMessages, Problems } from './diagnostics/problems';
 import type { Diagnostic, DiagnosticLanguage } from './diagnostics/types';
+import { checkForLearners } from './learner/warnings';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { TypeChecker } from './type-checker';
@@ -57,6 +58,8 @@ export interface BrowserCompileOptions {
    * (`mappings`), to place the errors of the running program.
    */
   mappings?: boolean;
+  /** The warnings of the learning mode (`CompileOptions.learningMode`). */
+  learningMode?: boolean;
 }
 
 export interface BrowserCompileResult {
@@ -132,7 +135,9 @@ function compileProgram(
   if (errors.length > 0) return fail();
 
   if (options.typeCheck !== false) {
-    const checked = new TypeChecker(source, { strict: Boolean(options.strict) }).check(program);
+    const checked = options.learningMode
+      ? checkForLearners(program, source, Boolean(options.strict))
+      : new TypeChecker(source, { strict: Boolean(options.strict) }).check(program);
     errors.push(
       ...checked.errors.map(
         error =>

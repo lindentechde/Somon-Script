@@ -37,6 +37,11 @@ export interface CompilerOptions {
   locale?: 'en' | 'ru' | 'tj';
   /** Also write a TypeScript declaration file (`.d.ts`) next to the output. */
   declaration?: boolean;
+  /**
+   * The warnings of the learning mode (src/learner/warnings.ts). Set by
+   * `"режим": "таълимӣ"` at the top of the configuration, not here.
+   */
+  learningMode?: boolean;
 }
 
 /** Allowed values of the compiler options that take one of a few strings. */
@@ -52,6 +57,20 @@ export interface SomonConfig {
   bundle?: BundleConfig;
   /** Settings of the formatter (`somon fmt`). */
   fmt?: FmtConfig;
+  /**
+   * `"таълимӣ"` (learning) turns on warnings for beginners in `somon run`,
+   * `compile` and `bundle` (docs/reference/learning-mode.md); `"оддӣ"`
+   * (ordinary, the default) leaves them off.
+   */
+  режим?: 'таълимӣ' | 'оддӣ';
+}
+
+/** The values of `режим`. */
+const MODES: readonly string[] = ['таълимӣ', 'оддӣ'];
+
+/** Whether a configuration turns the learning mode on. */
+export function isLearningMode(config: SomonConfig): boolean {
+  return config.режим === 'таълимӣ';
 }
 
 export interface FmtConfig {
@@ -516,7 +535,7 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   }
 
   // Check for unknown top-level properties
-  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle', 'fmt'];
+  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle', 'fmt', 'режим'];
   for (const key of Object.keys(config)) {
     if (!knownProperties.includes(key)) {
       errors.push({
@@ -533,6 +552,10 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
   errors.push(...validateBundle((config as SomonConfig).bundle));
   errors.push(...validateFmt((config as SomonConfig).fmt));
+  const mode = (config as SomonConfig).режим;
+  if (mode !== undefined && !MODES.includes(mode)) {
+    errors.push({ path: 'режим', message: `must be one of: ${MODES.join(', ')}` });
+  }
 
   return errors;
 }

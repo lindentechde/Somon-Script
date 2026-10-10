@@ -1111,6 +1111,9 @@ export class ModuleSystem {
     if (config.module !== undefined) {
       options.module = config.module;
     }
+    if (config.learningMode !== undefined) {
+      options.learningMode = config.learningMode;
+    }
     if (config.checker !== undefined) {
       options.checker = config.checker;
     }

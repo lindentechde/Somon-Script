@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
 
+import { compile } from '../src/compiler';
 import { runProgram, type RunEvent } from '../src/playground/run';
 import { buildCliOnce, canonicalTmpDir } from './helpers/paths';
 
@@ -125,6 +126,22 @@ describe('tutorial tasks', () => {
         ]);
       }
     }
+  });
+
+  test('the learning mode finds nothing to warn about in the lessons and solutions', () => {
+    const programs = taskIds.map(id => fs.readFileSync(path.join(TASKS, id, 'hal.som'), 'utf8'));
+    for (const lesson of lessons('tj')) {
+      const text = fs.readFileSync(path.join(TUTORIAL, 'tj', lesson), 'utf8');
+      for (const link of text.matchAll(/#c=([\w-]+)/g)) {
+        programs.push(Buffer.from(link[1], 'base64url').toString('utf8'));
+      }
+    }
+    const warned = programs.filter(source =>
+      (compile(source, { learningMode: true, language: 'tj' }).diagnostics ?? []).some(d =>
+        d.code.startsWith('LEARNER_')
+      )
+    );
+    expect(warned).toEqual([]);
   });
 
   test('outputs are compared without the spaces at line ends and empty lines at the end', () => {

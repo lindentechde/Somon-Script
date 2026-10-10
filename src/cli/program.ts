@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { compile, formatTypeError, type CompileResult } from '../compiler';
 import {
   ConfigError,
+  isLearningMode,
   loadConfigWithPath,
   type CompilerOptions,
   type LoadedConfig,
@@ -256,6 +257,7 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
   ) as CompilerOptions;
   return {
     locale: diagnosticLocale(config.compilerOptions),
+    ...(isLearningMode(config) && { learningMode: true }),
     ...fromConfig,
     ...config.moduleSystem?.compilation,
     ...cliCompilerOverrides(flags),
@@ -421,6 +423,9 @@ function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileO
   if (cliOptions.typeCheck === false) {
     merged.noTypeCheck = true;
   }
+  if (isLearningMode(loaded.config)) {
+    merged.learningMode = true;
+  }
 
   // Set default target if not specified
   if (!merged.target) {
@@ -470,6 +475,7 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
       locale: diagnosticLocale(options),
       language: learnerLanguage(options),
       declaration: options.declaration,
+      learningMode: options.learningMode,
       filePath: path.resolve(input),
     });
 
