@@ -381,7 +381,8 @@ describe('import and export names written as strings (TypeScript 5.6)', () => {
           'чоп.сабт(ҷудокунанда, а);',
         ].join('\n')
       )
-    ).toEqual(['/ б']);
+      // `path.sep` is the platform's separator (`\` on Windows)
+    ).toEqual([`${path.sep} б`]);
   });
 
   test('CommonJS output names them as properties, on every target', () => {
