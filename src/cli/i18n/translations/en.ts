@@ -66,6 +66,7 @@ const translations: Translations = {
         failedToExecute: 'Failed to execute Node:',
         terminatedWithSignal: (signal: string) => `Process terminated with signal ${signal}`,
         cleanupFailed: 'Warning: unable to clean temporary files:',
+        warning: 'Warning',
       },
     },
     init: {

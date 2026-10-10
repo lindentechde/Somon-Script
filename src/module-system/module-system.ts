@@ -84,12 +84,23 @@ export interface CompilationError {
   originalError?: Error;
 }
 
+/** A warning of a build: the compiler's warning and the file it is about. */
+export interface CompilationWarning {
+  /** As the compiler reports it (`Type warning [CODE] at line …`), without the file. */
+  message: string;
+  /** The module the warning is about; none for warnings about the whole build (cycles). */
+  filePath?: string;
+}
+
 export interface CompilationResult {
   modules: Map<string, CompiledModule>;
   entryPoint: string;
   dependencies: string[];
   errors: CompilationError[];
+  /** Each warning with its file: `Warning in <file>: <message>`. */
   warnings: string[];
+  /** The same warnings, with the file apart from the message. */
+  warningDetails?: CompilationWarning[];
 }
 
 export interface BundleOptions {
@@ -115,6 +126,11 @@ export interface BundleOptions {
    * absolute paths, so the bundle only works on the machine that built it.
    */
   modulePaths?: boolean;
+  /**
+   * Log the warnings of the build (default true). The caller that reports
+   * them itself, from `BundleOutput.warnings`, turns this off.
+   */
+  logWarnings?: boolean;
 }
 
 export interface BundleOutput {
@@ -122,6 +138,8 @@ export interface BundleOutput {
   map?: string;
   /** How many modules the bundle holds (externals, packages and Node.js modules are not in it). */
   moduleCount: number;
+  /** The warnings of compiling the modules. */
+  warnings?: CompilationWarning[];
 }
 
 /**
@@ -195,6 +213,17 @@ type RequireRewriteContext = {
   externalModuleIds: Set<string>;
   entryPoint: string;
 };
+
+/** The warnings of a build, as strings and with their files apart. */
+class WarningCollector {
+  readonly warnings: string[] = [];
+  readonly details: CompilationWarning[] = [];
+
+  add(message: string, filePath?: string): void {
+    this.warnings.push(filePath === undefined ? message : `Warning in ${filePath}: ${message}`);
+    this.details.push(filePath === undefined ? { message } : { message, filePath });
+  }
+}
 
 export class ModuleSystem {
   private readonly resolver: ModuleResolver;
@@ -522,7 +551,7 @@ export class ModuleSystem {
    */
   private checkCircularDependencies(
     buildIds: Set<string>,
-    warnings: string[],
+    warnings: WarningCollector,
     errors: CompilationError[]
   ): boolean {
     const strategy = this.loader.getCircularDependencyStrategy();
@@ -544,7 +573,7 @@ export class ModuleSystem {
       );
       return false;
     }
-    warnings.push(`Circular dependencies detected: ${description}`);
+    warnings.add(`Circular dependencies detected: ${description}`);
     return true;
   }
 
@@ -553,7 +582,7 @@ export class ModuleSystem {
     compilationConfig: ModuleCompilationOptions,
     modules: Map<string, CompiledModule>,
     errors: CompilationError[],
-    warnings: string[]
+    warnings: WarningCollector
   ): void {
     for (const moduleId of compilationOrder) {
       // The modules of this build are in the loader's cache
@@ -605,7 +634,8 @@ export class ModuleSystem {
     overrideCompilation?: Partial<ModuleCompilationOptions>
   ): Promise<CompilationResult> {
     const errors: CompilationError[] = [];
-    const warnings: string[] = [];
+    const collector = new WarningCollector();
+    const { warnings, details: warningDetails } = collector;
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
@@ -628,12 +658,19 @@ export class ModuleSystem {
       const compilationOrder = this.registry
         .getTopologicalSort()
         .filter(moduleId => buildIds.has(moduleId));
-      if (!this.checkCircularDependencies(buildIds, warnings, errors)) {
-        return { modules, entryPoint: entryModule.id, dependencies: [], errors, warnings };
+      if (!this.checkCircularDependencies(buildIds, collector, errors)) {
+        return {
+          modules,
+          entryPoint: entryModule.id,
+          dependencies: [],
+          errors,
+          warnings,
+          warningDetails,
+        };
       }
 
       const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
-      this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, warnings);
+      this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, collector);
 
       return {
         modules,
@@ -641,6 +678,7 @@ export class ModuleSystem {
         dependencies: compilationOrder,
         errors,
         warnings,
+        warningDetails,
       };
     } catch (error) {
       // Watchers stay: a watch loop recompiles once the file is fixed
@@ -652,6 +690,7 @@ export class ModuleSystem {
         dependencies: [],
         errors,
         warnings,
+        warningDetails,
       };
     } finally {
       this.loader.setExternals(previousExternals);
@@ -716,7 +755,7 @@ export class ModuleSystem {
     }
 
     // Log warnings even if compilation succeeded
-    if (compilationResult.warnings.length > 0) {
+    if (compilationResult.warnings.length > 0 && options.logWarnings !== false) {
       this.logger.warn('Bundle compilation succeeded with warnings', {
         warningCount: compilationResult.warnings.length,
         warnings: compilationResult.warnings,
@@ -725,7 +764,8 @@ export class ModuleSystem {
 
     // Generate bundle based on format
     try {
-      return await this.generateBundle(compilationResult, { ...options, format, minify });
+      const output = await this.generateBundle(compilationResult, { ...options, format, minify });
+      return { ...output, warnings: compilationResult.warningDetails };
     } catch (error) {
       // Fail fast on bundle generation errors (all of them Error objects)
       throw new Error(`Failed to generate bundle: ${(error as Error).message}`);
@@ -1520,7 +1560,7 @@ export class ModuleSystem {
     compilationConfig: ModuleCompilationOptions;
     modules: Map<string, { code: string; map?: RawSourceMap }>;
     errors: CompilationError[];
-    warnings: string[];
+    warnings: WarningCollector;
   }): void {
     const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
     try {
@@ -1539,9 +1579,9 @@ export class ModuleSystem {
 
       const map = this.parseModuleSourceMap(module, compileResult.sourceMap);
       modules.set(moduleId, { code: compileResult.code, map });
-      warnings.push(
-        ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
-      );
+      for (const warning of compileResult.warnings) {
+        warnings.add(warning, module.resolvedPath);
+      }
     } catch (error) {
       // A crash of the compiler (it reports problems in `errors`), always an Error
       const failure = error as Error;

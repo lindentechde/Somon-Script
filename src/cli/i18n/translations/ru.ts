@@ -66,6 +66,7 @@ const translations: Translations = {
         failedToExecute: 'Не удалось выполнить Node:',
         terminatedWithSignal: (signal: string) => `Процесс завершён сигналом ${signal}`,
         cleanupFailed: 'Предупреждение: не удалось удалить временные файлы:',
+        warning: 'Предупреждение',
       },
     },
     init: {

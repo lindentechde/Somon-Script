@@ -69,6 +69,8 @@ export interface Translations {
         failedToExecute: string;
         terminatedWithSignal: (_signal: string) => string;
         cleanupFailed: string;
+        /** Label of a compiler warning printed before the program runs. */
+        warning: string;
       };
     };
     init: {

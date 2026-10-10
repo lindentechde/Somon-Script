@@ -298,6 +298,37 @@ describe('ModuleSystem', () => {
       const result = await createSystem().compile(file('main.som'));
       expect(result.errors).toEqual([]);
       expect(result.warnings).toEqual([expect.stringMatching(/^Warning in .*main\.som: /)]);
+      expect(result.warningDetails).toEqual([
+        {
+          filePath: file('main.som'),
+          message: expect.stringMatching(/^Type warning \[PROPERTY_NOT_FOUND\] at line 2/),
+        },
+      ]);
+    });
+
+    test('bundle() logs the warnings unless asked not to, and returns them', async () => {
+      project.write({ 'main.som': 'тағ н = 1;\nчоп.сабт(н.нестХосият);\n' });
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const logged = await createSystem().bundle({ entryPoint: file('main.som') });
+        expect(warn).toHaveBeenCalledWith(
+          '[module-system]',
+          'Bundle compilation succeeded with warnings',
+          expect.objectContaining({ warningCount: 1 })
+        );
+        warn.mockClear();
+        const quiet = await createSystem().bundle({
+          entryPoint: file('main.som'),
+          logWarnings: false,
+        });
+        expect(warn).not.toHaveBeenCalled();
+        expect(quiet.warnings).toEqual(logged.warnings);
+        expect(quiet.warnings).toEqual([
+          { filePath: file('main.som'), message: expect.stringContaining('нестХосият') },
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     test('an entry that does not load is one error without line', async () => {
@@ -315,6 +346,7 @@ describe('ModuleSystem', () => {
           }),
         ],
         warnings: [],
+        warningDetails: [],
       });
       project.write({ 'bad.som': 'ворид "./gone";\n' });
       const nested = await createSystem().compile(file('bad.som'));
@@ -399,6 +431,8 @@ describe('ModuleSystem', () => {
         expect(result.warnings).toEqual([
           `Circular dependencies detected: ${file('u.som')} -> ${file('v.som')} -> ${file('u.som')}`,
         ]);
+        // About the whole build: no file of its own
+        expect(result.warningDetails).toEqual([{ message: result.warnings[0] }]);
       });
     });
   });

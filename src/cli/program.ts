@@ -30,7 +30,7 @@ import {
   validateGlobalName,
   validateLib,
 } from '../targets';
-import type { CompilationResult } from '../module-system/module-system';
+import type { CompilationResult, CompilationWarning } from '../module-system/module-system';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import { checkWithTypeScript, type TsCheckInput } from '../tsc-checker';
@@ -39,16 +39,25 @@ import { registerLspCommand } from './lsp-command';
 import { registerToolCommands } from './tool-commands';
 // Read package.json at runtime to avoid import attribute issues: the nearest one
 // at or above this file (src/cli in a checkout, dist/cli in the package).
-function findPackageJson(): { name: string; version: string } {
+function findPackageRoot(): string {
   for (let dir = __dirname; ; dir = path.dirname(dir)) {
-    const packagePath = path.join(dir, 'package.json');
-    if (fs.existsSync(packagePath)) {
-      return JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-    }
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
     if (path.dirname(dir) === dir) throw new Error('package.json not found');
   }
 }
-const pkg = findPackageJson();
+const packageRoot = findPackageRoot();
+const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+  name: string;
+  version: string;
+};
+
+/**
+ * The run time `somon run` loads before a program (src/runtime/node-prelude.ts,
+ * built into dist/ also when the CLI runs from its TypeScript sources).
+ */
+export function runtimePreludePath(): string {
+  return path.join(packageRoot, 'dist', 'runtime', 'node-prelude.js');
+}
 
 /** `--lib es2022,dom` → ['es2022', 'dom'], rejecting names TypeScript does not ship. */
 function parseLibList(value: string): string[] {
@@ -419,6 +428,8 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
 interface ExecuteOptions {
   cwd?: string;
   enableSourceMaps?: boolean;
+  /** Modules Node.js loads before the program (`--require`). */
+  preload?: string[];
 }
 
 export interface ExecutionResult {
@@ -443,6 +454,7 @@ export const cliRuntime = {
   ): Promise<ExecutionResult> {
     return new Promise(resolve => {
       const nodeArgs = options.enableSourceMaps ? ['--enable-source-maps'] : [];
+      for (const module of options.preload ?? []) nodeArgs.push('--require', module);
       const child = spawn(process.execPath, [...nodeArgs, filePath, ...forwardedArgv], {
         stdio: 'inherit',
         env: process.env,
@@ -539,6 +551,7 @@ async function executeRunCommand(
         await cliRuntime.executeCompiledFile(entryFile, scriptArgs, {
           cwd: baseDir,
           enableSourceMaps: sourceMaps,
+          preload: [runtimePreludePath()],
         })
       );
       return;
@@ -552,7 +565,9 @@ async function executeRunCommand(
       externals: config.bundle?.externals,
       // The bundle runs from a temporary directory; modules keep their real locations.
       modulePaths: true,
+      logWarnings: false,
     });
+    reportRunWarnings(bundle.warnings ?? []);
 
     const workspace = createRunWorkspace(input);
     cleanup = workspace.cleanup;
@@ -569,12 +584,34 @@ async function executeRunCommand(
     const child = await cliRuntime.executeCompiledFile(compiledFilePath, scriptArgs, {
       cwd: baseDir,
       enableSourceMaps: sourceMaps && !!bundle.map,
+      preload: [runtimePreludePath()],
     });
     reportChildResult(child);
   } catch (error) {
     handleCliFailure(error, t().common.error);
   } finally {
     cleanup?.();
+  }
+}
+
+/** The compiler's own prefix of a type warning: `Type warning [CODE] at line 3, column 5: `. */
+const TYPE_WARNING_PREFIX = /^Type warning \[\w+\] at line (\d+), column (\d+): /;
+
+/**
+ * Prints the warnings of compiling a program before it runs, one line each:
+ * `Огоҳӣ: барнома.som:3:5: …`, the file relative to the current directory.
+ */
+function reportRunWarnings(warnings: CompilationWarning[]): void {
+  for (const warning of warnings) {
+    const position = TYPE_WARNING_PREFIX.exec(warning.message);
+    const message = warning.message.replace(TYPE_WARNING_PREFIX, '').split('\n')[0];
+    const location = [
+      warning.filePath === undefined ? undefined : path.relative(process.cwd(), warning.filePath),
+      position?.[1],
+      position?.[2],
+    ].filter(part => part !== undefined);
+    const where = location.length > 0 ? `${location.join(':')}: ` : '';
+    console.warn(`${t().commands.run.messages.warning}: ${where}${message}`);
   }
 }
 
@@ -625,6 +662,7 @@ async function writeEsmModules(
   if (result.errors.length > 0) {
     throw new Error(formatCompilationErrors(result));
   }
+  reportRunWarnings(result.warningDetails ?? []);
   const files = [...result.modules.keys()].filter(id => path.isAbsolute(id));
   const root = commonDirectory(
     path.dirname(entry),

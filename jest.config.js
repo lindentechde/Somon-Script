@@ -35,6 +35,8 @@ const baseConfig = {
     '!src/types.ts', // Re-export file
     // Exclude the thin Node entry wrapper; we cover CLI logic via program tests
     '!src/cli.ts',
+    // Loaded by the programs `somon run` starts; src/runtime/node.ts is what it runs
+    '!src/runtime/node-prelude.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {

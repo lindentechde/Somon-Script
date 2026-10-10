@@ -210,7 +210,8 @@ describe('CLI: TypeScript backend', () => {
       );
       const result = cli(['run', 'main.som', '--module', 'esm', '--', 'а', 'б'], dir);
       expect(result.stderr).toBe('');
-      expect(result.stdout).toBe('42 7 6 10 true\nа,б\n');
+      // somon run prints values with SomonScript's names (src/runtime/format.ts)
+      expect(result.stdout).toBe('42 7 6 10 дуруст\nа,б\n');
       expect(result.status).toBe(0);
     });
 

@@ -66,6 +66,7 @@ const translations: Translations = {
         failedToExecute: 'Иҷрои Node сар назад:',
         terminatedWithSignal: (signal: string) => `Раванд бо сигнали ${signal} қатъ шуд`,
         cleanupFailed: 'Огоҳӣ: файлҳои муваққатиро тоза кардан нашуд:',
+        warning: 'Огоҳӣ',
       },
     },
     init: {

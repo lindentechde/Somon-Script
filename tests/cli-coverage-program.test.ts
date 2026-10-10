@@ -21,7 +21,13 @@ import { i18n, type Language } from '../src/cli/i18n';
 import en from '../src/cli/i18n/translations/en';
 import ru from '../src/cli/i18n/translations/ru';
 import tj from '../src/cli/i18n/translations/tj';
-import { cliRuntime, compileFile, createProgram, type ExecutionResult } from '../src/cli/program';
+import {
+  cliRuntime,
+  compileFile,
+  createProgram,
+  runtimePreludePath,
+  type ExecutionResult,
+} from '../src/cli/program';
 import { runInProcess, slash, writeFiles } from './helpers/cli-in-process';
 import { canonicalTmpDir } from './helpers/paths';
 
@@ -608,7 +614,11 @@ describe('run', () => {
     const [run] = runs;
     expect(run.stdout).toBe('42\n');
     expect(run.argv).toEqual(['а', '--б']);
-    expect(run.options).toEqual({ cwd: dir, enableSourceMaps: false });
+    expect(run.options).toEqual({
+      cwd: dir,
+      enableSourceMaps: false,
+      preload: [runtimePreludePath()],
+    });
     expect(path.basename(run.file)).toBe('main.js');
     expect(Object.keys(run.files)).toEqual(['main.js']);
     // The temporary directory is removed afterwards.
@@ -740,7 +750,11 @@ describe('run', () => {
     await runInProcess(['run', 'main.som'], { cwd: dir });
     const [run] = runs;
     expect(run.stdout).toBe('42\n');
-    expect(run.options).toEqual({ cwd: dir, enableSourceMaps: false });
+    expect(run.options).toEqual({
+      cwd: dir,
+      enableSourceMaps: false,
+      preload: [runtimePreludePath()],
+    });
     expect(Object.keys(run.files).sort()).toEqual(['lib.js', 'main.js', 'package.json']);
   });
 
