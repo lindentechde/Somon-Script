@@ -90,6 +90,7 @@ import {
   InstantiationExpression,
 } from './ast';
 import { translateMemberName } from './builtin-names';
+import { nullishSemantics, skipOuterExpressions, truthySemantics } from './syntactic-conditions';
 
 /**
  * Represents a type checking error or warning
@@ -122,6 +123,8 @@ export const TypeCheckErrorCode = {
   InvalidOverride: 'INVALID_OVERRIDE',
   TypeOnlyImportValue: 'TYPE_ONLY_IMPORT_VALUE',
   AbstractInstantiation: 'ABSTRACT_INSTANTIATION',
+  /** A condition or `??` operand its syntax decides (TypeScript 5.6: TS2869, TS2871 to TS2873). */
+  ConstantCondition: 'CONSTANT_CONDITION',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -1819,6 +1822,7 @@ export class TypeChecker {
   }
 
   private checkIfStatement(statement: IfStatement): void {
+    this.checkConstantCondition(statement.test);
     this.inferExpressionType(statement.test);
     const whenTrue = this.narrowingsFor(statement.test, true);
     const whenFalse = this.narrowingsFor(statement.test, false);
@@ -1850,6 +1854,7 @@ export class TypeChecker {
     // Assignments in the body may run before the test is evaluated again
     this.invalidateAssignedIn(statement.test, statement.body);
     const entry = new Map(this.narrowed);
+    this.checkConstantCondition(statement.test);
     this.inferExpressionType(statement.test);
     this.applyFacts(this.narrowingsFor(statement.test, true));
     this.checkBody(statement.body);
@@ -1866,6 +1871,7 @@ export class TypeChecker {
    * checked.
    */
   private checkDoWhileStatement(statement: DoWhileStatement): void {
+    this.checkConstantCondition(statement.test);
     const before = this.narrowed;
     this.narrowed = new Map(before);
     this.invalidateAssignedIn(statement.body, statement.test);
@@ -1919,6 +1925,7 @@ export class TypeChecker {
       this.invalidateAssignedIn(statement.test, statement.update, statement.body);
       const entry = new Map(this.narrowed);
       if (statement.test) {
+        this.checkConstantCondition(statement.test);
         this.inferExpressionType(statement.test);
         this.applyFacts(this.narrowingsFor(statement.test, true));
       }
@@ -3469,6 +3476,7 @@ export class TypeChecker {
 
   private inferBinaryType(binary: BinaryExpression): Type {
     const op = binary.operator;
+    this.checkConstantOperand(binary);
     let left = this.inferExpressionType(binary.left);
     let right = this.inferRightOperand(binary);
 
@@ -3515,6 +3523,7 @@ export class TypeChecker {
   }
 
   private inferUnaryType(unary: UnaryExpression): Type {
+    if (unary.operator === '!') this.checkConstantCondition(unary.argument);
     const argument = this.inferExpressionType(unary.argument);
     switch (unary.operator) {
       case '!':
@@ -3538,6 +3547,59 @@ export class TypeChecker {
     }
   }
 
+  /** `беқимат` (`undefined`) naming the global value, not a local. */
+  private readonly isGlobalUndefined = (identifier: Identifier): boolean =>
+    (identifier.name === 'беқимат' || identifier.name === 'undefined') &&
+    !this.lookup(identifier.name);
+
+  /**
+   * A condition its syntax decides, as TypeScript reports it since 5.6: always
+   * truthy (`агар ([])`, TS2872) or always falsy (`то ("")`, TS2873).
+   */
+  private checkConstantCondition(test: Expression): void {
+    const semantics = truthySemantics(test, this.isGlobalUndefined);
+    if (semantics === 'sometimes') return;
+    this.reportConstantCondition(
+      test,
+      `This kind of expression is always ${semantics === 'always' ? 'truthy' : 'falsy'}`
+    );
+  }
+
+  /**
+   * The left operand of `??` when its syntax decides it, as TypeScript reports it
+   * since 5.6: never nullish (`0 ?? 4`, TS2869) or always (`холӣ ?? 1`, TS2871).
+   */
+  private checkNullishOperand(left: Expression): void {
+    const operand = skipOuterExpressions(left);
+    const semantics = nullishSemantics(operand, this.isGlobalUndefined);
+    if (semantics === 'sometimes') return;
+    this.reportConstantCondition(
+      operand,
+      semantics === 'never'
+        ? 'Right operand of ?? is unreachable because the left operand is never nullish'
+        : 'This expression is always nullish'
+    );
+  }
+
+  /** The left operand of `??`, `&&` and `||`, which TypeScript checks by its syntax. */
+  private checkConstantOperand(binary: BinaryExpression): void {
+    if (binary.operator === '??') {
+      this.checkNullishOperand(binary.left);
+    } else if (binary.operator === '&&' || binary.operator === '||') {
+      this.checkConstantCondition(binary.left);
+    }
+  }
+
+  /** Reports a constant condition once, also when its expression is inferred again. */
+  private reportConstantCondition(node: Expression, message: string): void {
+    if (this.silent > 0 || this.constantConditions.has(node)) return;
+    this.constantConditions.add(node);
+    this.addError(TypeCheckErrorCode.ConstantCondition, message, node.line, node.column);
+  }
+
+  /** Conditions and `??` operands reported by `reportConstantCondition`. */
+  private readonly constantConditions = new WeakSet<Expression>();
+
   /** The operand of `++`/`--`: a number that is not nullish. */
   private inferNumericOperand(argument: Expression): Type {
     const type = this.checkNotNullish(argument, this.inferExpressionType(argument));
@@ -3545,6 +3607,7 @@ export class TypeChecker {
   }
 
   private inferConditionalType(conditional: ConditionalExpression, targetType?: Type): Type {
+    this.checkConstantCondition(conditional.test);
     this.inferExpressionType(conditional.test);
     const consequent = this.withFacts(this.narrowingsFor(conditional.test, true), () =>
       this.inferExpressionType(conditional.consequent, targetType)

@@ -128,11 +128,6 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
     strict: 'typescript-only',
     reason: 'TS2367: TypeScript rejects comparing types without overlap (`1 == "1"`)',
   },
-  'migrate/03-comparison-logic.ts': {
-    default: 'typescript-only',
-    strict: 'typescript-only',
-    reason: 'TS2367: TypeScript rejects comparing types without overlap',
-  },
   'operators: comma': {
     default: 'typescript-only',
     strict: 'typescript-only',

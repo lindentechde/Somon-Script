@@ -14,6 +14,11 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { TsEmitter } from '../src/ts-emitter';
 import { format } from '../src/tools/format';
+import {
+  nullishSemantics,
+  skipOuterExpressions,
+  truthySemantics,
+} from '../src/syntactic-conditions';
 import { migrate, setFeatureSupport } from '../src/tools/migrate';
 import type {
   ExportDeclaration,
@@ -451,5 +456,97 @@ describe('import and export names written as strings (TypeScript 5.6)', () => {
     } finally {
       setFeatureSupport('stringExportNames', undefined);
     }
+  });
+});
+
+describe('conditions decided by their syntax (TypeScript 5.6)', () => {
+  /** `[code, line, column]` of each error of a checker, strict or not. */
+  function positions(source: string, options: CompileOptions = {}): string[] {
+    return compile(source, options).errors.map(error => {
+      const match = /^Type error \[([^\]]+)\] at line (\d+), column (\d+)/.exec(error);
+      return match ? `${match[1]} ${match[2]}:${match[3]}` : error;
+    });
+  }
+
+  test('the SomonScript checker reports what TypeScript reports, where it reports it', () => {
+    const source = [
+      'тағ х = 2;',
+      'чоп.сабт(0 ?? 4, холӣ ?? 1, беқимат ?? 2, (1 чун ҳар) ?? 3, х! ?? 5);',
+      'агар (/а/) {} вагарна агар ({}) {}',
+      'то ("") {}',
+      'кун {} то (функсия () {});',
+      'барои (; 5;) { шикастан; }',
+      'чоп.сабт(!0, ![], х ? 1 : 2, "а" ? 1 : 2, 10n && 1, дуруст || 1, `` ? 1 : 2);',
+      'чоп.сабт((х = 1) ?? 2, (х += 1) ?? 2, (1, холӣ) ?? 2, (х ? 1 : холӣ) ?? 2);',
+    ].join('\n');
+    // TypeScript also reports the comma operator's useless `1` (TS2695)
+    const typescript = positions(source, { checker: 'typescript' })
+      .filter(error => /^TS28(69|71|72|73) /.test(error))
+      .map(error => error.replace(/^TS\d+/, 'CONSTANT_CONDITION'));
+    expect(typescript).toHaveLength(16);
+    for (const strict of [false, true]) {
+      expect(positions(source, { strict })).toEqual(typescript);
+    }
+    expect(compile('чоп.сабт(0 ?? 4);').errors[0]).toContain(
+      'Right operand of ?? is unreachable because the left operand is never nullish'
+    );
+  });
+
+  test('what may be either is no error', () => {
+    const source = [
+      'функсия ф(): рақам | холӣ { бозгашт холӣ; }',
+      'тағ х: рақам | холӣ = ф();',
+      'синф К { м() { бозгашт ин ?? 1; } }',
+      'чоп.сабт(х ?? 1, ф() ?? 2, [1][0] ?? 3, (х || холӣ) ?? 4, (х && 1) ?? 5);',
+      'агар (дуруст) {} агар (нодуруст) {} агар (1) {} то (0) {}',
+      'чоп.сабт(`а${х}` ? 1 : 2, х ? 1 : 2, -1 ? 1 : 2, !х);',
+    ].join('\n');
+    for (const checker of ['somon', 'typescript'] as const) {
+      expect([checker, compile(source, { checker, strict: true }).errors]).toEqual([checker, []]);
+    }
+  });
+
+  test('a local named `undefined` is a name like any other', () => {
+    const source = 'функсия ф(undefined: рақам | холӣ) {\n    бозгашт undefined ?? 1;\n}';
+    expect(compile(source).errors).toEqual([]);
+    expect(compile('чоп.сабт(undefined ?? 1);').errors).toHaveLength(1);
+  });
+
+  test('both checkers reject a program with such conditions', () => {
+    expect(check('тағ н = 0 ?? 4;\nагар (/\\d/) { н = 1; }')).toHaveLength(4);
+  });
+
+  test('the rules, one by one', () => {
+    const tree = (source: string) =>
+      (syntaxTree(`${source};`).ast.body[0] as ExpressionStatement).expression;
+    const never = (): boolean => false;
+    const nullish = (source: string) => nullishSemantics(tree(source), never);
+    const truthy = (source: string) => truthySemantics(tree(source), never);
+    expect(['а.б', 'ф()', 'ин', 'нав К()', 'а?.б', 'ворид("м")'].map(nullish)).toEqual(
+      Array(6).fill('sometimes')
+    );
+    expect(['холӣ', '1', '"а"', '[]', 'а + б', '-а', 'а++'].map(nullish)).toEqual([
+      'always',
+      ...Array(6).fill('never'),
+    ]);
+    expect(['а || б', 'а &&= б', 'а ?? холӣ', 'а = 1', 'а += 1', '(а, холӣ)'].map(nullish)).toEqual(
+      ['sometimes', 'sometimes', 'always', 'never', 'never', 'always']
+    );
+    expect(['а ? холӣ : холӣ', 'а ? 1 : холӣ', 'беқимат'].map(nullish)).toEqual([
+      'always',
+      'sometimes',
+      'sometimes',
+    ]);
+    expect(
+      ['[]', '({})', '() => 1', '/а/', '10n', '2', '"а"', '``', '`а`', 'холӣ', 'void 0'].map(truthy)
+    ).toEqual([...Array(7).fill('always'), 'never', 'always', 'never', 'never']);
+    expect(
+      ['0', '1', 'дуруст', '`${а}`', '!а', 'а', 'а ? [] : 0', 'а ? [] : {}'].map(truthy)
+    ).toEqual([...Array(7).fill('sometimes'), 'always']);
+    expect(truthySemantics(tree('беқимат'), () => true)).toBe('never');
+    expect(skipOuterExpressions(tree('(<ҳар>а! чун Т) бармесоё У'))).toMatchObject({
+      type: 'Identifier',
+      name: 'а',
+    });
   });
 });
