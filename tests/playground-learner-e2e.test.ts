@@ -222,6 +222,81 @@ describeInBrowser(`playground for learners in Chromium${chromium ? '' : ` (skipp
     expect(await page.inputValue('#input')).toBe('Зарина');
   }, 60000);
 
+  /** The playground link of a task page, with its tests (scripts/tutorial-links.js). */
+  const taskLink = (id: string) => {
+    const readme = fs.readFileSync(
+      path.join(__dirname, '..', 'docs', 'tutorial', 'tasks', id, 'README.md'),
+      'utf8'
+    );
+    return /\(https:\/\/lindentechde\.github\.io\/Somon-Script\/(#c=[^)]*&t=[^)]*)\)/.exec(
+      readme
+    )![1];
+  };
+
+  /** Clicks «Санҷидан» and waits until every test has run. */
+  async function check(): Promise<string> {
+    await page.click('#check');
+    await page.waitForFunction(
+      () => !(document.getElementById('check') as HTMLButtonElement).disabled,
+      null,
+      { timeout: 30000 }
+    );
+    return (await output())!;
+  }
+
+  test('a task link checks the program on every test of the task', async () => {
+    await page.goto(pageUrl + taskLink('05-jam'));
+    expect(await page.isVisible('#check')).toBe(true);
+    expect(await page.textContent('#check')).toContain('Санҷидан');
+    // The program of the link only says where to write
+    expect(await check()).toContain('Санҷиши 1: нодуруст ✗\n   Вуруд:\n    2\n    3\n');
+    await page.fill('#code', 'тағ а = хондан();\nтағ б = хондан();\nчоп(а + б);');
+    const wrong = await check();
+    expect(wrong).toContain('   Интизор буд:\n    5\n   Барнома чоп кард:\n    23\n');
+    expect(wrong.trimEnd().split('\n').pop()).toBe('Натиҷа: 0 аз 3 санҷиш гузашт.');
+    await page.fill('#code', 'тағ а = хонданиРақам();\nтағ б = хонданиРақам();\nчоп(а + б);');
+    expect(await check()).toBe(
+      [
+        'Санҷиши 1: дуруст ✓',
+        'Санҷиши 2: дуруст ✓',
+        'Санҷиши 3: дуруст ✓',
+        'Натиҷа: 3 аз 3 санҷиш гузашт.',
+        '',
+      ].join('\n')
+    );
+    expect(await page.locator('#output .pass').count()).toBe(4);
+    // A program that does not compile is not checked
+    await page.fill('#code', 'агр');
+    const notCompiled = await check();
+    expect(notCompiled).toContain('Барнома компайл нашуд: 1 хато.');
+    expect(notCompiled).not.toContain('Санҷиши');
+    // The link keeps the tests; an example has none
+    await page.click('#share');
+    expect(page.url()).toContain('&t=');
+    await page.selectOption('#example', 'salom');
+    expect(await page.isVisible('#check')).toBe(false);
+  }, 90000);
+
+  test('a check fails a test whose program runs too long, or fails, and can be stopped', async () => {
+    await page.goto(`${pageUrl}?timeout=1&lang=ru${taskLink('01-salom')}`);
+    expect(await page.textContent('#check')).toContain('Проверить');
+    await page.fill('#code', 'то (дуруст) {}');
+    const endless = await check();
+    expect(endless).toContain('Тест 1: неверно ✗');
+    expect(endless).toContain('Программа работала слишком долго');
+    await page.fill('#code', 'чоп("Салом, ҷаҳон!");\nтағ о: ҳар = холӣ;\nчоп(о.х);');
+    const failing = await check();
+    expect(failing).toContain('   Программа вывела:\n    Салом, ҷаҳон!\n');
+    expect(failing).toContain('Ошибка выполнения в строке 3:');
+    expect(await page.textContent('#gutter .error')).toBe('3');
+    // «Стоп» ends a check
+    await page.fill('#code', 'то (дуруст) {}');
+    await page.click('#check');
+    await page.click('#stop');
+    expect(await page.isEnabled('#check')).toBe(true);
+    expect(await page.textContent('#status')).toBe('Программа остановлена.');
+  }, 90000);
+
   test('the learning mode warns about beginner mistakes; it can be turned off', async () => {
     await page.goto(pageUrl);
     await page.fill('#code', 'тағ а = хондан();\nчоп(а + 1);');

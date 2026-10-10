@@ -23,7 +23,10 @@
 // Барномаи худро ин ҷо нависед
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDQtaGF2bGk6INKy0LDQstC706MKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDQtaGF2bGk6INKy0LDQstC706MKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&t=W3siaSI6IiIsIm8iOiLQnNCw0YHQvtKz0LDRgjogODRcbtCf0LXRgNC40LzQtdGC0YA6IDM4XG4ifV0)
+
+Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
+месанҷад.
 
 ### Санҷиш бо компютер
 
@@ -58,7 +61,10 @@ npm run check-task -- 04-havli барнома.som
 // Напишите свою программу здесь
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA0LWhhdmxpOiDQlNCy0L7RgAovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA0LWhhdmxpOiDQlNCy0L7RgAovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg&t=W3siaSI6IiIsIm8iOiLQnNCw0YHQvtKz0LDRgjogODRcbtCf0LXRgNC40LzQtdGC0YA6IDM4XG4ifV0)
+
+В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
+тестах этой задачи.
 
 ### Проверка на компьютере
 

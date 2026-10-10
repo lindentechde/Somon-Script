@@ -36,7 +36,10 @@
 10
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTQtZGFyYWphOiDQlNCw0YDQsNK30LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MgoxMAo)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMTQtZGFyYWphOiDQlNCw0YDQsNK30LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MgoxMAo&t=W3siaSI6IjJcbjEwXG4iLCJvIjoiMTAyNFxuIn0seyJpIjoiNVxuMFxuIiwibyI6IjFcbiJ9LHsiaSI6IjNcbjRcbiIsIm8iOiI4MVxuIn1d)
+
+Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
+месанҷад.
 
 ### Санҷиш бо компютер
 
@@ -84,7 +87,10 @@ npm run check-task -- 14-daraja барнома.som
 10
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE0LWRhcmFqYTog0KHRgtC10L_QtdC90YwKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=MgoxMAo)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDE0LWRhcmFqYTog0KHRgtC10L_QtdC90YwKLy8g0J3QsNC_0LjRiNC40YLQtSDRgdCy0L7RjiDQv9GA0L7Qs9GA0LDQvNC80YMg0LfQtNC10YHRjAo&i=MgoxMAo&t=W3siaSI6IjJcbjEwXG4iLCJvIjoiMTAyNFxuIn0seyJpIjoiNVxuMFxuIiwibyI6IjFcbiJ9LHsiaSI6IjNcbjRcbiIsIm8iOiI4MVxuIn1d)
+
+В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
+тестах этой задачи.
 
 ### Проверка на компьютере
 

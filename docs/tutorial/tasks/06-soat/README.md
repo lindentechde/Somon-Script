@@ -34,7 +34,10 @@
 135
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDYtc29hdDog0KHQvtCw0YIg0LLQsCDQtNCw0pvQuNKb0LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MTM1Cg)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JzQsNGB0YrQsNC70LAgMDYtc29hdDog0KHQvtCw0YIg0LLQsCDQtNCw0pvQuNKb0LAKLy8g0JHQsNGA0L3QvtC80LDQuCDRhdGD0LTRgNC-INC40L0g0rfQviDQvdCw0LLQuNGB0LXQtAo&i=MTM1Cg&t=W3siaSI6IjEzNVxuIiwibyI6IjIg0YHQvtCw0YIgMTUg0LTQsNKb0LjSm9CwXG4ifSx7ImkiOiI2MFxuIiwibyI6IjEg0YHQvtCw0YIgMCDQtNCw0pvQuNKb0LBcbiJ9LHsiaSI6IjU5XG4iLCJvIjoiMCDRgdC-0LDRgiA1OSDQtNCw0pvQuNKb0LBcbiJ9XQ)
+
+Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
+месанҷад.
 
 ### Санҷиш бо компютер
 
@@ -79,7 +82,10 @@ npm run check-task -- 06-soat барнома.som
 135
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA2LXNvYXQ6INCn0LDRgdGLINC4INC80LjQvdGD0YLRiwovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg&i=MTM1Cg)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JfQsNC00LDRh9CwIDA2LXNvYXQ6INCn0LDRgdGLINC4INC80LjQvdGD0YLRiwovLyDQndCw0L_QuNGI0LjRgtC1INGB0LLQvtGOINC_0YDQvtCz0YDQsNC80LzRgyDQt9C00LXRgdGMCg&i=MTM1Cg&t=W3siaSI6IjEzNVxuIiwibyI6IjIg0YHQvtCw0YIgMTUg0LTQsNKb0LjSm9CwXG4ifSx7ImkiOiI2MFxuIiwibyI6IjEg0YHQvtCw0YIgMCDQtNCw0pvQuNKb0LBcbiJ9LHsiaSI6IjU5XG4iLCJvIjoiMCDRgdC-0LDRgiA1OSDQtNCw0pvQuNKb0LBcbiJ9XQ)
+
+В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
+тестах этой задачи.
 
 ### Проверка на компьютере
 

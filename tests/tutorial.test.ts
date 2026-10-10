@@ -114,6 +114,28 @@ describe('tutorial tasks', () => {
     }
   });
 
+  test('the playground links of a task page carry its tests; lessons carry none', () => {
+    for (const id of taskIds) {
+      const readme = fs.readFileSync(path.join(TASKS, id, 'README.md'), 'utf8');
+      const links = [...readme.matchAll(/&t=([\w-]+)\)/g)];
+      expect([id, links.length]).toEqual([id, 2]);
+      const tests = readTests(path.join(TASKS, id)).map(
+        (test: { input: string; expected: string }) => ({
+          i: test.input,
+          o: test.expected,
+        })
+      );
+      for (const link of links) {
+        expect(JSON.parse(Buffer.from(link[1], 'base64url').toString('utf8'))).toEqual(tests);
+      }
+    }
+    for (const language of ['tj', 'ru']) {
+      for (const lesson of lessons(language)) {
+        expect(fs.readFileSync(path.join(TUTORIAL, language, lesson), 'utf8')).not.toContain('&t=');
+      }
+    }
+  });
+
   test('each solution passes the tests of its task', async () => {
     for (const id of taskIds) {
       const source = fs.readFileSync(path.join(TASKS, id, 'hal.som'), 'utf8');

@@ -27,7 +27,10 @@
 чоп("Се"));
 ```
 
-[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQr9C6IjsK0YfQvtC_KCLQlNGDIik7CtGH0L7Qvygi0KHQtSIpKTsK)
+[▶ Дар майдони озмоиш ҳал кунед](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQr9C6IjsK0YfQvtC_KCLQlNGDIik7CtGH0L7Qvygi0KHQtSIpKTsK&t=W3siaSI6IiIsIm8iOiLQr9C6XG7QlNGDXG7QodC1XG4ifV0)
+
+Дар майдони озмоиш тугмаи **✓ Санҷидан** барномаро бо ҳамаи санҷишҳои ин масъала
+месанҷад.
 
 ### Санҷиш бо компютер
 
@@ -66,7 +69,10 @@ npm run check-task -- 02-qavs барнома.som
 чоп("Се"));
 ```
 
-[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQr9C6IjsK0YfQvtC_KCLQlNGDIik7CtGH0L7Qvygi0KHQtSIpKTsK)
+[▶ Решить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQr9C6IjsK0YfQvtC_KCLQlNGDIik7CtGH0L7Qvygi0KHQtSIpKTsK&t=W3siaSI6IiIsIm8iOiLQr9C6XG7QlNGDXG7QodC1XG4ifV0)
+
+В песочнице кнопка **✓ Санҷидан** («Проверить») проверяет программу на всех
+тестах этой задачи.
 
 ### Проверка на компьютере
 

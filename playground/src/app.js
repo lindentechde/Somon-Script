@@ -7,6 +7,10 @@
  *
  * Works from a web server and from a file opened from disk (file://): the
  * worker starts from a Blob URL, and nothing is loaded from the network.
+ *
+ * A link to a task of the tutorial carries its tests (`&t=`): «Санҷидан» then
+ * runs the program on each, as `npm run check-task` does (scripts/check-task.js),
+ * and says which pass.
  */
 (function () {
   'use strict';
@@ -32,6 +36,7 @@
   var jsOutput = $('js');
   var runButton = $('run');
   var stopButton = $('stop');
+  var checkButton = $('check');
   var exampleSelect = $('example');
   var languageSelect = $('language');
   var timeoutSelect = $('timeout');
@@ -43,6 +48,8 @@
   var marks = {};
   /** The running program: its worker, timer and what it printed. */
   var current = null;
+  /** The check of a task's tests that is running: { stopped, worker }. */
+  var checking = null;
   /** A worker started ahead, so that the next run does not wait for the compiler to load. */
   var spare = null;
   var workerUrl = null;
@@ -62,6 +69,8 @@
       learningMode: saved.learningMode !== false,
       timeout: TIMEOUTS.indexOf(saved.timeout) !== -1 ? saved.timeout : DEFAULT_TIMEOUT,
       example: saved.example || '',
+      // The tests of the task a link opened: [{ i: input, o: expected output }]
+      tests: validTests(saved.tests),
     };
     var query = new URLSearchParams(location.search);
     if (STRINGS[query.get('lang')]) state.language = query.get('lang');
@@ -72,6 +81,7 @@
       state.code = linked.code;
       state.input = linked.input;
       state.example = linked.example || '';
+      state.tests = linked.tests;
     }
     if (typeof state.code !== 'string') {
       state.code = EXAMPLES[0].code;
@@ -103,7 +113,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Links: #c=<code>&i=<input> (UTF-8 in base64url), or #example=<id>
+  // Links: #c=<code>&i=<input>&t=<tests> (UTF-8 in base64url), or #example=<id>
   // ---------------------------------------------------------------------------
 
   function encode(text) {
@@ -131,17 +141,35 @@
         return {
           code: decode(params.get('c')),
           input: params.has('i') ? decode(params.get('i')) : '',
+          tests: params.has('t') ? validTests(JSON.parse(decode(params.get('t')))) : null,
         };
       }
     } catch (error) {
       return null;
     }
     var example = findExample(params.get('example'));
-    return example ? { code: example.code, input: example.input || '', example: example.id } : null;
+    return example
+      ? { code: example.code, input: example.input || '', example: example.id, tests: null }
+      : null;
   }
 
-  function linkTo(code, input) {
-    var hash = '#c=' + encode(code) + (input ? '&i=' + encode(input) : '');
+  /** Tests as a link or the storage gives them: a list of { i, o } strings, or null. */
+  function validTests(tests) {
+    var valid =
+      Array.isArray(tests) &&
+      tests.length > 0 &&
+      tests.every(function (test) {
+        return test && typeof test.i === 'string' && typeof test.o === 'string';
+      });
+    return valid ? tests : null;
+  }
+
+  function linkTo(code, input, tests) {
+    var hash =
+      '#c=' +
+      encode(code) +
+      (input ? '&i=' + encode(input) : '') +
+      (tests ? '&t=' + encode(JSON.stringify(tests)) : '');
     return location.href.split('#')[0] + hash;
   }
 
@@ -313,7 +341,12 @@
 
   function setRunning(running) {
     runButton.disabled = running;
+    checkButton.disabled = running;
     stopButton.hidden = !running;
+  }
+
+  function showCheckButton() {
+    checkButton.hidden = !state.tests;
   }
 
   function showCode(code) {
@@ -434,10 +467,148 @@
     setStatus(message);
   }
 
-  /** Stops the running program, if any; `message` says why (null: a new run starts). */
+  /** Stops the running program or check, if any; `message` says why (null: a new run starts). */
   function stop(message) {
+    if (checking) {
+      checking.stopped = true;
+      if (checking.worker) checking.worker.terminate();
+      endCheck(message || '');
+    }
     if (!current) return;
     finish(message || '');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Checking a task: the program on each of its tests
+  // ---------------------------------------------------------------------------
+
+  /** What a program printed, as it is compared: no spaces at line ends, no empty lines at the end. */
+  function normalize(printed) {
+    return printed
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(function (line) {
+        return line.replace(/\s+$/, '');
+      })
+      .join('\n')
+      .replace(/\n+$/, '');
+  }
+
+  /**
+   * Runs the program once with `input` in a worker of its own; `done` gets
+   * { notCompiled, diagnostics, summary } or { output, error, errorLine, timedOut }.
+   */
+  function runTest(input, done) {
+    var worker = spare || startWorker();
+    spare = null;
+    setTimeout(prepareSpare, 50);
+    checking.worker = worker;
+    var lines = [];
+    var result = { output: '', error: null, errorLine: 0, timedOut: false };
+    var timer = null;
+    var end = function () {
+      clearTimeout(timer);
+      worker.terminate();
+      result.output = lines.join('\n');
+      done(result);
+    };
+    worker.onmessage = function (event) {
+      if (!checking || checking.stopped || checking.worker !== worker) return;
+      var message = event.data;
+      if (message.type === 'compiled') {
+        timer = setTimeout(function () {
+          result.timedOut = true;
+          end();
+        }, state.timeout * 1000);
+      } else if (message.type === 'notCompiled') {
+        worker.terminate();
+        done({ notCompiled: true, diagnostics: message.diagnostics, summary: message.summary });
+      } else if (message.type === 'output') {
+        lines.push(message.text);
+      } else if (message.type === 'runtimeError') {
+        result.error = message.text;
+        result.errorLine = message.line;
+      } else if (message.type === 'done') {
+        end();
+      }
+    };
+    worker.onerror = function (event) {
+      event.preventDefault();
+      result.error = event.message || text('noWorker');
+      end();
+    };
+    worker.postMessage({ source: state.code, input: input, language: state.language });
+  }
+
+  /** Prints text under a label of the report, indented, or «(ҳеҷ чиз)» when empty. */
+  function printBlock(label, value, kind) {
+    var shown = normalize(value);
+    print('   ' + label);
+    print((shown === '' ? text('nothing') : shown).replace(/^/gm, '    '), kind);
+  }
+
+  function checkTask() {
+    if (!state.tests) return;
+    stop(null);
+    clearOutput();
+    marks = {};
+    renderMarks();
+    showCode('');
+    var tests = state.tests;
+    var passed = 0;
+    var index = 0;
+    checking = { stopped: false, worker: null };
+    setRunning(true);
+    setStatus(text('checking'));
+    var next = function () {
+      if (index === tests.length) {
+        var summary = text('summary', { passed: passed, total: tests.length });
+        print(summary, passed === tests.length ? 'pass' : 'error');
+        endCheck(summary);
+        return;
+      }
+      var test = tests[index];
+      runTest(test.i, function (result) {
+        if (checking === null || checking.stopped) return;
+        if (result.notCompiled) {
+          problems(result.diagnostics, 'error');
+          print(result.summary, 'error');
+          endCheck(text('notCompiled'));
+          return;
+        }
+        var ok =
+          !result.error && !result.timedOut && normalize(result.output) === normalize(test.o);
+        print(
+          text('testName', { n: index + 1 }) +
+            ': ' +
+            (ok ? text('testPassed') : text('testFailed')),
+          ok ? 'pass' : 'error'
+        );
+        if (ok) {
+          passed++;
+        } else {
+          if (test.i !== '') printBlock(text('testInput'), test.i);
+          printBlock(text('expected'), test.o);
+          printBlock(text('printed'), result.output);
+          if (result.timedOut) print(text('timeout'), 'error');
+          if (result.error) {
+            mark(result.errorLine, 'error');
+            renderMarks();
+            print(result.error, 'error', result.errorLine);
+          }
+        }
+        index++;
+        next();
+      });
+    };
+    next();
+  }
+
+  function endCheck(message) {
+    if (!checking) return;
+    checking = null;
+    setRunning(false);
+    setStatus(message);
   }
 
   // ---------------------------------------------------------------------------
@@ -445,7 +616,7 @@
   // ---------------------------------------------------------------------------
 
   function share() {
-    var url = linkTo(state.code, state.input);
+    var url = linkTo(state.code, state.input, state.tests);
     try {
       history.replaceState(null, '', url);
     } catch (error) {
@@ -472,6 +643,8 @@
     state.example = example.id;
     state.code = example.code;
     state.input = example.input || '';
+    state.tests = null;
+    showCheckButton();
     codeInput.value = state.code;
     inputField.value = state.input;
     clearOutput();
@@ -489,6 +662,7 @@
     showJs.checked = state.showJs;
     learningMode.checked = state.learningMode;
     jsPanel.hidden = !state.showJs;
+    showCheckButton();
     applyLanguage();
     renderEditor();
 
@@ -521,6 +695,7 @@
       if (target) goToLine(Number(target.getAttribute('data-line')));
     });
     runButton.addEventListener('click', run);
+    checkButton.addEventListener('click', checkTask);
     stopButton.addEventListener('click', function () {
       print(text('stopped'), 'note');
       stop(text('stopped'));
@@ -551,6 +726,8 @@
       state.code = linked.code;
       state.input = linked.input;
       state.example = linked.example || '';
+      state.tests = linked.tests;
+      showCheckButton();
       codeInput.value = state.code;
       inputField.value = state.input;
       exampleSelect.value = state.example;

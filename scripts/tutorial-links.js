@@ -8,7 +8,9 @@
  * block between them that follows a line `Вуруд:` (`Ввод:`), if there is one.
  * The code is in the link (#c=, UTF-8 in base64url, as playground/src/app.js
  * reads it), so a link changes with its code: run this after editing a
- * lesson. `--check` changes nothing and fails when a link is out of date.
+ * lesson. A link on the page of a task (docs/tutorial/tasks/<id>/README.md)
+ * also carries the task's tests (&t=), for the playground's «Санҷидан».
+ * `--check` changes nothing and fails when a link is out of date.
  *
  * Usage: node scripts/tutorial-links.js [--check]
  */
@@ -16,6 +18,8 @@
 
 const fs = require('fs');
 const path = require('path');
+
+const { readTests } = require('./check-task.js');
 
 const ROOT = path.join(__dirname, '..');
 const TUTORIAL = path.join(ROOT, 'docs', 'tutorial');
@@ -27,9 +31,17 @@ function encode(text) {
   return Buffer.from(text, 'utf8').toString('base64url');
 }
 
-/** The playground link of a program and its input. */
-function playgroundLink(code, input) {
-  return `${PLAYGROUND}#c=${encode(code)}${input ? `&i=${encode(input)}` : ''}`;
+/** The playground link of a program, its input and the tests of a task. */
+function playgroundLink(code, input, tests) {
+  const testsPart = tests ? `&t=${encode(JSON.stringify(tests))}` : '';
+  return `${PLAYGROUND}#c=${encode(code)}${input ? `&i=${encode(input)}` : ''}${testsPart}`;
+}
+
+/** The tests of the task whose page `file` is, as the playground reads them: [{ i, o }]. */
+function taskTests(file) {
+  const testsDir = path.join(path.dirname(file), 'tests');
+  if (path.basename(file) !== 'README.md' || !fs.existsSync(testsDir)) return undefined;
+  return readTests(path.dirname(file)).map(test => ({ i: test.input, o: test.expected }));
 }
 
 /** Fenced code blocks of a page: { start, end, text, label } (the line before them). */
@@ -52,7 +64,7 @@ function codeBlocks(lines) {
 }
 
 /** The page with its links made from the code above them. */
-function updateLinks(source, file) {
+function updateLinks(source, file, tests) {
   const lines = source.split('\n');
   const blocks = codeBlocks(lines);
   return lines
@@ -68,7 +80,7 @@ function updateLinks(source, file) {
       }
       if (!program)
         throw new Error(`${file}:${index + 1}: a playground link without code above it`);
-      return `${link[1]}${playgroundLink(program.text, input)}${link[2]}`;
+      return `${link[1]}${playgroundLink(program.text, input, tests)}${link[2]}`;
     })
     .join('\n');
 }
@@ -86,7 +98,7 @@ function processTutorial({ write }) {
   const stale = [];
   for (const file of markdownFiles(TUTORIAL).sort()) {
     const source = fs.readFileSync(file, 'utf8');
-    const updated = updateLinks(source, path.relative(ROOT, file));
+    const updated = updateLinks(source, path.relative(ROOT, file), taskTests(file));
     if (updated === source) continue;
     stale.push(path.relative(ROOT, file));
     if (write) fs.writeFileSync(file, updated);

@@ -304,6 +304,10 @@ h2 {
 #output .warning {
   color: var(--warning);
 }
+#output .pass {
+  color: var(--accent);
+  font-weight: 600;
+}
 #output .note {
   color: var(--muted);
   font-style: italic;
