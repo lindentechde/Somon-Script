@@ -27,10 +27,13 @@ page, the compiler's messages and the errors of the running program are in Tajik
 - **Реҷаи таълимӣ** (the learning mode, on by default) warns about mistakes that
   are valid JavaScript, such as `хондан() + 1`
   ([docs/reference/learning-mode.md](../docs/reference/learning-mode.md)).
-- **✓ Санҷидан** (check), on a link to a task of the tutorial: runs the program
-  on each test of the task (in a worker of its own, with the time limit) and
-  says which pass, and for the others what was expected and what the program
-  printed, as `npm run check-task` does.
+- **Масъала** (task): the 63 tasks of the tutorial, by lesson, are in the page;
+  choosing one shows its statement (Tajik, or Russian for a Russian page), its
+  starting program and the input of its first test, also offline.
+- **✓ Санҷидан** (check), on a task or a link to one: runs the program on each
+  test of the task (in a worker of its own, with the time limit) and says which
+  pass, and for the others what was expected and what the program printed, as
+  `npm run check-task` does.
 - **Нишон додани JavaScript** shows the JavaScript the program compiles to.
 - 15 examples, from «Салом, ҷаҳон!» to an endless loop.
 - **Пайванд** (link) copies a link that holds the program and its input.
@@ -50,6 +53,7 @@ same sources always give the same file.
 | Link                  | Opens                                             |
 | --------------------- | ------------------------------------------------- |
 | `#example=jam`        | an example, by its `id` in `examples.json`        |
+| `#task=05-jam`        | a task of the tutorial, by its directory name     |
 | `#c=<code>&i=<input>` | a program and its input (UTF-8, base64url)        |
 | `…&t=<tests>`         | and the tests of a task, as JSON `[{ "i", "o" }]` |
 | `?lang=ru`            | the page in Russian (`tj`, `ru`, `en`)            |
