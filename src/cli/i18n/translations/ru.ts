@@ -62,6 +62,9 @@ const translations: Translations = {
         input: 'Входной файл .som',
         args: 'Аргументы для программы (используйте -- перед аргументами, начинающимися с -)',
       },
+      options: {
+        stack: 'Показать полный стек ошибки программы (для отладки)',
+      },
       messages: {
         failedToExecute: 'Не удалось выполнить Node:',
         terminatedWithSignal: (signal: string) => `Процесс завершён сигналом ${signal}`,

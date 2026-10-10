@@ -65,6 +65,10 @@ export interface Translations {
         input: string;
         args: string;
       };
+      options: {
+        /** `--stack` / `--стек`. */
+        stack: string;
+      };
       messages: {
         failedToExecute: string;
         terminatedWithSignal: (_signal: string) => string;

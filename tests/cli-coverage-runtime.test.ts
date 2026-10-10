@@ -77,6 +77,19 @@ describe('cliRuntime.executeCompiledFile', () => {
     );
   });
 
+  test('adds variables to the environment of the program', async () => {
+    const report = path.join(dir, 'env.json');
+    const file = script(
+      'env.js',
+      'require("fs").writeFileSync(process.argv[2], JSON.stringify(process.env.SOMON_RUN_LANGUAGE));'
+    );
+    const result = await cliRuntime.executeCompiledFile(file, [report], {
+      env: { SOMON_RUN_LANGUAGE: 'tj' },
+    });
+    expect(result).toEqual({ status: 0, signal: null });
+    expect(JSON.parse(fs.readFileSync(report, 'utf8'))).toBe('tj');
+  });
+
   test('forwards termination signals to the program', async () => {
     const before = FORWARDED.map(signal => process.listeners(signal));
     const running = cliRuntime.executeCompiledFile(

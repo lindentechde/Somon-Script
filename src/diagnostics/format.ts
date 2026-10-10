@@ -15,6 +15,8 @@ import type { Diagnostic, DiagnosticLanguage } from './types';
 interface Words {
   error: string;
   warning: string;
+  /** An error of the running program. */
+  runtime: string;
   /** Header with a file and a line, a line only, a file only, or neither. */
   where: (_severity: string, _file?: string, _line?: number) => string;
   hint: string;
@@ -25,6 +27,7 @@ const WORDS: Readonly<Record<DiagnosticLanguage, Words>> = {
   en: {
     error: 'Error',
     warning: 'Warning',
+    runtime: 'Runtime error',
     where: (severity, file, line) => {
       if (file !== undefined && line !== undefined) return `${severity} in ${file}, line ${line}`;
       if (line !== undefined) return `${severity} on line ${line}`;
@@ -37,6 +40,7 @@ const WORDS: Readonly<Record<DiagnosticLanguage, Words>> = {
   ru: {
     error: 'Ошибка',
     warning: 'Предупреждение',
+    runtime: 'Ошибка выполнения',
     where: (severity, file, line) => {
       if (file !== undefined && line !== undefined) return `${severity} в ${file}, строка ${line}`;
       if (line !== undefined) return `${severity} в строке ${line}`;
@@ -49,6 +53,7 @@ const WORDS: Readonly<Record<DiagnosticLanguage, Words>> = {
   tj: {
     error: 'Хато',
     warning: 'Огоҳӣ',
+    runtime: 'Хатои иҷро',
     where: (severity, file, line) => {
       if (file !== undefined && line !== undefined) return `${severity} дар ${file}, сатри ${line}`;
       if (line !== undefined) return `${severity} дар сатри ${line}`;
@@ -65,6 +70,8 @@ export interface FormatOptions {
   source?: string;
   /** The file, as the learner knows it (relative to the current directory). */
   file?: string;
+  /** An error of the running program, not of the compiler: `Хатои иҷро дар …`. */
+  runtime?: boolean;
 }
 
 /** A diagnostic as a block of lines (no line break at the end). */
@@ -88,7 +95,8 @@ export function formatFailure(errors: number, language: DiagnosticLanguage): str
 
 function header(diagnostic: Diagnostic, options: FormatOptions): string {
   const words = WORDS[options.language];
-  const severity = diagnostic.severity === 'error' ? words.error : words.warning;
+  const error = options.runtime ? words.runtime : words.error;
+  const severity = diagnostic.severity === 'error' ? error : words.warning;
   return words.where(severity, options.file ?? diagnostic.file, diagnostic.line);
 }
 

@@ -61,3 +61,11 @@ export function russianPlural(count: number, forms: readonly [string, string, st
   if (units >= 2 && units <= 4) return forms[1];
   return forms[2];
 }
+
+/** How long the name or string at a position is (1 for anything else). */
+export function nameLength(source: string, line?: number, column?: number): number | undefined {
+  if (line === undefined || column === undefined) return undefined;
+  const rest = (source.split(/\r?\n/)[line - 1] ?? '').slice(column - 1);
+  const word = /^(?:[\p{L}\p{N}_$]+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/u.exec(rest);
+  return word ? [...word[0]].length : 1;
+}

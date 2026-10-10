@@ -43,8 +43,10 @@ describe('diagnostics catalog', () => {
           expect(text).not.toContain('undefined');
         }
         expect(ru).not.toEqual(tj);
-        expect(prose(tj)).not.toMatch(/[A-Za-z]/);
-        expect(prose(ru)).not.toMatch(/[A-Za-z]/);
+        // RUNTIME_ERROR shows the engine's own message, which no catalog can know
+        const own = id === 'RUNTIME_ERROR' ? `${params.name}: ${params.message}` : '';
+        expect(prose(tj.replace(own, ''))).not.toMatch(/[A-Za-z]/);
+        expect(prose(ru.replace(own, ''))).not.toMatch(/[A-Za-z]/);
         if (!DETAIL_IN_ENGLISH.has(id)) expect(en).toMatch(/[A-Za-z]/);
       }
     );

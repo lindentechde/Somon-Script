@@ -143,7 +143,11 @@ interface BundleOptions extends CliCompilerFlags {
   externals?: string;
 }
 
-type RunOptions = CliCompilerFlags;
+interface RunOptions extends CliCompilerFlags {
+  /** `--stack`, or its Tajik and Russian spelling `--стек`. */
+  stack?: boolean;
+  стек?: boolean;
+}
 
 /** Translate commander's compiler flags into config-style compiler options. */
 function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
@@ -509,6 +513,8 @@ interface ExecuteOptions {
   enableSourceMaps?: boolean;
   /** Modules Node.js loads before the program (`--require`). */
   preload?: string[];
+  /** Variables added to the program's environment. */
+  env?: Record<string, string>;
 }
 
 export interface ExecutionResult {
@@ -536,7 +542,7 @@ export const cliRuntime = {
       for (const module of options.preload ?? []) nodeArgs.push('--require', module);
       const child = spawn(process.execPath, [...nodeArgs, filePath, ...forwardedArgv], {
         stdio: 'inherit',
-        env: process.env,
+        env: options.env ? { ...process.env, ...options.env } : process.env,
         cwd: options.cwd,
       });
 
@@ -619,19 +625,22 @@ async function executeRunCommand(
     const moduleSystem = await createModuleSystem(input, loaded, compilation);
 
     const sourceMaps = options.sourceMap ?? config.bundle?.sourceMaps ?? false;
+    const language = learnerLanguage(config.compilerOptions);
+    const runtime = runtimeOptions(language, options);
     if (compilation.module === 'esm') {
       const workspace = createRunWorkspace(input);
       cleanup = workspace.cleanup;
       const entryFile = await writeEsmModules(moduleSystem, input, workspace.dir, {
-        sourceMaps,
+        // Errors are explained at their place in the .som files, through source maps
+        sourceMaps: sourceMaps || language !== undefined,
         externals: config.bundle?.externals,
-        language: learnerLanguage(config.compilerOptions),
+        language,
       });
       reportChildResult(
         await cliRuntime.executeCompiledFile(entryFile, scriptArgs, {
           cwd: baseDir,
           enableSourceMaps: sourceMaps,
-          preload: [runtimePreludePath()],
+          ...runtime,
         })
       );
       return;
@@ -640,21 +649,21 @@ async function executeRunCommand(
       entryPoint: path.resolve(input),
       format: 'commonjs',
       minify: options.minify ?? config.bundle?.minify,
-      sourceMaps,
+      sourceMaps: sourceMaps || language !== undefined,
       inlineSources: false,
       externals: config.bundle?.externals,
       // The bundle runs from a temporary directory; modules keep their real locations.
       modulePaths: true,
       logWarnings: false,
     });
-    reportRunWarnings(bundle.warnings ?? [], learnerLanguage(config.compilerOptions));
+    reportRunWarnings(bundle.warnings ?? [], language);
 
     const workspace = createRunWorkspace(input);
     cleanup = workspace.cleanup;
     const compiledFilePath = workspace.file;
 
     let code = bundle.code;
-    if (sourceMaps && bundle.map) {
+    if (bundle.map) {
       const mapPath = `${compiledFilePath}.map`;
       fs.writeFileSync(mapPath, absoluteSourceMap(bundle.map, baseDir), 'utf8');
       code = `${code}\n//# sourceMappingURL=${path.basename(mapPath)}`;
@@ -664,7 +673,7 @@ async function executeRunCommand(
     const child = await cliRuntime.executeCompiledFile(compiledFilePath, scriptArgs, {
       cwd: baseDir,
       enableSourceMaps: sourceMaps && !!bundle.map,
-      preload: [runtimePreludePath()],
+      ...runtime,
     });
     reportChildResult(child);
   } catch (error) {
@@ -713,6 +722,25 @@ function reportRunWarnings(
     const where = location.length > 0 ? `${location.join(':')}: ` : '';
     console.warn(`${t().commands.run.messages.warning}: ${where}${message}`);
   }
+}
+
+/**
+ * How the program runs: with the learner's run time loaded, which in Tajik or
+ * Russian also explains errors the program does not catch, at their place in
+ * the .som file of the learner (`SOMON_RUN_*`, read by src/runtime/node-prelude.ts).
+ */
+function runtimeOptions(
+  language: DiagnosticLanguage | undefined,
+  options: RunOptions
+): Pick<ExecuteOptions, 'preload' | 'env'> {
+  const preload = [runtimePreludePath()];
+  if (language === undefined) return { preload };
+  const env: Record<string, string> = {
+    SOMON_RUN_LANGUAGE: language,
+    SOMON_RUN_CWD: process.cwd(),
+  };
+  if (options.stack || options.стек) env.SOMON_RUN_STACK = '1';
+  return { preload, env };
 }
 
 /** Sets the CLI's exit code from the program it ran. */
@@ -1112,11 +1140,12 @@ export function createProgram(): Command {
     .usage(tr.commands.run.usage)
     .argument('<input>', tr.commands.run.args.input)
     .argument('[args...]', tr.commands.run.args.args);
-  addCompilerOptions(runCommand).action(
-    async (input: string, scriptArgs: string[], options: RunOptions): Promise<void> => {
+  addCompilerOptions(runCommand)
+    .option('--stack', tr.commands.run.options.stack)
+    .addOption(new Option('--стек').hideHelp())
+    .action(async (input: string, scriptArgs: string[], options: RunOptions): Promise<void> => {
       await executeRunCommand(input, scriptArgs, options);
-    }
-  );
+    });
 
   defineCommand(program, 'init', 'init')
     .argument('[name]', tr.commands.init.args.name, 'somon-project')

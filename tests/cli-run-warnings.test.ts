@@ -58,6 +58,23 @@ describe('somon run warnings and run time', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  test('in Tajik the program explains its errors, with the stack when asked for', async () => {
+    i18n.setLanguage('tj');
+    fs.writeFileSync(path.join(dir, 'а.som'), 'чоп(1);\n');
+    await run(['а.som']);
+    await run(['а.som', '--стек']);
+    await run(['--module', 'esm', 'а.som', '--stack']);
+    const envs = execute.mock.calls.map(call => call[2].env);
+    expect(envs).toEqual([
+      { SOMON_RUN_LANGUAGE: 'tj', SOMON_RUN_CWD: process.cwd() },
+      { SOMON_RUN_LANGUAGE: 'tj', SOMON_RUN_CWD: process.cwd(), SOMON_RUN_STACK: '1' },
+      { SOMON_RUN_LANGUAGE: 'tj', SOMON_RUN_CWD: process.cwd(), SOMON_RUN_STACK: '1' },
+    ]);
+    // The program runs with the source map that names its .som file
+    const bundle = execute.mock.calls[0][0] as string;
+    expect(path.basename(bundle)).toBe('а.js');
+  });
+
   test('a type warning names the file relative to the current directory', async () => {
     fs.mkdirSync(path.join(dir, 'лоиҳа'));
     fs.writeFileSync(path.join(dir, 'лоиҳа', 'б.som'), 'тағ н = 1;\nчоп(н.нест);\n');

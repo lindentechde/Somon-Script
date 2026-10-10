@@ -121,6 +121,18 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
   MODULE_FILE_NOT_FOUND: [{ file: 'барнома.som' }],
   CIRCULAR_DEPENDENCY: [{ cycle: 'а.som → б.som → а.som' }],
   MODULE_ERROR: [{ detail: 'Invalid JSON in маълумот.json' }],
+  RUNTIME_READ_OF_NOTHING: [{ property: 'дарозӣ', value: 'беқимат' }],
+  RUNTIME_WRITE_TO_NOTHING: [{ property: 'ном', value: 'холӣ' }],
+  RUNTIME_NOT_DEFINED: [{ name: 'window' }],
+  RUNTIME_BEFORE_DECLARATION: [{ name: 'х' }],
+  RUNTIME_NOT_A_FUNCTION: [{ name: 'о.ф' }],
+  RUNTIME_NOT_A_CONSTRUCTOR: [{ name: 'к' }],
+  RUNTIME_NOT_ITERABLE: [{ name: 'х' }],
+  RUNTIME_STACK_OVERFLOW: [{}],
+  RUNTIME_INVALID_ARRAY_LENGTH: [{}],
+  RUNTIME_CONST_ASSIGNMENT: [{}],
+  RUNTIME_THROWN: [{ message: 'Ба сифр тақсим кардан мумкин нест' }],
+  RUNTIME_ERROR: [{ name: 'SyntaxError', message: 'Unexpected end of JSON input' }],
 };
 
 export const HINT_SAMPLES: Readonly<Record<string, DiagnosticParams>> = {
@@ -135,4 +147,9 @@ export const HINT_SAMPLES: Readonly<Record<string, DiagnosticParams>> = {
   HAS_FOR_MAP_SET: {},
   RENAME: {},
   CHECK_PATH: {},
+  INDEX_OUT_OF_RANGE: {},
+  CHECK_VALUE: { value: 'беқимат' },
+  STOP_CONDITION: {},
+  DECLARE_BEFORE_USE: {},
+  SHOW_STACK: {},
 };

@@ -5,7 +5,7 @@
 import { codeOf, message, renderHint, renderMessage } from './catalog';
 import { classifyCodegenError, classifySyntaxError, type ClassifiedError } from './classify';
 import { ENGLISH_WORDS } from './suggest';
-import { text } from './text';
+import { nameLength, text } from './text';
 import type { Diagnostic, DiagnosticLanguage, DiagnosticMessage, DiagnosticParams } from './types';
 import type { TypeCheckError } from '../type-checker';
 
@@ -59,7 +59,7 @@ export function codegenDiagnostic(
   const name = classified.message.params.name;
   const position = name === undefined ? classified : namePosition(source, classified, text(name));
   return classifiedDiagnostic(
-    { ...classified, ...position, length: wordLength(source, position.line, position.column) },
+    { ...classified, ...position, length: nameLength(source, position.line, position.column) },
     'error',
     language
   );
@@ -101,7 +101,7 @@ export function typeDiagnostic(
   const position = {
     line: error.line,
     column: error.column,
-    length: wordLength(source, error.line, error.column),
+    length: nameLength(source, error.line, error.column),
   };
   if (!error.messageId) {
     return { code: error.code, severity: error.severity, message: error.message, ...position };
@@ -145,12 +145,4 @@ function typeHint(msg: DiagnosticMessage): DiagnosticMessage | undefined {
     return message('NUMBER_IN_QUOTES', { value: quotedNumber[1] });
   }
   return undefined;
-}
-
-/** How long the name or string at a position is (1 for anything else). */
-function wordLength(source: string, line?: number, column?: number): number | undefined {
-  if (line === undefined || column === undefined) return undefined;
-  const rest = (source.split(/\r?\n/)[line - 1] ?? '').slice(column - 1);
-  const word = /^(?:[\p{L}\p{N}_$]+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/u.exec(rest);
-  return word ? [...word[0]].length : 1;
 }

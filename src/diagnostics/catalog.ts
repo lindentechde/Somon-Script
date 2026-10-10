@@ -3,6 +3,7 @@
  * English, Russian and Tajik (docs/glossary.tj.md lists the Tajik terms).
  */
 import { HINTS, PROGRAM_MESSAGES } from './catalog-program';
+import { RUNTIME_HINTS, RUNTIME_MESSAGES } from './catalog-runtime';
 import { SYNTAX_MESSAGES } from './catalog-syntax';
 import { TYPE_MESSAGES } from './catalog-types';
 import type { CatalogEntry } from './text';
@@ -12,13 +13,16 @@ const MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   ...SYNTAX_MESSAGES,
   ...TYPE_MESSAGES,
   ...PROGRAM_MESSAGES,
+  ...RUNTIME_MESSAGES,
 };
+
+const ALL_HINTS: Readonly<Record<string, CatalogEntry>> = { ...HINTS, ...RUNTIME_HINTS };
 
 /** Every message id of the catalog (hints apart). */
 export const MESSAGE_IDS: readonly string[] = Object.keys(MESSAGES);
 
 /** Every hint id. */
-export const HINT_IDS: readonly string[] = Object.keys(HINTS);
+export const HINT_IDS: readonly string[] = Object.keys(ALL_HINTS);
 
 /** The diagnostic code of a message id: `TYPE_NOT_ASSIGNABLE.return` → `TYPE_NOT_ASSIGNABLE`. */
 export function codeOf(id: string): string {
@@ -38,7 +42,7 @@ export function renderMessage(msg: DiagnosticMessage, language: DiagnosticLangua
 
 /** The text of a hint in a language. */
 export function renderHint(hint: DiagnosticMessage, language: DiagnosticLanguage): string {
-  return entry(HINTS, hint.id)[language](hint.params);
+  return entry(ALL_HINTS, hint.id)[language](hint.params);
 }
 
 function entry(table: Readonly<Record<string, CatalogEntry>>, id: string): CatalogEntry {

@@ -62,6 +62,9 @@ const translations: Translations = {
         input: 'Файли вурудии .som',
         args: 'Аргументҳо барои барнома (пеш аз аргументҳое, ки бо - оғоз мешаванд, -- нависед)',
       },
+      options: {
+        stack: 'Пайҷои пурраи хатои барномаро нишон додан (барои ислоҳ)',
+      },
       messages: {
         failedToExecute: 'Иҷрои Node сар назад:',
         terminatedWithSignal: (signal: string) => `Раванд бо сигнали ${signal} қатъ шуд`,
