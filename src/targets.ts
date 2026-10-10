@@ -416,6 +416,9 @@ class SyntaxScanner {
       [kind.Decorator, () => this.needLowering()],
       [kind.ImportDeclaration, node => this.checkDeferredImport(node as ts.ImportDeclaration)],
       [kind.MetaProperty, node => this.checkDeferredImportCall(node as ts.MetaProperty)],
+      [kind.ImportSpecifier, node => this.checkStringNames(node as ts.ImportSpecifier)],
+      [kind.ExportSpecifier, node => this.checkStringNames(node as ts.ExportSpecifier)],
+      [kind.NamespaceExport, node => this.checkStringNames(node as ts.NamespaceExport)],
     ]);
   }
 
@@ -590,6 +593,19 @@ class SyntaxScanner {
   private checkDeferredImport(node: ts.ImportDeclaration): void {
     if (node.importClause?.phaseModifier === ts.SyntaxKind.DeferKeyword) {
       this.requireNative(node, 'Deferred imports are', 'esnext');
+    }
+  }
+
+  /**
+   * `export { х as "а-б" }`, `import { "а-б" as х }`, `export * as "а-б"` in ES
+   * module output (ES2022); CommonJS output names them as properties.
+   */
+  private checkStringNames(
+    node: ts.ImportSpecifier | ts.ExportSpecifier | ts.NamespaceExport
+  ): void {
+    const names = ts.isNamespaceExport(node) ? [node.name] : [node.propertyName, node.name];
+    if (names.some(name => name !== undefined && ts.isStringLiteral(name))) {
+      this.requireNative(node, 'String import and export names are', 'es2022');
     }
   }
 

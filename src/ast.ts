@@ -205,6 +205,11 @@ export interface ExpressionStatement extends Statement {
 export interface Identifier extends Expression {
   type: 'Identifier';
   name: string;
+  /**
+   * A name a module imports or exports, written as a string (`содир { х чун
+   * "а-б" };`, TypeScript 5.6, ES2022): any text, kept as it is.
+   */
+  isString?: boolean;
 }
 
 export interface Literal extends Expression {

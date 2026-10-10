@@ -343,6 +343,9 @@ const DEFER_HELPER = [
   '}',
 ].join('\n');
 
+/** An identifier name of JavaScript: the property after `.`. */
+const IDENTIFIER_NAME = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+
 /** Statements `давом` may continue: the loops. */
 const LOOP_TYPES: ReadonlySet<string> = new Set([
   'WhileStatement',
@@ -1474,8 +1477,7 @@ export class CodeGenerator {
     if (namedImports.length > 0) {
       const destructuring = namedImports
         .map(spec => {
-          // Exported names are member names: `содир функсия илова` exports `push`
-          const imported = translateMemberName(spec.imported.name);
+          const imported = this.specifierName(spec.imported);
           const local = this.generateIdentifier(spec.local, true);
           return imported === local ? imported : `${imported}: ${local}`;
         })
@@ -1537,7 +1539,7 @@ export class CodeGenerator {
       } else if (spec.type === 'ImportNamespaceSpecifier') {
         clauses.push(`* as ${local}`);
       } else {
-        named.push(CodeGenerator.esmNamedImport(spec as ImportSpecifier, local));
+        named.push(this.esmNamedImport(spec as ImportSpecifier, local));
       }
     }
     if (named.length > 0) clauses.push(`{ ${named.join(', ')} }`);
@@ -1548,14 +1550,37 @@ export class CodeGenerator {
     return this.indent(`import ${typeOnly}${phase}${clauses.join(', ')} from ${source};`);
   }
 
-  /**
-   * `б as в` or `type Т` in `import { … }`. Exported names are member names:
-   * `содир функсия илова` exports `push`.
-   */
-  private static esmNamedImport(spec: ImportSpecifier, local: string): string {
-    const imported = translateMemberName(spec.imported.name);
+  /** `б as в`, `"а-б" as в` or `type Т` in `import { … }`. */
+  private esmNamedImport(spec: ImportSpecifier, local: string): string {
+    const imported = this.specifierName(spec.imported);
     const typeOnly = spec.importKind === 'type' ? 'type ' : '';
     return `${typeOnly}${imported === stripPositionMarkers(local) ? local : `${imported} as ${local}`}`;
+  }
+
+  /**
+   * The name a module exports, in JavaScript: a member name is written as its
+   * JavaScript name (`содир функсия илова` exports `push`); a name written as
+   * a string (`содир { х чун "а-б" }`, TypeScript 5.6) is that string.
+   */
+  private static exportName(id: Identifier): string {
+    return id.isString ? id.name : translateMemberName(id.name);
+  }
+
+  /** An export name in `{ … }` of an import or export: a string when written as one (ES2022). */
+  private specifierName(id: Identifier): string {
+    const name = CodeGenerator.exportName(id);
+    return id.isString ? this.stringLiteral(name) : name;
+  }
+
+  /** `module.exports.ном`, or `module.exports["а-б"]` for a name that is no identifier. */
+  private memberAccess(object: string, name: string): string {
+    return IDENTIFIER_NAME.test(name)
+      ? `${object}.${name}`
+      : `${object}[${this.stringLiteral(name)}]`;
+  }
+
+  private stringLiteral(text: string): string {
+    return this.generateLiteral({ type: 'Literal', value: text, raw: '', line: 0, column: 0 });
   }
 
   private generateExportDeclaration(node: ExportDeclaration): string {
@@ -1639,9 +1664,9 @@ export class CodeGenerator {
     results.push(this.indent(`const ${tmpVar} = require(${source});`));
 
     for (const spec of node.specifiers!) {
-      const exported = translateMemberName(spec.exported.name);
-      const local = translateMemberName(spec.local.name);
-      results.push(this.indent(`module.exports.${exported} = ${tmpVar}.${local};`));
+      const exported = this.memberAccess('module.exports', CodeGenerator.exportName(spec.exported));
+      const local = this.memberAccess(tmpVar, CodeGenerator.exportName(spec.local));
+      results.push(this.indent(`${exported} = ${local};`));
     }
 
     return results.join('\n');
@@ -1650,9 +1675,12 @@ export class CodeGenerator {
   private generateDirectExportSpecifiers(node: ExportDeclaration): string {
     return node
       .specifiers!.map(spec => {
-        const exported = translateMemberName(spec.exported.name);
+        const exported = this.memberAccess(
+          'module.exports',
+          CodeGenerator.exportName(spec.exported)
+        );
         const local = this.generateIdentifier(spec.local);
-        return this.indent(`module.exports.${exported} = ${local};`);
+        return this.indent(`${exported} = ${local};`);
       })
       .join('\n');
   }
@@ -1665,8 +1693,8 @@ export class CodeGenerator {
     results.push(this.indent(`const ${tmpVar} = require(${source});`));
     // `содир * чун Н аз "./м";` exports the whole module as one member
     if (node.namespaceExport) {
-      const exported = translateMemberName(node.namespaceExport.name);
-      results.push(this.indent(`module.exports.${exported} = ${tmpVar};`));
+      const name = CodeGenerator.exportName(node.namespaceExport);
+      results.push(this.indent(`${this.memberAccess('module.exports', name)} = ${tmpVar};`));
       return results.join('\n');
     }
     results.push(this.indent(`Object.keys(${tmpVar}).forEach(key => {`));
@@ -1700,15 +1728,15 @@ export class CodeGenerator {
         const values = node.specifiers.filter(spec => keepsTypes || spec.exportKind !== 'type');
         if (values.length === 0) return '';
         const names = values.map(spec => {
-          const local = translateMemberName(spec.local.name);
-          const exported = translateMemberName(spec.exported.name);
+          const local = this.specifierName(spec.local);
+          const exported = this.specifierName(spec.exported);
           const typeName = spec.exportKind === 'type' ? 'type ' : '';
           return `${typeName}${local === exported ? local : `${local} as ${exported}`}`;
         });
         return this.indent(`export ${typeOnly}{ ${names.join(', ')} } from ${source};`);
       }
       const namespace = node.namespaceExport
-        ? ` as ${translateMemberName(node.namespaceExport.name)}`
+        ? ` as ${this.specifierName(node.namespaceExport)}`
         : '';
       return this.indent(`export ${typeOnly}*${namespace} from ${source};`);
     }
@@ -1721,7 +1749,7 @@ export class CodeGenerator {
     const names = specifiers.map(spec => {
       if (spec.exported.name === spec.local.name) this.esmExportedNames.add(spec.local.name);
       const local = this.generateIdentifier(spec.local);
-      const exported = translateMemberName(spec.exported.name);
+      const exported = this.specifierName(spec.exported);
       const typeName = spec.exportKind === 'type' ? 'type ' : '';
       return `${typeName}${exported === stripPositionMarkers(local) ? local : `${local} as ${exported}`}`;
     });
@@ -2677,9 +2705,7 @@ export class CodeGenerator {
   }
 
   private enumValueText(value: number | string): string {
-    if (typeof value === 'string') {
-      return this.generateLiteral({ type: 'Literal', value, raw: '', line: 0, column: 0 });
-    }
+    if (typeof value === 'string') return this.stringLiteral(value);
     return Object.is(value, -0) ? '-0' : String(value);
   }
 

@@ -133,6 +133,7 @@ const FEATURE_PROBES: Readonly<Record<string, Probe>> = {
     source: 'ворид мавқуф * чун Н аз "./а";\nворид.мавқуф("./а");',
     absent: ['мавқуф'],
   },
+  stringExportNames: { source: 'собит а = 1;\nсодир { а чун "а-б" };' },
   // `о.м<Т>(х)`: older parsers read the type arguments of a method call as `<` and `>`
   memberTypeArguments: { source: 'тағ а = [1].map<рақам>(х => х);', absent: ['<'] },
   // Any type as a type argument: older parsers compared `ф < ҳар > 1`
@@ -807,9 +808,27 @@ class Converter {
     return false;
   }
 
+  /** `export { х as "а-б" }`, `import { "а-б" as х }` (TypeScript 5.6), for a compiler without them. */
+  private stringNames(node: ts.Node, names: Array<ts.ModuleExportName | undefined>): void {
+    if (!names.some(name => name && ts.isStringLiteral(name)) || supports('stringExportNames')) {
+      return;
+    }
+    this.warn(
+      node,
+      'import and export names written as strings are not supported by SomonScript yet'
+    );
+  }
+
   importDeclaration(node: ts.ImportDeclaration): boolean {
     const clause = node.importClause;
     if (!clause) return false;
+    const bindings = clause.namedBindings;
+    if (bindings && ts.isNamedImports(bindings)) {
+      this.stringNames(
+        node,
+        bindings.elements.map(element => element.propertyName)
+      );
+    }
     // `import type …` (TypeScript 6 deprecates `isTypeOnly` for `phaseModifier`)
     if (clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       if (supports('importType')) return false;
@@ -838,6 +857,14 @@ class Converter {
     const clause = node.exportClause;
     if (clause && ts.isNamespaceExport(clause) && !supports('exportStarAs')) {
       this.warn(node, "'export * as' is not supported by SomonScript yet");
+    }
+    if (clause) {
+      this.stringNames(
+        node,
+        ts.isNamespaceExport(clause)
+          ? [clause.name]
+          : clause.elements.flatMap(element => [element.propertyName, element.name])
+      );
     }
     if (!clause || !ts.isNamedExports(clause) || supports('typeSpecifier')) return false;
     return this.removeTypeSpecifiers(node, clause.elements, true);

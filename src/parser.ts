@@ -3734,10 +3734,12 @@ export class Parser {
 
   /**
    * The name a module exports, in `ворид { ном чун х }` and
-   * `содир { х чун ном }`: any word, as in JavaScript; `пешфарз` is `default`.
+   * `содир { х чун ном }`: any word, as in JavaScript (`пешфарз` is
+   * `default`), or any string (`"а-б"`, TypeScript 5.6).
    */
   private parseModuleExportName(errorMessage: string): Token {
     const token = this.peek();
+    if (token.type === TokenType.STRING) return this.advance();
     if (!this.isIdentifierNameToken(token)) {
       throw new Error(`${errorMessage} at line ${token.line}, column ${token.column}`);
     }
@@ -3745,23 +3747,35 @@ export class Parser {
     return token.type === TokenType.ПЕШФАРЗ ? { ...token, value: 'default' } : token;
   }
 
-  /** A keyword imported or exported by name needs `чун`: `{ пешфарз чун х }`. */
+  /**
+   * A keyword or string imported or exported by name needs `чун`:
+   * `{ пешфарз чун х }`, `{ "а-б" чун х }`; only a name names a local binding.
+   */
   private checkBindingName(name: Token): void {
     if (this.isPlainIdentifierToken(name)) return;
+    const at = `at line ${name.line}, column ${name.column}`;
+    if (name.type === TokenType.STRING) {
+      this.errors.push(
+        `The string "${name.value}" cannot be a local name: import it as '"${name.value}" чун ном', export a name as 'ном чун "${name.value}"' ${at}`
+      );
+      return;
+    }
     this.errors.push(
-      `'${name.value}' is a keyword and cannot be a local name; write '${name.value} чун ном' at line ${name.line}, column ${name.column}`
+      `'${name.value}' is a keyword and cannot be a local name; write '${name.value} чун ном' ${at}`
     );
+  }
+
+  /** The identifier of a module export name; a string is marked `isString`. */
+  private moduleExportName(token: Token): Identifier {
+    const identifier = this.createIdentifier(token);
+    if (token.type === TokenType.STRING) identifier.isString = true;
+    return identifier;
   }
 
   private createImportSpecifier(imported: Token, local: Token): ImportSpecifier {
     return {
       type: 'ImportSpecifier',
-      imported: {
-        type: 'Identifier',
-        name: imported.value,
-        line: imported.line,
-        column: imported.column,
-      } as Identifier,
+      imported: this.moduleExportName(imported),
       local: {
         type: 'Identifier',
         name: local.value,
@@ -3792,6 +3806,8 @@ export class Parser {
         local = this.parseImportOrExportName("Expected local name after 'чун'");
       } else {
         this.checkBindingName(imported);
+        // `{ "а-б" }` binds no name: an error, and nothing is imported
+        if (imported.type === TokenType.STRING) continue;
       }
 
       const specifier = this.createImportSpecifier(imported, local);
@@ -3833,8 +3849,11 @@ export class Parser {
     if (this.match(TokenType.MULTIPLY)) {
       let namespaceExport: Identifier | undefined;
       if (this.match(TokenType.ЧУН)) {
-        namespaceExport = this.createIdentifier(
-          this.parseImportOrExportName("Expected export name after 'чун'")
+        // `содир * чун "а-б" аз "./м";` (ES2022)
+        namespaceExport = this.moduleExportName(
+          this.check(TokenType.STRING)
+            ? this.advance()
+            : this.parseImportOrExportName("Expected export name after 'чун'")
         );
       }
       this.consume(TokenType.АЗ, "Expected 'аз' after '*'");
@@ -3968,18 +3987,8 @@ export class Parser {
   private createExportSpecifier(local: Token, exported: Token): ExportSpecifier {
     return {
       type: 'ExportSpecifier',
-      local: {
-        type: 'Identifier',
-        name: local.value,
-        line: local.line,
-        column: local.column,
-      },
-      exported: {
-        type: 'Identifier',
-        name: exported.value,
-        line: exported.line,
-        column: exported.column,
-      },
+      local: this.moduleExportName(local),
+      exported: this.moduleExportName(exported),
       line: local.line,
       column: local.column,
     };

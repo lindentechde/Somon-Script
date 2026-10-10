@@ -1,8 +1,10 @@
 /**
  * Syntax that TypeScript added from 5.5 to 6.0, in SomonScript: deferred
  * imports (`ворид мавқуф * чун Н аз "м"` and `ворид.мавқуф("м")`, TypeScript
- * 5.9 `import defer`). The programs given to `run`, `check` and `errorsOf`
- * are part of the corpus of the differential test (tests/helpers/corpus.ts).
+ * 5.9 `import defer`) and import and export names written as strings
+ * (`содир { х чун "а-б" }`, TypeScript 5.6). The programs given to `run`,
+ * `check` and `errorsOf` are part of the corpus of the differential test
+ * (tests/helpers/corpus.ts).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,8 +14,14 @@ import { Lexer } from '../src/lexer';
 import { Parser } from '../src/parser';
 import { TsEmitter } from '../src/ts-emitter';
 import { format } from '../src/tools/format';
-import { migrate } from '../src/tools/migrate';
-import type { ImportDeclaration, ImportExpression, ExpressionStatement } from '../src/types';
+import { migrate, setFeatureSupport } from '../src/tools/migrate';
+import type {
+  ExportDeclaration,
+  ExpressionStatement,
+  ImportDeclaration,
+  ImportExpression,
+  ImportSpecifier,
+} from '../src/types';
 import { canonicalTmpDir } from './helpers/paths';
 
 jest.setTimeout(60000);
@@ -298,5 +306,150 @@ describe('ворид мавқуф (import defer)', () => {
     expect(migrated.code).toBe(
       'ворид мавқуф * чун ns аз "./m";\nсобит p = ворид.мавқуф("./m");\nчоп.сабт(ns.x, p);\n'
     );
+  });
+});
+
+describe('import and export names written as strings (TypeScript 5.6)', () => {
+  test('parse into names marked as strings', () => {
+    const { ast, errors } = parse(
+      [
+        'собит а = 1;',
+        'содир { а чун "а-б" };',
+        'содир { "x-y" чун з, "p q" } аз "./м";',
+        'содир * чун "н с" аз "./м";',
+        'ворид { "п-қ" чун р, х } аз "./м";',
+      ].join('\n')
+    );
+    expect(errors).toEqual([]);
+    const [, local, reexport, namespace, imported] = ast.body as [
+      unknown,
+      ExportDeclaration,
+      ExportDeclaration,
+      ExportDeclaration,
+      ImportDeclaration,
+    ];
+    expect(local.specifiers![0]).toMatchObject({
+      local: { name: 'а' },
+      exported: { name: 'а-б', isString: true },
+    });
+    expect(local.specifiers![0].local.isString).toBeUndefined();
+    expect(reexport.specifiers!.map(spec => [spec.local.isString, spec.exported.name])).toEqual([
+      [true, 'з'],
+      [true, 'p q'],
+    ]);
+    expect(namespace.namespaceExport).toMatchObject({ name: 'н с', isString: true });
+    const [string, plain] = imported.specifiers as ImportSpecifier[];
+    expect([string.imported.isString, string.local.name, plain.imported.isString]).toEqual([
+      true,
+      'р',
+      undefined,
+    ]);
+  });
+
+  test('a string is not a local name', () => {
+    const message = (name: string, at: string): string =>
+      `Parse error: The string "${name}" cannot be a local name: import it as '"${name}" чун ном', export a name as 'ном чун "${name}"' at line ${at}`;
+    expect(errorsOf('ворид { "а-б" } аз "./м";')).toEqual([message('а-б', '1, column 9')]);
+    expect(errorsOf('собит а = 1;\nсодир { "а-б" };')).toEqual([message('а-б', '2, column 9')]);
+    expect(errorsOf('ворид * чун "Н" аз "./м";')).toEqual([
+      expect.stringContaining("Expected namespace alias after 'чун'"),
+    ]);
+  });
+
+  test('a program that imports and exports names written as strings', () => {
+    expect(
+      run(
+        [
+          'ворид { "sep" чун ҷудокунанда, "basename" чун ном } аз "path";',
+          'собит а = ном("/а/б");',
+          'содир { а чун "а-б", а чун "илова" };',
+          'чоп.сабт(ҷудокунанда, а);',
+        ].join('\n')
+      )
+    ).toEqual(['/ б']);
+  });
+
+  test('CommonJS output names them as properties, on every target', () => {
+    const modules = {
+      м: 'собит а = 1;\nсодир { а чун "а-б", а чун "илова" };',
+      н: 'содир { "а-б" чун "в г", "илова" } аз "./м";\nсодир * чун "ҳама чиз" аз "./м";',
+    };
+    const source = [
+      'ворид { "в г" чун х, "илова" чун у, "ҳама чиз" чун Н } аз "./н";',
+      'чоп.сабт(х, у, Н["а-б"]);',
+    ].join('\n');
+    expect(runWithModules(source, modules)).toEqual(['1 1 1']);
+    const { code } = compile(modules.н, { typeCheck: false, target: 'es5' });
+    expect(code).toContain('module.exports["в г"] = __somon_reexport_0["а-б"];');
+    // A name written as a string is that string: "илова" is not the member name `push`
+    expect(compile(modules.м, { typeCheck: false }).code).toContain('module.exports.илова = а;');
+    expect(compile(source, { typeCheck: false }).code).toContain(
+      'const { "в г": х, "илова": у, "ҳама чиз": Н } = __somon_import_0;'
+    );
+    expect(runWithModules('ворид { илова } аз "./м";\nчоп.сабт(илова);', modules)).toEqual([
+      'undefined',
+    ]);
+  });
+
+  test('ES module output keeps them, from es2022', () => {
+    const source = [
+      'собит а = 1;',
+      'содир { а чун "а-б" };',
+      'содир { "x-y" чун з } аз "./м";',
+      'содир * чун "н с" аз "./м";',
+      'ворид { "п-қ" чун р } аз "./м";',
+      'чоп.сабт(р);',
+    ].join('\n');
+    const { code, errors } = compile(source, { typeCheck: false, module: 'esm' });
+    expect(errors).toEqual([]);
+    expect(code).toContain('export { а as "а-б" };');
+    expect(code).toContain('export { "x-y" as з } from "./м.js";');
+    expect(code).toContain('export * as "н с" from "./м.js";');
+    expect(code).toContain('import { "п-қ" as р } from "./м.js";');
+    const old = errorsOf(source, { module: 'esm', target: 'es2020' });
+    expect(old).toHaveLength(4);
+    expect(old[0]).toMatch(
+      /^Target error at line 2, column 1: String import and export names are only available when targeting es2022 or later \(target is es2020\)/
+    );
+  });
+
+  test('the TypeScript checker reads them across modules', () => {
+    const dir = canonicalTmpDir('somon-names-');
+    try {
+      fs.writeFileSync(path.join(dir, 'м.som'), 'собит а = 1;\nсодир { а чун "а-б" };\n');
+      const source = 'ворид { "а-б" чун х } аз "./м";\nтағ с: сатр = х;\nтағ р: рақам = х;';
+      expect(check(source, path.join(dir, 'main.som'))).toEqual([
+        expect.stringMatching(/^Type error \[TS2322\] at line 2, column 5: Type 'рақам'/),
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the formatter keeps them; migrate writes them from TypeScript', () => {
+    expect(format('содир {а чун   "а-б"};\nворид {"п-қ"   чун р} аз "./м";\n')).toBe(
+      'содир { а чун "а-б" };\nворид { "п-қ" чун р } аз "./м";\n'
+    );
+    const typescript = [
+      'const a = 1;',
+      'export { a as "a-b" };',
+      'export * as "n s" from "./m";',
+      'import { "p-q" as r } from "./m";',
+      'console.log(r);',
+      '',
+    ].join('\n');
+    const migrated = migrate(typescript);
+    expect(migrated.warnings).toEqual([]);
+    expect(migrated.code).toBe(
+      'собит a = 1;\nсодир { a чун "a-b" };\nсодир * чун "n s" аз "./m";\nворид { "p-q" чун r } аз "./m";\nчоп.сабт(r);\n'
+    );
+    // For a compiler without them, migrate says so
+    setFeatureSupport('stringExportNames', false);
+    try {
+      const warnings = migrate(typescript, { format: false }).warnings.map(w => w.line);
+      expect(warnings).toEqual(expect.arrayContaining([2, 3, 4]));
+    } finally {
+      setFeatureSupport('stringExportNames', undefined);
+    }
   });
 });
