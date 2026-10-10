@@ -359,6 +359,11 @@ somon --lang ru compile app.som
 somon --lang en compile app.som
 ```
 
+With `--lang tj` or `--lang ru`, the compiler explains its errors for learners
+in that language: the line of code with a caret under the place, and a hint
+(«Шояд `агар`-ро дар назар доштед?»). See
+[Diagnostics in the learner's language](docs/reference/diagnostics.md).
+
 #### Automatic Language Detection
 
 The CLI automatically detects your system language from environment variables:
@@ -579,6 +584,8 @@ npm run audit:examples
 - [🎓 Tutorial](docs/tutorial/) - Structured learning pathway
 - [📋 Examples](examples/) - Example programs
 - [🎯 Quick Reference](docs/reference/quick-start.md) - Essential syntax guide
+- [🩺 Compiler messages in Tajik and Russian](docs/reference/diagnostics.md) -
+  what the errors say and their codes
 
 ### **For Technical Teams**
 
