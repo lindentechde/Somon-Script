@@ -128,13 +128,15 @@ When resolving imports, the system tries multiple strategies:
 - Union types: `сатр | рақам`
 - Intersection types: `Корбар & Админ`
 - Tuple types: `[рақам, рақам, сатр]`
-- Interface inheritance with `мерос_мебарад`
+- Class and interface inheritance with `мерос` (`extends`), `татбиқ`
+  (`implements`)
 - Generic type parameters
 
 ### Bundle Output Formats
 
-- **CommonJS** (recommended): Self-contained module map with loader
-- **ESM/UMD** (experimental): Concatenated output, prefer CommonJS for execution
+- **CommonJS** (default): Self-contained module map with loader
+- **ESM**: An ES module that exports the entry's exports
+- **IIFE** (with `globalName`): For browsers
 
 ## Example Patterns
 
@@ -159,7 +161,7 @@ When resolving imports, the system tries multiple strategies:
     ҷамъиятӣ овоз_додан(): сатр { бозгашт "садо"; }
 }
 
-синф Саг мерос_мебарад Ҳайвон {
+синф Саг мерос Ҳайвон {
     ҷамъиятӣ овоз_додан(): сатр { бозгашт "вақ-вақ"; }
 }
 ```

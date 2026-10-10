@@ -36,6 +36,14 @@ describe('Performance Tests', () => {
 
   const largeProgram = new Array(50).fill(mediumProgram).join('\n\n');
 
+  // The timings below measure steady-state speed, so run the whole pipeline once
+  // first: a cold first call also pays for JIT compilation and, under --coverage,
+  // instrumentation of the lexer, parser and code generator.
+  beforeAll(() => {
+    new Parser(new Lexer(mediumProgram).tokenize()).parse();
+    compile(mediumProgram, { typeCheck: true });
+  });
+
   describe('Lexer Performance', () => {
     test('should tokenize small program quickly', () => {
       const start = performance.now();

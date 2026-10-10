@@ -16,14 +16,22 @@ const translations: Translations = {
       options: {
         output: 'Файли баромад (бо нобаёнӣ: вуруд бо .som ба .js иваз шуда, вагарна <вуруд>.js)',
         outDir: 'Феҳристи баромад',
-        target: 'Ҳадафи компилятсия',
+        target: 'Ҳадафи компилятсия (бо нобаёнӣ: es2022)',
+        lib: 'Китобхонаҳои TypeScript, ки ҳангоми иҷро дастрасанд, бо вергул (масалан es2022,dom)',
+        useDefineForClassFields: 'Майдонҳои синфро муайян кардан (бо нобаёнӣ аз es2022)',
+        noUseDefineForClassFields: 'Майдонҳои синфро дар конструктор таъин кардан',
         sourceMap: 'Харитаи манбаъҳоро эҷод кардан',
         noSourceMap: 'Харитаи манбаъҳоро хомӯш кардан',
         minify: 'Баромадро минималӣ кардан',
         noMinify: 'Минимализатсияро хомӯш кардан',
         noTypeCheck: 'Тафтиши навъҳоро хомӯш кардан',
         strict: 'Тафтиши қатъии навъҳоро фаъол кардан',
+        experimentalDecorators:
+          'Декораторҳои кӯҳна (озмоишӣ)-ро истифода бурдан, ки параметрҳоро низ оро медиҳанд',
         watch: 'Дар тағйирёбии файл аз нав компайл кардан',
+        module: "Формати модулҳои баромад: 'commonjs' (пешфарз) ё 'esm'",
+        checker: "Тафтиши навъҳо: 'somon' (пешфарз) ё 'typescript' (компайлери TypeScript)",
+        declaration: 'Инчунин файли эълонҳои TypeScript (.d.ts)-ро навиштан',
       },
       messages: {
         fileNotFound: (file: string) => `Хато: Файли '${file}' ёфт нашуд`,
@@ -31,6 +39,7 @@ const translations: Translations = {
         warnings: 'Огоҳиҳо:',
         compiled: (input: string, output: string) => `'${input}' ба '${output}' компайл шуд`,
         sourceMapGenerated: (file: string) => `Харитаи манбаъ эҷод шуд: '${file}'`,
+        declarationGenerated: (file: string) => `Эълонҳо эҷод шуданд: '${file}'`,
         watching: (file: string) => `'${file}'-ро барои тағйирот назорат мекунем...`,
         recompiling: (file: string) => `'${file}'-ро аз нав компайл мекунем...`,
         configChanged: (file: string) =>
@@ -81,7 +90,9 @@ const translations: Translations = {
       },
       options: {
         output: 'Роҳи файли баромад',
-        format: "Формати баста (танҳо 'commonjs' дастгирӣ мешавад)",
+        format:
+          'Формати баста: commonjs, esm ё iife (пешфарз: esm, агар модулҳо ба ES-модулҳо тартиб дода шаванд, вагарна commonjs)',
+        globalName: 'Тағйирёбандаи глобалӣ, ки содироти бастаи iife-ро мегирад',
         inlineSources: 'Манбаъҳои аслиро дар харитаи манбаъҳо ҷойгир кардан',
         externals: 'Модулҳои берунӣ (бо вергул ҷудошуда)',
       },
@@ -90,8 +101,6 @@ const translations: Translations = {
         bundleCreated: (output: string) => `✅ Баста эҷод шуд: ${output}`,
         sourceMapCreated: (file: string) => `🗺️ Харитаи манбаъ эҷод шуд: ${file}`,
         bundledModules: (count: number) => `📊 ${count} модул баста шуд`,
-        onlyCommonJsSupported: (format: string) =>
-          `СомонСкрипт дар ҳоли ҳозир танҳо формати бастаи 'commonjs'-ро дастгирӣ мекунад. Қабул шуд: '${format}'.`,
         bundleError: 'Хатои бастабандӣ:',
       },
     },
@@ -122,6 +131,20 @@ const translations: Translations = {
         analysisError: 'Хатои таҳлил:',
       },
     },
+    check: {
+      name: 'санҷиш',
+      description: 'Навъҳои файлҳои СомонСкриптро бе компайл санҷидан',
+      usage: '<файлҳо...> [интихобҳо]',
+      args: {
+        files: 'Файлҳои вурудии .som',
+      },
+      messages: {
+        noErrors: (files: number) => `✅ Дар ${files} файл хатои навъ нест`,
+        errorsFound: (errors: number, files: number) =>
+          `❌ Дар ${files} файл ${errors} хатои навъ ёфт шуд`,
+        fileErrors: (file: string) => `${file}:`,
+      },
+    },
     resolve: {
       name: 'ҳал',
       description: 'Мушаххаскунандаи модулро ба роҳи файл ҳал кардан',
@@ -141,6 +164,81 @@ const translations: Translations = {
         yes: 'Ҳа',
         no: 'Не',
         resolveError: 'Хатои ҳалкунӣ:',
+      },
+    },
+    fmt: {
+      name: 'формат',
+      description: 'Файлҳои СомонСкриптро бо услуби ягона формат кардан',
+      usage: '[интихобҳо] <файлҳо ё феҳристҳо...>',
+      args: {
+        paths: 'Файлҳои .som ё феҳристҳое, ки дар онҳо ҷустуҷӯ мешавад',
+      },
+      options: {
+        check: 'Танҳо файлҳои форматнашударо нишон додан (агар бошанд, рамзи баромад 1)',
+        write: 'Коди форматшударо ба файлҳо навиштан (бо нобаёнӣ)',
+        stdout: 'Коди форматшударо чоп кардан, на навиштан',
+        indent: 'Шумораи фосилаҳо дар як сатҳи ҷойгузорӣ (бо нобаёнӣ fmt.indent ё 4)',
+      },
+      messages: {
+        formatted: (file: string) => `${file} формат шуд`,
+        wouldReformat: (file: string) => `Формат нашудааст: ${file}`,
+        failed: (file: string) => `${file}-ро формат кардан ғайриимкон аст:`,
+        summary: (changed: number, total: number) => `${changed} аз ${total} файл тағйир ёфт`,
+        checkPassed: (total: number) => `Ҳамаи ${total} файл формат шудаанд`,
+        checkFailed: (changed: number) => `${changed} файл формат нашудааст`,
+        noFiles: 'Файлҳои .som ёфт нашуданд',
+        pathNotFound: (path: string) => `Хато: '${path}' вуҷуд надорад`,
+        invalidIndent: (value: string) =>
+          `Хато: --indent бояд адади бутун аз 1 то 16 бошад, на '${value}'`,
+      },
+    },
+    repl: {
+      name: 'интерактив',
+      description: 'Ҷаласаи интерактивии СомонСкриптро оғоз кардан',
+      messages: {
+        banner: (version: string) =>
+          `СомонСкрипт ${version}. Барои ёрӣ .ёрӣ, барои баромадан .баромад нависед.`,
+        help: [
+          '.ёрӣ, .help        Ин ёриро нишон додан',
+          '.баромад, .exit    Аз ҷаласа баромадан',
+          '.пок, .clear       Ҳамаи эълонҳо ва вуруди ҷориро фаромӯш кардан',
+          '.js                JavaScript-и аз вуруди охирин компайлшударо нишон додан',
+          '',
+          'То даме ки қавс, блок ё қолаб кушода аст, вуруд дар сатри навбатӣ идома меёбад.',
+          'Эълонҳо дар вурудҳои навбатӣ боқӣ мемонанд; интизор дар сатҳи боло кор мекунад.',
+        ].join('\n'),
+        cleared: 'Контекст тоза шуд.',
+        noCompiledCode: 'Ҳанӯз чизе компайл нашудааст.',
+        exitHint: '(Барои баромадан Ctrl+C-ро боз пахш кунед ё .баромад нависед)',
+        error: 'Хато:',
+      },
+    },
+    migrate: {
+      name: 'интиқол',
+      description: 'Файлҳои TypeScript-ро ба СомонСкрипт табдил додан',
+      usage: '[интихобҳо] <файл.ts ё феҳрист>',
+      args: {
+        input: 'Файли .ts ё феҳристи файлҳои .ts',
+      },
+      options: {
+        output: 'Файли баромад ё феҳристи баромад барои феҳрист',
+        stdout: 'Коди СомонСкриптро чоп кардан, на навиштан',
+      },
+      messages: {
+        migrated: (input: string, output: string) => `'${input}' ба '${output}' интиқол ёфт`,
+        warning: 'огоҳӣ:',
+        failed: (file: string) => `${file}-ро интиқол додан ғайриимкон аст:`,
+        noFiles: (input: string) => `Дар '${input}' файлҳои TypeScript ёфт нашуданд`,
+        summary: (files: number, warnings: number) =>
+          `${files} файл интиқол ёфт, ${warnings} огоҳӣ`,
+      },
+    },
+    lsp: {
+      name: 'lsp',
+      description:
+        'Сервери забони SomonScript-ро оғоз кардан (Language Server Protocol тавассути stdio)',
+      options: {
+        stdio: 'Мубодила тавассути stdin/stdout (пешфарз; барои муҳаррирҳо қабул мешавад)',
       },
     },
   },

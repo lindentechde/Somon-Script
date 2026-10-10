@@ -35,14 +35,20 @@ Notes:
 - Supports path mapping (`paths`) and `node_modules` packages. For packages,
   `package.json#exports` is used when present, like Node's `require()`: a
   string, `"."` and subpath keys (including `"./dir/*"` patterns) and the
-  `require`, `node` and `default` conditions. A subpath that is not exported is
-  an error. Without `exports`, `main` and then `index.*` are used.
+  `require`, `node` and `default` conditions; a package that exports a subpath
+  for `import` only (an ES module package) resolves to that module. A subpath
+  that is not exported is an error. Without `exports`, `main` and then `index.*`
+  are used.
+- `allowJs: false` and `resolveJsonModule: false` (both default to `true`) keep
+  the project's JavaScript (`.js`, `.cjs`, `.mjs`) and JSON files from being
+  imported; the files of packages stay importable.
 
 Containment policy:
 
 - Relative imports (`./`, `../`, any depth) and OS-absolute paths (`/home/…`,
-  `/tmp/…`, `C:\…`, or anything inside `baseUrl`) are allowed and not confined —
-  SomonScript sources are trusted code.
+  `/tmp/…`, `C:\…`, `\\server\share\…`, or anything inside `baseUrl`) are
+  allowed and not confined — SomonScript sources are trusted code. Both try the
+  extensions and `index.*` files.
 - Project-relative absolute imports (`/lib/utils`) resolve against `baseUrl` and
   must stay inside it; `paths` mappings and a package's `main`/`exports` targets
   must stay inside `baseUrl` / the package directory. These checks follow
@@ -63,7 +69,9 @@ Behavior:
 
 - Parses `.som` files and extracts dependencies from imports and re-exports.
   Local `.js` files contribute their static relative `require('./x')` calls;
-  `.json` files are validated.
+  `.json` files are validated. The entry point of a load is a SomonScript
+  program whatever its name (`program.txt`, a file named `.som`); an imported
+  file of another type is not compiled or bundled (`module.language`).
 - `module.dependencies` holds the specifiers as written,
   `module.resolvedDependencies` the module ids they resolved to.
 - Caches in-memory. A cache hit is re-validated against the file's mtime and
@@ -111,7 +119,9 @@ const bundle = await ms.bundle({
 Compilation:
 
 - `compile(entry)` loads dependencies, registers modules, topologically orders
-  them, and codegens to JS per module.
+  them, and codegens to JS per module. `entry` (also `bundle()`'s `entryPoint`)
+  is a file path, absolute or relative to the current directory, inside or
+  outside `baseUrl`.
 - Errors are returned in `errors` (and not logged): each has the `filePath` it
   is in, `line`/`column`, and for loading errors the `importer` and `specifier`.
 - Circular dependencies follow `loading.circularDependencyStrategy`: `'warn'`
@@ -125,15 +135,20 @@ Compilation:
 
 Bundling:
 
-- CommonJS: produces a self-contained module map + simple loader, then executes
-  the entry (currently the only supported bundle target).
+- Produces a self-contained module map + simple loader, then executes the entry.
+  `format` decides how the entry's exports reach the host: `'commonjs'`
+  (default) sets `module.exports`, `'esm'` is an ES module that `export`s them
+  (and `import`s what is not bundled), `'iife'` is a browser script that stores
+  them in `globalThis[globalName]`. The whole bundle is lowered once for
+  `compilation.target` (see
+  [llm-guide/16-targets.md](../llm-guide/16-targets.md)).
 - Local `.js` dependencies are included verbatim (their relative requires are
   rewritten too) and `.json` dependencies as `module.exports = <json>`. Packages
-  from `node_modules` and `externals` stay `require()` calls resolved by the
-  host at runtime, relative to the bundle file. A relative `require()` in a
-  local `.js` file that does not resolve at build time (an optional dependency
-  in `try`/`catch`, say) is left to the runtime as well; requires in comments
-  are ignored.
+  from `node_modules`, Node.js modules (`fs`, `node:path`, `fs/promises`) and
+  `externals` stay `require()` calls resolved by the host at runtime, relative
+  to the bundle file. A relative `require()` in a local `.js` file that does not
+  resolve at build time (an optional dependency in `try`/`catch`, say) is left
+  to the runtime as well; `require(…)` in comments and strings is no require.
 - Bundles are relocatable: they contain no absolute paths of the build machine,
   and every bundled module sees the bundle file's `__filename` and `__dirname`.
   `somon run` instead bundles with `modulePaths: true`: each module gets its

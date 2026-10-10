@@ -1,11 +1,22 @@
 import { transformSync, type PluginItem } from '@babel/core';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
-import ts from 'typescript';
 
 import { CodeGenerator, type CodeMapping } from './codegen';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
-import { TypeChecker } from './type-checker';
+import {
+  composeSourceMaps,
+  DEFAULT_TARGET,
+  isTarget,
+  lowerToTarget,
+  TARGETS,
+  validateLib,
+  type Target,
+  type TargetDiagnostic,
+} from './targets';
+import { TypeChecker, type TypeCheckError } from './type-checker';
 
 /**
  * Configuration flags that control how SomonScript source is transformed into JavaScript.
@@ -26,9 +37,30 @@ export interface CompileOptions {
    */
   minify?: boolean;
   /**
-   * JavaScript target version for the generated code. Defaults to `es2020` for modern runtimes.
+   * ECMAScript version the generated code must run on (`es5` … `es2025`,
+   * `esnext`). Defaults to `es2022`. Newer syntax is lowered with TypeScript;
+   * what the target cannot express (BigInt literals, some regular expression
+   * flags) is a compile error.
    */
-  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  target?: Target;
+  /**
+   * TypeScript lib names (`["es2022", "dom"]`) describing the APIs available
+   * at run time, used by the TypeScript checker. Defaults to the target's
+   * ECMAScript lib and the DOM. Validated against the libs TypeScript ships.
+   */
+  lib?: string[];
+  /**
+   * Class fields are defined (`Object.defineProperty` semantics) rather than
+   * assigned in the constructor. Defaults to TypeScript's default for the
+   * target: on from `es2022`.
+   */
+  useDefineForClassFields?: boolean;
+  /**
+   * Lower newer syntax for `target` (default). With `false` the code is only
+   * checked against the target and keeps its syntax: the bundler lowers the
+   * whole bundle once instead of every module.
+   */
+  downlevel?: boolean;
   /**
    * Toggle semantic analysis. Disable only when experimenting with partially valid programs.
    */
@@ -43,6 +75,39 @@ export interface CompileOptions {
    * interrupted. Enforce time limits around the call (e.g. in a worker).
    */
   timeout?: number;
+  /**
+   * TypeScript's legacy decorators (`experimentalDecorators`), which also
+   * decorate parameters. Without it decorators are the standard (TC39) ones.
+   * Either way TypeScript lowers them, since no JavaScript runtime runs them.
+   */
+  experimentalDecorators?: boolean;
+  /**
+   * Module format of the output: CommonJS `require`/`module.exports` (the
+   * default) or ES modules `import`/`export`, which also allow top-level
+   * `интизор` and `ворид.meta`.
+   */
+  module?: 'commonjs' | 'esm';
+  /**
+   * Allow top-level `интизор` in CommonJS output, for hosts that run the code
+   * inside an async function (as the REPL does).
+   */
+  topLevelAwait?: boolean;
+  /**
+   * Type checker: SomonScript's own (`somon`, the default) or the TypeScript
+   * compiler (`typescript`), which checks the program with TypeScript's full
+   * semantics, including imported `.som` modules and `.d.ts` typings.
+   */
+  checker?: 'somon' | 'typescript';
+  /** Language of the TypeScript checker's diagnostics: English (default), Russian or Tajik. */
+  locale?: 'en' | 'ru' | 'tj';
+  /** Also produce a TypeScript declaration file (`CompileResult.declaration`). */
+  declaration?: boolean;
+  /**
+   * Path of the source file. The TypeScript checker (and `declaration`)
+   * resolve imports and node_modules typings from it; defaults to
+   * `source.som` in the current directory.
+   */
+  filePath?: string;
 }
 
 /**
@@ -62,6 +127,8 @@ export interface CompileResult {
   errors: string[];
   /** Diagnostics that highlight potential problems but do not stop emission. */
   warnings: string[];
+  /** TypeScript declarations (`.d.ts` text) when `declaration` is enabled and code was emitted. */
+  declaration?: string;
 }
 
 /**
@@ -85,21 +152,48 @@ function compileInternal(source: string, options: CompileOptions): CompileResult
   const warnings: string[] = [];
 
   try {
+    if (routeTargetOptionErrors(options, errors)) {
+      return { code: '', errors, warnings };
+    }
+
     const { ast, parserErrors } = parseSource(source);
 
     if (routeParserErrors(parserErrors, errors)) {
       return { code: '', errors, warnings };
     }
 
-    if (runTypeCheckStage(ast, source, options, errors, warnings)) {
+    const typeScript = runTypeScriptStage(ast, source, options);
+    if (runTypeCheckStage(ast, source, options, { errors, warnings }, typeScript?.errors)) {
       return { code: '', errors, warnings };
     }
 
-    return emitCode(ast, options, errors, warnings, source);
+    const result = emitCode(ast, options, errors, warnings, source);
+    if (typeScript?.declaration !== undefined && result.code !== '') {
+      result.declaration = typeScript.declaration;
+    }
+    return result;
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
     return { code: '', errors, warnings };
   }
+}
+
+/**
+ * `target` and `lib` come from untyped sources too (JavaScript callers,
+ * configuration files): reject unknown values instead of guessing. Returns
+ * true when compilation must stop.
+ */
+function routeTargetOptionErrors(options: CompileOptions, errors: string[]): boolean {
+  const before = errors.length;
+  if (options.target !== undefined && !isTarget(options.target)) {
+    errors.push(
+      `Unknown target '${String(options.target)}'. Expected one of: ${TARGETS.join(', ')}`
+    );
+  }
+  if (options.lib !== undefined) {
+    errors.push(...validateLib(options.lib).map(message => `Invalid lib: ${message}`));
+  }
+  return errors.length > before;
 }
 
 /**
@@ -115,20 +209,59 @@ function routeParserErrors(parserErrors: string[], errors: string[]): boolean {
 
 /**
  * Runs the type-check stage unless explicitly disabled. Returns true when
- * strict-mode type errors should abort emission.
+ * strict-mode type errors should abort emission. With `checker: 'typescript'`
+ * it reports `typeScriptErrors`, the TypeScript stage's findings.
  */
 function runTypeCheckStage(
   ast: ReturnType<Parser['parse']>,
   source: string,
   options: CompileOptions,
-  errors: string[],
-  warnings: string[]
+  { errors, warnings }: { errors: string[]; warnings: string[] },
+  typeScriptErrors: TypeCheckError[] | undefined
 ): boolean {
   if (options.typeCheck === false) return false;
-  const result = runTypeCheck(source, ast, Boolean(options.strict));
+  // With `checker: 'typescript'` and type checking on, the TypeScript stage has run
+  const result =
+    options.checker === 'typescript'
+      ? { errors: typeScriptErrors!.map(formatTypeError), warnings: [] }
+      : runTypeCheck(source, ast, Boolean(options.strict));
   errors.push(...result.errors);
   warnings.push(...result.warnings);
   return Boolean(options.strict) && result.errors.length > 0;
+}
+
+/**
+ * The TypeScript compiler's part: type errors (with `checker: 'typescript'`)
+ * and declarations (`declaration`). Loaded only when needed.
+ */
+function runTypeScriptStage(
+  ast: ReturnType<Parser['parse']>,
+  source: string,
+  options: CompileOptions
+): { errors: TypeCheckError[]; declaration?: string } | undefined {
+  const typeCheck = options.typeCheck !== false && options.checker === 'typescript';
+  if (!typeCheck && !options.declaration) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { checkWithTypeScript } = require('./tsc-checker') as typeof import('./tsc-checker');
+  const [result] = checkWithTypeScript(
+    [{ fileName: options.filePath ?? 'source.som', source, ast }],
+    {
+      strict: options.strict,
+      target: options.target,
+      lib: options.lib,
+      useDefineForClassFields: options.useDefineForClassFields,
+      experimentalDecorators: options.experimentalDecorators,
+      locale: options.locale,
+      declaration: options.declaration,
+      typeCheck,
+    }
+  );
+  return result;
+}
+
+/** A type error in the format the compiler reports it. */
+export function formatTypeError(err: TypeCheckError): string {
+  return `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`;
 }
 
 function emitCode(
@@ -138,7 +271,13 @@ function emitCode(
   warnings: string[],
   source: string
 ): CompileResult {
-  const generator = new CodeGenerator();
+  const generator = new CodeGenerator({
+    experimentalDecorators: options.experimentalDecorators,
+    module: options.module,
+    topLevelAwait: options.topLevelAwait,
+    isDirectoryImport:
+      options.filePath === undefined ? undefined : directoryImports(options.filePath),
+  });
   const generated = generator.generateWithMappings(ast);
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
@@ -150,10 +289,20 @@ function emitCode(
   let map = options.sourceMap
     ? buildSourceMap(generated.mappings, sourceFileName, source)
     : undefined;
-  const transpileResult = transpile(generated.code, options);
-  let code = transpileResult.code;
-  if (map && transpileResult.map) {
-    map = chainSourceMaps(transpileResult.map, map, source);
+  const lowered = lowerToTarget(generated.code, {
+    target: options.target ?? DEFAULT_TARGET,
+    useDefineForClassFields: options.useDefineForClassFields,
+    experimentalDecorators: options.experimentalDecorators,
+    sourceMap: options.sourceMap,
+    downlevel: options.downlevel,
+  });
+  if (lowered.diagnostics.length > 0) {
+    errors.push(...targetErrors(lowered.diagnostics, generated.mappings, source));
+    return { code: '', errors, warnings };
+  }
+  let code = lowered.code;
+  if (map && lowered.map) {
+    map = composeSourceMaps(lowered.map, map);
   }
 
   if (options.minify) {
@@ -168,14 +317,30 @@ function emitCode(
   };
 }
 
+/**
+ * Whether a relative specifier of the file at `filePath` names a directory
+ * with an `index.som` (and no `.som` or `.js` file of that name), as the
+ * module system resolves `./м`.
+ */
+function directoryImports(filePath: string): (_specifier: string) => boolean {
+  const directory = path.dirname(path.resolve(filePath));
+  return specifier => {
+    const base = path.resolve(directory, specifier);
+    // The modules the compiled file imports (S8707)
+    return (
+      !fs.existsSync(`${base}.som`) && // NOSONAR
+      !fs.existsSync(`${base}.js`) && // NOSONAR
+      fs.existsSync(path.join(base, 'index.som')) // NOSONAR
+    );
+  };
+}
+
 function parseSource(source: string) {
   const lexer = new Lexer(source);
   const tokens = lexer.tokenize();
   const parser = new Parser(tokens);
   const ast = parser.parse();
-  const parserErrors = parser
-    .getErrors()
-    .map(err => (err.startsWith('Parse error') ? err : `Parse error: ${err}`));
+  const parserErrors = parser.getErrors().map(err => `Parse error: ${err}`);
   return { ast, parserErrors };
 }
 
@@ -183,10 +348,7 @@ function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: 
   const checker = new TypeChecker(source, { strict });
   const result = checker.check(ast);
   return {
-    errors: result.errors.map(
-      err =>
-        `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`
-    ),
+    errors: result.errors.map(formatTypeError),
     warnings: result.warnings.map(
       warn =>
         `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`
@@ -194,31 +356,29 @@ function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: 
   };
 }
 
-function transpile(code: string, options: CompileOptions) {
-  const targetMap: Record<NonNullable<CompileOptions['target']>, ts.ScriptTarget> = {
-    es5: ts.ScriptTarget.ES5,
-    es2015: ts.ScriptTarget.ES2015,
-    es2020: ts.ScriptTarget.ES2020,
-    esnext: ts.ScriptTarget.ESNext,
-  };
-  const target = options.target ?? 'es2020';
-  if (target === 'es2020') {
-    return { code };
-  }
-  const transpile = ts.transpileModule(code, {
-    compilerOptions: {
-      target: targetMap[target],
-      module: ts.ModuleKind.ESNext,
-      sourceMap: options.sourceMap,
-    },
+/**
+ * Errors for what the target cannot express, at the position of the statement
+ * around it in the SomonScript source (the code generator maps statements).
+ */
+function targetErrors(
+  diagnostics: TargetDiagnostic[],
+  mappings: CodeMapping[],
+  source: string
+): string[] {
+  const sourceLines = source.split(/\r?\n/);
+  const messages = diagnostics.map(diagnostic => {
+    let original = { line: diagnostic.line, column: 0 };
+    for (const mapping of mappings) {
+      const { line, column } = mapping.generated;
+      if (line > diagnostic.line || (line === diagnostic.line && column > diagnostic.column)) break;
+      original = mapping.original;
+    }
+    // Every target error is inside a statement, which has a mapping
+    const snippet = sourceLines[original.line - 1].trim();
+    return `Target error at line ${original.line}, column ${original.column + 1}: ${diagnostic.message}\n> ${snippet}`;
   });
-  const map =
-    options.sourceMap && transpile.sourceMapText
-      ? (JSON.parse(transpile.sourceMapText) as unknown as RawSourceMap)
-      : undefined;
-  // TypeScript points at a `module.js.map` file that is never written
-  const outputText = transpile.outputText.replace(/\n?\/\/# sourceMappingURL=\S*\s*$/, '\n');
-  return { code: outputText, map };
+  // Two literals in one statement end up at the same position
+  return [...new Set(messages)];
 }
 
 function outputFileName(sourceFileName: string): string {
@@ -240,74 +400,6 @@ function buildSourceMap(
   return generator.toJSON();
 }
 
-/**
- * Compose `outer` (transpiled JS → generated JS) with `inner` (generated JS →
- * `.som`). Done by hand because `source-map`'s consumer is asynchronous and
- * `compile` is not. Each outer segment takes the nearest inner mapping at or
- * before its position on the same line.
- */
-function chainSourceMaps(outer: RawSourceMap, inner: RawSourceMap, source: string): RawSourceMap {
-  const innerLines = decodeMappings(inner.mappings);
-  const sourceFileName = inner.sources[0];
-  const generator = new SourceMapGenerator({ file: inner.file });
-  generator.setSourceContent(sourceFileName, source);
-
-  decodeMappings(outer.mappings).forEach((segments, outerLine) => {
-    for (const [column, , line, originalColumn] of segments) {
-      if (line === undefined) continue;
-      const candidates = innerLines[line] ?? [];
-      let match: number[] | undefined;
-      for (const candidate of candidates) {
-        if (candidate[0] > originalColumn) break;
-        match = candidate;
-      }
-      match ??= candidates[0];
-      if (!match || match.length < 4) continue;
-      generator.addMapping({
-        generated: { line: outerLine + 1, column },
-        original: { line: match[2] + 1, column: match[3] },
-        source: sourceFileName,
-      });
-    }
-  });
-  return generator.toJSON();
-}
-
-const BASE64_DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/**
- * Decode a source map `mappings` string into absolute segments per generated
- * line: [column, sourceIndex, originalLine (0-based), originalColumn, name].
- */
-function decodeMappings(mappings: string): number[][][] {
-  const state = [0, 0, 0, 0, 0];
-  return mappings.split(';').map(lineText => {
-    state[0] = 0;
-    return lineText
-      .split(',')
-      .filter(segment => segment.length > 0)
-      .map(segment => decodeVlq(segment).map((delta, index) => (state[index] += delta)));
-  });
-}
-
-function decodeVlq(segment: string): number[] {
-  const values: number[] = [];
-  let value = 0;
-  let shift = 0;
-  for (const char of segment) {
-    const digit = BASE64_DIGITS.indexOf(char);
-    value += (digit & 31) << shift;
-    if (digit & 32) {
-      shift += 5;
-    } else {
-      values.push(value & 1 ? -(value >>> 1) : value >>> 1);
-      value = 0;
-      shift = 0;
-    }
-  }
-  return values;
-}
-
 let minifyPreset: PluginItem | undefined;
 
 /** `babel-preset-minify` is a regular dependency; load it once, on first use. */
@@ -317,9 +409,9 @@ function loadMinifyPreset(): PluginItem {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       minifyPreset = require('babel-preset-minify') as PluginItem;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      // `require` fails with an Error
       throw new Error(
-        `Minification failed: the 'babel-preset-minify' dependency could not be loaded (${reason}). Reinstall the package dependencies.`
+        `Minification failed: the 'babel-preset-minify' dependency could not be loaded (${(error as Error).message}). Reinstall the package dependencies.`
       );
     }
   }
@@ -332,9 +424,12 @@ function minifyCode(
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
   const babel = transformSync(code, {
+    // The options here are the whole configuration: no babel.config.json or .babelrc
+    configFile: false,
+    babelrc: false,
     sourceMaps: sourceMap,
     // Babel composes its own map with this one, so the result maps to the .som input
-    inputSourceMap: map ? { ...map, file: map.file || '' } : undefined,
+    inputSourceMap: map,
     presets: [loadMinifyPreset()],
     comments: false,
     compact: true,

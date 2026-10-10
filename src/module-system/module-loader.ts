@@ -1,10 +1,18 @@
 import * as fs from 'node:fs';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
-import { parseSync } from '@babel/core';
 import { ModuleResolver, ResolvedModule } from './module-resolver';
+import { findRequireCalls } from './require-calls';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
-import { Program, ImportDeclaration, ExportDeclaration } from '../types';
+import {
+  Program,
+  Statement,
+  ImportDeclaration,
+  ImportEqualsDeclaration,
+  ImportSpecifier,
+  ExportDeclaration,
+} from '../types';
 import { moduleLoaderLogger as logger } from './logger';
 
 type BufferEncoding =
@@ -31,6 +39,8 @@ export interface LoadedModule {
   resolvedDependencies?: string[];
   /** True for modules resolved from a module directory such as node_modules */
   isExternalLibrary?: boolean;
+  /** What the file holds, for modules read from files (see languageOf) */
+  language?: ModuleLanguage;
   exports: ModuleExports;
   isLoaded: boolean;
   isLoading: boolean;
@@ -39,6 +49,22 @@ export interface LoadedModule {
   mtimeMs?: number;
   size?: number;
   error?: Error;
+}
+
+export type ModuleLanguage = 'somonscript' | 'javascript' | 'json' | 'other';
+
+/**
+ * What a module file holds: SomonScript for names ending in `.som` (also a file named
+ * just `.som`), JavaScript for `.js`, JSON for `.json`. The entry point of a load is
+ * a SomonScript program whatever its name (`somon run program.txt`); an import of
+ * another file is 'other' and left to the run time.
+ */
+export function languageOf(filePath: string, isEntry: boolean): ModuleLanguage {
+  if (filePath.endsWith('.som')) return 'somonscript';
+  const extension = path.extname(filePath);
+  if (extension === '.js') return 'javascript';
+  if (extension === '.json') return 'json';
+  return isEntry ? 'somonscript' : 'other';
 }
 
 // Export map for a module. "default" holds default export runtime value; named holds each named export.
@@ -100,36 +126,19 @@ interface DependencyReference {
   optional?: boolean;
 }
 
-/** The parts of a Babel AST node that the JavaScript dependency scan looks at. */
-interface BabelNode {
-  type?: string;
-  name?: string;
-  value?: unknown;
-  callee?: BabelNode;
-  arguments?: BabelNode[];
-  expressions?: unknown[];
-  quasis?: Array<{ value?: { cooked?: string } }>;
-  loc?: { start: { line: number; column: number } };
-}
+const RELATIVE_SPECIFIER = /^\.{1,2}\//;
 
-/** `'./x'` for a `require('./x')` call with a constant relative specifier. */
-function relativeRequireSpecifier(node: BabelNode): string | undefined {
-  if (
-    node.type !== 'CallExpression' ||
-    node.callee?.type !== 'Identifier' ||
-    node.callee.name !== 'require' ||
-    node.arguments?.length !== 1
-  ) {
-    return undefined;
-  }
-  const [argument] = node.arguments;
-  let specifier: unknown;
-  if (argument.type === 'StringLiteral') {
-    specifier = argument.value;
-  } else if (argument.type === 'TemplateLiteral' && argument.expressions?.length === 0) {
-    specifier = argument.quasis?.[0]?.value?.cooked;
-  }
-  return typeof specifier === 'string' && /^\.{1,2}\//.test(specifier) ? specifier : undefined;
+/**
+ * The position a compiler message names: `… at line 3, column 7: …`.
+ * @internal
+ */
+export function locationOf(message: string): { line?: number; column?: number } {
+  const match = /line (\d+)(?:,\s*column (\d+))?/i.exec(message);
+  if (!match) return {};
+  return {
+    line: Number.parseInt(match[1], 10),
+    column: match[2] ? Number.parseInt(match[2], 10) : undefined,
+  };
 }
 
 const MAX_SPECIFIER_LENGTH = 500;
@@ -169,27 +178,34 @@ export class ModuleLoader {
    * Load module synchronously
    */
   loadSync(specifier: string, fromFile: string): LoadedModule {
-    const isTopLevel = this.loadingStack.size === 0;
-    const module = this.loadSyncInternal(specifier, fromFile);
-    if (isTopLevel) {
-      // Enforce limits only between builds, never evicting what this build needs
-      this.enforceCacheLimits(this.collectDependencyClosure(module.id));
+    // A load is synchronous: it is never called while another one runs, and the
+    // dependencies of a module are loaded with loadSyncInternal()
+    if (!this.options.cache) {
+      // Without a cache every load reads its files again; the modules of one load
+      // are kept until the next, so that cycles and shared modules load once.
+      this.clearCache();
     }
+    const module = this.loadSyncInternal(specifier, fromFile, true);
+    // Enforce limits only between builds, never evicting what this build needs
+    this.enforceCacheLimits(this.collectDependencyClosure(module.id));
     return module;
   }
 
-  private loadSyncInternal(specifier: string, fromFile: string): LoadedModule {
+  private loadSyncInternal(specifier: string, fromFile: string, isEntry: boolean): LoadedModule {
     const externalMatch = this.matchExternal(specifier);
     if (externalMatch) {
-      return this.getOrCreateExternalModule(specifier, externalMatch);
+      return this.getOrCreateExternalModule(externalMatch);
     }
 
     const resolved = this.resolver.resolve(specifier, fromFile);
     const moduleId = this.getModuleId(resolved.resolvedPath);
+    const language = languageOf(resolved.resolvedPath, isEntry);
 
-    const cached = this.options.cache ? this.moduleCache.get(moduleId) : undefined;
+    // A module being loaded is in the cache from its start: meeting it again is a cycle.
+    // A file loaded as an import and then as an entry (or back) is read again.
+    const cached = this.moduleCache.get(moduleId);
     if (cached?.isLoaded) {
-      if (this.isFresh(cached)) {
+      if (cached.language === language && this.isFresh(cached)) {
         cached.lastAccessed = Date.now();
         return cached;
       }
@@ -198,15 +214,14 @@ export class ModuleLoader {
       return this.handleCircularDependency(moduleId, cached);
     }
 
-    // Check for circular dependency in loading stack
-    if (this.loadingStack.has(moduleId)) {
-      return this.handleCircularDependency(moduleId);
-    }
-
-    return this.loadModuleSync(resolved, moduleId);
+    return this.loadModuleSync(resolved, moduleId, language);
   }
 
-  private loadModuleSync(resolved: ResolvedModule, moduleId: string): LoadedModule {
+  private loadModuleSync(
+    resolved: ResolvedModule,
+    moduleId: string,
+    language: ModuleLanguage
+  ): LoadedModule {
     const module: LoadedModule = {
       id: moduleId,
       resolvedPath: resolved.resolvedPath,
@@ -220,6 +235,7 @@ export class ModuleLoader {
       dependencies: [],
       resolvedDependencies: [],
       isExternalLibrary: resolved.isExternalLibrary,
+      language,
       exports: { named: {} },
       isLoaded: false,
       isLoading: true,
@@ -230,9 +246,7 @@ export class ModuleLoader {
     this.loadingStack.add(moduleId);
 
     try {
-      if (this.options.cache) {
-        this.moduleCache.set(moduleId, module);
-      }
+      this.moduleCache.set(moduleId, module);
 
       const stat = fs.statSync(resolved.resolvedPath);
       module.mtimeMs = stat.mtimeMs;
@@ -250,7 +264,7 @@ export class ModuleLoader {
       for (const ref of references) {
         let dependency: LoadedModule;
         try {
-          dependency = this.loadSyncInternal(ref.specifier, resolved.resolvedPath);
+          dependency = this.loadSyncInternal(ref.specifier, resolved.resolvedPath, false);
         } catch (error) {
           throw this.attributeDependencyError(error, ref, resolved.resolvedPath);
         }
@@ -259,19 +273,17 @@ export class ModuleLoader {
 
       module.isLoaded = true;
       module.isLoading = false;
-
-      if (this.options.cache) {
-        this.currentMemoryUsage += this.estimateModuleSize(module);
-      }
+      this.currentMemoryUsage += this.estimateModuleSize(module);
 
       return module;
     } catch (error) {
       // Keep module in cache with error state so callers can inspect broken dependencies
       module.isLoading = false;
+      // Reading the file (fs) fails with an Error
       const loadError =
         error instanceof ModuleLoadError
           ? error
-          : new ModuleLoadError(error instanceof Error ? error.message : String(error), {
+          : new ModuleLoadError((error as Error).message, {
               filePath: resolved.resolvedPath,
               cause: error,
             });
@@ -290,16 +302,17 @@ export class ModuleLoader {
   private readDependencies(module: LoadedModule, resolved: ResolvedModule): DependencyReference[] {
     const filePath = resolved.resolvedPath;
 
-    if (resolved.extension === '.som') {
+    if (module.language === 'somonscript') {
       let parser: Parser;
       try {
         parser = new Parser(new Lexer(module.source).tokenize());
         module.ast = parser.parse();
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        // The lexer throws an Error for what it cannot read (an unterminated string, …)
+        const message = (error as Error).message;
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${message}`, {
           filePath,
-          ...this.extractLocation(message),
+          ...locationOf(message),
           cause: error,
         });
       }
@@ -308,39 +321,30 @@ export class ModuleLoader {
       if (parseErrors.length > 0) {
         throw new ModuleLoadError(`Parse error(s) in ${filePath}: ${parseErrors[0]}`, {
           filePath,
-          ...this.extractLocation(parseErrors[0]),
+          ...locationOf(parseErrors[0]),
         });
       }
 
       return this.extractDependencies(module.ast, filePath);
     }
 
-    if (resolved.extension === '.json') {
+    if (module.language === 'json') {
       try {
         JSON.parse(module.source);
       } catch (error) {
-        throw new ModuleLoadError(
-          `Invalid JSON in ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
-          { filePath, cause: error }
-        );
+        throw new ModuleLoadError(`Invalid JSON in ${filePath}: ${(error as Error).message}`, {
+          filePath,
+          cause: error,
+        });
       }
       return [];
     }
 
-    if (resolved.extension === '.js' && !resolved.isExternalLibrary) {
+    if (module.language === 'javascript' && !resolved.isExternalLibrary) {
       return this.extractJsDependencies(module.source);
     }
 
     return [];
-  }
-
-  private extractLocation(message: string): { line?: number; column?: number } {
-    const match = /line (\d+)(?:,\s*column (\d+))?/i.exec(message);
-    if (!match) return {};
-    return {
-      line: Number.parseInt(match[1], 10),
-      column: match[2] ? Number.parseInt(match[2], 10) : undefined,
-    };
   }
 
   /**
@@ -354,17 +358,18 @@ export class ModuleLoader {
     importer: string
   ): ModuleLoadError {
     if (error instanceof ModuleLoadError) {
+      // The error of a dependency, which is another file (an import of the importer
+      // itself is a cycle, met in the cache)
       if (error.importer === undefined) {
         error.importer = importer;
         error.specifier = ref.specifier;
-        if (error.filePath !== importer) {
-          error.message += ` (imported as '${ref.specifier}' from ${importer})`;
-        }
+        error.message += ` (imported as '${ref.specifier}' from ${importer})`;
       }
       return error;
     }
 
-    const reason = error instanceof Error ? error.message : String(error);
+    // The resolver and the cycle check throw Error objects
+    const reason = (error as Error).message;
     return new ModuleLoadError(`Cannot import '${ref.specifier}' in ${importer}: ${reason}`, {
       filePath: importer,
       importer,
@@ -388,7 +393,12 @@ export class ModuleLoader {
       return false;
     }
 
-    for (const depId of module.resolvedDependencies ?? []) {
+    // Modules read from files (not external ones) list their resolved dependencies,
+    // one for each specifier
+    for (const [index, depId] of module.resolvedDependencies!.entries()) {
+      // An import that became an external, or stopped being one, resolves differently now
+      const isExternal = this.matchExternal(module.dependencies[index]) !== null;
+      if (depId.startsWith('external:') !== isExternal) return false;
       const dependency = this.moduleCache.get(depId);
       if (dependency?.isLoading) continue; // part of the cycle being loaded right now
       if (!dependency?.isLoaded || !this.isFresh(dependency, seen)) {
@@ -398,35 +408,19 @@ export class ModuleLoader {
     return true;
   }
 
-  private handleCircularDependency(moduleId: string, module?: LoadedModule): LoadedModule {
-    const message = `Circular dependency detected: ${moduleId}`;
-    const chain = Array.from(this.loadingStack);
+  /** Meeting `module` again while it loads: the partly loaded module, or an error. */
+  private handleCircularDependency(moduleId: string, module: LoadedModule): LoadedModule {
+    const chain = [...this.loadingStack, moduleId].join(' -> ');
+    const message = `Circular dependency detected: ${moduleId} (chain: ${chain})`;
 
-    switch (this.options.circularDependencyStrategy) {
-      case 'error':
-        throw new Error(`${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`);
-      case 'warn':
-        this.warnings.push(`${message} (chain: ${chain.join(' -> ')} -> ${moduleId})`);
-        break;
-      case 'ignore':
-        break;
+    const strategy = this.options.circularDependencyStrategy;
+    if (strategy === 'error') {
+      throw new Error(message);
     }
-
-    // Return partial module for circular dependencies
-    return (
-      module || {
-        id: moduleId,
-        resolvedPath: moduleId,
-        source: '',
-        ast: { type: 'Program', body: [], line: 1, column: 1 },
-        dependencies: [],
-        resolvedDependencies: [],
-        exports: { named: {} },
-        isLoaded: false,
-        isLoading: true,
-        lastAccessed: Date.now(),
-      }
-    );
+    if (strategy === 'warn') {
+      this.warnings.push(message);
+    }
+    return module;
   }
 
   /**
@@ -436,33 +430,37 @@ export class ModuleLoader {
   private extractDependencies(ast: Program, filePath: string): DependencyReference[] {
     const references: DependencyReference[] = [];
 
-    if (!ast?.body || !Array.isArray(ast.body)) {
-      return references;
-    }
-
     for (const statement of ast.body) {
-      if (statement?.type !== 'ImportDeclaration' && statement?.type !== 'ExportDeclaration') {
+      if (
+        statement.type !== 'ImportDeclaration' &&
+        statement.type !== 'ExportDeclaration' &&
+        statement.type !== 'ImportEqualsDeclaration'
+      ) {
         continue;
       }
-      const source = (statement as ImportDeclaration | ExportDeclaration).source;
-      if (!source) {
+      const source = (statement as ImportDeclaration | ExportDeclaration | ImportEqualsDeclaration)
+        .source;
+      // `содир { х };` and `ворид х = Н.а;` import nothing; `ворид навъ { Т } аз …` and
+      // `содир навъ { Т } аз …` load nothing at run time
+      if (!source || ModuleLoader.isTypeOnly(statement)) {
         continue;
       }
 
-      const specifier = source.value;
+      // The parser takes the module of an import from a string literal
+      const specifier = source.value as string;
       const location = { line: statement.line, column: statement.column };
       const reject = (reason: string): never => {
         throw new ModuleLoadError(`Invalid import specifier in ${filePath}: ${reason}`, {
           filePath,
-          specifier: typeof specifier === 'string' ? specifier : undefined,
+          specifier,
           ...location,
         });
       };
 
-      if (typeof specifier !== 'string' || specifier.trim().length === 0) {
+      const normalizedSpec = specifier.trim();
+      if (normalizedSpec.length === 0) {
         reject('the module specifier must be a non-empty string');
       }
-      const normalizedSpec = (specifier as string).trim();
       if (normalizedSpec.length > MAX_SPECIFIER_LENGTH) {
         reject(
           `'${normalizedSpec.slice(0, 40)}…' is longer than ${MAX_SPECIFIER_LENGTH} characters`
@@ -476,6 +474,15 @@ export class ModuleLoader {
     }
 
     return references;
+  }
+
+  /** An import or re-export of types only, which the compiled code does not `require`. */
+  private static isTypeOnly(statement: Statement): boolean {
+    const declaration = statement as { importKind?: 'type'; exportKind?: 'type' };
+    if (declaration.importKind === 'type' || declaration.exportKind === 'type') return true;
+    if (statement.type !== 'ImportDeclaration') return false;
+    const specifiers = (statement as ImportDeclaration).specifiers;
+    return specifiers.length > 0 && specifiers.every(spec => (spec as ImportSpecifier).importKind);
   }
 
   private canResolve(specifier: string, fromFile: string): boolean {
@@ -495,46 +502,18 @@ export class ModuleLoader {
    * Babel cannot parse fall back to a plain text scan.
    */
   private extractJsDependencies(source: string): DependencyReference[] {
-    let ast: unknown;
-    try {
-      ast = parseSync(source, {
-        configFile: false,
-        babelrc: false,
-        sourceType: 'unambiguous',
-        parserOpts: { allowReturnOutsideFunction: true, errorRecovery: true },
-      });
-    } catch {
-      ast = null;
-    }
-    if (!ast) {
+    const calls = findRequireCalls(source);
+    if (!calls) {
       return this.scanJsRequires(source);
     }
-
-    const references: DependencyReference[] = [];
-    const visit = (node: unknown): void => {
-      if (Array.isArray(node)) {
-        node.forEach(visit);
-        return;
-      }
-      if (!node || typeof node !== 'object') return;
-      const call = node as BabelNode;
-      const specifier = relativeRequireSpecifier(call);
-      if (specifier !== undefined) {
-        references.push({
-          specifier,
-          line: call.loc?.start.line,
-          column: call.loc ? call.loc.start.column + 1 : undefined,
-          optional: true,
-        });
-      }
-      for (const [key, value] of Object.entries(node)) {
-        if (key !== 'loc' && key !== 'leadingComments' && key !== 'trailingComments') {
-          visit(value);
-        }
-      }
-    };
-    visit((ast as { program: unknown }).program);
-    return references;
+    return calls
+      .filter(call => call.specifier !== undefined && RELATIVE_SPECIFIER.test(call.specifier))
+      .map(call => ({
+        specifier: call.specifier!,
+        line: call.line,
+        column: call.column,
+        optional: true,
+      }));
   }
 
   private scanJsRequires(source: string): DependencyReference[] {
@@ -639,12 +618,11 @@ export class ModuleLoader {
   }
 
   /**
-   * Enforce cache limits by evicting least recently used modules. Modules that are
-   * loading or in `protectedIds` (the current build) are never evicted, so the cache
-   * may temporarily exceed its limits while a large build is in use.
+   * Enforce cache limits by evicting least recently used modules. Called between
+   * builds; modules in `protectedIds` (the build just loaded) are never evicted, so
+   * the cache may exceed its limits while a large build is in use.
    */
-  private enforceCacheLimits(protectedIds: Set<string> = new Set()): void {
-    if (!this.options.cache) return;
+  private enforceCacheLimits(protectedIds: Set<string>): void {
     if (
       this.moduleCache.size <= this.options.maxCacheSize &&
       this.currentMemoryUsage <= this.options.maxCacheMemory
@@ -653,7 +631,7 @@ export class ModuleLoader {
     }
 
     const candidates = Array.from(this.moduleCache.values())
-      .filter(module => !protectedIds.has(module.id) && !this.loadingStack.has(module.id))
+      .filter(module => !protectedIds.has(module.id))
       .sort((a, b) => a.lastAccessed - b.lastAccessed);
 
     const memoryTarget = this.options.maxCacheMemory * 0.8; // Leave some headroom
@@ -671,13 +649,12 @@ export class ModuleLoader {
    * Evict a specific module from cache
    */
   private evictModule(moduleId: string): void {
-    const module = this.moduleCache.get(moduleId);
-    if (module) {
-      if (module.isLoaded) {
-        this.currentMemoryUsage -= this.estimateModuleSize(module);
-      }
-      this.moduleCache.delete(moduleId);
+    // Only called for cached modules; only loaded ones count towards the memory used
+    const module = this.moduleCache.get(moduleId)!;
+    if (module.isLoaded) {
+      this.currentMemoryUsage -= this.estimateModuleSize(module);
     }
+    this.moduleCache.delete(moduleId);
   }
 
   /**
@@ -727,9 +704,11 @@ export class ModuleLoader {
   }
 
   private matchExternal(specifier: string): string | null {
+    const trimmed = specifier.trim();
+    // Node.js modules (`fs`, `node:path`) always come from the host
+    if (isBuiltin(trimmed)) return trimmed;
     if (this.externalSpecifiers.size === 0) return null;
 
-    const trimmed = specifier.trim();
     const candidates = this.buildExternalCandidates(trimmed);
     for (const candidate of candidates) {
       if (this.externalSpecifiers.has(candidate)) {
@@ -762,10 +741,10 @@ export class ModuleLoader {
     return Array.from(variants.values());
   }
 
-  private getOrCreateExternalModule(specifier: string, canonical: string): LoadedModule {
+  private getOrCreateExternalModule(canonical: string): LoadedModule {
     const moduleId = this.getExternalModuleId(canonical);
-    if (this.options.cache && this.moduleCache.has(moduleId)) {
-      const cached = this.moduleCache.get(moduleId)!;
+    const cached = this.moduleCache.get(moduleId);
+    if (cached) {
       cached.lastAccessed = Date.now();
       return cached;
     }
@@ -782,11 +761,8 @@ export class ModuleLoader {
       lastAccessed: Date.now(),
     };
 
-    if (this.options.cache) {
-      this.moduleCache.set(moduleId, module);
-      this.currentMemoryUsage += this.estimateModuleSize(module);
-    }
-
+    this.moduleCache.set(moduleId, module);
+    this.currentMemoryUsage += this.estimateModuleSize(module);
     return module;
   }
 

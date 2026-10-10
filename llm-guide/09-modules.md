@@ -48,6 +48,17 @@
 // export default function calculator() { }
 ```
 
+The default export may have no name, as in TypeScript:
+`содир пешфарз функсия () { }`, `содир пешфарз ҳамзамон функсия* () { }`,
+`содир пешфарз [мавҳум] синф { }`.
+
+```som
+содир пешфарз синф {
+    салом(): сатр { бозгашт "салом"; }
+}
+// export default class { … } (CommonJS: module.exports.default = class { … })
+```
+
 ### Export List
 
 ```som

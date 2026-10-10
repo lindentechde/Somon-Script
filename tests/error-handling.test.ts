@@ -6,7 +6,7 @@ import { TypeChecker } from '../src/type-checker';
 describe('Error Handling Tests', () => {
   describe('Lexer Error Handling', () => {
     test('should handle invalid characters gracefully', () => {
-      const invalidSource = 'тағйирёбанда ном = "test" @#$%^&*';
+      const invalidSource = 'тағйирёбанда ном = "test" §#$%^&*';
       const lexer = new Lexer(invalidSource);
 
       expect(() => {
@@ -33,7 +33,7 @@ describe('Error Handling Tests', () => {
     });
 
     test('should provide meaningful error messages', () => {
-      const invalidSource = 'тағйирёбанда ном = "test" @';
+      const invalidSource = 'тағйирёбанда ном = "test" §';
       const lexer = new Lexer(invalidSource);
 
       try {

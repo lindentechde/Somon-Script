@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="tg" data-typescript="https://cdn.jsdelivr.net/npm/typescript@6.0.3/lib/typescript.js">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SomonScript Playground</title>
+    <meta
+      name="description"
+      content="Write SomonScript in the browser, see the JavaScript it compiles to and run it."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f7f5;
+        --panel: #ffffff;
+        --text: #1d1d1f;
+        --muted: #6b6b70;
+        --border: #d9d9de;
+        --accent: #0b6e4f;
+        --accent-text: #ffffff;
+        --error: #b42318;
+        --warning: #9a6700;
+        --code-bg: #f2f2ef;
+        --mono:
+          ui-monospace, 'SF Mono', 'Cascadia Code', 'DejaVu Sans Mono', Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #151517;
+          --panel: #1e1e21;
+          --text: #ececf0;
+          --muted: #a0a0a8;
+          --border: #34343a;
+          --accent: #3fb68b;
+          --accent-text: #0d1f18;
+          --error: #ff7b72;
+          --warning: #e3b341;
+          --code-bg: #18181b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.45 system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Noto Sans',
+          sans-serif;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0 auto 0 0;
+        font-weight: 650;
+      }
+      header h1 span {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      label {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      select,
+      button {
+        font: inherit;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+      }
+      button {
+        cursor: pointer;
+        padding: 6px 14px;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: progress;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        padding: 16px;
+        height: calc(100vh - 64px);
+        min-height: 520px;
+      }
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+          height: auto;
+        }
+      }
+      section {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      section h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        margin: 0;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border);
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #status {
+        color: var(--muted);
+        font-size: 13px;
+        margin-left: auto;
+      }
+      textarea,
+      pre {
+        font: 14px/1.5 var(--mono);
+        tab-size: 4;
+      }
+      textarea {
+        flex: 1;
+        min-height: 320px;
+        border: 0;
+        resize: none;
+        padding: 12px;
+        background: var(--code-bg);
+        color: var(--text);
+        outline: none;
+      }
+      .outputs {
+        display: grid;
+        grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+        gap: 16px;
+        min-height: 0;
+      }
+      pre {
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        flex: 1;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: var(--code-bg);
+      }
+      #console .error,
+      #errors .error {
+        color: var(--error);
+      }
+      #console .warn,
+      #errors .warning {
+        color: var(--warning);
+      }
+      #errors {
+        margin: 0;
+        padding: 8px 12px 8px 28px;
+        max-height: 30vh;
+        overflow: auto;
+        font: 13px/1.45 var(--mono);
+        white-space: pre-wrap;
+      }
+      #errors:empty::before {
+        content: attr(data-empty);
+        color: var(--muted);
+        margin-left: -16px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>SomonScript <span data-i18n="playground">Playground</span></h1>
+      <label
+        ><span data-i18n="example">Example</span>
+        <select id="example"></select>
+      </label>
+      <label
+        ><span data-i18n="target">Target</span>
+        <select id="target">
+          <option value="es2022">ES2022</option>
+          <option value="esnext">ESNext</option>
+          <option value="es2020">ES2020</option>
+          <option value="es2017">ES2017</option>
+          <option value="es2015">ES2015</option>
+          <option value="es5">ES5</option>
+        </select>
+      </label>
+      <label
+        ><input type="checkbox" id="type-check" checked />
+        <span data-i18n="typeCheck">Type check</span></label
+      >
+      <label><input type="checkbox" id="strict" /> <span data-i18n="strict">Strict</span></label>
+      <label
+        ><span data-i18n="language">Language</span>
+        <select id="locale">
+          <option value="tj">Тоҷикӣ</option>
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+    </header>
+    <main>
+      <section>
+        <h2><span data-i18n="source">SomonScript</span><span>.som</span></h2>
+        <textarea
+          id="source"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          aria-label="SomonScript"
+        ></textarea>
+        <div class="toolbar">
+          <button id="run" class="primary" data-i18n="run">Run</button>
+          <button id="compile" data-i18n="compile">Compile</button>
+          <button id="clear" data-i18n="clear">Clear output</button>
+          <span id="status" role="status"></span>
+        </div>
+      </section>
+      <div class="outputs">
+        <section>
+          <h2><span data-i18n="javascript">JavaScript</span></h2>
+          <pre id="output-js" aria-live="polite"></pre>
+        </section>
+        <section>
+          <h2><span data-i18n="console">Console</span></h2>
+          <pre id="console" aria-live="polite"></pre>
+        </section>
+        <section>
+          <h2><span data-i18n="errors">Errors</span></h2>
+          <ul id="errors" data-empty="—"></ul>
+        </section>
+      </div>
+    </main>
+
+    <!-- Examples: { name: {en, ru, tj}, code }. Every one compiles (checked by the tests). -->
+    <script type="application/json" id="examples">
+      [
+        {
+          "name": { "tj": "Салом, ҷаҳон!", "ru": "Привет, мир!", "en": "Hello, world!" },
+          "code": "// Салом, ҷаҳон!\nсобит ном: сатр = \"ҷаҳон\";\nчоп.сабт(`Салом, ${ном}!`);\n"
+        },
+        {
+          "name": { "tj": "Функсияҳо", "ru": "Функции", "en": "Functions" },
+          "code": "функсия факториал(н: рақам): рақам {\n    бозгашт н <= 1 ? 1 : н * факториал(н - 1);\n}\n\nбарои (тағ и = 1; и <= 5; и++) {\n    чоп.сабт(`${и}! = ${факториал(и)}`);\n}\n"
+        },
+        {
+          "name": { "tj": "Рӯйхатҳо", "ru": "Массивы", "en": "Arrays" },
+          "code": "собит рақамҳо = [1, 2, 3, 4, 5, 6];\nсобит ҷуфтҳо = рақамҳо.филтр(н => н % 2 === 0);\nсобит квадратҳо = ҷуфтҳо.харита(н => н * н);\nсобит ҳамагӣ = квадратҳо.ҷамъбаст((а, б) => а + б, 0);\n\nчоп.сабт(\"Ҷуфтҳо:\", ҷуфтҳо);\nчоп.сабт(\"Квадратҳо:\", квадратҳо);\nчоп.сабт(\"Ҳамагӣ:\", ҳамагӣ);\n"
+        },
+        {
+          "name": {
+            "tj": "Синфҳо ва интерфейсҳо",
+            "ru": "Классы и интерфейсы",
+            "en": "Classes and interfaces"
+          },
+          "code": "интерфейс Шакл {\n    ном: сатр;\n    масоҳат(): рақам;\n}\n\nсинф Доира татбиқ Шакл {\n    ном = \"доира\";\n    конструктор(хосусӣ радиус: рақам) {}\n    масоҳат(): рақам {\n        бозгашт Риёзӣ.ПИ * ин.радиус ** 2;\n    }\n}\n\nсинф Росткунҷа татбиқ Шакл {\n    ном = \"росткунҷа\";\n    конструктор(хосусӣ а: рақам, хосусӣ б: рақам) {}\n    масоҳат(): рақам {\n        бозгашт ин.а * ин.б;\n    }\n}\n\nсобит шаклҳо: Шакл[] = [нав Доира(1), нав Росткунҷа(2, 3)];\nбарои (собит шакл аз шаклҳо) {\n    чоп.сабт(шакл.ном, шакл.масоҳат().toFixed(2));\n}\n"
+        },
+        {
+          "name": { "tj": "Map ва Set", "ru": "Map и Set", "en": "Map and Set" },
+          "code": "собит ҳисоб = нав Map<сатр, рақам>();\nбарои (собит калима аз \"себ нок себ олу себ\".ҷудокунӣ(\" \")) {\n    ҳисоб.гузоштан(калима, (ҳисоб.бозгирифтан(калима) ?? 0) + 1);\n}\nчоп.сабт(ҳисоб);\n\nсобит ягона = нав Set([3, 1, 3, 2, 1]);\nчоп.сабт(ягона.ҳаҷм, ягона.дорадКалид(2));\n"
+        },
+        {
+          "name": { "tj": "Ҳамзамон (async)", "ru": "Асинхронность", "en": "Async and await" },
+          "code": "функсия интизорӣ(мс: рақам): Ваъда<беджавоб> {\n    бозгашт нав Ваъда(ҳал => setTimeout(ҳал, мс));\n}\n\nҳамзамон функсия асосӣ() {\n    чоп.сабт(\"Оғоз\");\n    интизор интизорӣ(200);\n    чоп.сабт(\"Баъд аз 200 мс\");\n}\n\nасосӣ();\n"
+        },
+        {
+          "name": { "tj": "Хатоҳо", "ru": "Обработка ошибок", "en": "Errors" },
+          "code": "функсия тақсимкунӣ(а: рақам, б: рақам): рақам {\n    агар (б === 0) партофтан нав Хато(\"Тақсим ба сифр\");\n    бозгашт а / б;\n}\n\nкӯшиш {\n    чоп.сабт(тақсимкунӣ(10, 4));\n    чоп.сабт(тақсимкунӣ(1, 0));\n} гирифтан (хато) {\n    чоп.хато(\"Хато:\", (хато чун Хато).message);\n}\n"
+        },
+        {
+          "name": {
+            "tj": "Шумориш ва интихоб",
+            "ru": "Перечисления и switch",
+            "en": "Enums and switch"
+          },
+          "code": "шумориш Ранг { Сурх, Сабз, Кабуд }\n\nфунксия тавсиф(ранг: Ранг): сатр {\n    интихоб (ранг) {\n        ҳолат Ранг.Сурх:\n            бозгашт \"гарм\";\n        ҳолат Ранг.Кабуд:\n            бозгашт \"хунук\";\n        пешфарз:\n            бозгашт \"табиӣ\";\n    }\n}\n\nбарои (собит ранг аз [Ранг.Сурх, Ранг.Сабз, Ранг.Кабуд]) {\n    чоп.сабт(Ранг[ранг], тавсиф(ранг));\n}\n"
+        },
+        {
+          "name": { "tj": "Хатои навъ", "ru": "Ошибка типа", "en": "A type error" },
+          "expectErrors": true,
+          "code": "интерфейс Корбар {\n    ном: сатр;\n    синну: рақам;\n}\n\n// Санҷиши навъ хаторо пеш аз иҷро нишон медиҳад\nсобит корбар: Корбар = { ном: \"Алӣ\", синну: \"сӣ\" };\nчоп.сабт(корбар.ном);\n"
+        }
+      ]
+    </script>
+
+    <script>
+      (function () {
+        'use strict';
+
+        var STRINGS = {
+          en: {
+            playground: 'Playground',
+            example: 'Example',
+            target: 'Target',
+            typeCheck: 'Type check',
+            strict: 'Strict',
+            language: 'Language',
+            source: 'SomonScript',
+            run: 'Run',
+            compile: 'Compile',
+            clear: 'Clear output',
+            javascript: 'JavaScript',
+            console: 'Console',
+            errors: 'Errors',
+            noErrors: 'No errors',
+            compiled: 'Compiled in {ms} ms',
+            failed: 'Compilation failed',
+            ran: 'Ran in {ms} ms',
+            runtimeError: 'Runtime error',
+            loadingCompiler: 'Loading the compiler…',
+            compilerMissing:
+              'The compiler bundle was not found. Build it with: npm run build && node scripts/build-browser.js',
+            loadingTypeScript: 'Loading TypeScript to lower the code…',
+            typeScriptFailed: 'TypeScript could not be loaded from {url}',
+          },
+          ru: {
+            playground: 'Песочница',
+            example: 'Пример',
+            target: 'Цель',
+            typeCheck: 'Проверка типов',
+            strict: 'Строгий режим',
+            language: 'Язык',
+            source: 'SomonScript',
+            run: 'Запустить',
+            compile: 'Скомпилировать',
+            clear: 'Очистить вывод',
+            javascript: 'JavaScript',
+            console: 'Консоль',
+            errors: 'Ошибки',
+            noErrors: 'Ошибок нет',
+            compiled: 'Скомпилировано за {ms} мс',
+            failed: 'Ошибка компиляции',
+            ran: 'Выполнено за {ms} мс',
+            runtimeError: 'Ошибка выполнения',
+            loadingCompiler: 'Загрузка компилятора…',
+            compilerMissing:
+              'Сборка компилятора не найдена. Соберите её: npm run build && node scripts/build-browser.js',
+            loadingTypeScript: 'Загрузка TypeScript для понижения кода…',
+            typeScriptFailed: 'Не удалось загрузить TypeScript с {url}',
+          },
+          tj: {
+            playground: 'Майдони озмоиш',
+            example: 'Намуна',
+            target: 'Ҳадаф',
+            typeCheck: 'Санҷиши навъ',
+            strict: 'Реҷаи қатъӣ',
+            language: 'Забон',
+            source: 'SomonScript',
+            run: 'Иҷро',
+            compile: 'Компилятсия',
+            clear: 'Тоза кардан',
+            javascript: 'JavaScript',
+            console: 'Консол',
+            errors: 'Хатоҳо',
+            noErrors: 'Хато нест',
+            compiled: 'Дар {ms} мс компилятсия шуд',
+            failed: 'Компилятсия нашуд',
+            ran: 'Дар {ms} мс иҷро шуд',
+            runtimeError: 'Хатои иҷро',
+            loadingCompiler: 'Боркунии компилятор…',
+            compilerMissing:
+              'Бастаи компилятор ёфт нашуд. Онро бисозед: npm run build && node scripts/build-browser.js',
+            loadingTypeScript: 'Боркунии TypeScript барои табдили код…',
+            typeScriptFailed: 'TypeScript аз {url} бор нашуд',
+          },
+        };
+
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        var source = $('source');
+        var exampleSelect = $('example');
+        var outputJs = $('output-js');
+        var consoleOut = $('console');
+        var errorList = $('errors');
+        var statusLine = $('status');
+        var examples = JSON.parse($('examples').textContent);
+        var locale = initialLocale();
+
+        // ---------------------------------------------------------------------
+        // Interface language
+        // ---------------------------------------------------------------------
+
+        function initialLocale() {
+          var fromQuery = new URLSearchParams(location.search).get('lang');
+          var stored = null;
+          try {
+            stored = localStorage.getItem('somon-playground-locale');
+          } catch (error) {
+            // Storage may be unavailable (private mode, file://)
+          }
+          var wanted = fromQuery || stored || (navigator.language || 'tj').slice(0, 2);
+          if (wanted === 'tg') wanted = 'tj';
+          return STRINGS[wanted] ? wanted : 'tj';
+        }
+
+        function text(key, values) {
+          var value = STRINGS[locale][key] || STRINGS.en[key] || key;
+          return value.replace(/\{(\w+)\}/g, function (_, name) {
+            return values && name in values ? values[name] : '';
+          });
+        }
+
+        function applyLocale() {
+          document.documentElement.lang = locale === 'tj' ? 'tg' : locale;
+          $('locale').value = locale;
+          document.querySelectorAll('[data-i18n]').forEach(function (element) {
+            element.textContent = text(element.getAttribute('data-i18n'));
+          });
+          errorList.setAttribute('data-empty', text('noErrors'));
+          var selected = exampleSelect.selectedIndex;
+          exampleSelect.innerHTML = '';
+          examples.forEach(function (example, index) {
+            var option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = example.name[locale] || example.name.en;
+            exampleSelect.appendChild(option);
+          });
+          exampleSelect.selectedIndex = Math.max(0, selected);
+        }
+
+        // ---------------------------------------------------------------------
+        // Output
+        // ---------------------------------------------------------------------
+
+        /** Values as Node's console prints them, roughly: [ 1, 2 ], { а: 1 }, Map(1) { 'а' => 1 }. */
+        function inspect(value, depth, seen) {
+          depth = depth || 0;
+          seen = seen || [];
+          if (typeof value === 'string') return depth === 0 ? value : "'" + value + "'";
+          if (typeof value === 'bigint') return value + 'n';
+          if (typeof value === 'function')
+            return '[Function: ' + (value.name || '(anonymous)') + ']';
+          if (typeof value === 'symbol') return value.toString();
+          if (value === null || typeof value !== 'object') return String(value);
+          if (seen.indexOf(value) !== -1) return '[Circular]';
+          if (value instanceof Error) return value.stack || value.name + ': ' + value.message;
+          if (depth > 3) return Array.isArray(value) ? '[Array]' : '[Object]';
+          var next = seen.concat([value]);
+          var show = function (item) {
+            return inspect(item, depth + 1, next);
+          };
+          if (Array.isArray(value)) {
+            return value.length ? '[ ' + value.map(show).join(', ') + ' ]' : '[]';
+          }
+          if (value instanceof Map) {
+            var entries = [];
+            value.forEach(function (item, key) {
+              entries.push(show(key) + ' => ' + show(item));
+            });
+            return (
+              'Map(' +
+              value.size +
+              ') ' +
+              (entries.length ? '{ ' + entries.join(', ') + ' }' : '{}')
+            );
+          }
+          if (value instanceof Set) {
+            var items = [];
+            value.forEach(function (item) {
+              items.push(show(item));
+            });
+            return (
+              'Set(' + value.size + ') ' + (items.length ? '{ ' + items.join(', ') + ' }' : '{}')
+            );
+          }
+          if (value instanceof Promise) return 'Promise { <pending> }';
+          var keys = Object.keys(value);
+          var name =
+            value.constructor && value.constructor !== Object ? value.constructor.name + ' ' : '';
+          if (!keys.length) return name + '{}';
+          return (
+            name +
+            '{ ' +
+            keys
+              .map(function (key) {
+                return key + ': ' + show(value[key]);
+              })
+              .join(', ') +
+            ' }'
+          );
+        }
+
+        function print(kind, args) {
+          var line = document.createElement('div');
+          line.className = kind;
+          line.textContent = Array.prototype.map
+            .call(args, function (arg) {
+              return inspect(arg);
+            })
+            .join(' ');
+          consoleOut.appendChild(line);
+          consoleOut.scrollTop = consoleOut.scrollHeight;
+        }
+
+        var playgroundConsole = {
+          log: function () {
+            print('log', arguments);
+          },
+          info: function () {
+            print('log', arguments);
+          },
+          debug: function () {
+            print('log', arguments);
+          },
+          warn: function () {
+            print('warn', arguments);
+          },
+          error: function () {
+            print('error', arguments);
+          },
+          table: function (data) {
+            print('log', [data]);
+          },
+          dir: function (data) {
+            print('log', [data]);
+          },
+          assert: function (condition) {
+            if (!condition)
+              print('error', ['Assertion failed'].concat([].slice.call(arguments, 1)));
+          },
+          clear: function () {
+            consoleOut.textContent = '';
+          },
+        };
+
+        function showErrors(errors, warnings) {
+          errorList.innerHTML = '';
+          errors.forEach(function (message) {
+            addProblem('error', message);
+          });
+          (warnings || []).forEach(function (message) {
+            addProblem('warning', message);
+          });
+        }
+
+        function addProblem(kind, message) {
+          var item = document.createElement('li');
+          item.className = kind;
+          item.textContent = message;
+          errorList.appendChild(item);
+        }
+
+        function setStatus(message) {
+          statusLine.textContent = message;
+        }
+
+        // ---------------------------------------------------------------------
+        // Compiling and running
+        // ---------------------------------------------------------------------
+
+        var typeScriptLoading = null;
+
+        /** TypeScript for lowering (decorators, older targets), loaded once on demand. */
+        function loadTypeScript() {
+          if (window.ts) return Promise.resolve(window.ts);
+          if (!typeScriptLoading) {
+            var url =
+              new URLSearchParams(location.search).get('typescript') ||
+              document.documentElement.getAttribute('data-typescript');
+            setStatus(text('loadingTypeScript'));
+            typeScriptLoading = loadScript(url).then(
+              function () {
+                return window.ts;
+              },
+              function () {
+                typeScriptLoading = null;
+                throw new Error(text('typeScriptFailed', { url: url }));
+              }
+            );
+          }
+          return typeScriptLoading;
+        }
+
+        function loadScript(url) {
+          return new Promise(function (resolve, reject) {
+            var script = document.createElement('script');
+            script.src = url;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
+
+        function options() {
+          return {
+            target: $('target').value,
+            typeCheck: $('type-check').checked,
+            strict: $('strict').checked,
+            locale: locale,
+          };
+        }
+
+        /** Compiles the editor's program; loads TypeScript first when lowering needs it. */
+        function compileSource() {
+          var started = performance.now();
+          var result = window.SomonScript.compile(source.value, options());
+          if (!result.needsTypeScript) return Promise.resolve(finish(result, started));
+          return loadTypeScript().then(
+            function () {
+              return finish(window.SomonScript.compile(source.value, options()), started);
+            },
+            function (error) {
+              result.errors.push(error.message);
+              return finish(result, started);
+            }
+          );
+        }
+
+        function finish(result, started) {
+          outputJs.textContent = result.code;
+          showErrors(result.errors, result.warnings);
+          var ms = Math.round(performance.now() - started);
+          setStatus(
+            result.code || !result.errors.length ? text('compiled', { ms: ms }) : text('failed')
+          );
+          return result;
+        }
+
+        function runSource() {
+          consoleOut.textContent = '';
+          return compileSource().then(function (result) {
+            if (!result.code) return;
+            var started = performance.now();
+            try {
+              window.SomonScript.execute(result.code, playgroundConsole);
+              setStatus(text('ran', { ms: Math.round(performance.now() - started) }));
+            } catch (error) {
+              print('error', [error]);
+              addProblem(
+                'error',
+                text('runtimeError') + ': ' + (error && error.message ? error.message : error)
+              );
+            }
+          });
+        }
+
+        window.addEventListener('unhandledrejection', function (event) {
+          print('error', ['Uncaught (in promise)', event.reason]);
+        });
+
+        // ---------------------------------------------------------------------
+        // Wiring
+        // ---------------------------------------------------------------------
+
+        function busy(button, task) {
+          button.disabled = true;
+          task().then(
+            function () {
+              button.disabled = false;
+            },
+            function (error) {
+              button.disabled = false;
+              addProblem('error', String(error && error.message ? error.message : error));
+            }
+          );
+        }
+
+        function loadExample(index) {
+          source.value = examples[index].code;
+          outputJs.textContent = '';
+          consoleOut.textContent = '';
+          errorList.innerHTML = '';
+          setStatus('');
+        }
+
+        $('run').addEventListener('click', function () {
+          busy($('run'), runSource);
+        });
+        $('compile').addEventListener('click', function () {
+          busy($('compile'), compileSource);
+        });
+        $('clear').addEventListener('click', function () {
+          consoleOut.textContent = '';
+          errorList.innerHTML = '';
+        });
+        exampleSelect.addEventListener('change', function () {
+          loadExample(Number(exampleSelect.value));
+        });
+        $('locale').addEventListener('change', function () {
+          locale = $('locale').value;
+          try {
+            localStorage.setItem('somon-playground-locale', locale);
+          } catch (error) {
+            // Not remembered without storage
+          }
+          applyLocale();
+        });
+        source.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            busy($('run'), runSource);
+          } else if (event.key === 'Tab' && !event.shiftKey) {
+            event.preventDefault();
+            var start = source.selectionStart;
+            source.setRangeText('    ', start, source.selectionEnd, 'end');
+          }
+        });
+
+        applyLocale();
+        loadExample(0);
+
+        // The compiler: next to this page, or in dist/ when served from the repository
+        setStatus(text('loadingCompiler'));
+        loadScript('somonscript.js')
+          .catch(function () {
+            return loadScript('../../dist/browser/somonscript.js');
+          })
+          .then(
+            function () {
+              setStatus('SomonScript ' + window.SomonScript.version);
+              document.body.setAttribute('data-ready', 'true');
+            },
+            function () {
+              setStatus('');
+              addProblem('error', text('compilerMissing'));
+            }
+          );
+      })();
+    </script>
+  </body>
+</html>

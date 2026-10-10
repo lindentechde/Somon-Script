@@ -415,9 +415,9 @@ describe('Template Literals', () => {
     });
 
     test('lexer errors inside an interpolation are parse errors with the real position', () => {
-      const { errors } = parseTemplate('чоп.сабт(1);\nчоп.сабт(`x ${ а @ }`);');
+      const { errors } = parseTemplate('чоп.сабт(1);\nчоп.сабт(`x ${ а § }`);');
       expect(errors).toEqual([
-        expect.stringMatching(/Unexpected character '@' at line 2, column 18/),
+        expect.stringMatching(/Unexpected character '§' at line 2, column 18/),
       ]);
     });
 

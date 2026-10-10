@@ -1,6 +1,6 @@
 // Test all TypeScript operators in SomonScript
 
-функсия санҷиши_операторҳо(): холӣ {
+функсия санҷиши_операторҳо(): беджавоб {
     чоп.сабт("=== Санҷиши ҳамаи операторҳо ===\n");
     
     // Arithmetic operators

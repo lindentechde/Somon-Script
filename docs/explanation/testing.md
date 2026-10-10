@@ -661,6 +661,20 @@ describe('Module System Integration', () => {
 
 Testing the entire compiler pipeline from source to JavaScript output.
 
+### Verification Against TypeScript
+
+TypeScript is the reference for what a SomonScript program means. The
+differential test (`tests/differential.test.ts`) compiles every program of the
+repository both with SomonScript and through the TypeScript emitter and
+`ts.transpileModule`, on es5 … esnext as CommonJS and ES modules, and compares
+what they print and the verdicts of both type checkers; the fuzz tests
+(`tests/fuzz.test.ts`, fast-check) feed random input to the lexer and parser and
+random programs through every round trip; and `scripts/run-runtimes.js` runs the
+compiled programs on Bun and Deno. See
+[llm-guide/19-verification.md](../../llm-guide/19-verification.md) for the
+layers, the environment variables (`SOMON_FULL_MATRIX`, `SOMON_FUZZ_RUNS`,
+`SOMON_FUZZ_SEED`, `SOMON_FUZZ_PATH`) and how to replay a fuzz failure.
+
 ### End-to-End Compilation
 
 ```typescript

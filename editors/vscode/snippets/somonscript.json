@@ -1,0 +1,137 @@
+{
+  "Функсия (function)": {
+    "prefix": ["функсия", "function"],
+    "body": [
+      "функсия ${1:ном}(${2:параметр}: ${3:рақам}): ${4:беджавоб} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Function declaration"
+  },
+  "Функсияи ҳамзамон (async function)": {
+    "prefix": ["ҳамзамон", "async"],
+    "body": [
+      "ҳамзамон функсия ${1:ном}(${2}): Ваъда<${3:беджавоб}> {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Async function declaration"
+  },
+  "Функсияи тирӣ (arrow function)": {
+    "prefix": ["=>", "arrow"],
+    "body": ["(${1:х}) => ${0:х}"],
+    "description": "Arrow function"
+  },
+  "Тағйирёбанда (let)": {
+    "prefix": ["тағ", "let"],
+    "body": ["тағ ${1:ном} = ${0:қимат};"],
+    "description": "Variable declaration"
+  },
+  "Собит (const)": {
+    "prefix": ["собит", "const"],
+    "body": ["собит ${1:ном} = ${0:қимат};"],
+    "description": "Constant declaration"
+  },
+  "Агар (if)": {
+    "prefix": ["агар", "if"],
+    "body": ["агар (${1:шарт}) {", "\t$0", "}"],
+    "description": "If statement"
+  },
+  "Агар … вагарна (if … else)": {
+    "prefix": ["агарвагарна", "ifelse"],
+    "body": ["агар (${1:шарт}) {", "\t$2", "} вагарна {", "\t$0", "}"],
+    "description": "If-else statement"
+  },
+  "Барои (for)": {
+    "prefix": ["барои", "for"],
+    "body": [
+      "барои (тағ ${1:и} = 0; ${1:и} < ${2:н}; ${1:и}++) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "Барои … аз (for … of)": {
+    "prefix": ["бароиаз", "forof"],
+    "body": ["барои (собит ${1:унсур} аз ${2:рӯйхат}) {", "\t$0", "}"],
+    "description": "For-of loop"
+  },
+  "Барои … дар (for … in)": {
+    "prefix": ["бароидар", "forin"],
+    "body": ["барои (собит ${1:калид} дар ${2:объект}) {", "\t$0", "}"],
+    "description": "For-in loop"
+  },
+  "То (while)": {
+    "prefix": ["то", "while"],
+    "body": ["то (${1:шарт}) {", "\t$0", "}"],
+    "description": "While loop"
+  },
+  "Кун … то (do … while)": {
+    "prefix": ["кун", "do"],
+    "body": ["кун {", "\t$0", "} то (${1:шарт});"],
+    "description": "Do-while loop"
+  },
+  "Интихоб (switch)": {
+    "prefix": ["интихоб", "switch"],
+    "body": [
+      "интихоб (${1:қимат}) {",
+      "\tҳолат ${2:1}:",
+      "\t\t$3",
+      "\t\tшикастан;",
+      "\tпешфарз:",
+      "\t\t$0",
+      "}"
+    ],
+    "description": "Switch statement"
+  },
+  "Кӯшиш … гирифтан (try … catch)": {
+    "prefix": ["кӯшиш", "try"],
+    "body": ["кӯшиш {", "\t$1", "} гирифтан (${2:хато}) {", "\t$0", "}"],
+    "description": "Try-catch statement"
+  },
+  "Синф (class)": {
+    "prefix": ["синф", "class"],
+    "body": [
+      "синф ${1:Ном} {",
+      "\tконструктор(${2:хосусӣ ном: сатр}) {",
+      "\t\t$3",
+      "\t}",
+      "",
+      "\t${4:усул}(): ${5:беджавоб} {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Class declaration"
+  },
+  "Интерфейс (interface)": {
+    "prefix": ["интерфейс", "interface"],
+    "body": ["интерфейс ${1:Ном} {", "\t${2:хосият}: ${3:сатр};$0", "}"],
+    "description": "Interface declaration"
+  },
+  "Навъ (type alias)": {
+    "prefix": ["навъ", "type"],
+    "body": ["навъ ${1:Ном} = ${0:сатр | рақам};"],
+    "description": "Type alias"
+  },
+  "Шумориш (enum)": {
+    "prefix": ["шумориш", "enum"],
+    "body": ["шумориш ${1:Ном} {", "\t${0:Аввал},", "}"],
+    "description": "Enum declaration"
+  },
+  "Ворид (import)": {
+    "prefix": ["ворид", "import"],
+    "body": ["ворид { ${2:ном} } аз \"${1:./модул}\";$0"],
+    "description": "Import declaration"
+  },
+  "Содир функсия (export function)": {
+    "prefix": ["содир", "export"],
+    "body": ["содир функсия ${1:ном}(${2}) {", "\t$0", "}"],
+    "description": "Exported function"
+  },
+  "Чоп (console.log)": {
+    "prefix": ["чоп", "log"],
+    "body": ["чоп.сабт(${0});"],
+    "description": "Write to the console"
+  }
+}

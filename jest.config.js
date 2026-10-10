@@ -8,17 +8,24 @@ const baseConfig = {
 
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json'],
+  // The suite covers 99.9% of lines and 99.5% of branches (on Linux); the margin
+  // leaves room for the few paths that differ by platform
   coverageThreshold: {
     global: {
-      branches: 55,
-      functions: 75,
-      lines: 68,
-      statements: 68,
+      branches: 98,
+      functions: 99,
+      lines: 99,
+      statements: 99,
     },
   },
   testTimeout: 10000,
   verbose: true,
   maxWorkers: 1,
+  // Run the test files in a worker process that is replaced once its heap passes
+  // this size, instead of all of them in one long-lived process: the run creates
+  // hundreds of vm contexts and TypeScript programs, whose native memory took a
+  // single process past 2 GB and Node.js 24 on macOS to occasional segfaults.
+  workerIdleMemoryLimit: '300MB',
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/coverage/'],
   collectCoverageFrom: [
@@ -28,8 +35,6 @@ const baseConfig = {
     '!src/types.ts', // Re-export file
     // Exclude the thin Node entry wrapper; we cover CLI logic via program tests
     '!src/cli.ts',
-    // Exclude infrastructure/system components that are better tested via integration tests
-    '!src/module-system/logger.ts',
   ],
   // Modern ts-jest configuration without deprecated globals
   transform: {

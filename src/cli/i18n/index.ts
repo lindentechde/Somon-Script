@@ -24,13 +24,20 @@ export interface Translations {
         output: string;
         outDir: string;
         target: string;
+        lib: string;
+        useDefineForClassFields: string;
+        noUseDefineForClassFields: string;
         sourceMap: string;
         noSourceMap: string;
         minify: string;
         noMinify: string;
         noTypeCheck: string;
         strict: string;
+        experimentalDecorators: string;
         watch: string;
+        module: string;
+        checker: string;
+        declaration: string;
       };
       messages: {
         fileNotFound: (_file: string) => string;
@@ -38,6 +45,7 @@ export interface Translations {
         warnings: string;
         compiled: (_input: string, _output: string) => string;
         sourceMapGenerated: (_file: string) => string;
+        declarationGenerated: (_file: string) => string;
         watching: (_file: string) => string;
         recompiling: (_file: string) => string;
         configChanged: (_file: string) => string;
@@ -86,6 +94,7 @@ export interface Translations {
       options: {
         output: string;
         format: string;
+        globalName: string;
         inlineSources: string;
         externals: string;
       };
@@ -94,7 +103,6 @@ export interface Translations {
         bundleCreated: (_output: string) => string;
         sourceMapCreated: (_file: string) => string;
         bundledModules: (_count: number) => string;
-        onlyCommonJsSupported: (_format: string) => string;
         bundleError: string;
       };
     };
@@ -125,6 +133,19 @@ export interface Translations {
         analysisError: string;
       };
     };
+    check: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        files: string;
+      };
+      messages: {
+        noErrors: (_files: number) => string;
+        errorsFound: (_errors: number, _files: number) => string;
+        fileErrors: (_file: string) => string;
+      };
+    };
     resolve: {
       name: string;
       description: string;
@@ -144,6 +165,69 @@ export interface Translations {
         yes: string;
         no: string;
         resolveError: string;
+      };
+    };
+    fmt: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        paths: string;
+      };
+      options: {
+        check: string;
+        write: string;
+        stdout: string;
+        indent: string;
+      };
+      messages: {
+        formatted: (_file: string) => string;
+        wouldReformat: (_file: string) => string;
+        failed: (_file: string) => string;
+        summary: (_changed: number, _total: number) => string;
+        checkPassed: (_total: number) => string;
+        checkFailed: (_changed: number) => string;
+        noFiles: string;
+        pathNotFound: (_path: string) => string;
+        invalidIndent: (_value: string) => string;
+      };
+    };
+    repl: {
+      name: string;
+      description: string;
+      messages: {
+        banner: (_version: string) => string;
+        help: string;
+        cleared: string;
+        noCompiledCode: string;
+        exitHint: string;
+        error: string;
+      };
+    };
+    migrate: {
+      name: string;
+      description: string;
+      usage: string;
+      args: {
+        input: string;
+      };
+      options: {
+        output: string;
+        stdout: string;
+      };
+      messages: {
+        migrated: (_input: string, _output: string) => string;
+        warning: string;
+        failed: (_file: string) => string;
+        noFiles: (_input: string) => string;
+        summary: (_files: number, _warnings: number) => string;
+      };
+    };
+    lsp: {
+      name: string;
+      description: string;
+      options: {
+        stdio: string;
       };
     };
   };
@@ -229,11 +313,6 @@ class I18n {
 
   public t(): Translations {
     return translations[this.language];
-  }
-
-  public get isRTL(): boolean {
-    // Tajik and Russian both use left-to-right writing
-    return false;
   }
 }
 

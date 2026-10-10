@@ -1,17 +1,50 @@
 import chokidar from 'chokidar';
 import type { FSWatcher, WatchOptions } from 'chokidar';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
 import { ModuleResolver, ModuleResolutionOptions } from './module-resolver';
-import { ModuleLoader, ModuleLoadOptions, LoadedModule, ModuleLoadError } from './module-loader';
+import {
+  languageOf,
+  locationOf,
+  ModuleLoader,
+  ModuleLoadOptions,
+  LoadedModule,
+  ModuleLoadError,
+} from './module-loader';
 import { ModuleRegistry, ModuleMetadata } from './module-registry';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 import { moduleSystemLogger as logger } from './logger';
 import {
+  bundleWrapper,
+  collectExportNames,
+  externalRequireCode,
+  shiftSourceMap,
+} from './bundle-formats';
+import { findRequireCalls } from './require-calls';
+import { withTimeout } from './async-timeout';
+import {
   compile as compileSource,
   type CompileOptions as PipelineCompileOptions,
 } from '../compiler';
+import {
+  BUNDLE_FORMATS,
+  composeSourceMaps,
+  DEFAULT_TARGET,
+  isBundleFormat,
+  lowerToTarget,
+  TARGETS,
+  validateGlobalName,
+  validateLib,
+  type BundleFormat,
+} from '../targets';
+
+/**
+ * Compiler options for the modules of one build. `downlevel: false` keeps the
+ * modules' syntax: the bundler lowers the whole bundle for the target once.
+ */
+type ModuleCompilationOptions = CompilerOptions & Pick<PipelineCompileOptions, 'downlevel'>;
 
 export type ModuleWatchEventType = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
 
@@ -62,7 +95,16 @@ export interface CompilationResult {
 export interface BundleOptions {
   entryPoint: string;
   outputPath?: string;
-  format?: 'commonjs';
+  /**
+   * 'commonjs' (default): `module.exports` is the entry's exports. 'esm': an ES
+   * module that exports them (`export`), modules not in the bundle are
+   * imported; the default when the compilation's `module` is 'esm'. 'iife': a
+   * script for browsers without `require` or `module` that stores them in
+   * `globalThis[globalName]`.
+   */
+  format?: BundleFormat;
+  /** For 'iife': the global, or dotted path of globals, that receives the entry's exports. */
+  globalName?: string;
   minify?: boolean;
   sourceMaps?: boolean;
   externals?: string[];
@@ -78,29 +120,73 @@ export interface BundleOptions {
 export interface BundleOutput {
   code: string;
   map?: string;
+  /** How many modules the bundle holds (externals, packages and Node.js modules are not in it). */
+  moduleCount: number;
 }
 
-const SIMPLE_ESCAPES: Record<string, string> = {
-  n: '\n',
-  r: '\r',
-  t: '\t',
-  b: '\b',
-  f: '\f',
-  v: '\v',
-  '0': '\0',
-};
+/**
+ * Suggestions for the errors of a build, by what their (lower case) message says.
+ * The first that matches is used; the messages are those of the compiler
+ * ("Unexpected token end of input", "Identifier 'х' has already been declared",
+ * "Type 'сатр' is not assignable …") and of the loader.
+ */
+const ERROR_SUGGESTIONS: ReadonlyArray<{
+  matches: (_message: string) => boolean;
+  suggestion: string;
+}> = [
+  {
+    matches: message => message.includes('end of input'),
+    suggestion: 'You may have unclosed brackets, parentheses, or string literals',
+  },
+  {
+    matches: message => message.includes('unexpected token'),
+    suggestion: 'Check for missing or extra brackets, parentheses, or semicolons',
+  },
+  {
+    matches: message =>
+      message.includes('cannot find module') || message.includes('module not found'),
+    suggestion:
+      'Verify the module path is correct and the file exists. Check for typos in the import path',
+  },
+  {
+    matches: message => message.includes('circular dependenc'),
+    suggestion: 'Refactor your code to remove circular dependencies between modules',
+  },
+  {
+    matches: message =>
+      message.includes('is not assignable') ||
+      (message.includes('type') && message.includes('mismatch')),
+    suggestion: 'Check that the types of your variables and function parameters are compatible',
+  },
+  {
+    matches: message =>
+      message.includes('already been declared') ||
+      message.includes('already declared') ||
+      message.includes('redeclared'),
+    suggestion:
+      'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration',
+  },
+  {
+    matches: message => message.includes('is not defined') || message.includes('undefined'),
+    suggestion: 'Make sure the variable is declared before use. Check for typos in variable names',
+  },
+];
 
-/** The value of a JavaScript string literal body, e.g. `ё` → `ё`, `\"` → `"`. */
-function decodeStringLiteral(body: string): string {
-  return body.replaceAll(
-    /\\(?:u\{([\da-fA-F]+)\}|u([\da-fA-F]{4})|x([\da-fA-F]{2})|\r\n|([\s\S]))/g,
-    (sequence: string, codePoint?: string, unit?: string, byte?: string, other?: string) => {
-      const hex = codePoint ?? unit ?? byte;
-      if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
-      if (other === undefined || other === '\n' || other === '\r') return '';
-      return SIMPLE_ESCAPES[other] ?? other;
-    }
-  );
+/** A module of a bundle, its requires pointed at bundle keys. */
+interface BundleModule {
+  id: string;
+  key: string;
+  code: string;
+  map?: RawSourceMap;
+  /** Modules its remaining requires load at run time (not in the bundle). */
+  requires: string[];
+}
+
+/** Where a module's code is in the bundle body (1-based lines). */
+interface BundleModuleLines {
+  key: string;
+  start: number;
+  end: number;
 }
 
 type RequireRewriteContext = {
@@ -131,41 +217,9 @@ export class ModuleSystem {
   /**
    * Provide helpful suggestions for common compilation errors.
    */
-  private getSuggestionForError(errorMessage: string, _filePath: string): string | undefined {
+  private getSuggestionForError(errorMessage: string): string | undefined {
     const lowerMessage = errorMessage.toLowerCase();
-
-    // Common syntax errors
-    if (lowerMessage.includes('unexpected token')) {
-      return 'Check for missing or extra brackets, parentheses, or semicolons';
-    }
-    if (lowerMessage.includes('unexpected end of input')) {
-      return 'You may have unclosed brackets, parentheses, or string literals';
-    }
-
-    // Import/module errors
-    if (lowerMessage.includes('cannot find module') || lowerMessage.includes('module not found')) {
-      return 'Verify the module path is correct and the file exists. Check for typos in the import path';
-    }
-    if (lowerMessage.includes('circular dependency')) {
-      return 'Refactor your code to remove circular dependencies between modules';
-    }
-
-    // Type errors
-    if (lowerMessage.includes('type') && lowerMessage.includes('mismatch')) {
-      return 'Check that the types of your variables and function parameters are compatible';
-    }
-
-    // Variable errors
-    if (lowerMessage.includes('is not defined') || lowerMessage.includes('undefined')) {
-      return 'Make sure the variable is declared before use. Check for typos in variable names';
-    }
-
-    // Scope errors
-    if (lowerMessage.includes('already declared') || lowerMessage.includes('redeclared')) {
-      return 'A variable with this name already exists in this scope. Use a different name or remove the duplicate declaration';
-    }
-
-    return undefined;
+    return ERROR_SUGGESTIONS.find(({ matches }) => matches(lowerMessage))?.suggestion;
   }
 
   /**
@@ -184,22 +238,20 @@ export class ModuleSystem {
         column: originalError.column,
         importer: originalError.importer,
         specifier: originalError.specifier,
-        suggestion: this.getSuggestionForError(message, originalError.filePath),
+        suggestion: this.getSuggestionForError(message),
         originalError,
       };
     }
 
     // Compiler diagnostics are strings; take the line and column from the message
-    const lineColMatch = message.match(/(?:line|:)\s*(\d+)(?::(\d+))?/i);
-    const line = lineColMatch?.[1] ? Number.parseInt(lineColMatch[1], 10) : undefined;
-    const column = lineColMatch?.[2] ? Number.parseInt(lineColMatch[2], 10) : undefined;
+    const { line, column } = locationOf(message);
 
     return {
       message,
       filePath,
       line,
       column,
-      suggestion: this.getSuggestionForError(message, filePath),
+      suggestion: this.getSuggestionForError(message),
       originalError,
     };
   }
@@ -333,12 +385,19 @@ export class ModuleSystem {
 
     // Validate target
     if (compilation.target !== undefined) {
-      const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
+      const validTargets: readonly string[] = TARGETS;
       if (!validTargets.includes(compilation.target)) {
         errors.push(
           `compilation.target must be one of: ${validTargets.join(', ')}, got: ${compilation.target}`
         );
       }
+    }
+    if (compilation.lib !== undefined) {
+      errors.push(...validateLib(compilation.lib).map(message => `compilation.lib ${message}`));
+    }
+    const useDefine = compilation.useDefineForClassFields;
+    if (useDefine !== undefined && typeof useDefine !== 'boolean') {
+      errors.push('compilation.useDefineForClassFields must be a boolean');
     }
 
     // Validate boolean options
@@ -349,6 +408,8 @@ export class ModuleSystem {
       'strict',
       'watch',
       'compileOnSave',
+      'experimentalDecorators',
+      'declaration',
     ];
     for (const option of booleanOptions) {
       if (compilation[option] !== undefined && typeof compilation[option] !== 'boolean') {
@@ -448,11 +509,10 @@ export class ModuleSystem {
     return module;
   }
 
-  private setupExternals(externals: string[] | undefined, previousExternals: string[]): void {
+  /** The externals of one build replace those of `loading.externals` while it runs. */
+  private setupExternals(externals: string[] | undefined): void {
     if (externals !== undefined) {
       this.loader.setExternals(externals);
-    } else if (previousExternals.length > 0) {
-      this.loader.setExternals();
     }
   }
 
@@ -490,42 +550,34 @@ export class ModuleSystem {
 
   private compileModulesInOrder(
     compilationOrder: string[],
-    compilationConfig: CompilerOptions,
+    compilationConfig: ModuleCompilationOptions,
     modules: Map<string, CompiledModule>,
     errors: CompilationError[],
     warnings: string[]
   ): void {
     for (const moduleId of compilationOrder) {
-      const module = this.loader.getModule(moduleId);
-      if (!module || moduleId.startsWith('external:') || module.isExternalLibrary) {
+      // The modules of this build are in the loader's cache
+      const module = this.loader.getModule(moduleId)!;
+      if (module.isExternalLibrary) {
         // Packages from module directories stay host requires
         continue;
       }
 
-      const extension = path.extname(module.resolvedPath);
-      if (extension === '.js') {
-        // Local JavaScript is bundled verbatim; its requires are rewritten when bundling
-        modules.set(moduleId, { code: module.source });
-        continue;
+      // Externals have no language; files of other types stay host requires
+      switch (module.language) {
+        case 'javascript':
+          // Local JavaScript is bundled verbatim; its requires are rewritten when bundling
+          modules.set(moduleId, { code: module.source });
+          break;
+        case 'json':
+          modules.set(moduleId, {
+            code: `module.exports = ${JSON.stringify(JSON.parse(module.source))};`,
+          });
+          break;
+        case 'somonscript':
+          this.compileModule({ module, moduleId, compilationConfig, modules, errors, warnings });
+          break;
       }
-      if (extension === '.json') {
-        modules.set(moduleId, {
-          code: `module.exports = ${JSON.stringify(JSON.parse(module.source))};`,
-        });
-        continue;
-      }
-      if (extension !== '.som') {
-        continue;
-      }
-
-      this.compileModule({
-        module,
-        moduleId,
-        compilationConfig,
-        modules,
-        errors,
-        warnings,
-      });
     }
   }
 
@@ -534,25 +586,14 @@ export class ModuleSystem {
     entryPoint: string,
     errors: CompilationError[]
   ): void {
-    // Errors inside the module graph already name the failing file and import
+    // The loader, the resolver and the registry throw Error objects only. Errors inside
+    // the module graph already name the failing file and import.
+    const failure = error as Error;
     const message =
-      error instanceof ModuleLoadError
-        ? error.message
-        : `Failed to load entry point: ${error instanceof Error ? error.message : String(error)}`;
-    errors.push(
-      this.createCompilationError(message, entryPoint, error instanceof Error ? error : undefined)
-    );
-  }
-
-  private async cleanupOnCompilationFailure(): Promise<void> {
-    if (this.activeWatchers.size > 0) {
-      if (this.logger) {
-        this.logger.warn('Compilation failed, cleaning up active watchers', {
-          watcherCount: this.activeWatchers.size,
-        });
-      }
-      await this.stopWatching();
-    }
+      failure instanceof ModuleLoadError
+        ? failure.message
+        : `Failed to load entry point: ${failure.message}`;
+    errors.push(this.createCompilationError(message, entryPoint, failure));
   }
 
   /**
@@ -561,17 +602,23 @@ export class ModuleSystem {
   async compile(
     entryPoint: string,
     externals?: string[],
-    overrideCompilation?: Partial<CompilerOptions>
+    overrideCompilation?: Partial<ModuleCompilationOptions>
   ): Promise<CompilationResult> {
     const errors: CompilationError[] = [];
     const warnings: string[] = [];
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
-    this.setupExternals(externals, previousExternals);
+    this.setupExternals(externals);
 
     try {
-      const entryModule = await this.loader.load(entryPoint, path.dirname(entryPoint));
+      // The entry is a file, relative to the current directory: not an import specifier,
+      // which could be a package name or a path relative to baseUrl
+      const entryFile = path.resolve(entryPoint);
+      const entryModule = await this.loader.load(
+        `./${path.basename(entryFile)}`,
+        path.dirname(entryFile)
+      );
       // The loader's cycle warnings depend on load order and cache state; cycles are
       // reported once, from the module graph, by checkCircularDependencies().
       this.loader.clearWarnings();
@@ -596,8 +643,8 @@ export class ModuleSystem {
         warnings,
       };
     } catch (error) {
+      // Watchers stay: a watch loop recompiles once the file is fixed
       this.handleEntryPointLoadError(error, entryPoint, errors);
-      await this.cleanupOnCompilationFailure();
 
       return {
         modules,
@@ -615,16 +662,22 @@ export class ModuleSystem {
    * Bundle modules into a single file
    */
   async bundle(options: BundleOptions): Promise<BundleOutput> {
-    const format = options.format ?? 'commonjs';
-    if (format !== 'commonjs') {
-      throw new Error(
-        `Only the 'commonjs' bundle format is currently supported. Received '${format}'.`
-      );
-    }
-    // The whole bundle is minified once at the end. Minifying modules as well would
-    // escape non-ASCII import paths, which the require rewriter cannot match.
+    // A project that compiles to ES modules gets an ES module bundle by default
+    const format =
+      options.format ?? (this.resolveCompilationOptions().module === 'esm' ? 'esm' : 'commonjs');
+    this.validateBundleOptions(options, format);
+    // The whole bundle is minified once at the end, not every module as well
     const minify = options.minify ?? this.resolveCompilationOptions().minify;
-    const compilationOverrides: Partial<CompilerOptions> = { minify: false };
+    // Modules keep their syntax (checked against the target): the whole bundle is
+    // lowered once, so TypeScript's helpers appear once. Every format keeps
+    // CommonJS modules in the bundle's module table (an esm bundle exports the
+    // entry's exports around it), so they compile to CommonJS whatever the
+    // configured `module` is.
+    const compilationOverrides: Partial<ModuleCompilationOptions> = {
+      minify: false,
+      downlevel: false,
+      module: 'commonjs',
+    };
     if (options.sourceMaps !== undefined) {
       compilationOverrides.sourceMap = options.sourceMaps;
     }
@@ -639,14 +692,11 @@ export class ModuleSystem {
     if (compilationResult.errors.length > 0) {
       const errorDetails = compilationResult.errors
         .map((error, index) => {
-          let detail = `  ${index + 1}. ${error.filePath}`;
-          if (error.line !== undefined) {
-            detail += `:${error.line}`;
-            if (error.column !== undefined) {
-              detail += `:${error.column}`;
-            }
-          }
-          detail += `\n     ${error.message}`;
+          // file, file:line or file:line:column (an error with a column has a line)
+          const location = [error.filePath, error.line, error.column]
+            .filter(part => part !== undefined)
+            .join(':');
+          let detail = `  ${index + 1}. ${location}\n     ${error.message}`;
           if (error.suggestion) {
             detail += `\n     💡 Suggestion: ${error.suggestion}`;
           }
@@ -666,7 +716,7 @@ export class ModuleSystem {
     }
 
     // Log warnings even if compilation succeeded
-    if (compilationResult.warnings.length > 0 && this.logger) {
+    if (compilationResult.warnings.length > 0) {
       this.logger.warn('Bundle compilation succeeded with warnings', {
         warningCount: compilationResult.warnings.length,
         warnings: compilationResult.warnings,
@@ -675,12 +725,26 @@ export class ModuleSystem {
 
     // Generate bundle based on format
     try {
-      return await this.generateCommonJSBundle(compilationResult, { ...options, minify });
+      return await this.generateBundle(compilationResult, { ...options, format, minify });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      // Fail fast on bundle generation errors (all of them Error objects)
+      throw new Error(`Failed to generate bundle: ${(error as Error).message}`);
+    }
+  }
 
-      // Fail fast on bundle generation errors
-      throw new Error(`Failed to generate bundle: ${message}`);
+  /** Reject a bundle format, global name or module-path mode that cannot work. */
+  private validateBundleOptions(options: BundleOptions, format: unknown): void {
+    if (!isBundleFormat(format)) {
+      throw new Error(
+        `Unsupported bundle format '${String(format)}'. Supported formats: ${BUNDLE_FORMATS.join(', ')}.`
+      );
+    }
+    if (options.globalName !== undefined) {
+      const problem = validateGlobalName(options.globalName);
+      if (problem) throw new Error(`Invalid bundle globalName: ${problem}`);
+    }
+    if (options.modulePaths && format !== 'commonjs') {
+      throw new Error(`Module paths need the commonjs bundle format, not '${format}'.`);
     }
   }
 
@@ -758,21 +822,18 @@ export class ModuleSystem {
   }
 
   /**
-   * Gracefully shutdown: stop watchers, clear caches.
+   * Gracefully shutdown: stop the watchers of watch().
    */
   async shutdown(): Promise<void> {
-    try {
-      await this.stopWatching();
-    } catch (error) {
-      logger.warn('Error stopping watchers during shutdown', { error });
-    }
+    await this.stopWatching();
   }
 
   watch(entryPoint: string, options: ModuleSystemWatchOptions = {}): FSWatcher {
     const resolvedEntry = path.resolve(entryPoint);
     const watchRoots = new Set<string>();
+    // Files and their directories; external modules have no path ('lodash', 'fs')
     const addWatchTarget = (target: string): void => {
-      if (target && path.isAbsolute(target)) {
+      if (path.isAbsolute(target)) {
         watchRoots.add(target);
       }
     };
@@ -782,9 +843,7 @@ export class ModuleSystem {
 
     for (const moduleMeta of this.registry.getAll()) {
       addWatchTarget(moduleMeta.resolvedPath);
-      if (path.isAbsolute(moduleMeta.resolvedPath)) {
-        addWatchTarget(path.dirname(moduleMeta.resolvedPath));
-      }
+      addWatchTarget(path.dirname(moduleMeta.resolvedPath));
     }
 
     for (const additional of options.additionalPaths ?? []) {
@@ -804,19 +863,8 @@ export class ModuleSystem {
 
     const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
 
-    const supportedEvents: ModuleWatchEventType[] = [
-      'add',
-      'change',
-      'unlink',
-      'addDir',
-      'unlinkDir',
-    ];
-
-    watcher.on('all', (event: string, changedPath: string) => {
-      if (!supportedEvents.includes(event as ModuleWatchEventType)) {
-        return;
-      }
-
+    // chokidar's 'all' event is one of add, addDir, change, unlink and unlinkDir
+    watcher.on('all', (event: ModuleWatchEventType, changedPath: string) => {
       const filePath = path.resolve(changedPath);
       if (event === 'change' || event === 'unlink') {
         this.invalidate(filePath);
@@ -825,63 +873,29 @@ export class ModuleSystem {
         this.clearCache();
       }
 
-      options.onChange?.({
-        type: event as ModuleWatchEventType,
-        filePath,
-      });
+      options.onChange?.({ type: event, filePath });
     });
 
-    watcher.on('error', (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      if (this.logger) {
-        this.logger.error('ModuleSystem watch error', { error: message });
-      } else {
-        console.error('ModuleSystem watch error:', message);
-      }
+    watcher.on('error', (error: Error) => {
+      this.logger.error('ModuleSystem watch error', { error: error.message });
 
       // Close watcher on error - the wrapped close() will handle removal from tracking
       // Handle the promise explicitly to avoid unhandled rejections
-      watcher.close().catch(closeError => {
-        const closeMessage = closeError instanceof Error ? closeError.message : String(closeError);
-        if (this.logger) {
-          this.logger.warn('Failed to close errored watcher', { error: closeMessage });
-        }
+      watcher.close().catch((closeError: Error) => {
+        this.logger.warn('Failed to close errored watcher', { error: closeError.message });
       });
     });
 
-    // Wrap the close method to ensure removal from tracking after close completes
-    // The 'close' event is not reliable in chokidar, so we intercept the call
-    // Following chokidar best practices: close() returns a Promise that resolves when fully closed
-
-    // Check if close is a Jest mock to preserve spy functionality in tests
-    const isMock =
-      typeof (watcher.close as unknown as { mockImplementation?: unknown }).mockImplementation ===
-      'function';
-
-    if (isMock) {
-      // For Jest mocks, get the original mock's current implementation before wrapping
-      const mockFn = watcher.close as unknown as jest.Mock;
-      const originalImpl = mockFn.getMockImplementation?.() || (() => Promise.resolve());
-
-      // Preserve Jest spy by using mockImplementation with cleanup logic
-      mockFn.mockImplementation(async () => {
-        try {
-          await originalImpl();
-        } finally {
-          this.activeWatchers.delete(watcher);
-        }
-      });
-    } else {
-      // Production: replace the method directly
-      const originalClose = watcher.close.bind(watcher);
-      watcher.close = async () => {
-        try {
-          await originalClose();
-        } finally {
-          this.activeWatchers.delete(watcher);
-        }
-      };
-    }
+    // A watcher closed by its owner is no longer one to stop. chokidar's 'close'
+    // event is not reliable, so close() itself is wrapped.
+    const originalClose = watcher.close.bind(watcher);
+    watcher.close = async () => {
+      try {
+        await originalClose();
+      } finally {
+        this.activeWatchers.delete(watcher);
+      }
+    };
 
     this.activeWatchers.add(watcher);
     return watcher;
@@ -892,44 +906,23 @@ export class ModuleSystem {
       return;
     }
 
-    if (this.logger) {
-      this.logger.info('Stopping all watchers', { count: this.activeWatchers.size });
-    }
+    this.logger.info('Stopping all watchers', { count: this.activeWatchers.size });
 
     const watchers = Array.from(this.activeWatchers);
     this.activeWatchers.clear();
 
-    // Create promises with timeout to prevent hanging
-    const closePromises = watchers.map(async watcher => {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Watcher close timeout after 5s')), 5000);
-      });
-
-      const closePromise = watcher.close();
-
-      try {
-        await Promise.race([closePromise, timeoutPromise]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (this.logger) {
-          this.logger.warn('Failed to close module watcher', { error: message });
-        } else {
-          console.warn('Failed to close module watcher:', message);
+    // A watcher that fails to close, or takes longer than 5 s, is reported, not awaited
+    await Promise.all(
+      watchers.map(async watcher => {
+        try {
+          await withTimeout(watcher.close(), { timeout: 5000, operation: 'close module watcher' });
+        } catch (error) {
+          this.logger.warn('Failed to close module watcher', { error: (error as Error).message });
         }
-      } finally {
-        // Always clear the timeout to prevent resource leaks
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-      }
-    });
+      })
+    );
 
-    await Promise.allSettled(closePromises);
-
-    if (this.logger) {
-      this.logger.info('All watchers stopped');
-    }
+    this.logger.info('All watchers stopped');
   }
 
   private registerAllLoadedModules(): void {
@@ -939,15 +932,13 @@ export class ModuleSystem {
     }
   }
 
-  private resolveCompilationOptions(overrides?: Partial<CompilerOptions>): CompilerOptions {
-    if (!overrides || Object.keys(overrides).length === 0) {
-      return { ...this.defaultCompilation };
-    }
-
+  private resolveCompilationOptions(
+    overrides?: Partial<ModuleCompilationOptions>
+  ): ModuleCompilationOptions {
     return { ...this.defaultCompilation, ...overrides };
   }
 
-  private toPipelineOptions(config: CompilerOptions): PipelineCompileOptions {
+  private toPipelineOptions(config: ModuleCompilationOptions): PipelineCompileOptions {
     const options: PipelineCompileOptions = {};
 
     if (config.target) {
@@ -964,6 +955,27 @@ export class ModuleSystem {
     }
     if (config.strict !== undefined) {
       options.strict = config.strict;
+    }
+    if (config.experimentalDecorators !== undefined) {
+      options.experimentalDecorators = config.experimentalDecorators;
+    }
+    if (config.lib !== undefined) {
+      options.lib = config.lib;
+    }
+    if (config.useDefineForClassFields !== undefined) {
+      options.useDefineForClassFields = config.useDefineForClassFields;
+    }
+    if (config.downlevel !== undefined) {
+      options.downlevel = config.downlevel;
+    }
+    if (config.module !== undefined) {
+      options.module = config.module;
+    }
+    if (config.checker !== undefined) {
+      options.checker = config.checker;
+    }
+    if (config.locale !== undefined) {
+      options.locale = config.locale;
     }
 
     return options;
@@ -988,19 +1000,9 @@ export class ModuleSystem {
     );
     const externalModuleIds = new Set<string>();
 
-    const normalizeKey = (absolutePath: string): string => {
-      const relativePath = path.relative(entryDir, absolutePath);
-      const normalized = relativePath.split(path.sep).join('/');
-      return normalized.length === 0 ? path.basename(absolutePath) : normalized;
-    };
-
-    for (const [moduleId] of result.modules) {
-      if (!path.isAbsolute(moduleId)) {
-        throw new Error(`Module ID should be absolute path, got: ${moduleId}`);
-      }
-      if (!moduleIdMapping.has(moduleId)) {
-        moduleIdMapping.set(moduleId, normalizeKey(moduleId));
-      }
+    // Keys are paths relative to the entry's directory, so the bundle holds no build path
+    for (const moduleId of result.modules.keys()) {
+      moduleIdMapping.set(moduleId, path.relative(entryDir, moduleId).split(path.sep).join('/'));
     }
 
     for (const ext of externals) {
@@ -1035,16 +1037,17 @@ export class ModuleSystem {
     });
   }
 
+  /** The `modules` table. Returns the lines each module's code occupies in the body. */
   private async buildModuleMapSection(
     bundleBuilder: { code: string; line: number },
-    processedModules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }>,
+    processedModules: BundleModule[],
     externalModuleIds: Set<string>,
     generator: SourceMapGenerator | null,
     options: BundleOptions
-  ): Promise<void> {
-    this.appendToBuilder(bundleBuilder, "(function() {\n  'use strict';\n\n  var modules = {\n");
+  ): Promise<BundleModuleLines[]> {
+    this.appendToBuilder(bundleBuilder, "  'use strict';\n\n  var modules = {\n");
+    const moduleLines: BundleModuleLines[] = [];
 
-    const inlinedSources = new Set<string>();
     let firstModule = true;
 
     for (const module of processedModules) {
@@ -1067,13 +1070,13 @@ export class ModuleSystem {
       );
       const moduleStartLine = bundleBuilder.line;
       this.appendToBuilder(bundleBuilder, module.code);
+      moduleLines.push({ key: module.key, start: moduleStartLine, end: bundleBuilder.line });
 
       if (generator && module.map) {
         await this.addModuleSourceMappings(
           generator,
-          module,
+          { key: module.key, map: module.map },
           moduleStartLine,
-          inlinedSources,
           options
         );
       }
@@ -1082,23 +1085,20 @@ export class ModuleSystem {
     }
 
     this.appendToBuilder(bundleBuilder, '\n  };\n\n');
+    return moduleLines;
   }
 
   private async addModuleSourceMappings(
     generator: SourceMapGenerator,
-    module: { key: string; map?: RawSourceMap },
+    module: { key: string; map: RawSourceMap },
     moduleStartLine: number,
-    inlinedSources: Set<string>,
     options: BundleOptions
   ): Promise<void> {
-    if (!module.map) {
-      return;
-    }
-
     const moduleMap = module.map;
     await SourceMapConsumer.with(moduleMap, null, consumer => {
       consumer.eachMapping(mapping => {
-        if (mapping.originalLine == null || mapping.originalColumn == null) {
+        // A segment without a source position maps nothing
+        if (mapping.originalLine == null) {
           return;
         }
         generator.addMapping({
@@ -1115,12 +1115,9 @@ export class ModuleSystem {
         });
       });
 
-      if (options.inlineSources && !inlinedSources.has(module.key)) {
-        const content = moduleMap.sourcesContent?.find(item => typeof item === 'string');
-        if (content !== undefined) {
-          generator.setSourceContent(module.key, content);
-          inlinedSources.add(module.key);
-        }
+      if (options.inlineSources) {
+        // parseModuleSourceMap() gives every module map its source
+        generator.setSourceContent(module.key, moduleMap.sourcesContent![0]!);
       }
     });
   }
@@ -1128,16 +1125,13 @@ export class ModuleSystem {
   private addBundleRuntimeCode(
     bundleBuilder: { code: string; line: number },
     entryKey: string,
-    modulePaths: Map<string, string> | null
+    modulePaths: Map<string, string> | null,
+    options: { format: BundleFormat; imports: readonly string[] }
   ): void {
     this.appendToBuilder(
       bundleBuilder,
       '  var cache = {};\n' +
-        "  var __externalRequire = typeof module !== 'undefined' && module.require\n" +
-        '    ? module.require.bind(module)\n' +
-        "    : typeof require === 'function'\n" +
-        '      ? require\n' +
-        '      : null;\n' +
+        externalRequireCode(options.format, options.imports) +
         '  var __hasOwn = Object.prototype.hasOwnProperty;\n\n'
     );
 
@@ -1186,34 +1180,10 @@ export class ModuleSystem {
       bundleBuilder,
       `  // Start with entry point and expose its exports\n  var entryModule = _require(${JSON.stringify(entryKey)});\n\n`
     );
-
-    this.appendToBuilder(
-      bundleBuilder,
-      '  // Expose entry point exports as bundle exports (for Node.js)\n' +
-        "  if (typeof module !== 'undefined' && module.exports) {\n" +
-        '    module.exports = entryModule;\n' +
-        '  }\n\n'
-    );
-
-    this.appendToBuilder(
-      bundleBuilder,
-      '  // Return entry point exports (for other environments)\n' + '  return entryModule;\n})();'
-    );
   }
 
   private generateBundleSourceMap(generator: SourceMapGenerator | null): RawSourceMap | undefined {
-    if (!generator) {
-      return undefined;
-    }
-
-    try {
-      const rawMap = JSON.parse(generator.toString()) as RawSourceMap;
-      this.validateSourceMap(rawMap, 'bundle generation');
-      return rawMap;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Source map generation failed: ${message}`);
-    }
+    return generator?.toJSON();
   }
 
   private async applyMinification(
@@ -1228,35 +1198,20 @@ export class ModuleSystem {
     try {
       const minified = this.minify(bundleBuilder.code, rawMap, Boolean(options.sourceMaps));
       bundleBuilder.code = minified.code;
-      const minifiedMap = minified.map;
-
-      if (minifiedMap && options.sourceMaps) {
-        this.validateSourceMap(minifiedMap, 'minification');
-      }
-
-      return minifiedMap;
+      return minified.map;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Minification failed: ${message}`);
+      throw new Error(`Minification failed: ${(error as Error).message}`);
     }
   }
 
-  private serializeBundleSourceMap(rawMap: RawSourceMap | undefined): string | undefined {
-    if (!rawMap) {
-      return undefined;
-    }
-
-    try {
-      return JSON.stringify(rawMap);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to serialize source map: ${message}`);
-    }
-  }
-
-  private async generateCommonJSBundle(
+  /**
+   * The bundle: a body (the module table and the runtime, which ends with
+   * `entryModule`) lowered for the target as a whole, inside the wrapper of the
+   * format that hands the entry's exports to the host.
+   */
+  private async generateBundle(
     result: CompilationResult,
-    options: BundleOptions
+    options: BundleOptions & { format: BundleFormat }
   ): Promise<BundleOutput> {
     const context = this.initializeBundleContext(result, options);
     const processedModules = this.prepareModulesForBundle(
@@ -1266,16 +1221,15 @@ export class ModuleSystem {
       context.externalModuleIds
     );
 
-    const entryKey = context.moduleIdMapping.get(result.entryPoint);
-    if (!entryKey) {
-      throw new Error(`Entry module ${result.entryPoint} missing from bundle results.`);
-    }
+    // A build without errors compiled its entry: whatever its name it is a program
+    const entryKey = context.moduleIdMapping.get(result.entryPoint)!;
+    const bundled = processedModules.filter(module => !context.externalModuleIds.has(module.id));
+    const imports = this.collectRuntimeImports(bundled, options.format);
 
-    const bundleBuilder = this.createBundleCodeBuilder();
+    const body = this.createBundleCodeBuilder();
     const generator = this.createSourceMapGenerator(options, result);
-
-    await this.buildModuleMapSection(
-      bundleBuilder,
+    const moduleLines = await this.buildModuleMapSection(
+      body,
       processedModules,
       context.externalModuleIds,
       generator,
@@ -1285,9 +1239,29 @@ export class ModuleSystem {
     const modulePaths = options.modulePaths
       ? new Map(processedModules.map(module => [module.key, module.id]))
       : null;
-    this.addBundleRuntimeCode(bundleBuilder, entryKey, modulePaths);
+    this.addBundleRuntimeCode(body, entryKey, modulePaths, { format: options.format, imports });
 
-    let rawMap = this.generateBundleSourceMap(generator);
+    let rawMap = this.lowerBundleBody(body, this.generateBundleSourceMap(generator), moduleLines);
+
+    const wrapper = bundleWrapper({
+      format: options.format,
+      globalName: options.globalName,
+      imports,
+      exportNames:
+        options.format === 'esm'
+          ? collectExportNames(entryKey, new Map(bundled.map(module => [module.key, module.code])))
+          : [],
+      defaultIsExportsObject: languageOf(result.entryPoint, true) !== 'somonscript',
+    });
+    const bundleBuilder = this.createBundleCodeBuilder();
+    // The entry's `#!/usr/bin/env node` starts a bundle that runs under Node.js
+    // (a browser script has none)
+    const shebang = ModuleSystem.shebangOf(result.modules.get(result.entryPoint)?.code);
+    if (shebang && options.format !== 'iife') this.appendToBuilder(bundleBuilder, `${shebang}\n`);
+    this.appendToBuilder(bundleBuilder, wrapper.prefix);
+    if (rawMap) rawMap = shiftSourceMap(rawMap, bundleBuilder.line - 1);
+    this.appendToBuilder(bundleBuilder, body.code + wrapper.suffix);
+
     rawMap = await this.applyMinification(bundleBuilder, rawMap, options);
     if (rawMap && options.outputPath) {
       // Sources are keyed relative to the entry; tools resolve them from the map file.
@@ -1297,12 +1271,71 @@ export class ModuleSystem {
         path.relative(mapDir, path.resolve(entryDir, source)).split(path.sep).join('/')
       );
     }
-    const serializedMap = this.serializeBundleSourceMap(rawMap);
-
     return {
       code: bundleBuilder.code,
-      map: serializedMap,
+      map: rawMap && JSON.stringify(rawMap),
+      moduleCount: bundled.length,
     };
+  }
+
+  /** The `#!…` line a compiled module starts with, if any. */
+  private static shebangOf(code: string | undefined): string | undefined {
+    return code?.match(/^#![^\n\r]*/)?.[0];
+  }
+
+  /**
+   * Lower the bundle body for the compilation target once (modules were only
+   * checked against it), so TypeScript's helpers appear once. Local JavaScript
+   * bundled as it is gets lowered too; what it uses that the target cannot
+   * express fails the bundle.
+   */
+  private lowerBundleBody(
+    body: { code: string; line: number },
+    map: RawSourceMap | undefined,
+    moduleLines: BundleModuleLines[]
+  ): RawSourceMap | undefined {
+    const compilation = this.resolveCompilationOptions();
+    const target = compilation.target ?? DEFAULT_TARGET;
+    const lowered = lowerToTarget(body.code, {
+      target,
+      useDefineForClassFields: compilation.useDefineForClassFields,
+      experimentalDecorators: compilation.experimentalDecorators,
+      sourceMap: map !== undefined,
+    });
+    if (lowered.diagnostics.length > 0) {
+      const details = lowered.diagnostics.map(diagnostic => {
+        // The runtime around the modules is ES5: what a target cannot run is in a module
+        const module = moduleLines.find(
+          lines => diagnostic.line >= lines.start && diagnostic.line <= lines.end
+        )!;
+        const line = diagnostic.line - module.start + 1;
+        return `  ${module.key}:${line}:${diagnostic.column + 1}: ${diagnostic.message}`;
+      });
+      throw new Error(`The bundle cannot run on ${target}:\n${details.join('\n')}`);
+    }
+    body.code = lowered.code;
+    return map && lowered.map ? composeSourceMaps(lowered.map, map) : map;
+  }
+
+  /**
+   * Modules the bundle loads at run time: requires with a constant module that are
+   * not bundle keys. An ES module bundle imports them; a browser bundle has nothing
+   * to load them with.
+   */
+  private collectRuntimeImports(modules: BundleModule[], format: BundleFormat): string[] {
+    if (format === 'commonjs') return [];
+    const keys = new Set(modules.map(module => module.key));
+    const imports = new Set(
+      modules.flatMap(module => module.requires).filter(specifier => !keys.has(specifier))
+    );
+    if (format === 'iife' && imports.size > 0) {
+      throw new Error(
+        `An iife bundle runs without a module loader, but it needs ${[...imports]
+          .map(specifier => `'${specifier}'`)
+          .join(', ')}. Bundle those modules or use the commonjs or esm format.`
+      );
+    }
+    return [...imports];
   }
 
   private buildExternalCandidates(raw: string, entryPoint: string): string[] {
@@ -1376,8 +1409,8 @@ export class ModuleSystem {
     moduleIdMapping: Map<string, string>,
     externals: Set<string>,
     externalModuleIds: Set<string>
-  ): Array<{ id: string; key: string; code: string; map?: RawSourceMap }> {
-    const modules: Array<{ id: string; key: string; code: string; map?: RawSourceMap }> = [];
+  ): BundleModule[] {
+    const modules: BundleModule[] = [];
     const context: RequireRewriteContext = {
       moduleIdMapping,
       externals,
@@ -1386,231 +1419,162 @@ export class ModuleSystem {
     };
 
     for (const [moduleId, moduleData] of result.modules) {
-      const processedCode = this.rewriteRequiresForModule(moduleId, moduleData.code, context);
-      const key = moduleIdMapping.get(moduleId);
-      if (!key) {
-        continue;
-      }
-      modules.push({ id: moduleId, key, code: processedCode, map: moduleData.map });
+      // A shebang is only valid on the bundle's first line; its line stays, empty
+      const code = moduleData.code.replace(/^#![^\n\r]*/, '');
+      const rewritten = this.rewriteRequiresForModule(moduleId, code, context);
+      // The mapping has a key for every module of the result
+      const key = moduleIdMapping.get(moduleId)!;
+      modules.push({ id: moduleId, key, ...rewritten, map: moduleData.map });
     }
 
     return modules;
   }
 
+  /**
+   * Point the requires of a module at the bundle's keys. Calls are found in the
+   * module's syntax tree, so requires in comments and strings stay as they are.
+   * Returns the code and the modules its other requires load at run time.
+   */
   private rewriteRequiresForModule(
     ownerModuleId: string,
     code: string,
     context: RequireRewriteContext
-  ): string {
-    if (typeof code !== 'string') {
-      throw new Error('Code input must be a string');
+  ): { code: string; requires: string[] } {
+    const calls = findRequireCalls(code);
+    if (!calls) {
+      // Local JavaScript that does not parse is bundled as it is
+      return { code, requires: [] };
     }
-    if (code.length > 10 * 1024 * 1024) {
-      throw new Error('Code input too large for require rewriting');
-    }
-
-    const normalizedOwner = path.isAbsolute(ownerModuleId)
-      ? ownerModuleId
-      : path.resolve(ownerModuleId);
 
     // Local JavaScript is bundled verbatim: its dynamic requires are left to the host
     // require instead of failing the bundle.
-    const isSomonModule = normalizedOwner.endsWith('.som');
-
-    // `(?<![\w$.])` keeps `obj.require(...)` and `_require(...)` untouched
-    const dynamicTemplatePattern = /(?<![\w$.])require\s*\(\s*`[^`]*\$\{[^`]*`\s*\)/;
-    if (isSomonModule && dynamicTemplatePattern.test(code)) {
-      throw new Error(
-        `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
-      );
+    const isSomonModule =
+      languageOf(ownerModuleId, ownerModuleId === context.entryPoint) === 'somonscript';
+    const dynamic = calls.find(call => call.specifier === undefined);
+    if (isSomonModule && dynamic) {
+      const kind = dynamic.template ? 'Dynamic template literal require' : 'Dynamic require';
+      throw new Error(`${kind} expressions are not supported in ${ownerModuleId}.`);
     }
 
-    const dynamicRequirePattern = /(?<![\w$.])require\s*\(\s*(?!['"`])/;
-    if (isSomonModule && dynamicRequirePattern.test(code)) {
-      throw new Error(`Dynamic require expressions are not supported in ${normalizedOwner}.`);
+    let rewritten = code;
+    const requires: string[] = [];
+    // From the end, so that the offsets of earlier calls stay valid
+    for (const call of [...calls].reverse()) {
+      if (call.specifier === undefined) continue;
+      const key = this.bundleKeyOf(ownerModuleId, call.specifier, context);
+      if (key === undefined) {
+        requires.unshift(call.specifier);
+      } else {
+        // A double-quoted literal whatever the characters of the key
+        rewritten =
+          rewritten.slice(0, call.start) + JSON.stringify(key) + rewritten.slice(call.end);
+      }
     }
-
-    // Literals may contain escapes (quotes in file names, `\u` escapes from minifiers)
-    const singleQuotePattern = /(?<![\w$.])require\s*\(\s*'((?:[^'\\\n\r]|\\.){1,500})'\s*\)/g;
-    const doubleQuotePattern = /(?<![\w$.])require\s*\(\s*"((?:[^"\\\n\r]|\\.){1,500})"\s*\)/g;
-    const templatePattern = /(?<![\w$.])require\s*\(\s*`([^`\n\r]{1,500})`\s*\)/g;
-
-    const processMatch = (match: string, spec: string): string => {
-      if (!spec || spec.length === 0 || spec.length > 500) {
-        return match;
-      }
-
-      if (this.matchesExternal(spec, context.externals, context.entryPoint)) {
-        this.markExternalModule(ownerModuleId, spec, context.externalModuleIds, context.entryPoint);
-        return match;
-      }
-
-      const tryResolveToKey = (s: string): { key: string; resolvedPath: string } | null => {
-        try {
-          const resolved = this.resolver.resolve(s, ownerModuleId);
-          const mapped = context.moduleIdMapping.get(resolved.resolvedPath);
-          if (!mapped) {
-            return null;
-          }
-          if (context.externalModuleIds.has(resolved.resolvedPath)) {
-            return null;
-          }
-          return { key: mapped, resolvedPath: resolved.resolvedPath };
-        } catch {
-          return null;
-        }
-      };
-
-      let resolved = tryResolveToKey(spec);
-      if (!resolved && /^(\.\.?\/).+\.js$/i.test(spec)) {
-        const fallbackSpec = spec.replace(/\.js$/i, '.som');
-        if (this.matchesExternal(fallbackSpec, context.externals, context.entryPoint)) {
-          this.markExternalModule(
-            ownerModuleId,
-            fallbackSpec,
-            context.externalModuleIds,
-            context.entryPoint
-          );
-          return match;
-        }
-        resolved = tryResolveToKey(fallbackSpec);
-      }
-      if (!resolved) {
-        return match;
-      }
-
-      // JSON.stringify produces a properly-escaped double-quoted JS string literal
-      // (handles ", \, \n, \r, \t, U+2028, U+2029, control chars). We do not rely
-      // on the inbound key shape — if something weird slipped in via filenames,
-      // emission stays syntactically valid.
-      const safeLiteral = JSON.stringify(resolved.key);
-      return `require(${safeLiteral})`;
-    };
-
-    let result = code.replaceAll(singleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, decodeStringLiteral(spec))
-    );
-    result = result.replaceAll(doubleQuotePattern, (match: string, spec: string) =>
-      processMatch(match, decodeStringLiteral(spec))
-    );
-    result = result.replaceAll(templatePattern, (match: string, spec: string) => {
-      if (spec.includes('${')) {
-        if (!isSomonModule) return match;
-        throw new Error(
-          `Dynamic template literal require expressions are not supported in ${normalizedOwner}.`
-        );
-      }
-      return processMatch(match, spec);
-    });
-
-    return result;
+    return { code: rewritten, requires };
   }
 
   /**
-   * Validate source map structure and required fields.
-   * Fails fast with clear error messages for invalid maps.
+   * The bundle key of the module that `require(specifier)` loads in `ownerModuleId`,
+   * or undefined when it stays a require at run time (externals, packages, Node.js
+   * modules, files that are not bundled). Compiled SomonScript requires `./x.js` for
+   * an import of `./x`, so when that is no bundled file, `./x.som` and `./x` (a
+   * directory, or a file with another extension such as `.json`) are tried.
    */
-  private validateSourceMap(map: RawSourceMap, context: string): void {
-    if (!map.version) {
-      throw new Error(`Invalid source map in ${context}: missing 'version' field`);
+  private bundleKeyOf(
+    ownerModuleId: string,
+    specifier: string,
+    context: RequireRewriteContext
+  ): string | undefined {
+    const candidates = [specifier];
+    if (/^\.\.?\/.+\.js$/i.test(specifier)) {
+      const withoutExtension = specifier.slice(0, -'.js'.length);
+      candidates.push(`${withoutExtension}.som`, withoutExtension);
     }
-    if (map.version !== 3) {
-      throw new Error(
-        `Invalid source map in ${context}: unsupported version ${map.version} (only version 3 is supported)`
-      );
+    for (const candidate of candidates) {
+      if (this.matchesExternal(candidate, context.externals, context.entryPoint)) {
+        this.markExternalModule(
+          ownerModuleId,
+          candidate,
+          context.externalModuleIds,
+          context.entryPoint
+        );
+        return undefined;
+      }
+      let resolvedPath: string;
+      try {
+        resolvedPath = this.resolver.resolve(candidate, ownerModuleId).resolvedPath;
+      } catch {
+        continue;
+      }
+      const key = context.moduleIdMapping.get(resolvedPath);
+      if (key !== undefined && !context.externalModuleIds.has(resolvedPath)) {
+        return key;
+      }
     }
-    if (!Array.isArray(map.sources)) {
-      throw new Error(`Invalid source map in ${context}: 'sources' must be an array`);
-    }
-    if (typeof map.mappings !== 'string') {
-      throw new Error(`Invalid source map in ${context}: 'mappings' must be a string`);
-    }
+    return undefined;
   }
 
   private compileModule(params: {
     module: LoadedModule;
     moduleId: string;
-    compilationConfig: CompilerOptions;
+    compilationConfig: ModuleCompilationOptions;
     modules: Map<string, { code: string; map?: RawSourceMap }>;
     errors: CompilationError[];
     warnings: string[];
-  }): { success: boolean } {
+  }): void {
     const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
     try {
-      const compileResult = compileSource(module.source, this.toPipelineOptions(compilationConfig));
+      const compileResult = compileSource(module.source, {
+        ...this.toPipelineOptions(compilationConfig),
+        // The TypeScript checker resolves the module's imports from its location
+        filePath: module.resolvedPath,
+      });
 
-      // Handle compilation errors
       if (compileResult.errors.length > 0) {
-        this.collectCompilationErrors(compileResult.errors, module.resolvedPath, errors);
-        return { success: false };
+        for (const message of compileResult.errors) {
+          errors.push(this.createCompilationError(message, module.resolvedPath));
+        }
+        return;
       }
 
-      // Parse source map
-      const parsedMap = this.parseModuleSourceMap(module, compileResult.sourceMap, warnings);
-      modules.set(moduleId, { code: compileResult.code, map: parsedMap });
-
-      // Collect warnings
-      if (compileResult.warnings.length > 0) {
-        warnings.push(
-          ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
-        );
-      }
-
-      return { success: true };
-    } catch (error) {
-      // Handle unexpected compilation errors
-      const compilationError = this.createCompilationError(
-        `Unexpected error: ${error instanceof Error ? error.message : String(error)}`,
-        module.resolvedPath,
-        error instanceof Error ? error : undefined
+      const map = this.parseModuleSourceMap(module, compileResult.sourceMap);
+      modules.set(moduleId, { code: compileResult.code, map });
+      warnings.push(
+        ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
       );
-      errors.push(compilationError);
-      return { success: false };
+    } catch (error) {
+      // A crash of the compiler (it reports problems in `errors`), always an Error
+      const failure = error as Error;
+      errors.push(
+        this.createCompilationError(
+          `Unexpected error: ${failure.message}`,
+          module.resolvedPath,
+          failure
+        )
+      );
     }
   }
 
-  private collectCompilationErrors(
-    errorMessages: string[],
-    filePath: string,
-    errors: CompilationError[]
-  ): void {
-    for (const errorMsg of errorMessages) {
-      errors.push(this.createCompilationError(errorMsg, filePath));
-    }
-  }
-
+  /** The compiler's source map of a module (a JSON string), named after its file. */
   private parseModuleSourceMap(
     module: LoadedModule,
-    rawMap: string | undefined,
-    warnings: string[]
+    rawMap: string | undefined
   ): RawSourceMap | undefined {
     if (!rawMap) {
       return undefined;
     }
 
-    try {
-      const parsed = JSON.parse(rawMap) as RawSourceMap;
-
-      // Validate source map structure before using it
-      this.validateSourceMap(parsed, module.resolvedPath);
-
-      parsed.file = module.resolvedPath;
-      parsed.sources =
-        parsed.sources && parsed.sources.length > 0
-          ? parsed.sources.map(() => module.resolvedPath)
-          : [module.resolvedPath];
-      if (!parsed.sourcesContent || parsed.sourcesContent.length === 0) {
-        parsed.sourcesContent = [module.source];
-      }
-      return parsed;
-    } catch (mapError) {
-      const message = mapError instanceof Error ? mapError.message : String(mapError);
-
-      // Add to warnings for now - compilation can continue without source maps
-      // In strict production mode, this could be upgraded to fail-fast
-      warnings.push(`Warning in ${module.resolvedPath}: Failed to parse source map: ${message}`);
-      return undefined;
+    const parsed = JSON.parse(rawMap) as RawSourceMap;
+    parsed.file = module.resolvedPath;
+    // A module without statements has no mappings, and no sources
+    parsed.sources =
+      parsed.sources.length > 0
+        ? parsed.sources.map(() => module.resolvedPath)
+        : [module.resolvedPath];
+    if (!parsed.sourcesContent || parsed.sourcesContent.length === 0) {
+      parsed.sourcesContent = [module.source];
     }
+    return parsed;
   }
 
   private deriveBundleFilename(entryPoint: string): string {
@@ -1625,32 +1589,30 @@ export class ModuleSystem {
     map: RawSourceMap | undefined,
     sourceMaps: boolean
   ): { code: string; map?: RawSourceMap } {
-    // Lazy-load preset to avoid runtime hard dependency
-    let presetModule: unknown = null;
+    // Loaded on first use, so that bundles without minification do not load it
+    let preset: PluginItem;
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      presetModule = require('babel-preset-minify');
+      preset = require('babel-preset-minify') as PluginItem;
     } catch {
       throw new Error(
         "Minification requires the optional dependency 'babel-preset-minify'. Install it to enable minified bundles."
       );
     }
-    const presetItems: PluginItem[] = [];
-    if (presetModule && (typeof presetModule === 'function' || typeof presetModule === 'object')) {
-      presetItems.push(presetModule as PluginItem);
-    }
+    // Without configuration files Babel never ignores the code: there is always a result
     const out = transformSync(code, {
+      // The bundle is minified the same way in every project: no babel.config.* or .babelrc
+      configFile: false,
+      babelrc: false,
       sourceMaps,
-      inputSourceMap: map ? { ...map, file: map.file ?? '' } : undefined,
-      presets: presetItems,
+      inputSourceMap: map,
+      presets: [preset],
       comments: false,
       compact: true,
-    });
+    })!;
 
-    const nextCode = out?.code && out.code.length > 0 ? out.code : code;
-    const nextMap = sourceMaps && out?.map ? (out.map as RawSourceMap) : map;
-
-    return { code: nextCode, map: nextMap };
+    // With `sourceMaps` (and only then) there is an input map and Babel returns a map
+    return { code: out.code!, map: sourceMaps ? (out.map as RawSourceMap) : undefined };
   }
 
   /**
@@ -1669,7 +1631,8 @@ export class ModuleSystem {
 
     // Check for missing dependencies
     for (const module of this.registry.getAll()) {
-      for (const dep of module.dependencies) {
+      // Node.js modules (`fs`, `node:path`) are provided by the host
+      for (const dep of module.dependencies.filter(specifier => !isBuiltin(specifier))) {
         try {
           this.resolver.resolve(dep, module.resolvedPath);
         } catch (error) {

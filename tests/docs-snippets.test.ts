@@ -36,7 +36,7 @@ function somBlocks(file: string): Array<{ line: number; code: string }> {
 
 const files = [
   ...fs.readdirSync(ROOT).filter(name => /^(README.*|DEPLOYMENT|CONTRIBUTING)\.md$/.test(name)),
-  ...['llm-guide', 'docs', 'examples'].flatMap(dir =>
+  ...['llm-guide', 'docs', 'examples', '.github'].flatMap(dir =>
     markdownFiles(path.join(ROOT, dir)).map(file => path.relative(ROOT, file))
   ),
 ];
@@ -48,6 +48,10 @@ const snippets = files.flatMap(file =>
 describe('documentation snippets', () => {
   test('the docs contain SomonScript snippets', () => {
     expect(snippets.length).toBeGreaterThan(100);
+    // The instructions for coding assistants in .github are checked too
+    expect(snippets.filter(([location]) => location.startsWith('.github')).length).toBeGreaterThan(
+      0
+    );
   });
 
   test.each(snippets)('%s compiles', (_location, code) => {

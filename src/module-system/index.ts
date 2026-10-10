@@ -4,7 +4,12 @@
 export { ModuleResolver } from './module-resolver';
 export type { ModuleResolutionOptions, ResolvedModule } from './module-resolver';
 export { ModuleLoader, ModuleLoadError } from './module-loader';
-export type { LoadedModule, ModuleExports, ModuleLoadOptions } from './module-loader';
+export type {
+  LoadedModule,
+  ModuleExports,
+  ModuleLanguage,
+  ModuleLoadOptions,
+} from './module-loader';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleMetadata, ModuleImports, DependencyNode } from './module-registry';
 export { ModuleSystem } from './module-system';

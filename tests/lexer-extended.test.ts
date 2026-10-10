@@ -430,7 +430,7 @@ describe('Lexer Extended Coverage Tests', () => {
 
   describe('Invalid character handling', () => {
     test('should handle unexpected characters gracefully', () => {
-      const source = 'тағйирёбанда @ ном = #значение;';
+      const source = 'тағйирёбанда § ном = #значение;';
 
       expect(() => tokenize(source)).toThrow();
     });
@@ -571,13 +571,11 @@ describe('Lexer Extended Coverage Tests', () => {
       expect(tokens[0].value).toBe('template ${variable} literal');
     });
 
-    test('should handle regex-like constructs', () => {
-      const source = '/pattern/flags';
-      const tokens = tokenize(source);
+    test('should tokenize a regular expression literal where an operand starts', () => {
+      const tokens = tokenize('/pattern/gi');
 
-      // Should tokenize as divide operators and identifiers
-      expect(tokens[0].type).toBe(TokenType.DIVIDE);
-      expect(tokens[2].type).toBe(TokenType.DIVIDE);
+      expect(tokens[0]).toMatchObject({ type: TokenType.REGEX, value: '/pattern/gi' });
+      expect(tokens[1].type).toBe(TokenType.EOF);
     });
   });
 });

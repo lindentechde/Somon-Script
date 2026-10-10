@@ -85,7 +85,7 @@ describe('somon.config.json loader/validation', () => {
   test('rejects unsupported bundle format', () => {
     fs.writeFileSync(
       path.join(tempDir, 'somon.config.json'),
-      JSON.stringify({ bundle: { format: 'esm' } }, null, 2)
+      JSON.stringify({ bundle: { format: 'umd' } }, null, 2)
     );
 
     expect(() => loadConfig(tempDir)).toThrow(ConfigError);
@@ -159,5 +159,79 @@ describe('somon.config.json loader/validation', () => {
       expect(error).toBeInstanceOf(ConfigError);
       expect((error as ConfigError).details.map(detail => detail.path)).toContain(expectedPath);
     }
+  });
+});
+
+describe('somon.config.json: targets, lib and bundle formats', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'somon-config-targets-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function problems(config: unknown): Array<{ path: string; message: string }> {
+    fs.writeFileSync(path.join(tempDir, 'somon.config.json'), JSON.stringify(config));
+    try {
+      loadConfig(tempDir);
+      return [];
+    } catch (error) {
+      return (error as ConfigError).details;
+    }
+  }
+
+  test.each(['es5', 'es2016', 'es2021', 'es2023', 'es2024', 'es2025', 'esnext'])(
+    'accepts target %s',
+    target => {
+      expect(problems({ compilerOptions: { target } })).toEqual([]);
+    }
+  );
+
+  test('lists every target when one is unknown', () => {
+    expect(problems({ compilerOptions: { target: 'es2030' } })).toEqual([
+      {
+        path: 'compilerOptions.target',
+        message:
+          'must be one of: es5, es2015, es2016, es2017, es2018, es2019, es2020, es2021, es2022, es2023, es2024, es2025, esnext',
+      },
+    ]);
+  });
+
+  test('validates lib against the libs TypeScript ships', () => {
+    expect(problems({ compilerOptions: { lib: ['ES2022', 'dom', 'es2015.promise'] } })).toEqual([]);
+    const [unknown] = problems({ compilerOptions: { lib: ['es2022', 'браузер'] } });
+    expect(unknown.path).toBe('compilerOptions.lib');
+    expect(unknown.message).toMatch(/^unknown lib 'браузер'\. TypeScript ships es5, /);
+    expect(problems({ moduleSystem: { compilation: { lib: 'dom' } } })).toEqual([
+      {
+        path: 'moduleSystem.compilation.lib',
+        message: 'must be an array of TypeScript lib names, e.g. ["es2022", "dom"]',
+      },
+    ]);
+  });
+
+  test('useDefineForClassFields must be a boolean', () => {
+    expect(problems({ compilerOptions: { useDefineForClassFields: false } })).toEqual([]);
+    expect(problems({ compilerOptions: { useDefineForClassFields: 'no' } })).toEqual([
+      { path: 'compilerOptions.useDefineForClassFields', message: 'must be a boolean' },
+    ]);
+  });
+
+  test('accepts the commonjs, esm and iife bundle formats and a global name', () => {
+    for (const format of ['commonjs', 'esm', 'iife']) {
+      expect(problems({ bundle: { format, globalName: 'app.Китоб' } })).toEqual([]);
+    }
+    expect(problems({ bundle: { format: 'umd' } })).toEqual([
+      { path: 'bundle.format', message: 'must be one of: commonjs, esm, iife' },
+    ]);
+    expect(problems({ bundle: { globalName: 'app-kitob' } })).toEqual([
+      {
+        path: 'bundle.globalName',
+        message: 'must be an identifier or a dotted path of identifiers, e.g. "MyLib" or "app.lib"',
+      },
+    ]);
   });
 });

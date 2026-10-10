@@ -1,9 +1,21 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import {
+  BUNDLE_FORMATS,
+  TARGETS,
+  validateGlobalName,
+  validateLib,
+  type BundleFormat,
+  type Target,
+} from './targets';
+
 export interface CompilerOptions {
   output?: string;
-  target?: 'es5' | 'es2015' | 'es2020' | 'esnext';
+  target?: Target;
+  /** TypeScript lib names, e.g. ["es2022", "dom"]. */
+  lib?: string[];
+  useDefineForClassFields?: boolean;
   sourceMap?: boolean;
   minify?: boolean;
   noTypeCheck?: boolean;
@@ -11,12 +23,36 @@ export interface CompilerOptions {
   outDir?: string;
   watch?: boolean;
   compileOnSave?: boolean;
+  /** TypeScript's legacy decorators, which may decorate parameters too. */
+  experimentalDecorators?: boolean;
+  /** Module format of the output: 'commonjs' (default) or 'esm'. */
+  module?: 'commonjs' | 'esm';
+  /** Type checker: 'somon' (default) or 'typescript'. */
+  checker?: 'somon' | 'typescript';
+  /** Language of the TypeScript checker's diagnostics: 'en' (default), 'ru' or 'tj'. */
+  locale?: 'en' | 'ru' | 'tj';
+  /** Also write a TypeScript declaration file (`.d.ts`) next to the output. */
+  declaration?: boolean;
 }
+
+/** Allowed values of the compiler options that take one of a few strings. */
+const ENUM_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+  module: ['commonjs', 'esm'],
+  checker: ['somon', 'typescript'],
+  locale: ['en', 'ru', 'tj'],
+};
 
 export interface SomonConfig {
   compilerOptions?: CompilerOptions;
   moduleSystem?: ModuleSystemConfig;
   bundle?: BundleConfig;
+  /** Settings of the formatter (`somon fmt`). */
+  fmt?: FmtConfig;
+}
+
+export interface FmtConfig {
+  /** Spaces per indentation level (1–16, default 4). */
+  indent?: number;
 }
 
 export class ConfigError extends Error {
@@ -35,8 +71,9 @@ export interface ConfigValidationError {
 }
 
 type UnknownRecord = Record<string, unknown>;
+/** A JSON object: not null, and not an array. */
 function isObject(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rejectUnknownKeys(
@@ -52,6 +89,43 @@ function rejectUnknownKeys(
     }));
 }
 
+/** `target`, `lib` (names of the libs TypeScript ships) and `useDefineForClassFields`. */
+function validateTargetOptions(options: UnknownRecord, path: string): ConfigValidationError[] {
+  const errors: ConfigValidationError[] = [];
+  if (options.target !== undefined) {
+    const validTargets: readonly string[] = TARGETS;
+    if (typeof options.target !== 'string' || !validTargets.includes(options.target)) {
+      errors.push({
+        path: `${path}.target`,
+        message: `must be one of: ${validTargets.join(', ')}`,
+      });
+    }
+  }
+  if (options.lib !== undefined) {
+    for (const message of validateLib(options.lib)) {
+      errors.push({ path: `${path}.lib`, message });
+    }
+  }
+  const useDefine = options.useDefineForClassFields;
+  if (useDefine !== undefined && typeof useDefine !== 'boolean') {
+    errors.push({ path: `${path}.useDefineForClassFields`, message: 'must be a boolean' });
+  }
+  return errors;
+}
+
+/** Options that take one of a few strings (`module`, `checker`, `locale`). */
+function validateEnumOptions(options: UnknownRecord, path: string): ConfigValidationError[] {
+  return Object.entries(ENUM_OPTIONS)
+    .filter(([option, values]) => {
+      const value = options[option];
+      return value !== undefined && (typeof value !== 'string' || !values.includes(value));
+    })
+    .map(([option, values]) => ({
+      path: `${path}.${option}`,
+      message: `must be one of: ${values.join(', ')}`,
+    }));
+}
+
 function validateCompilerOptions(
   options: unknown,
   path = 'compilerOptions'
@@ -62,19 +136,22 @@ function validateCompilerOptions(
     return [{ path, message: 'must be an object' }];
   }
 
-  // Validate target
-  if (options.target !== undefined) {
-    const validTargets = ['es5', 'es2015', 'es2020', 'esnext'];
-    if (typeof options.target !== 'string' || !validTargets.includes(options.target)) {
-      errors.push({
-        path: `${path}.target`,
-        message: `must be one of: ${validTargets.join(', ')}`,
-      });
-    }
-  }
+  // Validate target, lib and useDefineForClassFields
+  errors.push(...validateTargetOptions(options, path));
+
+  errors.push(...validateEnumOptions(options, path));
 
   // Validate boolean options
-  const booleanOptions = ['sourceMap', 'minify', 'noTypeCheck', 'strict', 'watch', 'compileOnSave'];
+  const booleanOptions = [
+    'sourceMap',
+    'minify',
+    'noTypeCheck',
+    'strict',
+    'watch',
+    'compileOnSave',
+    'experimentalDecorators',
+    'declaration',
+  ];
   for (const option of booleanOptions) {
     if (options[option] !== undefined && typeof options[option] !== 'boolean') {
       errors.push({
@@ -99,6 +176,8 @@ function validateCompilerOptions(
   const knownOptions = [
     'output',
     'target',
+    'lib',
+    'useDefineForClassFields',
     'sourceMap',
     'minify',
     'noTypeCheck',
@@ -106,6 +185,11 @@ function validateCompilerOptions(
     'outDir',
     'watch',
     'compileOnSave',
+    'experimentalDecorators',
+    'module',
+    'checker',
+    'locale',
+    'declaration',
   ];
   for (const key of Object.keys(options)) {
     if (!knownOptions.includes(key)) {
@@ -139,7 +223,9 @@ export interface ModuleSystemConfig {
 }
 
 export interface BundleConfig {
-  format?: 'commonjs';
+  format?: BundleFormat;
+  /** For the 'iife' format: the global (`globalThis[globalName]`) that receives the entry's exports. */
+  globalName?: string;
   minify?: boolean;
   sourceMaps?: boolean;
   inlineSources?: boolean;
@@ -202,6 +288,7 @@ const KNOWN_LOADING_KEYS = ['encoding', 'cache', 'circularDependencyStrategy'] a
 
 const KNOWN_BUNDLE_KEYS = [
   'format',
+  'globalName',
   'minify',
   'sourceMaps',
   'inlineSources',
@@ -213,7 +300,7 @@ function validateResolutionSection(resolution: unknown, basePath: string): Confi
   const errors: ConfigValidationError[] = [];
   if (resolution === undefined) return errors;
 
-  if (typeof resolution !== 'object' || resolution === null) {
+  if (!isObject(resolution)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 
@@ -241,12 +328,12 @@ function validateResolutionBaseUrl(baseUrl: unknown, basePath: string): ConfigVa
 function validateResolutionPaths(paths: unknown, basePath: string): ConfigValidationError[] {
   if (paths === undefined) return [];
 
-  if (typeof paths !== 'object' || paths === null) {
+  if (!isObject(paths)) {
     return [{ path: `${basePath}.paths`, message: 'must be an object' }];
   }
 
-  for (const [k, v] of Object.entries(paths)) {
-    if (typeof k !== 'string' || !Array.isArray(v) || v.some(x => typeof x !== 'string')) {
+  for (const v of Object.values(paths)) {
+    if (!Array.isArray(v) || v.some(x => typeof x !== 'string')) {
       return [{ path: `${basePath}.paths`, message: 'must be Record<string,string[]>' }];
     }
   }
@@ -301,7 +388,7 @@ function validateLoadingSection(loading: unknown, basePath: string): ConfigValid
   const errors: ConfigValidationError[] = [];
   if (loading === undefined) return errors;
 
-  if (typeof loading !== 'object' || loading === null) {
+  if (!isObject(loading)) {
     return [{ path: basePath, message: 'must be an object' }];
   }
 
@@ -343,6 +430,10 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 
   // Validate each property separately to reduce complexity
   errors.push(...validateBundleFormat(obj.format, basePath));
+  if (obj.globalName !== undefined) {
+    const problem = validateGlobalName(obj.globalName);
+    if (problem) errors.push({ path: `${basePath}.globalName`, message: problem });
+  }
   errors.push(...validateBundleBooleanProps(obj, basePath));
   errors.push(...validateBundleOutput(obj.output, basePath));
   errors.push(...validateBundleExternals(obj.externals, basePath));
@@ -351,11 +442,12 @@ function validateBundle(config: unknown, basePath = 'bundle'): ConfigValidationE
 }
 
 function validateBundleFormat(format: unknown, basePath: string): ConfigValidationError[] {
-  if (format !== undefined && format !== 'commonjs') {
+  const formats: readonly unknown[] = BUNDLE_FORMATS;
+  if (format !== undefined && !formats.includes(format)) {
     return [
       {
         path: `${basePath}.format`,
-        message: "SomonScript currently supports only the 'commonjs' bundle format",
+        message: `must be one of: ${BUNDLE_FORMATS.join(', ')}`,
       },
     ];
   }
@@ -397,6 +489,21 @@ function validateBundleExternals(externals: unknown, basePath: string): ConfigVa
   return [];
 }
 
+const KNOWN_FMT_KEYS = ['indent'] as const;
+
+function validateFmt(config: unknown, basePath = 'fmt'): ConfigValidationError[] {
+  if (config === undefined) return [];
+  if (!isObject(config)) {
+    return [{ path: basePath, message: 'must be an object' }];
+  }
+  const errors = rejectUnknownKeys(config, KNOWN_FMT_KEYS, basePath);
+  const indent = (config as FmtConfig).indent;
+  if (indent !== undefined && !(Number.isInteger(indent) && indent >= 1 && indent <= 16)) {
+    errors.push({ path: `${basePath}.indent`, message: 'must be an integer from 1 to 16' });
+  }
+  return errors;
+}
+
 function validateConfig(config: unknown): ConfigValidationError[] {
   const errors: ConfigValidationError[] = [];
 
@@ -405,7 +512,7 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   }
 
   // Check for unknown top-level properties
-  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle'];
+  const knownProperties = ['compilerOptions', 'moduleSystem', 'bundle', 'fmt'];
   for (const key of Object.keys(config)) {
     if (!knownProperties.includes(key)) {
       errors.push({
@@ -419,14 +526,9 @@ function validateConfig(config: unknown): ConfigValidationError[] {
   if ((config as SomonConfig).compilerOptions !== undefined) {
     errors.push(...validateCompilerOptions((config as SomonConfig).compilerOptions));
   }
-  // Validate moduleSystem if present
-  if ((config as SomonConfig).moduleSystem !== undefined) {
-    errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
-  }
-  // Validate bundle if present
-  if ((config as SomonConfig).bundle !== undefined) {
-    errors.push(...validateBundle((config as SomonConfig).bundle));
-  }
+  errors.push(...validateModuleSystem((config as SomonConfig).moduleSystem));
+  errors.push(...validateBundle((config as SomonConfig).bundle));
+  errors.push(...validateFmt((config as SomonConfig).fmt));
 
   return errors;
 }
@@ -442,10 +544,11 @@ function loadConfigFromFile(configPath: string): SomonConfig {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fileContents);
+    // Editors on Windows may save UTF-8 with a byte order mark, which JSON rejects
+    parsed = JSON.parse(fileContents.replace(/^\uFEFF/, ''));
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new ConfigError(`Failed to parse config file ${configPath}: ${reason}`);
+    // JSON.parse throws a SyntaxError
+    throw new ConfigError(`Failed to parse config file ${configPath}: ${(error as Error).message}`);
   }
 
   const validationErrors = validateConfig(parsed);

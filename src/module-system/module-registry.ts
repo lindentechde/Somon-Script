@@ -65,7 +65,12 @@ export class ModuleRegistry {
    * Get module metadata
    */
   get(moduleId: string): ModuleMetadata | undefined {
-    return this.modules.get(moduleId);
+    const metadata = this.modules.get(moduleId);
+    if (metadata) {
+      // Modules registered later may depend on this one
+      metadata.dependents = this.getDependents(moduleId);
+    }
+    return metadata;
   }
 
   /**
@@ -79,7 +84,7 @@ export class ModuleRegistry {
    * Get all registered modules
    */
   getAll(): ModuleMetadata[] {
-    return Array.from(this.modules.values());
+    return Array.from(this.modules.keys(), moduleId => this.get(moduleId)!);
   }
 
   /**
@@ -242,8 +247,8 @@ export class ModuleRegistry {
     if (resolvedDependencies) {
       resolvedDeps = [...resolvedDependencies];
     } else {
-      const module = this.modules.get(moduleId);
-      const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
+      // register() stores the module before its dependencies
+      const moduleDir = path.dirname(this.modules.get(moduleId)!.resolvedPath);
       resolvedDeps = [];
       for (const dep of dependencies) {
         const resolvedDepId = this.resolveSpecifierToModuleId(dep, moduleDir);
@@ -297,26 +302,27 @@ export class ModuleRegistry {
     this.calculateLevels();
   }
 
+  /**
+   * A module's level is 0 without dependencies and otherwise one more than the
+   * deepest of its dependencies; a dependency back into the path being computed
+   * (a cycle) counts as 0.
+   */
   private calculateLevels(): void {
-    const visited = new Set<string>();
+    const done = new Set<string>();
+    const inProgress = new Set<string>();
 
     const calculateLevel = (moduleId: string): number => {
-      if (visited.has(moduleId)) return 0;
-      visited.add(moduleId);
+      // Called for nodes of the graph only: its keys and their resolved dependencies
+      const node = this.dependencyGraph.get(moduleId)!;
+      if (done.has(moduleId)) return node.level;
+      if (inProgress.has(moduleId)) return 0;
+      inProgress.add(moduleId);
 
-      const node = this.dependencyGraph.get(moduleId);
-      if (!node || node.dependencies.length === 0) {
-        node && (node.level = 0);
-        return 0;
-      }
+      const dependencyLevels = this.getResolvedDependencies(moduleId).map(calculateLevel);
+      node.level = node.dependencies.length === 0 ? 0 : Math.max(0, ...dependencyLevels) + 1;
 
-      // Use resolved adjacency for level calculation
-      const resolvedDeps = this.getResolvedDependencies(moduleId);
-      const maxDepLevel = resolvedDeps.length
-        ? Math.max(...resolvedDeps.map(depId => calculateLevel(depId)))
-        : 0;
-
-      node.level = maxDepLevel + 1;
+      inProgress.delete(moduleId);
+      done.add(moduleId);
       return node.level;
     };
 
@@ -333,7 +339,7 @@ export class ModuleRegistry {
         const importDecl = statement as ImportDeclaration;
         const source = String(importDecl.source.value);
 
-        this.processImportSpecifiers(importDecl.specifiers || [], source, imports);
+        this.processImportSpecifiers(importDecl.specifiers, source, imports);
       }
     }
 
@@ -382,48 +388,31 @@ export class ModuleRegistry {
   }
 
   private processImportSpecifiers(
-    specifiers: Array<{ type: string; imported?: { name?: string } }>,
+    specifiers: ImportDeclaration['specifiers'],
     source: string,
     imports: ModuleImports
   ): void {
     for (const specifier of specifiers) {
       if (specifier.type === 'ImportDefaultSpecifier') {
-        // Initialize default import list lazily
-        imports.default ??= [];
-        imports.default.push(source);
+        (imports.default ??= []).push(source);
       } else if (specifier.type === 'ImportSpecifier') {
-        if (!imports.named[source]) imports.named[source] = [];
-        imports.named[source].push(specifier.imported?.name || '');
-      } else if (specifier.type === 'ImportNamespaceSpecifier') {
-        imports.namespace ??= [];
-        imports.namespace.push(source);
+        (imports.named[source] ??= []).push(specifier.imported.name);
+      } else {
+        (imports.namespace ??= []).push(source);
       }
     }
   }
 
-  // Get resolved dependencies for a given module ID
+  /**
+   * The dependencies of a node of the graph that are still nodes (not removed since).
+   * Dependencies are module ids: the loader's resolved ids, or specifiers of a
+   * hand-built module matched with the registered modules when it was registered.
+   */
   private getResolvedDependencies(moduleId: string): string[] {
-    const node = this.dependencyGraph.get(moduleId);
-    if (!node) return [];
-
-    const module = this.modules.get(moduleId);
-    const moduleDir = module ? path.dirname(module.resolvedPath) : path.dirname(moduleId);
-
-    const resolved: string[] = [];
-    for (const dep of node.dependencies) {
-      // Try to resolve if it's a raw specifier
-      if (!path.isAbsolute(dep) && !dep.startsWith('external:')) {
-        const resolvedId = this.resolveSpecifierToModuleId(dep, moduleDir);
-        if (resolvedId && this.dependencyGraph.has(resolvedId)) {
-          resolved.push(resolvedId);
-        }
-      } else if (this.dependencyGraph.has(dep)) {
-        // Already resolved
-        resolved.push(dep);
-      }
-    }
-
-    return resolved;
+    // Called for nodes of the graph only
+    return this.dependencyGraph
+      .get(moduleId)!
+      .dependencies.filter(dep => this.dependencyGraph.has(dep));
   }
 
   // Resolve a raw specifier to a module ID

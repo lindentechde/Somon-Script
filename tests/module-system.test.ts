@@ -1,6 +1,7 @@
 jest.mock('chokidar', () => {
   const watchMock = jest.fn(() => {
     const listeners = new Map<string, Array<(...args: any[]) => void>>();
+    const closeMock = jest.fn().mockResolvedValue(undefined);
     const watcher = {
       on: jest.fn(function (this: any, event: string, handler: (...args: any[]) => void) {
         const handlers = listeners.get(event) ?? [];
@@ -8,7 +9,9 @@ jest.mock('chokidar', () => {
         listeners.set(event, handlers);
         return this;
       }),
-      close: jest.fn().mockResolvedValue(undefined),
+      close: closeMock,
+      // ModuleSystem.watch() wraps close(); the mock stays here for assertions
+      closeMock,
       emit(event: string, ...args: any[]) {
         const handlers = listeners.get(event) ?? [];
         for (const handler of handlers) {
@@ -505,9 +508,9 @@ describe('Module System', () => {
       });
       expect(cjsBundle.code).toContain('module.exports');
 
-      await expect(
-        moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' as any })
-      ).rejects.toThrow(/commonjs/i);
+      // ES module bundles are supported (tests/bundle-formats.test.ts)
+      const esmBundle = await moduleSystem.bundle({ entryPoint: mainFile, format: 'esm' });
+      expect(esmBundle.code).toContain('export {');
 
       await expect(
         moduleSystem.bundle({ entryPoint: mainFile, format: 'umd' as any })
@@ -685,7 +688,7 @@ describe('Module System', () => {
       });
 
       await moduleSystem.shutdown();
-      expect(watcher.close).toHaveBeenCalled();
+      expect((watcher as any).closeMock).toHaveBeenCalled();
     });
 
     test('should evict changed modules and their dependents on watch events', async () => {
@@ -709,6 +712,29 @@ describe('Module System', () => {
       expect(moduleSystem.getModule(path.resolve(mainFile))).toBeUndefined();
       const result = await moduleSystem.compile(mainFile);
       expect(result.modules.get(path.resolve(depFile))?.code).toContain('= 2');
+    });
+
+    test('a compile that fails keeps watching, so the fixed file compiles', async () => {
+      watchMock.mockClear();
+      const mainFile = path.join(tempDir, 'watch-broken.som');
+      fs.writeFileSync(mainFile, 'чоп.сабт(1);\n');
+      const onChange = jest.fn();
+      moduleSystem.watch(mainFile, { onChange });
+      const watcherInstance = watchMock.mock.results[0].value;
+      const close = watcherInstance.closeMock;
+
+      fs.writeFileSync(mainFile, 'ворид { Нест } аз "./нест";\n');
+      watcherInstance.emit('change', mainFile);
+      expect((await moduleSystem.compile(mainFile)).errors).toHaveLength(1);
+      expect(close).not.toHaveBeenCalled();
+
+      fs.writeFileSync(mainFile, 'чоп.сабт(2);\n');
+      watcherInstance.emit('change', mainFile);
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect((await moduleSystem.compile(mainFile)).errors).toEqual([]);
+
+      await moduleSystem.shutdown();
+      expect(close).toHaveBeenCalledTimes(1);
     });
   });
 

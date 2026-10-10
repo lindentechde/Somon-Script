@@ -240,6 +240,70 @@ describe('precedence-aware emission', () => {
   });
 });
 
+describe('type assertions are erased', () => {
+  const as = (expression: any): any => ({
+    type: 'AsExpression',
+    expression,
+    typeAnnotation: { type: 'PrimitiveType', name: 'рақам', ...pos },
+    ...pos,
+  });
+  const angle = (expression: any): any => ({ ...as(expression), type: 'TypeAssertion' });
+  const satisfies = (expression: any): any => ({ ...as(expression), type: 'SatisfiesExpression' });
+  const nonNull = (expression: any): any => ({ type: 'NonNullExpression', expression, ...pos });
+  const abc = [letDecl('а', lit(1)), letDecl('б', lit(2)), letDecl('в', lit(3))];
+
+  test.each([
+    ['(а + б чун рақам) * в', bin('*', as(bin('+', id('а'), id('б'))), id('в')), '(а + б) * в', 9],
+    ['а - (б - в)!', bin('-', id('а'), nonNull(bin('-', id('б'), id('в')))), 'а - (б - в)', 2],
+    ['(-б чун рақам) ** б', bin('**', as(unary('-', id('б'))), id('б')), '(-б) ** б', 4],
+    ['(<рақам>-б) ** б', bin('**', angle(unary('-', id('б'))), id('б')), '(-б) ** б', 4],
+    [
+      '(5!).toFixed(1)',
+      call(member(nonNull(lit(5, '5')), 'toFixed'), [lit(1)]),
+      '(5).toFixed(1)',
+      '5.0',
+    ],
+    [
+      '((0 && 1) чун рақам) ?? 7',
+      bin('??', as(bin('&&', lit(0), lit(1))), lit(7)),
+      '(0 && 1) ?? 7',
+      0,
+    ],
+    ['(а, б) бармесоё рақам', satisfies(seq(id('а'), id('б'))), '(а, б)', 2],
+    ['а = (б = в)!', assign('=', id('а'), nonNull(assign('=', id('б'), id('в')))), 'а = б = в', 3],
+  ])('%s', (_label, expr, emitted, expected) => {
+    const code = emit([...abc, letDecl('r', expr)]);
+    expect(code).toContain(`let r = ${emitted};`);
+    expect(vm.runInNewContext(`${code}\nr;`, {})).toEqual(expected);
+  });
+
+  test('a call inside an asserted new callee is parenthesised', () => {
+    const thisV = member({ type: 'ThisExpression', ...pos }, 'v');
+    const setup = [
+      letDecl('C', fnExpr([], block(exprStmt(assign('=', thisV, lit(7)))))),
+      letDecl('f', arrow([], id('C'))),
+      letDecl('g', arrow([], obj(prop('K', id('C'))))),
+    ];
+    // new (f() чун ҳар)() and new g()!.K()
+    expect(evaluate(member(newExpr(as(call(id('f')))), 'v'), setup)).toBe(7);
+    expect(evaluate(member(newExpr(member(nonNull(call(id('g'))), 'K')), 'v'), setup)).toBe(7);
+  });
+
+  test('asserted built-in objects keep their mapping', () => {
+    const code = emit([exprStmt(call(member(as(id('чоп')), 'сабт'), [lit(1)]))]);
+    expect(code).toBe('console.log(1);');
+  });
+
+  test('an asserted object literal statement or arrow body stays an object', () => {
+    const code = emit([
+      exprStmt(as(obj(prop('x', lit(1))))),
+      letDecl('ф', arrow([], nonNull(obj(prop('x', lit(2)))))),
+    ]);
+    expect(code).toContain('({x: 1});');
+    expect(vm.runInNewContext(`${code}\nф().x`, {})).toBe(2);
+  });
+});
+
 describe('new AST node emission', () => {
   test.each([
     ['??=', lit(null), 5, 5],

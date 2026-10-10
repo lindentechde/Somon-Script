@@ -17,14 +17,22 @@ const translations: Translations = {
       options: {
         output: 'Выходной файл (по умолчанию: вход с .som, заменённым на .js, иначе <вход>.js)',
         outDir: 'Выходная директория',
-        target: 'Цель компиляции',
+        target: 'Цель компиляции (по умолчанию: es2022)',
+        lib: 'Библиотеки TypeScript, доступные при выполнении, через запятую (например es2022,dom)',
+        useDefineForClassFields: 'Определять поля классов (по умолчанию начиная с es2022)',
+        noUseDefineForClassFields: 'Присваивать поля классов в конструкторе',
         sourceMap: 'Генерировать исходные карты',
         noSourceMap: 'Отключить исходные карты',
         minify: 'Минифицировать вывод',
         noMinify: 'Отключить минификацию',
         noTypeCheck: 'Отключить проверку типов',
         strict: 'Включить строгую проверку типов',
+        experimentalDecorators:
+          'Использовать устаревшие (экспериментальные) декораторы, в том числе для параметров',
         watch: 'Перекомпилировать при изменении файлов',
+        module: "Формат модулей вывода: 'commonjs' (по умолчанию) или 'esm'",
+        checker: "Проверка типов: 'somon' (по умолчанию) или 'typescript' (компилятор TypeScript)",
+        declaration: 'Также записать файл объявлений TypeScript (.d.ts)',
       },
       messages: {
         fileNotFound: (file: string) => `Ошибка: Файл '${file}' не найден`,
@@ -32,6 +40,7 @@ const translations: Translations = {
         warnings: 'Предупреждения:',
         compiled: (input: string, output: string) => `Скомпилировано '${input}' в '${output}'`,
         sourceMapGenerated: (file: string) => `Сгенерирована карта источников: '${file}'`,
+        declarationGenerated: (file: string) => `Сгенерированы объявления: '${file}'`,
         watching: (file: string) => `Отслеживаем '${file}' на изменения...`,
         recompiling: (file: string) => `Перекомпилируем '${file}'...`,
         configChanged: (file: string) =>
@@ -81,7 +90,9 @@ const translations: Translations = {
       },
       options: {
         output: 'Путь к выходному файлу',
-        format: "Формат пакета (поддерживается только 'commonjs')",
+        format:
+          'Формат пакета: commonjs, esm или iife (по умолчанию esm, если модули компилируются в ES-модули, иначе commonjs)',
+        globalName: 'Глобальная переменная, получающая экспорты пакета iife',
         inlineSources: 'Встроить оригинальные источники в карты источников',
         externals: 'Внешние модули (через запятую)',
       },
@@ -90,8 +101,6 @@ const translations: Translations = {
         bundleCreated: (output: string) => `✅ Пакет создан: ${output}`,
         sourceMapCreated: (file: string) => `🗺️ Карта источников создана: ${file}`,
         bundledModules: (count: number) => `📊 Собрано модулей: ${count}`,
-        onlyCommonJsSupported: (format: string) =>
-          `СомонСкрипт в настоящее время поддерживает только формат пакета 'commonjs'. Получено: '${format}'.`,
         bundleError: 'Ошибка сборки:',
       },
     },
@@ -122,6 +131,20 @@ const translations: Translations = {
         analysisError: 'Ошибка анализа:',
       },
     },
+    check: {
+      name: 'проверить',
+      description: 'Проверить типы в файлах СомонСкрипт без компиляции',
+      usage: '<файлы...> [опции]',
+      args: {
+        files: 'Входные файлы .som',
+      },
+      messages: {
+        noErrors: (files: number) => `✅ Ошибок типов нет (файлов: ${files})`,
+        errorsFound: (errors: number, files: number) =>
+          `❌ Найдено ошибок типов: ${errors} (файлов: ${files})`,
+        fileErrors: (file: string) => `${file}:`,
+      },
+    },
     resolve: {
       name: 'разрешить',
       description: 'Разрешить спецификатор модуля к пути файла',
@@ -141,6 +164,80 @@ const translations: Translations = {
         yes: 'Да',
         no: 'Нет',
         resolveError: 'Ошибка разрешения:',
+      },
+    },
+    fmt: {
+      name: 'формат',
+      description: 'Отформатировать файлы SomonScript в едином стиле',
+      usage: '[параметры] <файлы или каталоги...>',
+      args: {
+        paths: 'Файлы .som или каталоги, в которых их искать',
+      },
+      options: {
+        check: 'Только сообщить о неотформатированных файлах (код выхода 1, если они есть)',
+        write: 'Записать отформатированный код в файлы (по умолчанию)',
+        stdout: 'Вывести отформатированный код вместо записи',
+        indent: 'Пробелов на уровень отступа (по умолчанию fmt.indent из somon.config.json или 4)',
+      },
+      messages: {
+        formatted: (file: string) => `Отформатирован ${file}`,
+        wouldReformat: (file: string) => `Не отформатирован: ${file}`,
+        failed: (file: string) => `Не удалось отформатировать ${file}:`,
+        summary: (changed: number, total: number) => `Изменено файлов: ${changed} из ${total}`,
+        checkPassed: (total: number) => `Все файлы (${total}) отформатированы`,
+        checkFailed: (changed: number) => `Не отформатировано файлов: ${changed}`,
+        noFiles: 'Файлы .som не найдены',
+        pathNotFound: (path: string) => `Ошибка: '${path}' не существует`,
+        invalidIndent: (value: string) =>
+          `Ошибка: --indent должен быть целым числом от 1 до 16, получено '${value}'`,
+      },
+    },
+    repl: {
+      name: 'интерактив',
+      description: 'Запустить интерактивный сеанс SomonScript',
+      messages: {
+        banner: (version: string) =>
+          `SomonScript ${version}. Введите .help (.ёрӣ) для справки, .exit (.баромад) для выхода.`,
+        help: [
+          '.ёрӣ, .help        Показать эту справку',
+          '.баромад, .exit    Выйти из сеанса',
+          '.пок, .clear       Забыть все объявления и текущий ввод',
+          '.js                Показать JavaScript, скомпилированный из последнего ввода',
+          '',
+          'Ввод продолжается на следующей строке, пока открыта скобка, блок или шаблон.',
+          'Объявления видны в следующих вводах; интизор работает на верхнем уровне.',
+        ].join('\n'),
+        cleared: 'Контекст очищен.',
+        noCompiledCode: 'Пока ничего не скомпилировано.',
+        exitHint: '(Чтобы выйти, нажмите Ctrl+C ещё раз или введите .exit)',
+        error: 'Ошибка:',
+      },
+    },
+    migrate: {
+      name: 'миграция',
+      description: 'Преобразовать файлы TypeScript в SomonScript',
+      usage: '[параметры] <файл.ts или каталог>',
+      args: {
+        input: 'Файл .ts или каталог с файлами .ts',
+      },
+      options: {
+        output: 'Выходной файл или выходной каталог для каталога',
+        stdout: 'Вывести код SomonScript вместо записи файлов',
+      },
+      messages: {
+        migrated: (input: string, output: string) => `'${input}' преобразован в '${output}'`,
+        warning: 'предупреждение:',
+        failed: (file: string) => `Не удалось преобразовать ${file}:`,
+        noFiles: (input: string) => `В '${input}' не найдены файлы TypeScript`,
+        summary: (files: number, warnings: number) =>
+          `Преобразовано файлов: ${files}, предупреждений: ${warnings}`,
+      },
+    },
+    lsp: {
+      name: 'lsp',
+      description: 'Запустить языковой сервер SomonScript (Language Server Protocol через stdio)',
+      options: {
+        stdio: 'Обмен через stdin/stdout (по умолчанию; принимается для редакторов)',
       },
     },
   },

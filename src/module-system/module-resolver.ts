@@ -6,7 +6,9 @@ export interface ModuleResolutionOptions {
   paths?: Record<string, string[]>;
   extensions?: string[];
   moduleDirectories?: string[];
+  /** The project's JavaScript files (.js, .cjs, .mjs) can be imported (default true). */
   allowJs?: boolean;
+  /** The project's JSON files can be imported (default true). */
   resolveJsonModule?: boolean;
 }
 
@@ -15,6 +17,32 @@ export interface ResolvedModule {
   isExternalLibrary: boolean;
   packageName?: string;
   extension: string;
+}
+
+/** Conditions of package.json "exports" that Node's `require()` matches. */
+const REQUIRE_CONDITIONS: ReadonlySet<string> = new Set(['require', 'node', 'default']);
+/**
+ * The conditions of `import`: a package with ES module entries only is still a
+ * dependency the host loads (an esm bundle imports it).
+ */
+const IMPORT_CONDITIONS: ReadonlySet<string> = new Set(['import', 'node', 'default']);
+
+const JAVASCRIPT_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.cjs', '.mjs']);
+
+const UNIX_SYSTEM_PREFIXES = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
+
+/**
+ * Whether a normalized absolute path names a place of the file system rather than
+ * of the project (see `ModuleResolver`): a common Unix system directory, a Windows
+ * drive (`C:\…`) or a UNC path (`\\server\share\…`, `\\?\C:\…`).
+ * @internal
+ */
+export function isSystemPath(normalizedPath: string): boolean {
+  return (
+    UNIX_SYSTEM_PREFIXES.some(prefix => normalizedPath.startsWith(prefix)) ||
+    /^[A-Za-z]:[/\\]/.test(normalizedPath) ||
+    /^[/\\]{2}[^/\\]+[/\\]/.test(normalizedPath)
+  );
 }
 
 export class ModuleResolver {
@@ -45,16 +73,13 @@ export class ModuleResolver {
     fromFile = path.resolve(fromFile);
 
     // Determine a correct base directory whether 'fromFile' is a file path or a directory path
-    let fromDir: string;
+    let fromDir = path.dirname(fromFile);
     try {
-      if (fs.existsSync(fromFile) && fs.statSync(fromFile).isDirectory()) {
+      if (fs.statSync(fromFile).isDirectory()) {
         fromDir = fromFile;
-      } else {
-        fromDir = path.dirname(fromFile);
       }
     } catch {
-      // Fallback: treat input as a file path
-      fromDir = path.dirname(fromFile);
+      // Not on disk: a file path
     }
 
     // Handle already absolute file paths
@@ -68,11 +93,8 @@ export class ModuleResolver {
       const isOsPath = this.isOsLevelAbsolutePath(normalizedPath);
 
       if (isOsPath) {
-        return {
-          resolvedPath: normalizedPath,
-          isExternalLibrary: false,
-          extension: path.extname(normalizedPath),
-        };
+        // Like a relative import: extensions, index files and package.json "main" are tried
+        return this.resolveFile(normalizedPath, false);
       }
       // Otherwise, fall through to project-relative handling
     }
@@ -158,11 +180,11 @@ export class ModuleResolver {
     for (;;) {
       for (const moduleDir of this.options.moduleDirectories) {
         const packageDir = path.join(currentDir, moduleDir, packageName);
-        const fromExports = this.tryPackageExports(packageDir, subpath, specifier);
+        const fromExports = this.tryPackageExports(packageDir, packageName, subpath, specifier);
         if (fromExports) return fromExports;
 
         try {
-          return this.resolveFile(path.join(currentDir, moduleDir, specifier), true, specifier);
+          return this.resolveFile(path.join(currentDir, moduleDir, specifier), true, packageName);
         } catch {
           // Continue searching
         }
@@ -178,10 +200,12 @@ export class ModuleResolver {
   /**
    * Resolve `subpath` through the package.json "exports" field like Node's require():
    * string, array and conditional targets ("require", "node", "default") and
-   * "./dir/*" patterns. Returns null when the package has no "exports" field.
+   * "./dir/*" patterns. A subpath exported for "import" only resolves to that ES
+   * module. Returns null when the package has no "exports" field.
    */
   private tryPackageExports(
     packageDir: string,
+    packageName: string,
     subpath: string,
     specifier: string
   ): ResolvedModule | null {
@@ -189,8 +213,7 @@ export class ModuleResolver {
     if (!fs.existsSync(packageJsonPath)) {
       return null;
     }
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    const exportsField: unknown = packageJson.exports;
+    const exportsField = this.readPackageJson(packageJsonPath).exports;
     if (exportsField === undefined || exportsField === null) {
       return null;
     }
@@ -200,12 +223,13 @@ export class ModuleResolver {
       !Array.isArray(exportsField) &&
       Object.keys(exportsField).some(key => key.startsWith('.'));
 
-    let target: string | null = null;
-    if (!isSubpathMap) {
-      target = subpath === '.' ? this.resolveExportsTarget(exportsField) : null;
-    } else {
-      target = this.matchExportsSubpath(exportsField as Record<string, unknown>, subpath);
-    }
+    const targetFor = (conditions: ReadonlySet<string>): string | null => {
+      if (!isSubpathMap) {
+        return subpath === '.' ? this.resolveExportsTarget(exportsField, conditions) : null;
+      }
+      return this.matchExportsSubpath(exportsField as Record<string, unknown>, subpath, conditions);
+    };
+    const target = targetFor(REQUIRE_CONDITIONS) ?? targetFor(IMPORT_CONDITIONS);
 
     if (target === null || !target.startsWith('./')) {
       throw new Error(
@@ -217,16 +241,20 @@ export class ModuleResolver {
     if (!this.isInsideDir(targetPath, packageDir)) {
       throw new Error(`package.json 'exports' target escapes package directory: ${target}`);
     }
-    const resolved = this.tryExactPath(targetPath, true, specifier);
+    const resolved = this.tryExactPath(targetPath, true, packageName);
     if (!resolved) {
       throw new Error(`Cannot resolve module: ${targetPath} (exported by ${packageJsonPath})`);
     }
     return resolved;
   }
 
-  private matchExportsSubpath(map: Record<string, unknown>, subpath: string): string | null {
+  private matchExportsSubpath(
+    map: Record<string, unknown>,
+    subpath: string,
+    conditions: ReadonlySet<string>
+  ): string | null {
     if (Object.prototype.hasOwnProperty.call(map, subpath)) {
-      return this.resolveExportsTarget(map[subpath]);
+      return this.resolveExportsTarget(map[subpath], conditions);
     }
 
     // Longest matching "./prefix*suffix" pattern wins
@@ -241,27 +269,31 @@ export class ModuleResolver {
         subpath.length >= prefix.length + suffix.length
       ) {
         const match = subpath.slice(prefix.length, subpath.length - suffix.length);
-        return this.resolveExportsTarget(map[key], match);
+        return this.resolveExportsTarget(map[key], conditions, match);
       }
     }
     return null;
   }
 
-  private resolveExportsTarget(target: unknown, patternMatch?: string): string | null {
+  private resolveExportsTarget(
+    target: unknown,
+    conditions: ReadonlySet<string>,
+    patternMatch?: string
+  ): string | null {
     if (typeof target === 'string') {
       return patternMatch === undefined ? target : target.split('*').join(patternMatch);
     }
     if (Array.isArray(target)) {
       for (const item of target) {
-        const resolved = this.resolveExportsTarget(item, patternMatch);
+        const resolved = this.resolveExportsTarget(item, conditions, patternMatch);
         if (resolved !== null) return resolved;
       }
       return null;
     }
     if (target && typeof target === 'object') {
       for (const [condition, value] of Object.entries(target)) {
-        if (condition === 'require' || condition === 'node' || condition === 'default') {
-          const resolved = this.resolveExportsTarget(value, patternMatch);
+        if (conditions.has(condition)) {
+          const resolved = this.resolveExportsTarget(value, conditions, patternMatch);
           if (resolved !== null) return resolved;
         }
       }
@@ -289,20 +321,40 @@ export class ModuleResolver {
     throw new Error(`Cannot resolve module: ${targetPath}`);
   }
 
+  /** `filePath` as a module, when it is a file the options allow importing. */
+  private fileModule(
+    filePath: string,
+    extension: string,
+    isExternal: boolean,
+    packageName?: string
+  ): ResolvedModule | null {
+    if (
+      !fs.existsSync(filePath) ||
+      !fs.statSync(filePath).isFile() ||
+      !this.isAllowedFile(filePath, isExternal)
+    ) {
+      return null;
+    }
+    return { resolvedPath: filePath, isExternalLibrary: isExternal, packageName, extension };
+  }
+
+  /**
+   * `allowJs: false` and `resolveJsonModule: false` keep the project's JavaScript and
+   * JSON files from being imported; the files of packages stay importable.
+   */
+  private isAllowedFile(filePath: string, isExternal: boolean): boolean {
+    if (isExternal) return true;
+    const extension = path.extname(filePath).toLowerCase();
+    if (extension === '.json') return this.options.resolveJsonModule;
+    return this.options.allowJs || !JAVASCRIPT_EXTENSIONS.has(extension);
+  }
+
   private tryExactPath(
     targetPath: string,
     isExternal: boolean,
     packageName?: string
   ): ResolvedModule | null {
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
-      return {
-        resolvedPath: targetPath,
-        isExternalLibrary: isExternal,
-        packageName,
-        extension: path.extname(targetPath),
-      };
-    }
-    return null;
+    return this.fileModule(targetPath, path.extname(targetPath), isExternal, packageName);
   }
 
   private tryWithExtensions(
@@ -311,15 +363,8 @@ export class ModuleResolver {
     packageName?: string
   ): ResolvedModule | null {
     for (const ext of this.options.extensions) {
-      const pathWithExt = targetPath + ext;
-      if (fs.existsSync(pathWithExt) && fs.statSync(pathWithExt).isFile()) {
-        return {
-          resolvedPath: pathWithExt,
-          isExternalLibrary: isExternal,
-          packageName,
-          extension: ext,
-        };
-      }
+      const resolved = this.fileModule(targetPath + ext, ext, isExternal, packageName);
+      if (resolved) return resolved;
     }
     return null;
   }
@@ -351,21 +396,36 @@ export class ModuleResolver {
       return null;
     }
 
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    if (packageJson.main) {
-      const mainPath = path.resolve(targetPath, packageJson.main);
+    // Like Node, a "main" that is not a string is ignored
+    const { main } = this.readPackageJson(packageJsonPath);
+    if (typeof main === 'string' && main.length > 0) {
+      const mainPath = path.resolve(targetPath, main);
       // Confine package main to its own directory — reject "main": "../../etc/passwd"
       if (!this.isInsideDir(mainPath, targetPath)) {
-        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+        throw new Error(`package.json 'main' field escapes package directory: ${main}`);
       }
       const resolved = this.resolveFile(mainPath, isExternal, packageName);
       if (!this.isInsideDir(resolved.resolvedPath, targetPath)) {
-        throw new Error(`package.json 'main' field escapes package directory: ${packageJson.main}`);
+        throw new Error(`package.json 'main' field escapes package directory: ${main}`);
       }
       return resolved;
     }
 
     return null;
+  }
+
+  /** The fields of a package.json; an unreadable file is an error that names it. */
+  private readPackageJson(packageJsonPath: string): { main?: unknown; exports?: unknown } {
+    let packageJson: unknown;
+    try {
+      packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    } catch (error) {
+      throw new Error(`Invalid package.json ${packageJsonPath}: ${(error as Error).message}`);
+    }
+    if (typeof packageJson !== 'object' || packageJson === null || Array.isArray(packageJson)) {
+      throw new Error(`Invalid package.json ${packageJsonPath}: it must contain a JSON object`);
+    }
+    return packageJson;
   }
 
   private tryIndexFiles(
@@ -375,23 +435,17 @@ export class ModuleResolver {
   ): ResolvedModule | null {
     for (const ext of this.options.extensions) {
       const indexPath = path.join(targetPath, `index${ext}`);
-      if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
-        return {
-          resolvedPath: indexPath,
-          isExternalLibrary: isExternal,
-          packageName,
-          extension: ext,
-        };
-      }
+      const resolved = this.fileModule(indexPath, ext, isExternal, packageName);
+      if (resolved) return resolved;
     }
     return null;
   }
 
+  /** `*`, `prefix/*` (the prefix with its '/') or an exact name, as in TypeScript. */
   private matchesPattern(specifier: string, pattern: string): boolean {
     if (pattern === '*') return true;
     if (pattern.endsWith('/*')) {
-      const prefix = pattern.slice(0, -2);
-      return specifier.startsWith(prefix);
+      return specifier.startsWith(pattern.slice(0, -1));
     }
     return specifier === pattern;
   }
@@ -401,9 +455,8 @@ export class ModuleResolver {
       return mapping.replace('*', specifier);
     }
     if (pattern.endsWith('/*')) {
-      const prefix = pattern.slice(0, -2);
-      const suffix = specifier.slice(prefix.length);
-      return mapping.replace('*', suffix);
+      // What the '*' of `prefix/*` matched
+      return mapping.replace('*', specifier.slice(pattern.length - 1));
     }
     return mapping;
   }
@@ -431,7 +484,7 @@ export class ModuleResolver {
 
   /**
    * Classify an absolute import specifier. Absolute imports are allowed: a path inside
-   * baseUrl or under a common system prefix (/home/, /tmp/, C:\ …) is used as-is;
+   * baseUrl or under a common system prefix (/home/, /tmp/, C:\, \\server\share\ …) is used as-is;
    * anything else (e.g. /lib/utils) is project-relative, resolved against baseUrl and
    * confined to it.
    *
@@ -441,21 +494,8 @@ export class ModuleResolver {
    * Relative imports (`./`, `../`) and OS-absolute imports are not confined —
    * SomonScript sources are trusted code.
    */
-  private isOsLevelAbsolutePath(absolutePath: string): boolean {
-    const normalizedPath = path.normalize(absolutePath);
-
-    if (this.isInsideDir(normalizedPath, this.options.baseUrl)) {
-      return true;
-    }
-
-    const unixOsPrefixes = ['/home/', '/Users/', '/var/', '/tmp/', '/opt/', '/usr/', '/etc/']; // NOSONAR
-    const windowsDrivePattern = /^[A-Za-z]:[/\\]/;
-
-    if (unixOsPrefixes.some(prefix => normalizedPath.startsWith(prefix))) {
-      return true;
-    }
-
-    return windowsDrivePattern.test(normalizedPath);
+  private isOsLevelAbsolutePath(normalizedPath: string): boolean {
+    return isSystemPath(normalizedPath) || this.isInsideDir(normalizedPath, this.options.baseUrl);
   }
 
   /**

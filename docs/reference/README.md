@@ -348,7 +348,7 @@ typeof қимат;                 // typeof
 ```json
 {
   "compilerOptions": {
-    "target": "es2020",
+    "target": "es2022",
     "sourceMap": true,
     "strict": true
   }
@@ -366,7 +366,8 @@ somon compile <file> [options]
   --output, -o     Output file path
   --source-map     Generate source maps
   --minify         Minify output
-  --target         JavaScript target (es5, es2015, es2020)
+  --target         JavaScript target (es5, es2015 … es2025, esnext; default es2022)
+  --lib            TypeScript libs available at run time (e.g. es2022,dom)
 
 # Execution
 somon run <file> [options]
@@ -375,7 +376,8 @@ somon run <file> [options]
 
 # Module operations
 somon bundle <entry> [options]
-  --format         Output format (only 'commonjs' is supported)
+  --format         Output format: commonjs (default), esm or iife
+  --global-name    Global that receives the exports of an iife bundle
   --output, -o     Bundle output path
   --minify         Minify bundle
   --source-map     Generate source maps

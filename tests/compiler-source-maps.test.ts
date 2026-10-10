@@ -67,6 +67,52 @@ describe('source maps', () => {
     expect(log.line).toBe(8);
   });
 
+  test('statements with erased type assertions map to their lines', async () => {
+    const program = [
+      'собит а: ҳар = 1;',
+      'тағ х!: рақам;',
+      'х = (а чун рақам) + <рақам>а;',
+      'собит ф = <Т>(у: Т): Т => у;',
+      'чоп.сабт(ф(х)!, а бармесоё ҳар);',
+    ].join('\n');
+    const result = compile(program, { sourceMap: true, strict: true });
+    expect(result.errors).toEqual([]);
+    const map = JSON.parse(result.sourceMap!) as RawSourceMap;
+    expect(result.code).toContain('let х;');
+    expect(await originalOf(result.code, map, 'х = а + а;')).toMatchObject({ line: 3 });
+    expect(await originalOf(result.code, map, 'const ф = (у) => у;')).toMatchObject({ line: 4 });
+    expect(await originalOf(result.code, map, 'console.log(ф(х), а);')).toMatchObject({ line: 5 });
+  });
+
+  test('labels, do-while, enums and generators map to their lines', async () => {
+    const statements = [
+      'шумориш Ранг { Сурх }',
+      'берун: барои (тағ и = 0; и < 1; и++) {',
+      '  кун {',
+      '    шикастан берун;',
+      '  } то (дуруст);',
+      '}',
+      'функсия* г() {',
+      '  ҳосил 1;',
+      '}',
+    ].join('\n');
+    const result = compile(statements, { sourceMap: true, typeCheck: false });
+    expect(result.errors).toEqual([]);
+    const map = JSON.parse(result.sourceMap!) as RawSourceMap;
+    const lines: Array<[string, number]> = [
+      ['var Ранг', 1],
+      ['берун:', 2],
+      ['for (', 2],
+      ['do {', 3],
+      ['break берун', 4],
+      ['function*', 7],
+      ['yield 1', 8],
+    ];
+    for (const [needle, line] of lines) {
+      expect(await originalOf(result.code, map, needle)).toMatchObject({ line });
+    }
+  });
+
   test('no source map unless requested', () => {
     expect(compile(source, { typeCheck: false }).sourceMap).toBeUndefined();
   });

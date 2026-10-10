@@ -10,6 +10,9 @@ export enum TokenType {
   TEMPLATE_END = 'TEMPLATE_END',
   BOOLEAN = 'BOOLEAN',
   IDENTIFIER = 'IDENTIFIER',
+  PRIVATE_NAME = 'PRIVATE_NAME', // `#ном`: a private class member name
+  /** Regular expression literal; the value is the source text, `/а+/g`. */
+  REGEX = 'REGEX',
 
   // Keywords (in Tajik Cyrillic)
   ТАҒЙИРЁБАНДА = 'ТАҒЙИРЁБАНДА', // variable (let/var)
@@ -202,6 +205,8 @@ export enum TokenType {
   NOT = '!',
   SPREAD = '...',
   OPTIONAL_CHAINING = '?.',
+  /** `@`, which starts a decorator: `@ном`, `@ном(…)`. */
+  AT = '@',
 
   // Punctuation
   SEMICOLON = ';',
@@ -219,9 +224,13 @@ export enum TokenType {
   RIGHT_BRACKET = ']',
 
   // Special
+  /** `#!/usr/bin/env node` on the first line; the value is the whole line. */
+  SHEBANG = 'SHEBANG',
   EOF = 'EOF',
   NEWLINE = 'NEWLINE',
   WHITESPACE = 'WHITESPACE',
+  /** A line or block comment; only a Lexer created with `{ comments: true }` emits these. */
+  COMMENT = 'COMMENT',
 }
 
 export interface Token {
@@ -229,4 +238,8 @@ export interface Token {
   value: string;
   line: number;
   column: number;
+  /** Offset of the first character in the source; set only in comment mode. */
+  start?: number;
+  /** Offset just past the last character in the source; set only in comment mode. */
+  end?: number;
 }

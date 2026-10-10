@@ -1,4 +1,4 @@
-import { ASTNode, Identifier, Parameter, Statement } from './ast';
+import { ASTNode, Expression, Identifier, Literal, Parameter, Statement } from './ast';
 
 // Type system AST nodes
 export interface TypeAnnotation extends ASTNode {
@@ -12,7 +12,7 @@ export interface TypeNode extends ASTNode {
 
 export interface PrimitiveType extends TypeNode {
   type: 'PrimitiveType';
-  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат';
+  name: 'сатр' | 'рақам' | 'мантиқӣ' | 'холӣ' | 'беқимат' | 'рамз' | 'калонрақам';
 }
 
 export interface ArrayType extends TypeNode {
@@ -20,11 +20,15 @@ export interface ArrayType extends TypeNode {
   elementType: TypeNode;
 }
 
-/** `(а: рақам, б?: сатр, ...в: рақам[]) => мантиқӣ` */
+/** `(а: рақам, б?: сатр, ...в: рақам[]) => мантиқӣ`, `<Т>(х: Т) => Т` */
 export interface FunctionType extends TypeNode {
   type: 'FunctionType';
+  /** A generic function type: `<Т>(х: Т) => Т`. */
+  typeParameters?: TypeParameter[];
   parameters: Parameter[];
   returnType: TypeNode;
+  /** A `this` parameter: `(ин: Т, х: рақам) => беджавоб`. */
+  thisType?: TypeNode;
 }
 
 export interface UnionType extends TypeNode {
@@ -58,10 +62,39 @@ export interface InterfaceBody extends ASTNode {
 
 export interface PropertySignature extends ASTNode {
   type: 'PropertySignature';
-  key: Identifier;
+  /** The name; a literal for `"а-б": Т` and `1: Т`. */
+  key: Identifier | Literal;
   typeAnnotation: TypeAnnotation;
   optional: boolean;
   readonly?: boolean;
+  /** Method signature `ном(…): Т`; `typeAnnotation` holds its function type. */
+  method?: boolean;
+  /** Type parameters of a generic method signature: `ҳамон<Т>(х: Т): Т`. */
+  typeParameters?: TypeParameter[];
+  /**
+   * Accessor signature `get ном(): Т;` / `set ном(қ: Т);`; `typeAnnotation`
+   * holds the property's type.
+   */
+  kind?: 'get' | 'set';
+  /**
+   * A call signature `(х: рақам): сатр;` or construct signature
+   * `нав (х: рақам): К;`: `key` is the placeholder `__call__` / `__new__`,
+   * `typeAnnotation` the function or constructor type and `typeParameters`
+   * its own type parameters.
+   */
+  signature?: 'call' | 'construct';
+  /**
+   * A computed name, `[калид]: Т;`, known only at run time: `key` is a
+   * placeholder and `computedKey` the expression.
+   */
+  computed?: boolean;
+  computedKey?: Expression;
+  /**
+   * An index signature `[калид: сатр]: Т`: its key parameter (with the key
+   * type as its annotation), as in a class's `PropertyDefinition`. `key` is
+   * then the placeholder `__computed__`.
+   */
+  indexSignature?: Parameter;
 }
 
 export interface TypeParameter extends ASTNode {
@@ -69,6 +102,11 @@ export interface TypeParameter extends ASTNode {
   name: Identifier;
   constraint?: TypeNode;
   default?: TypeNode;
+  /** `<собит Т>`: a const type parameter. */
+  const?: boolean;
+  /** Variance annotations `<дар Т>`, `<берун Т>`, `<дар берун Т>`. */
+  in?: boolean;
+  out?: boolean;
 }
 
 export interface TypeAlias extends Statement {
@@ -83,6 +121,8 @@ export interface NamespaceDeclaration extends Statement {
   name: Identifier;
   body: NamespaceBody;
   exported?: boolean;
+  /** `эълон номфазо …`: an ambient namespace, erased in the output. */
+  declare?: boolean;
 }
 
 export interface NamespaceBody extends ASTNode {
@@ -104,6 +144,48 @@ export interface MappedType extends TypeNode {
   typeAnnotation: TypeAnnotation;
   optional?: boolean;
   readonly?: boolean;
+  /** Key remapping clause (TypeScript `as`): the `Н` of `[К дар калидҳои Т чун Н]`. */
+  nameType?: TypeNode;
+  /** `+танҳохонӣ` / `-танҳохонӣ`: adds or removes `readonly` (`readonly` is set for '+' only). */
+  readonlyModifier?: '+' | '-';
+  /** `+?` / `-?`: adds or removes optionality (`optional` is set for '+' only). */
+  optionalModifier?: '+' | '-';
+}
+
+/** `инфер У` (`infer U`): a type variable inferred in the `мерос` clause of a conditional type. */
+export interface InferType extends TypeNode {
+  type: 'InferType';
+  typeParameter: TypeParameter;
+}
+
+/** `навъи х`, `навъи о.а` (`typeof x` in a type): the type of a value. */
+export interface TypeQuery extends TypeNode {
+  type: 'TypeQuery';
+  /** The value, a dotted name such as `о.а` kept in one identifier. */
+  exprName: Identifier;
+  /** `навъи ф<рақам>`: the type of an instantiation expression. */
+  typeArguments?: TypeNode[];
+}
+
+/**
+ * `ворид("./м")`, `ворид("./м").Т<У>` and `навъи ворид("./м")` (TypeScript's
+ * `import("./m").T`, `typeof import("./m")`): a type of another module.
+ */
+export interface ImportType extends TypeNode {
+  type: 'ImportType';
+  argument: Literal;
+  /** The dotted name after the module: `Т`, `Н.Т`. */
+  qualifier?: string;
+  typeArguments?: TypeNode[];
+  /** `навъи ворид("./м")`: the type of the module itself. */
+  isTypeOf?: boolean;
+}
+
+/** `` `пеш_${К}` `` in a type: `quasis` (raw text) has one element more than `types`. */
+export interface TemplateLiteralType extends TypeNode {
+  type: 'TemplateLiteralType';
+  quasis: string[];
+  types: TypeNode[];
 }
 
 export interface IndexedAccessType extends TypeNode {
@@ -122,14 +204,66 @@ export interface UniqueType extends TypeNode {
   baseType: TypeNode;
 }
 
+/** `танҳохонӣ рақам[]`, `танҳохонӣ [рақам, сатр]`: a readonly array or tuple type. */
+export interface ReadonlyType extends TypeNode {
+  type: 'ReadonlyType';
+  typeAnnotation: TypeNode;
+}
+
+/** An optional tuple element: `сатр?` in `[рақам, сатр?]`. */
+export interface OptionalType extends TypeNode {
+  type: 'OptionalType';
+  typeAnnotation: TypeNode;
+}
+
+/** A rest tuple element: `...мантиқӣ[]` in `[рақам, ...мантиқӣ[]]`. */
+export interface RestType extends TypeNode {
+  type: 'RestType';
+  typeAnnotation: TypeNode;
+}
+
+/** `ин` as a type: the type of the receiver (`илова(): ин`). */
+export interface ThisType extends TypeNode {
+  type: 'ThisType';
+}
+
+/**
+ * A return type that is a type predicate, `х аст сатр` / `ин аст Т`
+ * (`x is T`), or an assertion signature, `тасдиқ х` / `тасдиқ х аст Т`
+ * (`asserts x`, `asserts x is T`).
+ */
+export interface TypePredicate extends TypeNode {
+  type: 'TypePredicate';
+  parameterName: Identifier | ThisType;
+  /** Absent for `тасдиқ х`. */
+  typeAnnotation?: TypeNode;
+  asserts: boolean;
+}
+
+/** `нав (а: рақам) => Т`, `мавҳум нав () => Т` */
+export interface ConstructorType extends TypeNode {
+  type: 'ConstructorType';
+  /** `нав <Т>(а: Т) => Т` */
+  typeParameters?: TypeParameter[];
+  parameters: Parameter[];
+  returnType: TypeNode;
+  abstract?: boolean;
+}
+
 export interface TupleType extends TypeNode {
   type: 'TupleType';
+  /** Element types; optional and rest elements are `OptionalType` / `RestType` nodes. */
   elementTypes: TypeNode[];
+  /** Names of a named tuple, one per element: `[х: рақам, у?: рақам, ...боқӣ: сатр[]]`. */
+  elementNames?: Identifier[];
 }
 
 export interface LiteralType extends TypeNode {
   type: 'LiteralType';
+  /** Negative numbers too: `-1`. */
   value: string | number | boolean;
+  /** A bigint literal type, `1n` (`value` holds its number). */
+  bigint?: boolean;
 }
 
 export interface ObjectType extends TypeNode {

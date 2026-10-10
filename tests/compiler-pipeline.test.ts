@@ -21,13 +21,17 @@ describe('compiler pipeline', () => {
   });
 
   test('JavaScript reserved words used as identifiers are compile errors', () => {
-    const result = compile('тағйирёбанда а = 1;\nтағйирёбанда class = 2;\nчоп.сабт(new);', {
+    const result = compile('тағйирёбанда а = 1;\nтағйирёбанда class = 2;\nчоп.сабт(while);', {
       typeCheck: false,
     });
     expect(result.code).toBe('');
     expect(result.errors).toEqual([
       expect.stringMatching(/'class'.*line 2, column \d+/),
-      expect.stringMatching(/'new'.*line 3, column \d+/),
+      expect.stringMatching(/'while'.*line 3, column \d+/),
+    ]);
+    // `new` (like `return`, `function`, …) is read as its Tajik keyword
+    expect(compile('чоп.сабт(new);', { typeCheck: false }).errors).toEqual([
+      expect.stringMatching(/Unexpected token '\)' at line 1/),
     ]);
   });
 
