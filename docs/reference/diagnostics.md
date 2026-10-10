@@ -15,6 +15,9 @@ a hint.
 Барнома компайл нашуд: 1 хато.
 ```
 
+The [learning mode](learning-mode.md) adds warnings about mistakes that are
+valid JavaScript (`хондан() + 1`, `"5" * 2`, unused variables).
+
 ## In the command line
 
 `somon run`, `somon compile` and `somon bundle` report this way when the

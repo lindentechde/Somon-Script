@@ -24,6 +24,9 @@ page, the compiler's messages and the errors of the running program are in Tajik
 - The program runs in a Web Worker. One that runs longer than the time limit (5
   seconds; 2 to 60 can be chosen) is stopped: «Барнома аз ҳад зиёд дароз кор
   кард — шояд давраи беохир?». Only the first 1000 lines of output are shown.
+- **Реҷаи таълимӣ** (the learning mode, on by default) warns about mistakes that
+  are valid JavaScript, such as `хондан() + 1`
+  ([docs/reference/learning-mode.md](../docs/reference/learning-mode.md)).
 - **Нишон додани JavaScript** shows the JavaScript the program compiles to.
 - 15 examples, from «Салом, ҷаҳон!» to an endless loop.
 - **Пайванд** (link) copies a link that holds the program and its input.

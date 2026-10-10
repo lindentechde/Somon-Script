@@ -64,3 +64,15 @@ Exported names follow the same rule: `содир функсия илова` is e
 `push`, and `ворид { илова }` and `Л.илова` on a namespace import both look up
 `push`, so SomonScript modules work together. A JavaScript module importing it
 must use the English name.
+
+---
+
+## Properties named like built-in members
+
+Built-in member names are translated for every object, so an own property named
+`дарозӣ`, `илова`, `хато`, `вақт`, `маълумот`, … is renamed too: `{ дарозӣ: 5 }`
+compiles to `{ length: 5 }`, prints as `{ length: 5 }`, and `Object.keys` gives
+`"length"`. Reading it with `о.дарозӣ` works (it is `о.length` too), but data
+from outside with the Tajik key (`JSON.parse('{"дарозӣ": 7}')`) needs
+`о["дарозӣ"]`. Prefer other names (`дарозии_қуттӣ`); the learning mode
+(`"режим": "таълимӣ"`, `docs/reference/learning-mode.md`) warns about them.

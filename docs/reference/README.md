@@ -24,6 +24,11 @@ Write and run SomonScript in the browser, also offline
 `хондан()` and `хонданиРақам()`: reading lines and numbers the learner types or
 a file holds.
 
+### **[🎓 Learning mode](learning-mode.md)**
+
+Warnings for beginners: `хондан() + 1`, `"5" * 2`, unused variables, properties
+named like built-in members. `"режим": "таълимӣ"` in `somon.config.json`.
+
 ### **[🩺 Diagnostics](diagnostics.md)**
 
 Compiler and run-time messages in Tajik, Russian and English, and their codes.
