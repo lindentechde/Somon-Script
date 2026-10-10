@@ -224,6 +224,11 @@ export const TYPE_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     ru: () => `Это выражение всегда ${code('холӣ')} или ${code('беқимат')}.`,
     tj: () => `Ин ифода ҳамеша ${code('холӣ')} ё ${code('беқимат')} аст.`,
   },
+  TYPE_NOT_FOUND: {
+    en: p => `Cannot find type '${text(p.name)}'`,
+    ru: p => `Тип ${code(p.name)} не найден.`,
+    tj: p => `Навъи ${code(p.name)} ёфт нашуд.`,
+  },
   CLASS_NOT_FOUND: {
     en: p => `Base class '${text(p.name)}' not found`,
     ru: p => `Базовый класс ${code(p.name)} не найден.`,

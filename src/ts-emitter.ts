@@ -15,6 +15,7 @@
  */
 import { translateMemberName } from './builtin-names';
 import { CodeGenerator, originalPosition, PREC, type CodeMapping } from './codegen';
+import { TYPE_NAMES } from './type-names';
 import type {
   AmbientModuleDeclaration,
   ArrayType,
@@ -70,45 +71,8 @@ import type {
   UniqueType,
 } from './types';
 
-/**
- * TypeScript names of SomonScript's built-in type names: primitive types,
- * `Ваъда` and the utility types.
- */
-export const TYPE_NAMES: ReadonlyMap<string, string> = new Map([
-  ['рақам', 'number'],
-  ['сатр', 'string'],
-  ['мантиқӣ', 'boolean'],
-  ['ҳар', 'any'],
-  ['ношинос', 'unknown'],
-  ['абадан', 'never'],
-  ['беджавоб', 'void'],
-  ['холӣ', 'null'],
-  ['беқимат', 'undefined'],
-  ['объект', 'object'],
-  ['калонрақам', 'bigint'],
-  ['рамз', 'symbol'],
-  ['Ваъда', 'Promise'],
-  ['ваъда', 'Promise'],
-  ['рӯйхат', 'Array'],
-  ['Хато', 'Error'],
-  ['функсия', 'Function'],
-  ['функция', 'Function'],
-  ['қисмӣ', 'Partial'],
-  ['ҳатмӣ', 'Required'],
-  ['танҳохон', 'Readonly'],
-  ['сабт_навъ', 'Record'],
-  ['гирифтан_навъ', 'Pick'],
-  ['ҳазф', 'Omit'],
-  ['хориҷ', 'Exclude'],
-  ['истихроҷ', 'Extract'],
-  ['беналиӣ', 'NonNullable'],
-  ['навъи_бозгашт', 'ReturnType'],
-  ['параметрҳо', 'Parameters'],
-  ['навъи_намуна', 'InstanceType'],
-  ['параметрҳои_конструктор', 'ConstructorParameters'],
-  ['навъи_параметри_ин', 'ThisParameterType'],
-  ['интизоршуда', 'Awaited'],
-]);
+/** TypeScript names of SomonScript's built-in type names (src/type-names.ts). */
+export { TYPE_NAMES };
 
 /** Binding strength of type syntax, for parenthesizing nested types. */
 const TYPE_PREC = {

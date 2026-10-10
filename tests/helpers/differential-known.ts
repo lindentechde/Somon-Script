@@ -246,13 +246,15 @@ export const KNOWN_VERDICT_DISAGREEMENTS: Readonly<
   },
   'ts-syntax-parser.test.ts › функсия ф(ин: Нуқта, х: рақам) {}': {
     default: 'typescript-only',
-    strict: 'typescript-only',
-    reason: 'TS2304: the type of an `ин` parameter does not exist (type names are not resolved)',
+    reason:
+      'TS2304: the type of an `ин` parameter does not exist; the SomonScript checker ' +
+      'reports it (TYPE_NOT_FOUND) as an error with --strict only, a warning otherwise',
   },
   'ts-syntax-parser.test.ts › собит о = { м(ин: Т, х: рақам) {} };': {
     default: 'typescript-only',
-    strict: 'typescript-only',
-    reason: 'TS2304: the type of an `ин` parameter does not exist (type names are not resolved)',
+    reason:
+      'TS2304: the type of an `ин` parameter does not exist; the SomonScript checker ' +
+      'reports it (TYPE_NOT_FOUND) as an error with --strict only, a warning otherwise',
   },
   'ts-syntax-parser.test.ts › интерфейс И { [калид]: рақам; [Symbol.iterator](): Iterator<…': {
     default: 'typescript-only',

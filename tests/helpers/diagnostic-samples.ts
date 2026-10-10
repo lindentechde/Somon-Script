@@ -96,6 +96,7 @@ export const SAMPLES: Readonly<Record<string, DiagnosticParams[]>> = {
   'CONSTANT_CONDITION.falsy': [{}],
   'CONSTANT_CONDITION.neverNullish': [{}],
   'CONSTANT_CONDITION.alwaysNullish': [{}],
+  TYPE_NOT_FOUND: [{ name: 'мантики', suggestion: 'мантиқӣ' }],
   CLASS_NOT_FOUND: [{ name: 'Нест' }],
   INVALID_EXTENDS: [
     { class: 'А', parent: 'И', kind: 'interface' },

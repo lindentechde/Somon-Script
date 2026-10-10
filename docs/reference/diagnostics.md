@@ -91,9 +91,14 @@ others come from the type checker (`TYPE_NOT_ASSIGNABLE`,
 `UNDEFINED_IDENTIFIER`, `CONST_ASSIGNMENT`, …). A code of the TypeScript checker
 is TypeScript's (`TS2322`).
 
-The type checker reports two mistakes beginners make that JavaScript accepts
+The type checker reports three mistakes beginners make that JavaScript accepts
 until the program runs, or at all:
 
 - `CONST_ASSIGNMENT` (error): a new value for a `собит` (`собит х = 1; х = 2;`).
 - `ASSIGNMENT_IN_CONDITION` (warning): `=` in a condition, where `===` or `==`
   was meant (`агар (х = 1)`).
+- `TYPE_NOT_FOUND` (warning; an error with `--strict`): a type name that is
+  neither built in nor declared, with the closest name as a hint
+  (`тағ а: мантики` — «Шояд `мантиқӣ`-ро дар назар доштед?»). Only names with
+  Cyrillic letters are checked: a name in Latin letters may be any type of
+  JavaScript's, TypeScript's or the browser's libraries.

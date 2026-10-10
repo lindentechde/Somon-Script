@@ -101,6 +101,7 @@ import { message, renderMessage } from './diagnostics/catalog';
 import { closestName } from './diagnostics/suggest';
 import type { DiagnosticMessage, DiagnosticParams } from './diagnostics/types';
 import { nullishSemantics, skipOuterExpressions, truthySemantics } from './syntactic-conditions';
+import { declaredTypeNames, isUnknownTypeName, TYPE_NAMES } from './type-names';
 
 /**
  * Represents a type checking error or warning
@@ -145,6 +146,8 @@ export const TypeCheckErrorCode = {
   ConstAssignment: 'CONST_ASSIGNMENT',
   /** `агар (х = 1)`: a condition that assigns, where a comparison was meant. */
   AssignmentInCondition: 'ASSIGNMENT_IN_CONDITION',
+  /** A type name that is neither built in nor declared: `тағ а: мантики`. */
+  TypeNotFound: 'TYPE_NOT_FOUND',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -534,6 +537,10 @@ export class TypeChecker {
   private classStack: Type[] = [];
   /** Enum declarations already declared (merged enums add to the first one's type). */
   private declaredEnums: WeakSet<EnumDeclaration> = new WeakSet();
+  /** The names the program declares that may be types (`declaredTypeNames`). */
+  private declaredTypes: ReadonlySet<string> = new Set();
+  /** Type names already reported as unknown, by their node. */
+  private reportedTypeNames = new WeakSet<Identifier>();
   /** Members of the declarations of a (merged) enum checked so far, by its enum object. */
   private checkedEnumMembers: WeakMap<Type, Set<string>> = new WeakMap();
   /** Types `initializePrimitiveTypes` gives the names `сатр`, `рақам`, … as values. */
@@ -711,6 +718,8 @@ export class TypeChecker {
     this.ambientModules = new Map();
     this.builtinAugmentations = new Map();
     this.declaredEnums = new WeakSet();
+    this.declaredTypes = declaredTypeNames(program);
+    this.reportedTypeNames = new WeakSet();
     this.initializePrimitiveTypes();
 
     // `эълон глобалӣ { … }` declares top-level names; `эълон модул "ном"` modules
@@ -2787,6 +2796,7 @@ export class TypeChecker {
     }
 
     const baseType = this.resolveNamedType(baseName);
+    if (baseType.kind === 'unknown') this.checkTypeName(genericType.name);
 
     // Add type parameters for generic types
     if (typeParams.length > 0) {
@@ -2816,7 +2826,32 @@ export class TypeChecker {
     if (PROMISE_NAMES.has(identifierType.name)) {
       return { kind: 'generic', name: 'Promise', typeParameters: [] };
     }
-    return this.resolveNamedType(identifierType.name);
+    const type = this.resolveNamedType(identifierType.name);
+    if (type.kind === 'unknown') this.checkTypeName(identifierType);
+    return type;
+  }
+
+  /**
+   * Reports a type name the program neither declares nor has built in, once:
+   * a typo such as `мантики` for `мантиқӣ` (an error with `strict`).
+   */
+  private checkTypeName(name: Identifier): void {
+    if (this.reportedTypeNames.has(name) || !isUnknownTypeName(name.name, this.declaredTypes)) {
+      return;
+    }
+    if (this.silent > 0) return;
+    this.reportedTypeNames.add(name);
+    const suggestion = closestName(name.name, [...TYPE_NAMES.keys(), ...this.declaredTypes]);
+    const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
+    report(
+      TypeCheckErrorCode.TypeNotFound,
+      message(
+        'TYPE_NOT_FOUND',
+        suggestion === undefined ? { name: name.name } : { name: name.name, suggestion }
+      ),
+      name.line,
+      name.column
+    );
   }
 
   private resolveNamedType(typeName: string): Type {
