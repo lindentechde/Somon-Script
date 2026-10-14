@@ -88,6 +88,11 @@ function taskDirectory(task) {
   return fs.existsSync(path.join(byId, 'tests')) ? byId : undefined;
 }
 
+/** A test file with LF line ends (a checkout on Windows may have CRLF ones). */
+function readTestFile(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+}
+
 /** The tests of a task: [{ name, input, expected }], in the order of their numbers. */
 function readTests(directory) {
   const testsDir = path.join(directory, 'tests');
@@ -98,10 +103,10 @@ function readTests(directory) {
     .sort((a, b) => Number(a) - Number(b) || a.localeCompare(b))
     .map(name => ({
       name,
-      input: fs.readFileSync(path.join(testsDir, `${name}.in`), 'utf8'),
+      input: readTestFile(path.join(testsDir, `${name}.in`)),
       // Missing before `--update` writes it
       expected: fs.existsSync(path.join(testsDir, `${name}.out`))
-        ? fs.readFileSync(path.join(testsDir, `${name}.out`), 'utf8')
+        ? readTestFile(path.join(testsDir, `${name}.out`))
         : '',
     }));
 }

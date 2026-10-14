@@ -51,12 +51,20 @@ function words(distDir) {
   return result;
 }
 
+/**
+ * A text file with LF line ends: a checkout on Windows may have CRLF ones, and
+ * the page is the same on every system.
+ */
+function readText(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+}
+
 function examples() {
-  const manifest = JSON.parse(fs.readFileSync(path.join(EXAMPLES, 'examples.json'), 'utf8'));
+  const manifest = JSON.parse(readText(path.join(EXAMPLES, 'examples.json')));
   return manifest.map(example => ({
     id: example.id,
     name: example.name,
-    code: fs.readFileSync(path.join(EXAMPLES, example.file), 'utf8'),
+    code: readText(path.join(EXAMPLES, example.file)),
     input: example.input || '',
   }));
 }
@@ -129,9 +137,9 @@ function tasks() {
     .filter(file => /^\d\d-.*\.md$/.test(file))
     .sort()
     .flatMap(file =>
-      [
-        ...fs.readFileSync(path.join(LESSONS, file), 'utf8').matchAll(/\.\.\/tasks\/([^/]+)\//g),
-      ].map(match => match[1])
+      [...readText(path.join(LESSONS, file)).matchAll(/\.\.\/tasks\/([^/]+)\//g)].map(
+        match => match[1]
+      )
     );
   const rank = id => (order.includes(id) ? order.indexOf(id) : order.length);
   return fs
@@ -139,7 +147,7 @@ function tasks() {
     .filter(id => fs.existsSync(path.join(TASKS, id, 'tests')))
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .map(id => {
-      const page = fs.readFileSync(path.join(TASKS, id, 'README.md'), 'utf8');
+      const page = readText(path.join(TASKS, id, 'README.md'));
       const title = /^# (.+?) \/ (.+)$/m.exec(page);
       const link = /\(https:\/\/lindentechde\.github\.io\/Somon-Script\/#([^)]*)\)/.exec(page);
       if (!title || !link)
@@ -171,7 +179,7 @@ function scriptJson(value) {
 }
 
 function readSource(name) {
-  const text = fs.readFileSync(path.join(SOURCE, name), 'utf8');
+  const text = readText(path.join(SOURCE, name));
   if (/<\/script|<!--/i.test(text)) {
     throw new Error(
       `playground/src/${name} contains '</script' or '<!--', which would end the page's script`
@@ -195,7 +203,7 @@ function buildPlayground(options = {}) {
     readSource('highlight.js'),
     readSource('app.js'),
   ].join('\n');
-  const template = fs.readFileSync(path.join(SOURCE, 'index.html'), 'utf8');
+  const template = readText(path.join(SOURCE, 'index.html'));
   // Functions as replacements: `$` in the code stays as it is
   const html = template
     .replace(/^[ \t]*\/\*STYLE\*\/\n/m, () => readSource('style.css'))

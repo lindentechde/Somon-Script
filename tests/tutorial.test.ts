@@ -8,7 +8,7 @@ import { runProgram, type RunEvent } from '../src/playground/run';
 import { buildCliOnce, canonicalTmpDir } from './helpers/paths';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { processTutorial } = require('../scripts/tutorial-links.js');
+const { processTutorial, updateLinks } = require('../scripts/tutorial-links.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { normalize, readTests } = require('../scripts/check-task.js');
 
@@ -63,6 +63,18 @@ describe('tutorial lessons', () => {
 
   test('the playground links are made from the code above them', () => {
     expect(processTutorial({ write: false })).toEqual([]);
+  });
+
+  test('a page with CRLF line ends (a checkout on Windows) gets the same links and keeps them', () => {
+    const page = fs
+      .readFileSync(path.join(TUTORIAL, 'ru', '05-vurud.md'), 'utf8')
+      .replace(/\r\n/g, '\n');
+    const stale = page.replace(/#c=[\w-]+/g, '#c=');
+    expect(stale).not.toBe(page);
+    expect(updateLinks(stale, '05-vurud.md')).toBe(page);
+    const crlf = (text: string) => text.replace(/\n/g, '\r\n');
+    expect(updateLinks(crlf(stale), '05-vurud.md')).toBe(crlf(page));
+    expect(updateLinks(crlf(page), '05-vurud.md')).toBe(crlf(page));
   });
 
   test.each(['tj', 'ru'])('every %s lesson has examples and 3-5 tasks that exist', language => {
@@ -202,6 +214,14 @@ describe('scripts/check-task.js', () => {
     expect(result.stdout).toContain('   Интизор буд:\n    5\n   Барнома чоп кард:\n    23');
     expect(check('05-jam', wrong, '--lang', 'ru').stdout).toContain('Итог: пройдено 0 из 3.');
   }, 60000);
+
+  test('tests with CRLF line ends (a checkout on Windows) are read with LF ones', () => {
+    const task = path.join(dir, 'crlf');
+    fs.mkdirSync(path.join(task, 'tests'), { recursive: true });
+    fs.writeFileSync(path.join(task, 'tests', '1.in'), '2\r\n3\r\n');
+    fs.writeFileSync(path.join(task, 'tests', '1.out'), '5\r\n');
+    expect(readTests(task)).toEqual([{ name: '1', input: '2\n3\n', expected: '5\n' }]);
+  });
 
   test('a task or file that does not exist', () => {
     expect(check('нест', 'барнома.som')).toMatchObject({ status: 2 });

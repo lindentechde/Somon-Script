@@ -65,9 +65,13 @@ function codeBlocks(lines) {
   return blocks;
 }
 
-/** The page with its links made from the code above them. */
+/**
+ * The page with its links made from the code above them. A page with CRLF line
+ * ends (a checkout on Windows) gets the same links and keeps its line ends.
+ */
 function updateLinks(source, file, task) {
-  const lines = source.split('\n');
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.split(/\r?\n/);
   const blocks = codeBlocks(lines);
   return lines
     .map((line, index) => {
@@ -84,7 +88,7 @@ function updateLinks(source, file, task) {
         throw new Error(`${file}:${index + 1}: a playground link without code above it`);
       return `${link[1]}${playgroundLink(program.text, input, task)}${link[2]}`;
     })
-    .join('\n');
+    .join(eol);
 }
 
 function markdownFiles(dir) {

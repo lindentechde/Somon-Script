@@ -54,6 +54,29 @@ describe('playground build', () => {
     expect(buildPlayground().html).toBe(html);
   });
 
+  test('is the same from a checkout with CRLF line ends (Windows)', () => {
+    // The module object the build script reads with, not a copy of it
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodeFs: typeof fs = require('fs');
+    const readFileSync = nodeFs.readFileSync;
+    const texts = /[\\/](playground[\\/](src|examples)|docs[\\/]tutorial)[\\/]/;
+    const spy = jest.spyOn(nodeFs, 'readFileSync').mockImplementation(((
+      file: fs.PathOrFileDescriptor,
+      options?: Parameters<typeof fs.readFileSync>[1]
+    ) => {
+      const content = readFileSync(file, options);
+      return typeof content === 'string' && texts.test(String(file))
+        ? content.replace(/\r?\n/g, '\r\n')
+        : content;
+    }) as typeof fs.readFileSync);
+    try {
+      expect(buildPlayground().html).toBe(html);
+      expect(spy.mock.calls.some(([file]) => String(file).endsWith('index.html'))).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test('has every task of the tutorial, in the order of the lessons, with its tests', () => {
     const tasksDir = path.join(__dirname, '..', 'docs', 'tutorial', 'tasks');
     const ids = fs
@@ -81,7 +104,9 @@ describe('playground build', () => {
         fs.readdirSync(path.join(tasksDir, task.id, 'tests')).filter(f => f.endsWith('.in')).length
       );
       expect(task.tests[0].o).toBe(
-        fs.readFileSync(path.join(tasksDir, task.id, 'tests', '1.out'), 'utf8')
+        fs
+          .readFileSync(path.join(tasksDir, task.id, 'tests', '1.out'), 'utf8')
+          .replace(/\r\n/g, '\n')
       );
     }
     // A code block of a statement, and the text around it, escaped
