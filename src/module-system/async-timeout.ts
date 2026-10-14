@@ -66,7 +66,9 @@ export class TimeoutError extends Error {
 /**
  * Create a timeout wrapper function for repeated use
  */
-export function createTimeoutWrapper(defaultTimeout: number) {
+export function createTimeoutWrapper(
+  defaultTimeout: number
+): <T>(_promise: Promise<T>, _options?: Partial<TimeoutOptions>) => Promise<T> {
   return <T>(promise: Promise<T>, options?: Partial<TimeoutOptions>): Promise<T> => {
     return withTimeout(promise, {
       timeout: options?.timeout ?? defaultTimeout,

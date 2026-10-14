@@ -109,6 +109,11 @@ jobs:
     - name: Audit examples
       run: npm run audit:examples
 
+    # The release publishes src to JSR, which rejects public functions without
+    # explicit types ("slow types"): check it here, not first at the release
+    - name: Check the JSR package
+      run: npx --yes jsr publish --dry-run --allow-dirty
+
   runtimes:
     # The examples and LeetCode solutions, compiled by SomonScript, run on Bun
     # and Deno and must print what they print on Node.js

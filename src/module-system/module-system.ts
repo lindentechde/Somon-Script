@@ -12,7 +12,7 @@ import {
   LoadedModule,
   ModuleLoadError,
 } from './module-loader';
-import { ModuleRegistry, ModuleMetadata } from './module-registry';
+import { ModuleRegistry, ModuleMetadata, type ModuleStatistics } from './module-registry';
 import { transformSync, type PluginItem } from '@babel/core';
 import { CompilerOptions } from '../config';
 import { moduleSystemLogger as logger } from './logger';
@@ -927,7 +927,7 @@ export class ModuleSystem {
   /**
    * Get module statistics
    */
-  getStatistics() {
+  getStatistics(): ModuleStatistics {
     return this.registry.getStatistics();
   }
 
