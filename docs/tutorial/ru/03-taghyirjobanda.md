@@ -17,6 +17,8 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvCA9ICLQl9Cw0YDQuNC90LAiOwrRgtCw0pMg0YHQuNC90L3RgyA9IDEzOwrRh9C-0L8o0L3QvtC8KTsK0YfQvtC_KNGB0LjQvdC90YMpOwrRh9C-0L8o0L3QvtC8LCAi4oCUIiwg0YHQuNC90L3RgywgItGB0L7Qu9CwIik7Cg)
 
+<!-- anim: variable-box -->
+
 - `тағ ном = "Зарина";` — объявляет переменную `ном` («имя») и даёт ей значение
   `"Зарина"`.
 - `чоп(ном)` выводит значение переменной, а не слово «ном».
@@ -34,9 +36,21 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7QuyA9IDEwOwrRh9C-0L8o0YXQvtC7KTsK0YXQvtC7ID0gMTU7CtGH0L7QvyjRhdC-0LspOwrRhdC-0LsgPSDRhdC-0LsgKyA1OwrRh9C-0L8o0YXQvtC7KTsK)
 
+<!-- anim: variable-box {"focus": ["хол"]} -->
+
 - `хол = 15;` — даёт новое значение; `тағ` уже не нужен.
 - `хол = хол + 5;` — берёт текущее значение, прибавляет 5 и снова сохраняет
   результат в `хол`.
+
+<!-- quiz
+q: Какое значение будет в `х` после этой программы?
+code: |
+  тағ х = 4;
+  х = х * 2;
+  х = х + 1;
+options: 4 | 8 | *9 | 5
+explain: Сначала `х` равно 4, потом 4 * 2 = 8, потом 8 + 1 = 9.
+-->
 
 ## Константа
 

@@ -16,6 +16,8 @@ import { buildCliOnce, canonicalTmpDir } from './helpers/paths';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildPlayground, tasks, MAX_BYTES } = require('../scripts/build-playground.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { buildLearn } = require('../scripts/build-learn.js');
 
 type Chromium = typeof import('playwright-core').chromium;
 type Browser = import('playwright-core').Browser;
@@ -432,6 +434,41 @@ describeInBrowser(`playground for learners in Chromium${chromium ? '' : ` (skipp
     await page.keyboard.press('Control+Enter');
     await page.waitForFunction(() => document.getElementById('status')!.textContent !== '');
   }, 60000);
+
+  test("the learn kit's minified worker runs a traced program (scripts/build-learn.js)", async () => {
+    const kit = path.join(dir, 'learn');
+    await buildLearn({ outDir: kit });
+    await page.goto(pageUrl);
+    const run = (source: string) =>
+      page.evaluate(
+        ({ code, source }) =>
+          new Promise<Array<{ type: string; [key: string]: unknown }>>(resolve => {
+            const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+            const worker = new Worker(url);
+            const events: Array<{ type: string }> = [];
+            worker.onmessage = event => {
+              events.push(event.data);
+              if (event.data.type === 'done') {
+                worker.terminate();
+                resolve(events);
+              }
+            };
+            worker.postMessage({ source, input: '', language: 'tj', trace: true });
+          }),
+        { code: fs.readFileSync(path.join(kit, 'worker.js'), 'utf8'), source }
+      );
+    const events = await run('тағ х = 1;\nх = х + 1;\nчоп(х);');
+    expect(events.filter(event => event.type === 'output')).toEqual([
+      { type: 'output', stream: 'log', text: '2' },
+    ]);
+    const trace = events.find(event => event.type === 'trace') as unknown as {
+      steps: Array<{ l: number }>;
+    };
+    expect(trace.steps.map(step => step.l)).toEqual([1, 2, 3, 0]);
+    // The line of a runtime error, from the stack of the program in this browser
+    const failed = await run('тағ а = 1;\nчоп(а.б.в);');
+    expect(failed.find(event => event.type === 'runtimeError')).toMatchObject({ line: 2 });
+  }, 120000);
 
   test('fits a phone screen', async () => {
     const phone = await browser.newPage({ viewport: { width: 360, height: 740 } });

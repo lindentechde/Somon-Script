@@ -15,6 +15,8 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0LHQsNGA0L7QuCAo0YLQsNKTINC4ID0gMTsg0LggPD0gNTsg0LgrKykgewogINGH0L7QvyjQuCk7Cn0K)
 
+<!-- anim: loop-counter {"counter": "и"} -->
+
 В скобках `барои` три части через `;`:
 
 1. `тағ и = 1` — начало: один раз, перед циклом.
@@ -40,8 +42,20 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC9ID0g0YXQvtC90LTQsNC90LjQoNCw0pvQsNC8KCk7CtGC0LDSkyDSt9Cw0LzRiiA9IDA7CtCx0LDRgNC-0LggKNGC0LDSkyDQuCA9IDE7INC4IDw9INC9OyDQuCsrKSB7CiAg0rfQsNC80YogPSDSt9Cw0LzRiiArINC4Owp9CtGH0L7Qvygi0rbQsNC80Yo6Iiwg0rfQsNC80YopOwo&i=MTAK)
 
+<!-- anim: loop-counter {"counter": "и", "total": "ҷамъ"} -->
+
 `ҷамъ` («сумма») до цикла равна `0`, и на каждом шаге к ней прибавляется `и`.
 `ҷамъ = ҷамъ + и` можно записать короче: `ҷамъ += и`.
+
+<!-- quiz
+q: Сколько раз выполнится `чоп` в этом цикле?
+code: |
+  барои (тағ и = 0; и < 3; и++) {
+    чоп(и);
+  }
+options: 2 | *3 | 4 | 0
+explain: `и` принимает значения 0, 1 и 2; когда `и` становится 3, условие `и < 3` ложно.
+-->
 
 ## Таблица умножения
 
@@ -59,6 +73,8 @@
 ```
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC9ID0g0YXQvtC90LTQsNC90LjQoNCw0pvQsNC8KCk7CtCx0LDRgNC-0LggKNGC0LDSkyDQuCA9IDE7INC4IDw9IDEwOyDQuCsrKSB7CiAg0YfQvtC_KNC9ICsgIiDDlyAiICsg0LggKyAiID0gIiArINC9ICog0LgpOwp9Cg&i=Nwo)
+
+<!-- anim: loop-counter {"counter": "и"} -->
 
 ## Частые ошибки
 

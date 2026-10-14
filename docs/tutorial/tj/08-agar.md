@@ -20,6 +20,8 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINKz0LDRgNC-0YDQsNGCID0g0YXQvtC90LTQsNC90LjQoNCw0pvQsNC8KCk7CtCw0LPQsNGAICjSs9Cw0YDQvtGA0LDRgiA-IDMwKSB7CiAg0YfQvtC_KCLQmNC80YDTr9C3INCz0LDRgNC8INCw0YHRgiEiKTsKfQrRh9C-0L8oItCg06_Qt9C4INGF0YPRiCEiKTsK&i=MzUK)
 
+<!-- anim: if-branch -->
+
 - Шарт дар қавс `( )` навишта мешавад.
 - Фармонҳои дохили `{ }` танҳо вақте иҷро мешаванд, ки шарт `дуруст` бошад.
 - `чоп("Рӯзи хуш!")` берун аз `{ }` аст — он ҳамеша иҷро мешавад.
@@ -47,7 +49,22 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGA0LDSm9Cw0LwgPSDRhdC-0L3QtNCw0L3QuNCg0LDSm9Cw0LwoKTsK0LDQs9Cw0YAgKNGA0LDSm9Cw0LwgJSAyID09PSAwKSB7CiAg0YfQvtC_KNGA0LDSm9Cw0LwsICLSt9GD0YTRgiDQsNGB0YIiKTsKfSDQstCw0LPQsNGA0L3QsCB7CiAg0YfQvtC_KNGA0LDSm9Cw0LwsICLRgtC-0psg0LDRgdGCIik7Cn0K&i=Nwo)
 
+<!-- anim: if-branch -->
+
 Аз ду қисм ҳамеша танҳо яктояш иҷро мешавад.
+
+<!-- quiz
+q: Ин барнома чӣ чоп мекунад?
+code: |
+  тағ х = 3;
+  агар (х > 5) {
+    чоп("калон");
+  } вагарна {
+    чоп("хурд");
+  }
+options: калон | *хурд | калон ва хурд | ҳеҷ чиз
+explain: `3 > 5` нодуруст аст, бинобар ин қисми `вагарна` иҷро мешавад.
+-->
 
 ## Калонтарин аз ду рақам
 

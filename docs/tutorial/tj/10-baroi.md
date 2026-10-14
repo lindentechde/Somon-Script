@@ -15,6 +15,8 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0LHQsNGA0L7QuCAo0YLQsNKTINC4ID0gMTsg0LggPD0gNTsg0LgrKykgewogINGH0L7QvyjQuCk7Cn0K)
 
+<!-- anim: loop-counter {"counter": "и"} -->
+
 Дар қавси `барои` се қисм ҳаст, ки бо `;` ҷудо шудаанд:
 
 1. `тағ и = 1` — оғоз: як бор, пеш аз давра.
@@ -40,8 +42,20 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC9ID0g0YXQvtC90LTQsNC90LjQoNCw0pvQsNC8KCk7CtGC0LDSkyDSt9Cw0LzRiiA9IDA7CtCx0LDRgNC-0LggKNGC0LDSkyDQuCA9IDE7INC4IDw9INC9OyDQuCsrKSB7CiAg0rfQsNC80YogPSDSt9Cw0LzRiiArINC4Owp9CtGH0L7Qvygi0rbQsNC80Yo6Iiwg0rfQsNC80YopOwo&i=MTAK)
 
+<!-- anim: loop-counter {"counter": "и", "total": "ҷамъ"} -->
+
 `ҷамъ` пеш аз давра `0` аст ва дар ҳар давр `и`-ро ба худ илова мекунад.
 `ҷамъ = ҷамъ + и`-ро кӯтоҳтар ҳам навиштан мумкин: `ҷамъ += и`.
+
+<!-- quiz
+q: `чоп` дар ин давра чанд бор иҷро мешавад?
+code: |
+  барои (тағ и = 0; и < 3; и++) {
+    чоп(и);
+  }
+options: 2 | *3 | 4 | 0
+explain: `и` 0, 1 ва 2 мешавад; вақте ки `и` 3 мешавад, шарти `и < 3` нодуруст аст.
+-->
 
 ## Ҷадвали зарб
 
@@ -59,6 +73,8 @@
 ```
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC9ID0g0YXQvtC90LTQsNC90LjQoNCw0pvQsNC8KCk7CtCx0LDRgNC-0LggKNGC0LDSkyDQuCA9IDE7INC4IDw9IDEwOyDQuCsrKSB7CiAg0YfQvtC_KNC9ICsgIiDDlyAiICsg0LggKyAiID0gIiArINC9ICog0LgpOwp9Cg&i=Nwo)
+
+<!-- anim: loop-counter {"counter": "и"} -->
 
 ## Хатоҳои маъмул
 
