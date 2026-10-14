@@ -19,7 +19,7 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINCx0LDQu9Cw0L3QtNOjID0gMzsK0YLQsNKTINCx0LDRgCA9IDU7CtCx0LDRgNC-0LggKNGC0LDSkyDSm9Cw0YLQvtGAID0gMTsg0pvQsNGC0L7RgCA8PSDQsdCw0LvQsNC90LTTozsg0pvQsNGC0L7RgCsrKSB7CiAg0YLQsNKTINGF0LDRgiA9ICIiOwogINCx0LDRgNC-0LggKNGC0LDSkyDRgdGD0YLRg9C9ID0gMTsg0YHRg9GC0YPQvSA8PSDQsdCw0YA7INGB0YPRgtGD0L0rKykgewogICAg0YXQsNGCID0g0YXQsNGCICsgIioiOwogIH0KICDRh9C-0L8o0YXQsNGCKTsKfQo)
 
-- Давраи берунӣ сатрҳоро месозад, давраи дохилӣ — аломатҳои як сатрро.
+- Давраи берунӣ сатрҳоро месозад, давраи дохилӣ - аломатҳои як сатрро.
 - `хат` дар ҳар сатр аз нав холӣ (`""`) сар мешавад.
 
 ## Зина

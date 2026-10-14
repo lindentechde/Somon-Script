@@ -4,7 +4,7 @@
 
 ## Что такое переменная?
 
-Переменная — коробка с именем, в которой хранится значение. Её объявляют словом
+Переменная - коробка с именем, в которой хранится значение. Её объявляют словом
 `тағ`:
 
 ```som
@@ -12,14 +12,14 @@
 тағ синну = 13;
 чоп(ном);
 чоп(синну);
-чоп(ном, "—", синну, "сола");
+чоп(ном, "-", синну, "сола");
 ```
 
-[▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvCA9ICLQl9Cw0YDQuNC90LAiOwrRgtCw0pMg0YHQuNC90L3RgyA9IDEzOwrRh9C-0L8o0L3QvtC8KTsK0YfQvtC_KNGB0LjQvdC90YMpOwrRh9C-0L8o0L3QvtC8LCAi4oCUIiwg0YHQuNC90L3RgywgItGB0L7Qu9CwIik7Cg)
+[▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvCA9ICLQl9Cw0YDQuNC90LAiOwrRgtCw0pMg0YHQuNC90L3RgyA9IDEzOwrRh9C-0L8o0L3QvtC8KTsK0YfQvtC_KNGB0LjQvdC90YMpOwrRh9C-0L8o0L3QvtC8LCAiLSIsINGB0LjQvdC90YMsICLRgdC-0LvQsCIpOwo)
 
 <!-- anim: variable-box -->
 
-- `тағ ном = "Зарина";` — объявляет переменную `ном` («имя») и даёт ей значение
+- `тағ ном = "Зарина";` - объявляет переменную `ном` («имя») и даёт ей значение
   `"Зарина"`.
 - `чоп(ном)` выводит значение переменной, а не слово «ном».
 
@@ -38,8 +38,8 @@
 
 <!-- anim: variable-box {"focus": ["хол"]} -->
 
-- `хол = 15;` — даёт новое значение; `тағ` уже не нужен.
-- `хол = хол + 5;` — берёт текущее значение, прибавляет 5 и снова сохраняет
+- `хол = 15;` - даёт новое значение; `тағ` уже не нужен.
+- `хол = хол + 5;` - берёт текущее значение, прибавляет 5 и снова сохраняет
   результат в `хол`.
 
 <!-- quiz

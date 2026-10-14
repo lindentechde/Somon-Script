@@ -97,7 +97,7 @@ describe('reading input', () => {
     ]);
     const russian = fakeHost(['х\n', '1\n'], true);
     createInput(russian.host, 'ru').хонданиРақам();
-    expect(russian.written).toEqual(['`х` — не число. Введите число ещё раз:\n']);
+    expect(russian.written).toEqual(['`х` - не число. Введите число ещё раз:\n']);
   });
 
   test('the errors of input are explained for learners', () => {

@@ -26,7 +26,7 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7QuyA9INGF0L7QvdC00LDQvdC40KDQsNKb0LDQvCgpOwrQsNCz0LDRgCAo0YXQvtC7ID49IDkwKSB7CiAg0YfQvtC_KCLQkdCw0rPQvjogNSIpOwp9INCy0LDQs9Cw0YDQvdCwINCw0LPQsNGAICjRhdC-0LsgPj0gNzApIHsKICDRh9C-0L8oItCR0LDSs9C-OiA0Iik7Cn0g0LLQsNCz0LDRgNC90LAg0LDQs9Cw0YAgKNGF0L7QuyA-PSA1MCkgewogINGH0L7Qvygi0JHQsNKz0L46IDMiKTsKfSDQstCw0LPQsNGA0L3QsCB7CiAg0YfQvtC_KCLQkdCw0rPQvjogMiIpOwp9Cg&i=ODUK)
 
-Условия проверяются сверху вниз. Выполняется первое истинное, остальные — нет.
+Условия проверяются сверху вниз. Выполняется первое истинное, остальные - нет.
 
 ## «И», «или», «не»
 

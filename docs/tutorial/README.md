@@ -7,12 +7,12 @@ objects, each with examples that open in the
 [playground](https://lindentechde.github.io/Somon-Script/) and tasks with
 automatic tests:
 
-- **[Дарсҳо бо забони тоҷикӣ](tj/README.md)** — дарсҳо барои навомӯзон
-- **[Уроки на русском](ru/README.md)** — уроки для начинающих
-- **[Масъалаҳо / Задачи](tasks/README.md)** — 63 tasks with tests
+- **[Дарсҳо бо забони тоҷикӣ](tj/README.md)** - дарсҳо барои навомӯзон
+- **[Уроки на русском](ru/README.md)** - уроки для начинающих
+- **[Масъалаҳо / Задачи](tasks/README.md)** - 63 tasks with tests
   (`npm run check-task -- 05-jam барнома.som`)
 - For teachers: **[Дастур барои омӯзгор](omuzgor.md)** ·
-  **[Памятка для учителя](uchitelyu.md)** — the playground offline, handing out
+  **[Памятка для учителя](uchitelyu.md)** - the playground offline, handing out
   tasks, common mistakes
 
 ## For developers

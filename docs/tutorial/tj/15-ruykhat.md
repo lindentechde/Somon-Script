@@ -17,9 +17,9 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7Qu9Kz0L4gPSBbNSwgNCwgNSwgM107CtGH0L7QvyjRhdC-0LvSs9C-KTsK0YfQvtC_KCLQkNCy0LLQsNC70LjQvToiLCDRhdC-0LvSs9C-WzBdKTsK0YfQvtC_KCLQlNGD0Y7QvNC40L06Iiwg0YXQvtC70rPQvlsxXSk7CtGH0L7Qvygi0KjRg9C80L7RgNCwOiIsINGF0L7Qu9Kz0L4u0LTQsNGA0L7Qt9OjKTsK)
 
-- Ҳар қимат дар рӯйхат **унсур** аст. Рақами унсур — **индекс** — аз `0` сар
+- Ҳар қимат дар рӯйхат **унсур** аст. Рақами унсур - **индекс** - аз `0` сар
   мешавад: унсури аввал `холҳо[0]` аст.
-- `холҳо.дарозӣ` — шумораи унсурҳо. Унсури охирин: `холҳо[холҳо.дарозӣ - 1]`.
+- `холҳо.дарозӣ` - шумораи унсурҳо. Унсури охирин: `холҳо[холҳо.дарозӣ - 1]`.
 
 ## Иваз кардан ва илова кардан
 

@@ -9,12 +9,12 @@ import { code, text, type CatalogEntry } from './text';
 export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   RUNTIME_READ_OF_NOTHING: {
     en: p => `Cannot read the property ${code(p.property)}: the value is ${code(p.value)}.`,
-    ru: p => `Нельзя прочитать свойство ${code(p.property)}: значение — ${code(p.value)}.`,
+    ru: p => `Нельзя прочитать свойство ${code(p.property)}: значение - ${code(p.value)}.`,
     tj: p => `Хосияти ${code(p.property)}-ро хондан мумкин нест: қимат ${code(p.value)} аст.`,
   },
   RUNTIME_WRITE_TO_NOTHING: {
     en: p => `Cannot set the property ${code(p.property)}: the value is ${code(p.value)}.`,
-    ru: p => `Нельзя задать свойство ${code(p.property)}: значение — ${code(p.value)}.`,
+    ru: p => `Нельзя задать свойство ${code(p.property)}: значение - ${code(p.value)}.`,
     tj: p => `Ба хосияти ${code(p.property)} қимат додан мумкин нест: объект ${code(p.value)} аст.`,
   },
   RUNTIME_NOT_DEFINED: {
@@ -29,7 +29,7 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   },
   RUNTIME_NOT_A_FUNCTION: {
     en: p => `${code(p.name)} is not a function and cannot be called.`,
-    ru: p => `${code(p.name)} — не функция, её нельзя вызвать.`,
+    ru: p => `${code(p.name)} - не функция, её нельзя вызвать.`,
     tj: p => `${code(p.name)} функсия нест ва онро даъват кардан мумкин нест.`,
   },
   RUNTIME_NOT_A_CONSTRUCTOR: {
@@ -39,7 +39,7 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   },
   RUNTIME_NOT_ITERABLE: {
     en: p => `${code(p.name)} is not a list: ${code('барои … аз')} cannot go through it.`,
-    ru: p => `${code(p.name)} — не список: ${code('барои … аз')} не может по нему пройти.`,
+    ru: p => `${code(p.name)} - не список: ${code('барои … аз')} не может по нему пройти.`,
     tj: p => `${code(p.name)} рӯйхат нест: ${code('барои … аз')} аз он гузашта наметавонад.`,
   },
   RUNTIME_STACK_OVERFLOW: {
@@ -68,7 +68,7 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     en: p =>
       `${p.text === '' ? 'An empty line' : code(p.text)} is not a number: ${code(`${text(p.name)}()`)} expected one.`,
     ru: p =>
-      `${p.text === '' ? 'Пустая строка' : code(p.text)} — не число: ${code(`${text(p.name)}()`)} ждала число.`,
+      `${p.text === '' ? 'Пустая строка' : code(p.text)} - не число: ${code(`${text(p.name)}()`)} ждала число.`,
     tj: p =>
       `${p.text === '' ? 'Сатри холӣ' : code(p.text)} рақам нест: ${code(`${text(p.name)}()`)} рақам интизор буд.`,
   },
@@ -82,7 +82,7 @@ export const RUNTIME_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   },
   INPUT_ASK_AGAIN: {
     en: p => `${p.text === '' ? 'That' : code(p.text)} is not a number. Type a number again:`,
-    ru: p => `${p.text === '' ? 'Это' : code(p.text)} — не число. Введите число ещё раз:`,
+    ru: p => `${p.text === '' ? 'Это' : code(p.text)} - не число. Введите число ещё раз:`,
     tj: p => `${p.text === '' ? 'Ин' : code(p.text)} рақам нест. Боз як бор рақам нависед:`,
   },
   RUNTIME_THROWN: {

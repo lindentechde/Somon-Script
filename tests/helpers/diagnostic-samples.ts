@@ -163,6 +163,7 @@ export const HINT_SAMPLES: Readonly<Record<string, DiagnosticParams>> = {
   USE_TAG: {},
   NO_REDECLARE: { name: 'х' },
   NUMBER_IN_QUOTES: { value: '5' },
+  TRIPLE_QUOTES: { quotes: '"""' },
   HAS_FOR_MAP_SET: {},
   RENAME: {},
   CHECK_PATH: {},

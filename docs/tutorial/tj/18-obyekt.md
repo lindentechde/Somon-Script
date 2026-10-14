@@ -4,7 +4,7 @@
 
 ## Объект чист?
 
-Рӯйхат қиматҳоро бо рақам (индекс) нигоҳ медорад. Объект — бо **ном**:
+Рӯйхат қиматҳоро бо рақам (индекс) нигоҳ медорад. Объект - бо **ном**:
 
 ```som
 тағ хонанда = {
@@ -20,7 +20,7 @@
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7QvdCw0L3QtNCwID0gewogINC90L7QvDogItCX0LDRgNC40L3QsCIsCiAg0YHQuNC90YQ6IDcsCiAg0LDRitC70L7Rh9OjOiDQtNGD0YDRg9GB0YIsCn07CtGH0L7QvyjRhdC-0L3QsNC90LTQsCk7CtGH0L7QvyjRhdC-0L3QsNC90LTQsC7QvdC-0LwpOwrRh9C-0L8oItCh0LjQvdGEOiIsINGF0L7QvdCw0L3QtNCwLtGB0LjQvdGEKTsK)
 
 - Объект дар қавси `{ }` навишта мешавад: `ном: қимат`, бо вергул ҷудо.
-- Ҳар `ном: қимат` — **хосият**. Онро бо нуқта мехонанд: `хонанда.ном`.
+- Ҳар `ном: қимат` - **хосият**. Онро бо нуқта мехонанд: `хонанда.ном`.
 
 ## Хосиятро иваз кардан ва илова кардан
 

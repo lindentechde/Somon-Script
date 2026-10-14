@@ -14,8 +14,8 @@
 
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvNKz0L4gPSBbItCQ0LvToyIsICLQl9Cw0YDQuNC90LAiLCAi0KTQsNGA0rPQvtC0Il07CtGH0L7QvyjQvdC-0LzSs9C-LtC00L7RgNCw0LQoItCX0LDRgNC40L3QsCIpKTsK0YfQvtC_KNC90L7QvNKz0L4u0LjQvdC00LXQutGB0LgoItCk0LDRgNKz0L7QtCIpKTsK0YfQvtC_KNC90L7QvNKz0L4u0LjQvdC00LXQutGB0LgoItCh0LjQvdC-IikpOwo)
 
-- `дорад(х)` («содержит») — есть ли `х` в списке: `дуруст` или `нодуруст`.
-- `индекси(х)` — индекс `х` или `-1`, если его нет.
+- `дорад(х)` («содержит») - есть ли `х` в списке: `дуруст` или `нодуруст`.
+- `индекси(х)` - индекс `х` или `-1`, если его нет.
 
 ## Сортировка
 
@@ -44,7 +44,7 @@
 
 - `филтр` оставляет только элементы, для которых условие `дуруст`.
 - `харита` заменяет каждый элемент и строит новый список.
-- `х => х >= 50` — короткая функция: принимает `х` и возвращает `х >= 50`.
+- `х => х >= 50` - короткая функция: принимает `х` и возвращает `х >= 50`.
 
 ## Задачи
 

@@ -14,8 +14,8 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvNKz0L4gPSBbItCQ0LvToyIsICLQl9Cw0YDQuNC90LAiLCAi0KTQsNGA0rPQvtC0Il07CtGH0L7QvyjQvdC-0LzSs9C-LtC00L7RgNCw0LQoItCX0LDRgNC40L3QsCIpKTsK0YfQvtC_KNC90L7QvNKz0L4u0LjQvdC00LXQutGB0LgoItCk0LDRgNKz0L7QtCIpKTsK0YfQvtC_KNC90L7QvNKz0L4u0LjQvdC00LXQutGB0LgoItCh0LjQvdC-IikpOwo)
 
-- `дорад(х)` — оё `х` дар рӯйхат ҳаст: `дуруст` ё `нодуруст`.
-- `индекси(х)` — индекси `х`, ё `-1`, агар он набошад.
+- `дорад(х)` - оё `х` дар рӯйхат ҳаст: `дуруст` ё `нодуруст`.
+- `индекси(х)` - индекси `х`, ё `-1`, агар он набошад.
 
 ## Тартиб додан
 
@@ -44,7 +44,7 @@
 
 - `филтр` танҳо унсурҳоеро нигоҳ медорад, ки барои онҳо шарт `дуруст` аст.
 - `харита` ҳар унсурро иваз карда, рӯйхати нав месозад.
-- `х => х >= 50` — функсияи кӯтоҳ: `х` мегирад ва `х >= 50`-ро бармегардонад.
+- `х => х >= 50` - функсияи кӯтоҳ: `х` мегирад ва `х >= 50`-ро бармегардонад.
 
 ## Супоришҳо
 

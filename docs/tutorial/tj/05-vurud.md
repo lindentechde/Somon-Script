@@ -19,7 +19,7 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvCA9INGF0L7QvdC00LDQvSgpOwrRh9C-0L8oItCh0LDQu9C-0LwsICIgKyDQvdC-0LwgKyAiISIpOwo&i=0JDQu9OjCg)
 
-- Дар майдони озмоиш вурудро дар қисми **«Вуруд»** менависед: ҳар сатр — як
+- Дар майдони озмоиш вурудро дар қисми **«Вуруд»** менависед: ҳар сатр - як
   вуруд.
 - Ҳар даъвати `хондан()` сатри навбатиро мегирад.
 

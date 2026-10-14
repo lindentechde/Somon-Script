@@ -13,7 +13,7 @@ export const PROGRAM_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   CODEGEN_RESERVED_WORD: {
     en: p => `${code(p.name)} is a reserved word of JavaScript and cannot be a name.`,
     ru: p =>
-      `${code(p.name)} — зарезервированное слово JavaScript, его нельзя использовать как имя.`,
+      `${code(p.name)} - зарезервированное слово JavaScript, его нельзя использовать как имя.`,
     tj: p =>
       `${code(p.name)} калимаи махсуси JavaScript аст ва онро ҳамчун ном истифода бурдан мумкин нест.`,
   },
@@ -125,6 +125,14 @@ export const HINTS: Readonly<Record<string, CatalogEntry>> = {
       `Чтобы изменить значение, не повторяйте ${code('тағ')}: напишите ${code(`${text(p.name)} = …`)}.`,
     tj: p =>
       `Барои иваз кардани қимат ${code('тағ')}-ро такрор накунед: ${code(`${text(p.name)} = …`)} нависед.`,
+  },
+  TRIPLE_QUOTES: {
+    en: p =>
+      `SomonScript has no ${code(p.quotes)}. Write text of several lines between backticks (the key left of 1 in the English layout), or print each line with its own ${code('чоп')}.`,
+    ru: p =>
+      `В этом языке нет ${code(p.quotes)}. Текст в несколько строк пишите между обратными кавычками (клавиша слева от 1 в английской раскладке) или печатайте каждую строку своим ${code('чоп')}.`,
+    tj: p =>
+      `Ин забон ${code(p.quotes)} надорад. Матни якчандсатраро байни нохунакҳои баръакс нависед (тугмаи пеш аз 1 дар клавиатураи англисӣ) ё ҳар сатрро бо ${code('чоп')}-и алоҳида чоп кунед.`,
   },
   NUMBER_IN_QUOTES: {
     en: p => `Write the number without quotes: ${code(p.value)}.`,
