@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-## Unreleased
+## 0.5.0 (2026-10-14)
 
 ### ⚠ Breaking Changes
 
@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file. See [Conven
 * An enum member whose initializer is a string by its syntax but known only at run time (`` А = `${х}` ``, `Б = "п" + х`) no longer maps its value back to the member name, as TypeScript 6 emits it: such a member, like other string members, is a one-way mapping.
 
 ### ✨ Features
+
+* A learn kit for websites that show the lessons card by card (`dist/learn`, built by `npm run build:learn` and on `npm pack`/`npm publish`; see `docs/reference/learn-kit.md`): the playground's Web Worker minified (about 410 KB, 100 KB gzipped), the 18 lessons as steps in Tajik and Russian (`lessons.json`: an intro, an example for each ▶ link with its code and input, the common mistakes, the tasks), the tasks with their tests, the examples, the words to highlight, a manifest with the version and the worker's hash, and a client (`dist/learn/client.js`) that runs programs in the worker with a time limit and checks tasks on their tests. somonscript.lindentech.de shows the lessons with it.
+* Comments in the lessons that GitHub does not show add steps (`<!-- step -->`), explanatory animations (`<!-- anim: variable-box -->`, the list in `src/learn/animations.ts`), questions (`<!-- quiz … -->`) and small exercises (`<!-- try … -->`); the Tajik and Russian lessons must give the same steps. Lessons 3, 8 and 10 have the first animations and a question each.
+* Programs can record their steps, for a lesson to replay them line by line: `compile(source, { trace: true })` of the browser compiler, and `trace: true` in a request to the playground's worker, which then sends a `trace` event with, for each statement run and each test of `агар`, `то` and `барои`, the line, the variables the program sees with their values (the items of arrays and fields of objects too), the call depth and the function, and how much it had printed. At most 2000 steps are recorded; the program prints the same with and without them. The worker's events are now protocol 2.
 
 * `чоп(…)` prints, as `чоп.сабт(…)` does: the first program of a learner, `чоп("Салом");`, works. A program that declares its own `чоп` calls it.
 * Diagnostics for learners in Tajik, Russian and English (`compile(source, { language: 'tj' })`, and `somon run`/`compile`/`bundle` with `--lang tj` or `--lang ru`, `SOMON_LANG`, a Tajik or Russian `LANG` or `compilerOptions.locale`): every error and warning of the lexer, parser, type checker, code generator and module system has a stable code and a message in each language (`src/diagnostics`, listed in `docs/glossary.tj.md`), shown with the line of code and a caret under the place, the line where a missing bracket was opened, and a hint: the keyword or name closest to a misspelt one («Шояд `агар`-ро дар назар доштед?»), the SomonScript word for an English keyword, `,` between arguments, `;` in `барои`. A failed compilation ends with `Барнома компайл нашуд: N хато.`; file names are relative to the current directory. `CompileResult.diagnostics`, `CompilationError.diagnostic`, `CompilationWarning.diagnostic` and `BundleError` give them as data. Without a language the messages are the English ones they always were. See `docs/reference/diagnostics.md`.

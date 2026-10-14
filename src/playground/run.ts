@@ -8,6 +8,9 @@
  *
  * Input comes from the page's input field: `хондан()` and `хонданиРақам()`
  * read its lines in order, as from a file redirected to `somon run`.
+ *
+ * With `trace`, the program records its steps (src/runtime/trace.ts) and the
+ * page is sent them before the program's end, for a lesson to replay it.
  */
 import { compile } from '../browser';
 import { message } from '../diagnostics/catalog';
@@ -17,6 +20,7 @@ import { originalPosition, type CodeMapping } from '../codegen';
 import { explainError, locateError, type ExplainedError } from '../runtime/errors';
 import { createInput, INPUT_GLOBAL } from '../runtime/input';
 import { runtimeDiagnostic, type SourcePlace } from '../runtime/report';
+import { TRACE_GLOBAL, Tracer, type TraceStep } from '../runtime/trace';
 import { createPlaygroundConsole } from './console';
 
 /** What the page asks to run. */
@@ -27,6 +31,8 @@ export interface RunRequest {
   language: DiagnosticLanguage;
   /** Warnings for beginners (src/learner/warnings.ts). */
   learningMode?: boolean;
+  /** Record the program's steps (at most `maxSteps`, 2000 by default) and send them. */
+  trace?: boolean | { maxSteps?: number };
 }
 
 /** A problem as the page shows it: its text, and the line to mark. */
@@ -45,7 +51,15 @@ export type RunEvent =
   /** The program printed more than `lines` lines; the rest is not sent. */
   | { type: 'outputLimit'; lines: number }
   | { type: 'runtimeError'; text: string; line?: number }
+  /**
+   * With `trace`: the steps the program took, before its error or its end, or
+   * as soon as it took the most steps recorded (`truncated`).
+   */
+  | { type: 'trace'; steps: TraceStep[]; truncated: boolean }
   | { type: 'done' };
+
+/** The version of these events, for pages that bundle another build of the worker. */
+export const PROTOCOL = 2;
 
 /** The program as a script the host runs: the file its stack frames name, and how to run it. */
 export interface ProgramScript {
@@ -98,7 +112,12 @@ export class PlaygroundModuleError extends Error {
 
 export function runProgram(request: RunRequest, host: RunHost): RunningProgram {
   const { source, language } = request;
-  const result = compile(source, { language, mappings: true, learningMode: request.learningMode });
+  const result = compile(source, {
+    language,
+    mappings: true,
+    learningMode: request.learningMode,
+    trace: Boolean(request.trace),
+  });
   // Given with `language`
   const diagnostics = result.diagnostics!;
   const errors = diagnostics.filter(d => d.severity === 'error');
@@ -135,6 +154,10 @@ class Run implements RunningProgram {
   /** Timers the program set and that have not run or been cleared. */
   private readonly active = new Set<unknown>();
   private file = '';
+  /** How many `output` events were sent. */
+  private outputs = 0;
+  private tracer?: Tracer;
+  private traceSent = false;
   private readonly request: RunRequest;
   private readonly host: RunHost;
   private readonly mappings: CodeMapping[];
@@ -165,6 +188,8 @@ class Run implements RunningProgram {
     this.finished = true;
     const { language, source } = this.request;
     const diagnostic = runtimeDiagnostic(explain(error), language, this.placeOf(error), source);
+    this.tracer?.error(diagnostic.line);
+    this.sendTrace();
     this.host.post({
       type: 'runtimeError',
       text: formatDiagnostic(diagnostic, { language, source, runtime: true }),
@@ -218,6 +243,22 @@ class Run implements RunningProgram {
     };
     scope.clearTimeout = (id: unknown) => this.clear(id, timers.clearTimeout);
     scope.clearInterval = (id: unknown) => this.clear(id, timers.clearInterval);
+    if (this.request.trace) {
+      const { maxSteps } = this.request.trace === true ? {} : this.request.trace;
+      this.tracer = new Tracer({
+        maxSteps,
+        printed: () => this.outputs,
+        full: () => this.sendTrace(),
+      });
+      scope[TRACE_GLOBAL] = this.tracer;
+    }
+  }
+
+  /** The steps so far, once: at the program's end, its error, or when no more are recorded. */
+  private sendTrace(): void {
+    if (!this.tracer || this.traceSent) return;
+    this.traceSent = true;
+    this.host.post({ type: 'trace', steps: this.tracer.steps, truncated: this.tracer.truncated });
   }
 
   private clear(id: unknown, clear: (_id: unknown) => void): void {
@@ -242,6 +283,7 @@ class Run implements RunningProgram {
       if (this.finished || this.active.size > 0) return;
       this.flushPrompt();
       this.finished = true;
+      this.sendTrace();
       this.host.post({ type: 'done' });
     }, 0);
   }
@@ -257,6 +299,7 @@ class Run implements RunningProgram {
     const lines = text.split('\n');
     const room = OUTPUT_LINES - this.lines;
     this.lines += lines.length;
+    this.outputs++;
     this.host.post({ type: 'output', stream, text: lines.slice(0, room).join('\n') });
     if (this.lines >= OUTPUT_LINES) this.host.post({ type: 'outputLimit', lines: OUTPUT_LINES });
   }

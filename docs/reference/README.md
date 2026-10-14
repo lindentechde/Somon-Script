@@ -33,6 +33,11 @@ named like built-in members. `"режим": "таълимӣ"` in `somon.config.j
 
 Compiler and run-time messages in Tajik, Russian and English, and their codes.
 
+### **[🧩 Learn kit](learn-kit.md)**
+
+What a website needs to show the lessons card by card and run programs in the
+browser: the compiler's Web Worker, the steps of a program, the lessons as data.
+
 ### Language Features
 
 #### Core Language

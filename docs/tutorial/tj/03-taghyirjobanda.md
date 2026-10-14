@@ -18,6 +18,8 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINC90L7QvCA9ICLQl9Cw0YDQuNC90LAiOwrRgtCw0pMg0YHQuNC90L3RgyA9IDEzOwrRh9C-0L8o0L3QvtC8KTsK0YfQvtC_KNGB0LjQvdC90YMpOwrRh9C-0L8o0L3QvtC8LCAi4oCUIiwg0YHQuNC90L3RgywgItGB0L7Qu9CwIik7Cg)
 
+<!-- anim: variable-box -->
+
 - `тағ ном = "Зарина";` — тағйирёбандаи `ном`-ро эълон мекунад ва ба он қимати
   `"Зарина"`-ро медиҳад.
 - `чоп(ном)` — қимати тағйирёбандаро чоп мекунад, на калимаи «ном»-ро.
@@ -35,9 +37,21 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7QuyA9IDEwOwrRh9C-0L8o0YXQvtC7KTsK0YXQvtC7ID0gMTU7CtGH0L7QvyjRhdC-0LspOwrRhdC-0LsgPSDRhdC-0LsgKyA1OwrRh9C-0L8o0YXQvtC7KTsK)
 
+<!-- anim: variable-box {"focus": ["хол"]} -->
+
 - `хол = 15;` — қимати навро медиҳад; `тағ` дигар лозим нест.
 - `хол = хол + 5;` — қимати ҳозираро гирифта, 5 илова мекунад ва натиҷаро боз
   дар `хол` нигоҳ медорад.
+
+<!-- quiz
+q: Пас аз ин барнома дар `х` чӣ қимат ҳаст?
+code: |
+  тағ х = 4;
+  х = х * 2;
+  х = х + 1;
+options: 4 | 8 | *9 | 5
+explain: `х` аввал 4 аст, баъд 4 * 2 = 8, баъд 8 + 1 = 9.
+-->
 
 ## Собит
 

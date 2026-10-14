@@ -104,6 +104,14 @@ export interface CodeGeneratorOptions {
   isDirectoryImport?: (_specifier: string) => boolean;
 }
 
+/** What `generateFunctionParts` is told about the function it generates. */
+export interface FunctionInfo {
+  /** Its name in the source, if it has one. */
+  name?: string;
+  /** `функсия*`: its body runs in parts, between the `ҳосил`s. */
+  generator?: boolean;
+}
+
 /** Precedence levels of non-binary expressions; binary levels live in `operatorPrecedence`. */
 export const PREC = {
   SEQUENCE: 1,
@@ -404,7 +412,7 @@ export class CodeGenerator {
   private importCounter: number = 0;
   protected readonly errors: string[] = [];
   /** Names declared by the program, innermost scope last (see `withScope`). */
-  private readonly scopes: Set<string>[] = [];
+  protected readonly scopes: Set<string>[] = [];
   /** Enclosing loops and `интихоб` statements of the current function, for `шикастан`/`давом`. */
   private jumpTargets = { loops: 0, switches: 0 };
   /** Whether statements are prefixed with position markers (`generateWithMappings`). */
@@ -625,9 +633,11 @@ export class CodeGenerator {
     }
     this.checkRedeclarations(node.body);
     this.checkDefaultExports(node.body);
-    const statements = this.withScope(this.declaredNames(node.body), () =>
-      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
-    );
+    const statements = this.withScope(this.declaredNames(node.body), () => [
+      ...this.generateStatements(node.body),
+      ...this.programEpilogue(),
+    ]);
+    statements.unshift(...this.programPrologue());
     if (this.usesDeferHelper) statements.unshift(DEFER_HELPER);
     if (this.usesInput) statements.unshift(this.inputPrologue());
     // A module is strict mode code; in CommonJS (as in TypeScript's output) only by the directive
@@ -643,6 +653,29 @@ export class CodeGenerator {
   /** Where a program that reads input gets `хондан` and `хонданиРақам` (see `INPUT_PROLOGUE`). */
   protected inputPrologue(): string {
     return INPUT_PROLOGUE;
+  }
+
+  /** Statements a subclass puts before the program's own (src/trace-generator.ts). */
+  protected programPrologue(): string[] {
+    return [];
+  }
+
+  /** Statements a subclass puts after the program's own, in its scope. */
+  protected programEpilogue(): string[] {
+    return [];
+  }
+
+  /** The statements of a program, block or `ҳолат` arm, without the empty ones. */
+  protected generateStatements(statements: Statement[]): string[] {
+    return statements.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0);
+  }
+
+  /**
+   * The test of an `агар`, `то`, `кун … то` or `барои` as it is emitted; a
+   * subclass may wrap it (src/trace-generator.ts records each test).
+   */
+  protected generateTest(_test: Expression, code: string): string {
+    return code;
   }
 
   /**
@@ -1040,7 +1073,10 @@ export class CodeGenerator {
     const name = this.generateIdentifier(node.name, true);
     const typeParameters = this.typeParametersText(node.typeParameters);
     const { params, body } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
+      this.generateFunctionParts(node.params, node.body, node.async, node.thisType, {
+        name: node.name.name,
+        generator: node.generator,
+      })
     );
     const returnType = this.returnTypeText(node.returnType);
 
@@ -1076,11 +1112,12 @@ export class CodeGenerator {
    * Parameter list and body of a function, with the parameters in scope; a
    * `this` parameter (`thisType`) comes first.
    */
-  private generateFunctionParts(
+  protected generateFunctionParts(
     params: Parameter[],
     body: BlockStatement,
     isAsync = false,
-    thisType?: TypeAnnotation
+    thisType?: TypeAnnotation,
+    _function: FunctionInfo = {}
   ): { params: string; body: string } {
     const paramNames = this.paramNames(params);
     return this.withScope(paramNames, () => ({
@@ -1124,7 +1161,7 @@ export class CodeGenerator {
 
     this.indentLevel++;
     const statements = this.withScope([...scopeNames, ...this.declaredNames(node.body)], () =>
-      node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
+      this.generateStatements(node.body)
     );
     this.indentLevel--;
 
@@ -1152,13 +1189,13 @@ export class CodeGenerator {
       return this.generateBlockStatement(node as BlockStatement);
     }
     this.indentLevel++;
-    const statement = this.generateStatement(node);
+    const statements = this.generateStatements([node]);
     this.indentLevel--;
-    return statement.length > 0 ? `{\n${statement}\n${this.getIndent()}}` : '{}';
+    return statements.length > 0 ? `{\n${statements.join('\n')}\n${this.getIndent()}}` : '{}';
   }
 
   private generateIfStatement(node: IfStatement): string {
-    const test = this.generateExpression(node.test);
+    const test = this.generateTest(node.test, this.generateExpression(node.test));
     let result = this.indent(`if (${test}) `) + this.generateBody(node.consequent);
 
     if (node.alternate) {
@@ -1176,13 +1213,13 @@ export class CodeGenerator {
   }
 
   private generateWhileStatement(node: WhileStatement): string {
-    const test = this.generateExpression(node.test);
+    const test = this.generateTest(node.test, this.generateExpression(node.test));
     return this.indent(`while (${test}) `) + this.generateBody(node.body);
   }
 
   private generateDoWhileStatement(node: DoWhileStatement): string {
     const body = this.generateBody(node.body);
-    const test = this.generateExpression(node.test);
+    const test = this.generateTest(node.test, this.generateExpression(node.test));
     return this.indent('do ') + `${body} while (${test});`;
   }
 
@@ -1234,7 +1271,7 @@ export class CodeGenerator {
 
   private generateForStatement(node: ForStatement): string {
     const init = node.init ? this.generateStatement(node.init).trim().replace(/;$/, '') : '';
-    const test = node.test ? this.generateExpression(node.test) : '';
+    const test = node.test ? this.generateTest(node.test, this.generateExpression(node.test)) : '';
     const update = node.update ? this.generateExpression(node.update) : '';
     return this.indent(`for (${init}; ${test}; ${update}) `) + this.generateBody(node.body);
   }
@@ -1416,7 +1453,10 @@ export class CodeGenerator {
       const head = node.generator ? `function*${name || ' '}` : `function${name}`;
       const typeParameters = this.typeParametersText(node.typeParameters);
       const { params, body } = this.withNewTarget(() =>
-        this.generateFunctionParts(node.params, node.body, node.async, node.thisType)
+        this.generateFunctionParts(node.params, node.body, node.async, node.thisType, {
+          name: node.name?.name,
+          generator: node.generator,
+        })
       );
       const returnType = this.returnTypeText(node.returnType);
       return `${async}${head}${typeParameters}(${params})${returnType} ${body}`;
@@ -2544,7 +2584,10 @@ export class CodeGenerator {
       const star = fn.generator ? '*' : '';
       const typeParameters = this.typeParametersText(fn.typeParameters);
       const { params, body } = this.withNewTarget(() =>
-        this.generateFunctionParts(fn.params, fn.body, fn.async, fn.thisType)
+        this.generateFunctionParts(fn.params, fn.body, fn.async, fn.thisType, {
+          name: prop.key.type === 'Identifier' ? (prop.key as Identifier).name : undefined,
+          generator: fn.generator,
+        })
       );
       const returnType = this.returnTypeText(fn.returnType);
       return `${asyncPrefix}${star}${key}${typeParameters}(${params})${returnType} ${body}`;
@@ -3222,7 +3265,10 @@ export class CodeGenerator {
     const returnType = this.returnTypeText(node.value.returnType);
     const body = node.kind === 'constructor' ? this.constructorBody(node.value) : node.value.body;
     const { params, body: code } = this.withNewTarget(() =>
-      this.generateFunctionParts(node.value.params, body, node.value.async, node.value.thisType)
+      this.generateFunctionParts(node.value.params, body, node.value.async, node.value.thisType, {
+        name: node.key.type === 'Identifier' ? (node.key as Identifier).name : undefined,
+        generator: node.value.generator,
+      })
     );
     return this.indent(
       `${modifiers}${isAsync}${star}${methodName}${typeParameters}(${params})${returnType} ${code}`
@@ -3321,9 +3367,7 @@ export class CodeGenerator {
           ? `case ${this.generateExpression(switchCase.test)}:`
           : 'default:';
         this.indentLevel++;
-        const consequent = switchCase.consequent
-          .map(stmt => this.generateStatement(stmt))
-          .filter(stmt => stmt.length > 0);
+        const consequent = this.generateStatements(switchCase.consequent);
         this.indentLevel--;
         return [this.indent(label), ...consequent].join('\n');
       })

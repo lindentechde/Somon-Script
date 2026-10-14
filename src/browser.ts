@@ -21,6 +21,7 @@ import type { Diagnostic, DiagnosticLanguage } from './diagnostics/types';
 import { checkForLearners } from './learner/warnings';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
+import { TraceGenerator } from './trace-generator';
 import { TypeChecker } from './type-checker';
 
 /** The part of TypeScript's API the browser compiler uses to lower code. */
@@ -60,6 +61,12 @@ export interface BrowserCompileOptions {
   mappings?: boolean;
   /** The warnings of the learning mode (`CompileOptions.learningMode`). */
   learningMode?: boolean;
+  /**
+   * The code records the steps it takes, for a page to replay them: it calls
+   * the global `__somonTrace`, a `Tracer` (src/runtime/trace.ts), which must
+   * exist when it runs.
+   */
+  trace?: boolean;
 }
 
 export interface BrowserCompileResult {
@@ -156,7 +163,7 @@ function compileProgram(
     if (options.strict && checked.errors.length > 0) return fail();
   }
 
-  const generator = new CodeGenerator({ experimentalDecorators: options.experimentalDecorators });
+  const generator = codeGenerator(options);
   const generated = options.mappings
     ? generator.generateWithMappings(program)
     : { code: generator.generate(program), mappings: undefined };
@@ -176,6 +183,12 @@ function compileProgram(
   // Lowered code has other positions
   if (generated.mappings && result.code === generated.code) result.mappings = generated.mappings;
   return result;
+}
+
+/** The code generator of the options: one that records the steps with `trace`. */
+function codeGenerator(options: BrowserCompileOptions): CodeGenerator {
+  const generatorOptions = { experimentalDecorators: options.experimentalDecorators };
+  return options.trace ? new TraceGenerator(generatorOptions) : new CodeGenerator(generatorOptions);
 }
 
 /** What the stages report: the messages and, for other languages, the problems. */
