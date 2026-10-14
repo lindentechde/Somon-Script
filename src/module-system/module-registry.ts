@@ -33,6 +33,15 @@ export type DependencyTreeNode =
   | { id: string; level?: number; circular?: false; dependencies: DependencyTreeNode[] }
   | { id: string; circular: true };
 
+/** What `ModuleRegistry.getStatistics()` (and `ModuleSystem.getStatistics()`) tell. */
+export interface ModuleStatistics {
+  totalModules: number;
+  totalDependencies: number;
+  averageDependencies: number;
+  maxDependencyDepth: number;
+  circularDependencies: number;
+}
+
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleMetadata>();
   private readonly dependencyGraph = new Map<string, DependencyNode>();
@@ -181,13 +190,7 @@ export class ModuleRegistry {
   /**
    * Get module statistics
    */
-  getStatistics(): {
-    totalModules: number;
-    totalDependencies: number;
-    averageDependencies: number;
-    maxDependencyDepth: number;
-    circularDependencies: number;
-  } {
+  getStatistics(): ModuleStatistics {
     const totalModules = this.modules.size;
     const allDependencies = Array.from(this.dependencyGraph.values()).map(
       node => node.dependencies.length
@@ -367,7 +370,10 @@ export class ModuleRegistry {
   /**
    * Get dependency tree for a specific module
    */
-  getDependencyTree(moduleId: string, visited = new Set<string>()): DependencyTreeNode {
+  getDependencyTree(
+    moduleId: string,
+    visited: Set<string> = new Set<string>()
+  ): DependencyTreeNode {
     // Return a structured dependency tree node. Use a discriminated union for circular nodes.
     if (visited.has(moduleId)) {
       return { id: moduleId, circular: true } as const;
