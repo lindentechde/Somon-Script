@@ -18,9 +18,9 @@ export const LEARNER_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     en: () =>
       `A line read with ${code('хондан()')} is a ${code('сатр')}: ${code('+')} joins it with the number instead of adding (${code('"2" + 3')} is ${code('"23"')}). Read numbers with ${code('хонданиРақам()')}.`,
     ru: () =>
-      `Строка, прочитанная через ${code('хондан()')}, — это ${code('сатр')}: ${code('+')} соединяет её с числом, а не складывает (${code('"2" + 3')} — это ${code('"23"')}). Числа читайте через ${code('хонданиРақам()')}.`,
+      `Строка, прочитанная через ${code('хондан()')}, - это ${code('сатр')}: ${code('+')} соединяет её с числом, а не складывает (${code('"2" + 3')} - это ${code('"23"')}). Числа читайте через ${code('хонданиРақам()')}.`,
     tj: () =>
-      `Сатре, ки бо ${code('хондан()')} хонда шудааст, ${code('сатр')} аст: ${code('+')} онро бо рақам ҷамъ намекунад, балки мепайвандад (${code('"2" + 3')} — ${code('"23"')}). Рақамҳоро бо ${code('хонданиРақам()')} хонед.`,
+      `Сатре, ки бо ${code('хондан()')} хонда шудааст, ${code('сатр')} аст: ${code('+')} онро бо рақам ҷамъ намекунад, балки мепайвандад (${code('"2" + 3')} - ${code('"23"')}). Рақамҳоро бо ${code('хонданиРақам()')} хонед.`,
   },
   LEARNER_COMPARE_TYPES: {
     en: p =>
@@ -39,7 +39,7 @@ export const LEARNER_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     en: p =>
       `${code(p.name)} is the name of a built-in member: in JavaScript this property is called ${code(p.js)}, and it is printed so. Choose another name.`,
     ru: p =>
-      `${code(p.name)} — имя встроенного члена: в JavaScript это свойство называется ${code(p.js)} и так и выводится. Выберите другое имя.`,
+      `${code(p.name)} - имя встроенного члена: в JavaScript это свойство называется ${code(p.js)} и так и выводится. Выберите другое имя.`,
     tj: p =>
       `${code(p.name)} номи узви дарунсохт аст: дар JavaScript ин хосият ${code(p.js)} ном дорад ва ҳангоми чоп ҳамин тавр нишон дода мешавад. Номи дигар интихоб кунед.`,
   },

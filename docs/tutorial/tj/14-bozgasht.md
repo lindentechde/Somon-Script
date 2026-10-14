@@ -16,7 +16,7 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YTRg9C90LrRgdC40Y8g0LrQstCw0LTRgNCw0YIo0YU6INGA0LDSm9Cw0LwpOiDRgNCw0pvQsNC8IHsKICDQsdC-0LfQs9Cw0YjRgiDRhSAqINGFOwp9CgrRh9C-0L8o0LrQstCw0LTRgNCw0YIoNCkpOwrRgtCw0pMg0L3QsNGC0LjSt9CwID0g0LrQstCw0LTRgNCw0YIoMykgKyDQutCy0LDQtNGA0LDRgig0KTsK0YfQvtC_KNC90LDRgtC40rfQsCk7Cg)
 
-- `бозгашт х * х;` — қиматро ба ҷое, ки функсия даъват шуд, бармегардонад.
+- `бозгашт х * х;` - қиматро ба ҷое, ки функсия даъват шуд, бармегардонад.
 - `: рақам` пас аз қавс мегӯяд, ки функсия рақам бармегардонад.
 - Пас аз `бозгашт` функсия тамом мешавад.
 

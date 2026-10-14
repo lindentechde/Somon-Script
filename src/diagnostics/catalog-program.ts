@@ -13,7 +13,7 @@ export const PROGRAM_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   CODEGEN_RESERVED_WORD: {
     en: p => `${code(p.name)} is a reserved word of JavaScript and cannot be a name.`,
     ru: p =>
-      `${code(p.name)} — зарезервированное слово JavaScript, его нельзя использовать как имя.`,
+      `${code(p.name)} - зарезервированное слово JavaScript, его нельзя использовать как имя.`,
     tj: p =>
       `${code(p.name)} калимаи махсуси JavaScript аст ва онро ҳамчун ном истифода бурдан мумкин нест.`,
   },

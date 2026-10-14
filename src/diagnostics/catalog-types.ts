@@ -238,7 +238,7 @@ export const TYPE_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
     en: p =>
       `Class '${text(p.class)}' can only extend other classes, but '${text(p.parent)}' is ${p.kind === 'interface' ? 'an interface' : `a ${text(p.kind)}`}`,
     ru: p =>
-      `Класс ${code(p.class)} может наследовать только другой класс, а ${code(p.parent)} — ${p.kind === 'interface' ? 'интерфейс' : 'не класс'}.`,
+      `Класс ${code(p.class)} может наследовать только другой класс, а ${code(p.parent)} - ${p.kind === 'interface' ? 'интерфейс' : 'не класс'}.`,
     tj: p =>
       `Синфи ${code(p.class)} танҳо аз синфи дигар мерос гирифта метавонад, вале ${code(p.parent)} ${p.kind === 'interface' ? 'интерфейс' : 'синф нест'}.`,
   },
@@ -254,7 +254,7 @@ export const TYPE_MESSAGES: Readonly<Record<string, CatalogEntry>> = {
   },
   NOT_CALLABLE: {
     en: p => `'${text(p.name)}' is not a function and cannot be called`,
-    ru: p => `${code(p.name)} — не функция, его нельзя вызвать.`,
+    ru: p => `${code(p.name)} - не функция, его нельзя вызвать.`,
     tj: p => `${code(p.name)} функсия нест ва онро даъват кардан мумкин нест.`,
   },
   CONST_ASSIGNMENT: {

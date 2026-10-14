@@ -5,7 +5,7 @@
 
 ## Что такое объект?
 
-Список хранит значения под номерами (индексами). Объект — под **именами**:
+Список хранит значения под номерами (индексами). Объект - под **именами**:
 
 ```som
 тағ хонанда = {
@@ -21,7 +21,7 @@
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7QvdCw0L3QtNCwID0gewogINC90L7QvDogItCX0LDRgNC40L3QsCIsCiAg0YHQuNC90YQ6IDcsCiAg0LDRitC70L7Rh9OjOiDQtNGD0YDRg9GB0YIsCn07CtGH0L7QvyjRhdC-0L3QsNC90LTQsCk7CtGH0L7QvyjRhdC-0L3QsNC90LTQsC7QvdC-0LwpOwrRh9C-0L8oItCh0LjQvdGEOiIsINGF0L7QvdCw0L3QtNCwLtGB0LjQvdGEKTsK)
 
 - Объект пишется в скобках `{ }`: `имя: значение`, через запятую.
-- Каждое `имя: значение` — **свойство** (`хосият`). Его читают через точку:
+- Каждое `имя: значение` - **свойство** (`хосият`). Его читают через точку:
   `хонанда.ном`.
 
 ## Изменить и добавить свойство

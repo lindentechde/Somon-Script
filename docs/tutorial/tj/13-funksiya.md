@@ -5,7 +5,7 @@
 
 ## Функсия чист?
 
-Функсия — қисми барнома бо ном. Онро як бор менависем ва чанд бор **даъват**
+Функсия - қисми барнома бо ном. Онро як бор менависем ва чанд бор **даъват**
 мекунем:
 
 ```som
@@ -20,8 +20,8 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YTRg9C90LrRgdC40Y8g0YHQsNC70L7QvCgpIHsKICDRh9C-0L8oItCh0LDQu9C-0LwhIik7CiAg0YfQvtC_KCLQpdGD0Ygg0L7QvNCw0LTQtdC0ISIpOwp9CgrRgdCw0LvQvtC8KCk7CtGB0LDQu9C-0LwoKTsK)
 
-- `функсия салом() { … }` — функсияро эълон мекунад. Ҳоло ҳеҷ чиз чоп намешавад.
-- `салом();` — функсияро даъват мекунад: фармонҳои дохили он иҷро мешаванд.
+- `функсия салом() { … }` - функсияро эълон мекунад. Ҳоло ҳеҷ чиз чоп намешавад.
+- `салом();` - функсияро даъват мекунад: фармонҳои дохили он иҷро мешаванд.
 
 ## Параметрҳо
 
@@ -38,7 +38,7 @@
 
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YTRg9C90LrRgdC40Y8g0YHQsNC70L7QvNCU0LjSsyjQvdC-0Lw6INGB0LDRgtGAKSB7CiAg0YfQvtC_KCLQodCw0LvQvtC8LCAiICsg0L3QvtC8ICsgIiEiKTsKfQoK0YHQsNC70L7QvNCU0LjSsygi0JfQsNGA0LjQvdCwIik7CtGB0LDQu9C-0LzQlNC40rMoItCk0LDRgNKz0L7QtCIpOwo)
 
-`ном: сатр` — параметри `ном`, ки навъаш `сатр` аст. Навъ мегӯяд, ки чӣ гуна
+`ном: сатр` - параметри `ном`, ки навъаш `сатр` аст. Навъ мегӯяд, ки чӣ гуна
 қимат интизор аст: `сатр`, `рақам` ё `мантиқӣ`. Агар рақамро ба ҷои сатр диҳед,
 майдони озмоиш огоҳ мекунад.
 
