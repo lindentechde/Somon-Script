@@ -522,6 +522,12 @@ describe('running programs and checking tasks (src/learn/client.ts)', () => {
 
   test('what is compared: no spaces at line ends, no empty lines at the end', () => {
     expect(normalize('а  \r\nб\t\n\n\n')).toBe('а\nб');
+    expect(normalize('\n\n')).toBe('');
+    expect(normalize('  а')).toBe('  а');
+    // In linear time: a line of many spaces that does not end with them
+    const started = Date.now();
+    expect(normalize(`${' '.repeat(400000)}х\n`)).toHaveLength(400001);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   test('checking a task on its tests', async () => {

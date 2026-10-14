@@ -127,12 +127,13 @@ export function runInWorker(
 
 /** What a program printed, as it is compared: no spaces at line ends, no empty lines at the end. */
 export function normalize(printed: string): string {
-  return printed
+  // trimEnd and popping, not /\s+$/ and /\n+$/: they take quadratic time on long runs of spaces
+  const lines = printed
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map(line => line.replace(/\s+$/, ''))
-    .join('\n')
-    .replace(/\n+$/, '');
+    .map(line => line.trimEnd());
+  while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines.join('\n');
 }
 
 /** A test of a task: its input and what the program must print (tasks.json). */

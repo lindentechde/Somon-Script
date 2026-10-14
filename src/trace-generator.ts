@@ -138,7 +138,9 @@ export class TraceGenerator extends CodeGenerator {
         (depth >= start ? own : outside).push(name);
       }
     }
-    return { names: [...outside.reverse(), ...own.reverse()], outer: outside.length };
+    outside.reverse();
+    own.reverse();
+    return { names: [...outside, ...own], outer: outside.length };
   }
 
   private namesIndex(entry: [number, ...string[]]): number {

@@ -212,7 +212,15 @@ function fields(value: object): Array<[string, string]> {
 
 /** A value as one line of at most `max` characters. */
 function text(value: unknown, depth: number, max: number): string {
-  const line = inspect(value, { depth }).replace(/\s*\n\s*/g, ' ');
+  // The line breaks and the indentation around them become one space (a regular
+  // expression would take quadratic time on a long run of spaces)
+  const parts = inspect(value, { depth }).split('\n');
+  const line = parts
+    .map((part, index) => {
+      const start = index > 0 ? part.trimStart() : part;
+      return index < parts.length - 1 ? start.trimEnd() : start;
+    })
+    .join(' ');
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 

@@ -163,10 +163,7 @@ function compileProgram(
     if (options.strict && checked.errors.length > 0) return fail();
   }
 
-  const generatorOptions = { experimentalDecorators: options.experimentalDecorators };
-  const generator = options.trace
-    ? new TraceGenerator(generatorOptions)
-    : new CodeGenerator(generatorOptions);
+  const generator = codeGenerator(options);
   const generated = options.mappings
     ? generator.generateWithMappings(program)
     : { code: generator.generate(program), mappings: undefined };
@@ -186,6 +183,12 @@ function compileProgram(
   // Lowered code has other positions
   if (generated.mappings && result.code === generated.code) result.mappings = generated.mappings;
   return result;
+}
+
+/** The code generator of the options: one that records the steps with `trace`. */
+function codeGenerator(options: BrowserCompileOptions): CodeGenerator {
+  const generatorOptions = { experimentalDecorators: options.experimentalDecorators };
+  return options.trace ? new TraceGenerator(generatorOptions) : new CodeGenerator(generatorOptions);
 }
 
 /** What the stages report: the messages and, for other languages, the problems. */

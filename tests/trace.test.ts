@@ -361,6 +361,15 @@ describe('the values a step records (Tracer)', () => {
     expect(long.s).toHaveLength(80);
     expect(long.s.endsWith('…')).toBe(true);
     expect(variable(['б'.repeat(100)]).a![0]).toHaveLength(40);
+    // A value printed on several lines is one, its indentation one space
+    const [а, б] = ['а'.repeat(20), 'б'.repeat(20)];
+    expect(variable([{ ном: а, синну: 1 }, { ном: б }]).s).toBe(
+      `[ { ном: "${а}", синну: 1 }, { ном: "${б}" } ]`
+    );
+    // In linear time: a string of many spaces
+    const started = Date.now();
+    expect(variable(`${' '.repeat(400000)}х`).s).toHaveLength(80);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   test('functions and variables still in their dead zone are left out', () => {
