@@ -25,7 +25,9 @@ const baseConfig = {
   // this size, instead of all of them in one long-lived process: the run creates
   // hundreds of vm contexts and TypeScript programs, whose native memory took a
   // single process past 2 GB and Node.js 24 on macOS to occasional segfaults.
-  workerIdleMemoryLimit: '300MB',
+  // These come when a long-lived worker starts its next file, so the worker is
+  // replaced often (at 200 MB about 60 times a run, at 300 MB about 40).
+  workerIdleMemoryLimit: '200MB',
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/coverage/'],
   collectCoverageFrom: [
