@@ -231,7 +231,10 @@ describe('scripts/check-task.js', () => {
 
   test('--update writes the expected output from the solution', () => {
     const task = path.join(dir, 'масъала');
-    fs.cpSync(path.join(TASKS, '05-jam'), task, { recursive: true });
+    // With a filter, cpSync copies through the fs functions: without one, Node.js
+    // copies in C++ with std::filesystem paths made from UTF-8 bytes, which Windows
+    // reads in its ANSI code page, so `масъала` gets another name there
+    fs.cpSync(path.join(TASKS, '05-jam'), task, { recursive: true, filter: () => true });
     fs.rmSync(path.join(task, 'tests', '1.out'));
     expect(check('--update', task).status).toBe(0);
     expect(fs.readFileSync(path.join(task, 'tests', '1.out'), 'utf8')).toBe('5\n');
