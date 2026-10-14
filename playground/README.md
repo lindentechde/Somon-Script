@@ -43,10 +43,10 @@ page, the compiler's messages and the errors of the running program are in Tajik
 ## One file, offline
 
 `npm run build:playground` builds `playground/dist/index.html`: one file of
-about 900 KB with the page, the examples and the compiler. It loads nothing from
-the network, so it works from GitHub Pages, from any web server, and opened from
-a disk or a USB stick (`file://`): the worker is started from a Blob URL. The
-same sources always give the same file.
+about 1 MB with the page, the examples, the tasks and the compiler. It loads
+nothing from the network, so it works from GitHub Pages, from any web server,
+and opened from a disk or a USB stick (`file://`): the worker is started from a
+Blob URL. The same sources always give the same file.
 
 ## Links
 

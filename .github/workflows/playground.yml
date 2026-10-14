@@ -11,6 +11,8 @@ on:
     paths:
       - 'src/**'
       - 'playground/**'
+      # the tasks of the tutorial are built into the page
+      - 'docs/tutorial/tasks/**'
       - 'scripts/build-browser.js'
       - 'scripts/build-playground.js'
       - 'package.json'
