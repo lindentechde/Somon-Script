@@ -182,6 +182,20 @@ describe('names close to what was written', () => {
 });
 
 describe('classification details', () => {
+  test("Python's triple quotes get a hint: backticks, or a чоп for each line", () => {
+    const hintOf = (source: string, language: 'tj' | 'ru' | 'en' = 'tj') =>
+      compile(source, { language }).diagnostics?.[0].hint;
+    expect(hintOf('чоп("""\nМан.\nБарнома.\n""")\n')).toBe(
+      'Ин забон `"""` надорад. Матни якчандсатраро байни нохунакҳои баръакс нависед (тугмаи пеш аз 1 дар клавиатураи англисӣ) ё ҳар сатрро бо `чоп`-и алоҳида чоп кунед.'
+    );
+    expect(hintOf('тағ м = """\nсатр\n""";\n')).toContain('`"""`');
+    expect(hintOf("чоп('''\nсалом\n''')\n", 'ru')).toContain("В этом языке нет `'''`.");
+    expect(hintOf('чоп("""Салом""");', 'en')).toContain('between backticks');
+    // Not when the quotes are on another line, or after the error
+    expect(hintOf('чоп("")\nтағ = 1;')).toBeUndefined();
+    expect(hintOf('тағ х = ; чоп("""а""");')).toBeUndefined();
+  });
+
   test('a closing bracket that closes an open one is no stray bracket', () => {
     expect(compile('агар (1) { тағ х = }', { language: 'tj' }).diagnostics?.[0].code).toBe(
       'PARSE_EXPECTED_EXPRESSION'

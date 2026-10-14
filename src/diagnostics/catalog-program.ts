@@ -126,6 +126,14 @@ export const HINTS: Readonly<Record<string, CatalogEntry>> = {
     tj: p =>
       `Барои иваз кардани қимат ${code('тағ')}-ро такрор накунед: ${code(`${text(p.name)} = …`)} нависед.`,
   },
+  TRIPLE_QUOTES: {
+    en: p =>
+      `SomonScript has no ${code(p.quotes)}. Write text of several lines between backticks (the key left of 1 in the English layout), or print each line with its own ${code('чоп')}.`,
+    ru: p =>
+      `В этом языке нет ${code(p.quotes)}. Текст в несколько строк пишите между обратными кавычками (клавиша слева от 1 в английской раскладке) или печатайте каждую строку своим ${code('чоп')}.`,
+    tj: p =>
+      `Ин забон ${code(p.quotes)} надорад. Матни якчандсатраро байни нохунакҳои баръакс нависед (тугмаи пеш аз 1 дар клавиатураи англисӣ) ё ҳар сатрро бо ${code('чоп')}-и алоҳида чоп кунед.`,
+  },
   NUMBER_IN_QUOTES: {
     en: p => `Write the number without quotes: ${code(p.value)}.`,
     ru: p => `Пишите число без кавычек: ${code(p.value)}.`,

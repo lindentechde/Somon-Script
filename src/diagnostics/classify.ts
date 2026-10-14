@@ -71,7 +71,24 @@ export function classifySyntaxError(raw: string, source: string): ClassifiedErro
         : classifyExpectation(unexpected[5], found, position, context);
     return context.finish(result, found);
   }
-  return classifyLexerError(raw, source) ?? classifyStandalone(raw, source);
+  const result = classifyLexerError(raw, source) ?? classifyStandalone(raw, source);
+  result.hint ??= tripleQuoteHint(source.split(/\r?\n/), result.line, result.column);
+  return result;
+}
+
+/**
+ * Python's `"""` or `'''` on the line of an error, up to it: SomonScript reads
+ * them as an empty string and a quote, and a learner who wrote text of several
+ * lines in them is told what to write instead.
+ */
+function tripleQuoteHint(
+  lines: readonly string[],
+  line: number | undefined,
+  column: number | undefined
+): DiagnosticMessage | undefined {
+  if (line === undefined || column === undefined) return undefined;
+  const quotes = /"""|'''/.exec(lines[line - 1]?.slice(0, column) ?? '');
+  return quotes ? message('TRIPLE_QUOTES', { quotes: quotes[0] }) : undefined;
 }
 
 /** Code generator errors: names declared twice, `шикастан` outside a loop, … */
@@ -377,7 +394,9 @@ class SourceContext {
       result.message = message(result.message.id, { ...result.message.params, line: result.line });
     }
     if (!result.hint && result.line !== undefined) {
-      result.hint = this.keywordHint(result.line, result.column!);
+      result.hint =
+        tripleQuoteHint(this.lines, result.line, result.column) ??
+        this.keywordHint(result.line, result.column!);
     }
     return result;
   }
