@@ -145,43 +145,38 @@ function report(id, results, words) {
   return lines.join('\n');
 }
 
-function main(argv) {
-  const languageIndex = argv.indexOf('--lang');
-  const language = languageIndex !== -1 ? argv[languageIndex + 1] : 'tj';
-  const words = WORDS[language] ?? WORDS.tj;
-  const args = argv.filter(
-    (arg, index) => !arg.startsWith('--') && (languageIndex === -1 || index !== languageIndex + 1)
-  );
-
-  if (argv.includes('--all')) {
-    let failed = 0;
-    for (const id of fs
-      .readdirSync(TASKS)
-      .filter(name => taskDirectory(name))
-      .sort()) {
-      const directory = path.join(TASKS, id);
-      const results = checkProgram(directory, path.join(directory, 'hal.som'), language);
-      const ok = results.every(result => result.passed);
-      if (!ok) failed++;
-      console.log(ok ? `✅ ${id}` : `❌ ${report(id, results, words)}`);
-    }
-    return failed === 0 ? 0 : 1;
+/** --all: every task with its own solution. */
+function checkAll(language, words) {
+  let failed = 0;
+  for (const id of fs
+    .readdirSync(TASKS)
+    .filter(name => taskDirectory(name))
+    .sort()) {
+    const directory = path.join(TASKS, id);
+    const results = checkProgram(directory, path.join(directory, 'hal.som'), language);
+    const ok = results.every(result => result.passed);
+    if (!ok) failed++;
+    console.log(ok ? `✅ ${id}` : `❌ ${report(id, results, words)}`);
   }
+  return failed === 0 ? 0 : 1;
+}
 
-  if (argv.includes('--update')) {
-    const directory = args[0] && taskDirectory(args[0]);
-    if (!directory) {
-      console.error(words.noTask(args[0] ?? ''));
-      return 2;
-    }
-    for (const result of checkProgram(directory, path.join(directory, 'hal.som'), language)) {
-      fs.writeFileSync(path.join(directory, 'tests', `${result.name}.out`), result.printed);
-    }
-    console.log(`✅ ${path.basename(directory)}`);
-    return 0;
+/** --update <task>: writes N.out from what the solution prints. */
+function update(task, language, words) {
+  const directory = task && taskDirectory(task);
+  if (!directory) {
+    console.error(words.noTask(task ?? ''));
+    return 2;
   }
+  for (const result of checkProgram(directory, path.join(directory, 'hal.som'), language)) {
+    fs.writeFileSync(path.join(directory, 'tests', `${result.name}.out`), result.printed);
+  }
+  console.log(`✅ ${path.basename(directory)}`);
+  return 0;
+}
 
-  const [task, program] = args;
+/** <task> <program.som>: a learner's program on the tests of a task. */
+function checkOne(task, program, language, words) {
   if (!task || !program) {
     console.error(words.usage);
     return 2;
@@ -198,6 +193,18 @@ function main(argv) {
   const results = checkProgram(directory, program, language);
   console.log(report(path.basename(directory), results, words));
   return results.every(result => result.passed) ? 0 : 1;
+}
+
+function main(argv) {
+  const languageIndex = argv.indexOf('--lang');
+  const language = languageIndex !== -1 ? argv[languageIndex + 1] : 'tj';
+  const words = WORDS[language] ?? WORDS.tj;
+  const args = argv.filter(
+    (arg, index) => !arg.startsWith('--') && (languageIndex === -1 || index !== languageIndex + 1)
+  );
+  if (argv.includes('--all')) return checkAll(language, words);
+  if (argv.includes('--update')) return update(args[0], language, words);
+  return checkOne(args[0], args[1], language, words);
 }
 
 if (require.main === module) {
