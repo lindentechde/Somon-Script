@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 0.5.1 (2026-10-14)
+
+### 📚 Documentation
+
+* The lessons, the tasks and the teacher guides of the tutorial use a hyphen (`-`) where they had an em dash (`—`), as somonscript.lindentech.de shows them; the lessons' examples print `Зарина - 13 сола`. The Russian messages of the compiler do too (`` `х` - не число ``).
+
 ## 0.5.0 (2026-10-14)
 
 ### ⚠ Breaking Changes
