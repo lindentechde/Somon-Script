@@ -1,5 +1,22 @@
 # SomonScript Tutorial
 
+## 🎒 For beginners: lessons in Tajik and Russian
+
+Eighteen short lessons for people who have never programmed, from `чоп` to
+objects, each with examples that open in the
+[playground](https://lindentechde.github.io/Somon-Script/) and tasks with
+automatic tests:
+
+- **[Дарсҳо бо забони тоҷикӣ](tj/README.md)** — дарсҳо барои навомӯзон
+- **[Уроки на русском](ru/README.md)** — уроки для начинающих
+- **[Масъалаҳо / Задачи](tasks/README.md)** — 63 tasks with tests
+  (`npm run check-task -- 05-jam барнома.som`)
+- For teachers: **[Дастур барои омӯзгор](omuzgor.md)** ·
+  **[Памятка для учителя](uchitelyu.md)** — the playground offline, handing out
+  tasks, common mistakes
+
+## For developers
+
 Learn SomonScript step by step with comprehensive tutorials designed for
 developers of all experience levels.
 
@@ -66,7 +83,7 @@ Each tutorial follows a consistent structure:
 
 ### System Requirements
 
-- Node.js 20.x or 22.x
+- Node.js 20.x, 22.x, 23.x or 24.x
 - npm or yarn package manager
 - Modern terminal/command prompt
 
@@ -88,14 +105,13 @@ Each tutorial follows a consistent structure:
 ### 💻 Code Examples
 
 - [Examples Directory](../../examples/) - 32+ comprehensive examples
-- [GitHub Repository](https://github.com/Slashmsu/somoni-script) - Source code
+- [GitHub Repository](https://github.com/lindentechde/Somon-Script) - Source
+  code
 
 ### 🤝 Community
 
-- [GitHub Discussions](https://github.com/Slashmsu/somoni-script/discussions) -
-  Q&A and discussions
-- [Issues](https://github.com/Slashmsu/somoni-script/issues) - Bug reports and
-  features
+- [Issues](https://github.com/lindentechde/Somon-Script/issues) - Questions, bug
+  reports and feature requests
 
 ## Quick Reference
 
@@ -171,7 +187,8 @@ Study the examples in the `/examples` directory to see best practices.
 
 ### 5. Join the Community
 
-Ask questions and share your progress in GitHub Discussions.
+Ask questions and share your progress in
+[GitHub Issues](https://github.com/lindentechde/Somon-Script/issues).
 
 ### 6. Build Projects
 
@@ -193,15 +210,13 @@ Apply what you learn by building real projects:
 ### Support Channels
 
 - 📚 [Documentation](../../README.md) - Comprehensive guides
-- 💬 [Discussions](https://github.com/Slashmsu/somoni-script/discussions) -
-  Community Q&A
-- 🐛 [Issues](https://github.com/Slashmsu/somoni-script/issues) - Bug reports
-- 📧 [Email Support](mailto:support@somoni-script.org) - Direct help
+- 🐛 [Issues](https://github.com/lindentechde/Somon-Script/issues) - Questions
+  and bug reports
 
 ### Before Asking for Help
 
 1. Check the documentation
-2. Search existing issues and discussions
+2. Search existing issues
 3. Create a minimal example that reproduces your problem
 4. Include error messages and system information
 

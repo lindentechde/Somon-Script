@@ -91,7 +91,14 @@ describe.each(['en', 'ru', 'tj'] as const)('%s', lang => {
     expect(localeMissing).toEqual(missing);
 
     expect(typeError.status).toBe(1);
-    expect(typeError.stderr.split('\n')[0]).toBe(messages.compile.messages.compilationErrors);
+    expect(typeError.stderr.split('\n')[0]).toBe(
+      // Russian and Tajik errors read as the learner's diagnostics do (src/diagnostics)
+      {
+        en: messages.compile.messages.compilationErrors,
+        ru: 'Ошибка в typed.som, строка 1:',
+        tj: 'Хато дар typed.som, сатри 1:',
+      }[lang]
+    );
     expect(fs.existsSync(path.join(dir, 'typed.js'))).toBe(false);
 
     expect(check).toMatchObject({

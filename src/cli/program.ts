@@ -16,12 +16,21 @@ import { pathToFileURL } from 'node:url';
 import { compile, formatTypeError, type CompileResult } from '../compiler';
 import {
   ConfigError,
+  isLearningMode,
   loadConfigWithPath,
   type CompilerOptions,
   type LoadedConfig,
   type SomonConfig,
 } from '../config';
+import {
+  formatDiagnostic,
+  formatDiagnosticLine,
+  formatFailure,
+  type Diagnostic,
+  type DiagnosticLanguage,
+} from '../diagnostics';
 import type { ModuleSystem, BundleOptions as ModuleBundleOptions } from '../module-system';
+import { BundleError } from '../module-system/module-system';
 import {
   BUNDLE_FORMATS,
   DEFAULT_TARGET,
@@ -30,7 +39,7 @@ import {
   validateGlobalName,
   validateLib,
 } from '../targets';
-import type { CompilationResult } from '../module-system/module-system';
+import type { CompilationResult, CompilationWarning } from '../module-system/module-system';
 import { Lexer } from '../lexer';
 import { Parser } from '../parser';
 import { checkWithTypeScript, type TsCheckInput } from '../tsc-checker';
@@ -39,16 +48,25 @@ import { registerLspCommand } from './lsp-command';
 import { registerToolCommands } from './tool-commands';
 // Read package.json at runtime to avoid import attribute issues: the nearest one
 // at or above this file (src/cli in a checkout, dist/cli in the package).
-function findPackageJson(): { name: string; version: string } {
+function findPackageRoot(): string {
   for (let dir = __dirname; ; dir = path.dirname(dir)) {
-    const packagePath = path.join(dir, 'package.json');
-    if (fs.existsSync(packagePath)) {
-      return JSON.parse(fs.readFileSync(packagePath, 'utf8'));
-    }
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
     if (path.dirname(dir) === dir) throw new Error('package.json not found');
   }
 }
-const pkg = findPackageJson();
+const packageRoot = findPackageRoot();
+const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
+  name: string;
+  version: string;
+};
+
+/**
+ * The run time `somon run` loads before a program (src/runtime/node-prelude.ts,
+ * built into dist/ also when the CLI runs from its TypeScript sources).
+ */
+export function runtimePreludePath(): string {
+  return path.join(packageRoot, 'dist', 'runtime', 'node-prelude.js');
+}
 
 /** `--lib es2022,dom` → ['es2022', 'dom'], rejecting names TypeScript does not ship. */
 function parseLibList(value: string): string[] {
@@ -126,7 +144,11 @@ interface BundleOptions extends CliCompilerFlags {
   externals?: string;
 }
 
-type RunOptions = CliCompilerFlags;
+interface RunOptions extends CliCompilerFlags {
+  /** `--stack`, or its Tajik and Russian spelling `--стек`. */
+  stack?: boolean;
+  стек?: boolean;
+}
 
 /** Translate commander's compiler flags into config-style compiler options. */
 function cliCompilerOverrides(flags: CliCompilerFlags): CompilerOptions {
@@ -154,6 +176,63 @@ function diagnosticLocale(config?: CompilerOptions): NonNullable<CompilerOptions
 }
 
 /**
+ * The language of diagnostics written for learners (src/diagnostics): Russian
+ * or Tajik; in English the compiler's messages stay as they always were.
+ */
+function learnerLanguage(config?: CompilerOptions): DiagnosticLanguage | undefined {
+  const locale = diagnosticLocale(config);
+  return locale === 'en' ? undefined : locale;
+}
+
+/** A path as the learner typed it: relative to the current directory. */
+function shownPath(file: string): string {
+  return path.relative(process.cwd(), file) || file;
+}
+
+/** Prints diagnostics of one file as blocks with its code; errors to stderr, warnings too. */
+function printDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  options: { language: DiagnosticLanguage; source?: string; file: string }
+): void {
+  for (const diagnostic of diagnostics) {
+    console.error(formatDiagnostic(diagnostic, options));
+  }
+}
+
+/**
+ * Reports a build that did not compile, for learners: each error with its
+ * line of code, then `Барнома компайл нашуд: N хато.` Returns false for
+ * other failures, which are reported as before.
+ */
+function reportBuildFailure(error: unknown, language: DiagnosticLanguage | undefined): boolean {
+  if (!(error instanceof BundleError) || language === undefined) return false;
+  const sources = new Map<string, string | undefined>();
+  const sourceOf = (file: string): string | undefined => {
+    if (!sources.has(file)) {
+      // The files of the program the learner runs (S8707)
+      sources.set(file, fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined); // NOSONAR
+    }
+    return sources.get(file);
+  };
+  for (const failure of error.errors) {
+    const diagnostic: Diagnostic = failure.diagnostic ?? {
+      code: 'MODULE_ERROR',
+      severity: 'error',
+      message: failure.message,
+      line: failure.line,
+      column: failure.column,
+    };
+    const file = failure.filePath;
+    console.error(
+      formatDiagnostic(diagnostic, { language, source: sourceOf(file), file: shownPath(file) })
+    );
+  }
+  console.error(formatFailure(error.errors.length, language));
+  process.exitCode = 1;
+  return true;
+}
+
+/**
  * Compiler options for the module system: config compilerOptions, then the more
  * specific moduleSystem.compilation section, then the command-line flags.
  */
@@ -178,6 +257,7 @@ function moduleCompilationOptions(config: SomonConfig, flags: CliCompilerFlags):
   ) as CompilerOptions;
   return {
     locale: diagnosticLocale(config.compilerOptions),
+    ...(isLearningMode(config) && { learningMode: true }),
     ...fromConfig,
     ...config.moduleSystem?.compilation,
     ...cliCompilerOverrides(flags),
@@ -231,7 +311,9 @@ async function executeBundleCommand(input: string, options: BundleOptions): Prom
 
     await performBundling(moduleSystem, bundleOptions, input, outputPath);
   } catch (error) {
-    handleCliFailure(error, t().commands.bundle.messages.bundleError);
+    if (!reportBuildFailure(error, learnerLanguage(compilationLocale(input)))) {
+      handleCliFailure(error, t().commands.bundle.messages.bundleError);
+    }
   }
 }
 
@@ -341,6 +423,9 @@ function mergeOptions(input: string, cliOptions: CompileOptions): MergedCompileO
   if (cliOptions.typeCheck === false) {
     merged.noTypeCheck = true;
   }
+  if (isLearningMode(loaded.config)) {
+    merged.learningMode = true;
+  }
 
   // Set default target if not specified
   if (!merged.target) {
@@ -388,9 +473,22 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
       module: options.module,
       checker: options.checker,
       locale: diagnosticLocale(options),
+      language: learnerLanguage(options),
       declaration: options.declaration,
+      learningMode: options.learningMode,
       filePath: path.resolve(input),
     });
+
+    const language = learnerLanguage(options);
+    if (language && result.diagnostics) {
+      const where = { language, source, file: shownPath(path.resolve(input)) };
+      printDiagnostics(result.diagnostics, where);
+      if (result.errors.length > 0) {
+        console.error(formatFailure(result.errors.length, language));
+        process.exitCode = 1;
+      }
+      return result;
+    }
 
     if (result.errors.length > 0) {
       console.error(t().commands.compile.messages.compilationErrors);
@@ -419,6 +517,10 @@ export function compileFile(input: string, options: CompileOptions): CompileResu
 interface ExecuteOptions {
   cwd?: string;
   enableSourceMaps?: boolean;
+  /** Modules Node.js loads before the program (`--require`). */
+  preload?: string[];
+  /** Variables added to the program's environment. */
+  env?: Record<string, string>;
 }
 
 export interface ExecutionResult {
@@ -443,9 +545,10 @@ export const cliRuntime = {
   ): Promise<ExecutionResult> {
     return new Promise(resolve => {
       const nodeArgs = options.enableSourceMaps ? ['--enable-source-maps'] : [];
+      for (const module of options.preload ?? []) nodeArgs.push('--require', module);
       const child = spawn(process.execPath, [...nodeArgs, filePath, ...forwardedArgv], {
         stdio: 'inherit',
-        env: process.env,
+        env: options.env ? { ...process.env, ...options.env } : process.env,
         cwd: options.cwd,
       });
 
@@ -528,17 +631,22 @@ async function executeRunCommand(
     const moduleSystem = await createModuleSystem(input, loaded, compilation);
 
     const sourceMaps = options.sourceMap ?? config.bundle?.sourceMaps ?? false;
+    const language = learnerLanguage(config.compilerOptions);
+    const runtime = runtimeOptions(language, options);
     if (compilation.module === 'esm') {
       const workspace = createRunWorkspace(input);
       cleanup = workspace.cleanup;
       const entryFile = await writeEsmModules(moduleSystem, input, workspace.dir, {
-        sourceMaps,
+        // Errors are explained at their place in the .som files, through source maps
+        sourceMaps: sourceMaps || language !== undefined,
         externals: config.bundle?.externals,
+        language,
       });
       reportChildResult(
         await cliRuntime.executeCompiledFile(entryFile, scriptArgs, {
           cwd: baseDir,
           enableSourceMaps: sourceMaps,
+          ...runtime,
         })
       );
       return;
@@ -547,19 +655,21 @@ async function executeRunCommand(
       entryPoint: path.resolve(input),
       format: 'commonjs',
       minify: options.minify ?? config.bundle?.minify,
-      sourceMaps,
+      sourceMaps: sourceMaps || language !== undefined,
       inlineSources: false,
       externals: config.bundle?.externals,
       // The bundle runs from a temporary directory; modules keep their real locations.
       modulePaths: true,
+      logWarnings: false,
     });
+    reportRunWarnings(bundle.warnings ?? [], language);
 
     const workspace = createRunWorkspace(input);
     cleanup = workspace.cleanup;
     const compiledFilePath = workspace.file;
 
     let code = bundle.code;
-    if (sourceMaps && bundle.map) {
+    if (bundle.map) {
       const mapPath = `${compiledFilePath}.map`;
       fs.writeFileSync(mapPath, absoluteSourceMap(bundle.map, baseDir), 'utf8');
       code = `${code}\n//# sourceMappingURL=${path.basename(mapPath)}`;
@@ -569,13 +679,74 @@ async function executeRunCommand(
     const child = await cliRuntime.executeCompiledFile(compiledFilePath, scriptArgs, {
       cwd: baseDir,
       enableSourceMaps: sourceMaps && !!bundle.map,
+      ...runtime,
     });
     reportChildResult(child);
   } catch (error) {
-    handleCliFailure(error, t().common.error);
+    if (!reportBuildFailure(error, learnerLanguage(compilationLocale(input)))) {
+      handleCliFailure(error, t().common.error);
+    }
   } finally {
     cleanup?.();
   }
+}
+
+/** The configured `locale` of the program at `input`, if its configuration can be read. */
+function compilationLocale(input: string): CompilerOptions | undefined {
+  try {
+    return loadConfigWithPath(path.dirname(path.resolve(input))).config.compilerOptions;
+  } catch {
+    // A configuration that does not load is reported by the command itself
+    return undefined;
+  }
+}
+
+/** The compiler's own prefix of a type warning: `Type warning [CODE] at line 3, column 5: `. */
+const TYPE_WARNING_PREFIX = /^Type warning \[\w+\] at line (\d+), column (\d+): /;
+
+/**
+ * Prints the warnings of compiling a program before it runs, one line each:
+ * `Огоҳӣ: барнома.som:3:5: …`, the file relative to the current directory.
+ */
+function reportRunWarnings(
+  warnings: CompilationWarning[],
+  language: DiagnosticLanguage | undefined
+): void {
+  for (const warning of warnings) {
+    if (warning.diagnostic && language) {
+      const file = warning.filePath === undefined ? undefined : shownPath(warning.filePath);
+      console.warn(formatDiagnosticLine(warning.diagnostic, { language, file }));
+      continue;
+    }
+    const position = TYPE_WARNING_PREFIX.exec(warning.message);
+    const message = warning.message.replace(TYPE_WARNING_PREFIX, '').split('\n')[0];
+    const location = [
+      warning.filePath === undefined ? undefined : path.relative(process.cwd(), warning.filePath),
+      position?.[1],
+      position?.[2],
+    ].filter(part => part !== undefined);
+    const where = location.length > 0 ? `${location.join(':')}: ` : '';
+    console.warn(`${t().commands.run.messages.warning}: ${where}${message}`);
+  }
+}
+
+/**
+ * How the program runs: with the learner's run time loaded, which in Tajik or
+ * Russian also explains errors the program does not catch, at their place in
+ * the .som file of the learner (`SOMON_RUN_*`, read by src/runtime/node-prelude.ts).
+ */
+function runtimeOptions(
+  language: DiagnosticLanguage | undefined,
+  options: RunOptions
+): Pick<ExecuteOptions, 'preload' | 'env'> {
+  const preload = [runtimePreludePath()];
+  if (language === undefined) return { preload };
+  const env: Record<string, string> = {
+    SOMON_RUN_LANGUAGE: language,
+    SOMON_RUN_CWD: process.cwd(),
+  };
+  if (options.stack || options.стек) env.SOMON_RUN_STACK = '1';
+  return { preload, env };
 }
 
 /** Sets the CLI's exit code from the program it ran. */
@@ -614,7 +785,7 @@ async function writeEsmModules(
   moduleSystem: ModuleSystem,
   input: string,
   dir: string,
-  options: { sourceMaps: boolean; externals?: string[] }
+  options: { sourceMaps: boolean; externals?: string[]; language?: DiagnosticLanguage }
 ): Promise<string> {
   const entry = path.resolve(input);
   const result = await moduleSystem.compile(entry, options.externals, {
@@ -623,8 +794,9 @@ async function writeEsmModules(
     sourceMap: options.sourceMaps,
   });
   if (result.errors.length > 0) {
-    throw new Error(formatCompilationErrors(result));
+    throw new BundleError(formatCompilationErrors(result), result.errors, []);
   }
+  reportRunWarnings(result.warningDetails ?? [], options.language);
   const files = [...result.modules.keys()].filter(id => path.isAbsolute(id));
   const root = commonDirectory(
     path.dirname(entry),
@@ -974,11 +1146,12 @@ export function createProgram(): Command {
     .usage(tr.commands.run.usage)
     .argument('<input>', tr.commands.run.args.input)
     .argument('[args...]', tr.commands.run.args.args);
-  addCompilerOptions(runCommand).action(
-    async (input: string, scriptArgs: string[], options: RunOptions): Promise<void> => {
+  addCompilerOptions(runCommand)
+    .option('--stack', tr.commands.run.options.stack)
+    .addOption(new Option('--стек').hideHelp())
+    .action(async (input: string, scriptArgs: string[], options: RunOptions): Promise<void> => {
       await executeRunCommand(input, scriptArgs, options);
-    }
-  );
+    });
 
   defineCommand(program, 'init', 'init')
     .argument('[name]', tr.commands.init.args.name, 'somon-project')

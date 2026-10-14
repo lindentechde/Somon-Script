@@ -14,7 +14,8 @@
  * mapped back.
  */
 import { translateMemberName } from './builtin-names';
-import { CodeGenerator, PREC, type CodeMapping } from './codegen';
+import { CodeGenerator, originalPosition, PREC, type CodeMapping } from './codegen';
+import { TYPE_NAMES } from './type-names';
 import type {
   AmbientModuleDeclaration,
   ArrayType,
@@ -70,45 +71,8 @@ import type {
   UniqueType,
 } from './types';
 
-/**
- * TypeScript names of SomonScript's built-in type names: primitive types,
- * `Ваъда` and the utility types.
- */
-export const TYPE_NAMES: ReadonlyMap<string, string> = new Map([
-  ['рақам', 'number'],
-  ['сатр', 'string'],
-  ['мантиқӣ', 'boolean'],
-  ['ҳар', 'any'],
-  ['ношинос', 'unknown'],
-  ['абадан', 'never'],
-  ['беджавоб', 'void'],
-  ['холӣ', 'null'],
-  ['беқимат', 'undefined'],
-  ['объект', 'object'],
-  ['калонрақам', 'bigint'],
-  ['рамз', 'symbol'],
-  ['Ваъда', 'Promise'],
-  ['ваъда', 'Promise'],
-  ['рӯйхат', 'Array'],
-  ['Хато', 'Error'],
-  ['функсия', 'Function'],
-  ['функция', 'Function'],
-  ['қисмӣ', 'Partial'],
-  ['ҳатмӣ', 'Required'],
-  ['танҳохон', 'Readonly'],
-  ['сабт_навъ', 'Record'],
-  ['гирифтан_навъ', 'Pick'],
-  ['ҳазф', 'Omit'],
-  ['хориҷ', 'Exclude'],
-  ['истихроҷ', 'Extract'],
-  ['беналиӣ', 'NonNullable'],
-  ['навъи_бозгашт', 'ReturnType'],
-  ['параметрҳо', 'Parameters'],
-  ['навъи_намуна', 'InstanceType'],
-  ['параметрҳои_конструктор', 'ConstructorParameters'],
-  ['навъи_параметри_ин', 'ThisParameterType'],
-  ['интизоршуда', 'Awaited'],
-]);
+/** TypeScript names of SomonScript's built-in type names (src/type-names.ts). */
+export { TYPE_NAMES };
 
 /** Binding strength of type syntax, for parenthesizing nested types. */
 const TYPE_PREC = {
@@ -247,6 +211,14 @@ export class TsEmitter extends CodeGenerator {
   // ---------------------------------------------------------------------------
   // Hooks of the JavaScript generator
   // ---------------------------------------------------------------------------
+
+  /** For TypeScript, the input functions are declared: the run time provides them. */
+  protected inputPrologue(): string {
+    return [
+      'declare function хондан(савол?: unknown): string;',
+      'declare function хонданиРақам(савол?: unknown): number;',
+    ].join('\n');
+  }
 
   protected elidesTypes(): boolean {
     return false;
@@ -955,27 +927,5 @@ export class TsEmitter extends CodeGenerator {
   }
 }
 
-/**
- * The `.som` position (line 1-based, column 0-based) of a position in the
- * emitted TypeScript: that of the nearest mapping at or before it.
- */
-export function originalPosition(
-  mappings: CodeMapping[],
-  line: number,
-  column: number
-): { line: number; column: number } | undefined {
-  let low = 0;
-  let high = mappings.length - 1;
-  let found = -1;
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const generated = mappings[middle].generated;
-    if (generated.line < line || (generated.line === line && generated.column <= column)) {
-      found = middle;
-      low = middle + 1;
-    } else {
-      high = middle - 1;
-    }
-  }
-  return found === -1 ? undefined : mappings[found].original;
-}
+/** Where a position of the emitted TypeScript is in the `.som` source. */
+export { originalPosition };

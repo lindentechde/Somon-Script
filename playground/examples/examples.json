@@ -1,0 +1,117 @@
+[
+  {
+    "id": "salom",
+    "file": "01-salom.som",
+    "name": {
+      "tj": "Салом, ҷаҳон!",
+      "ru": "Привет, мир!",
+      "en": "Hello, world!"
+    }
+  },
+  {
+    "id": "taghyirjobanda",
+    "file": "02-taghyirjobanda.som",
+    "name": { "tj": "Тағйирёбандаҳо", "ru": "Переменные", "en": "Variables" }
+  },
+  {
+    "id": "hisob",
+    "file": "03-hisob.som",
+    "name": { "tj": "Ҳисоб", "ru": "Арифметика", "en": "Arithmetic" }
+  },
+  {
+    "id": "nom",
+    "file": "04-nom.som",
+    "input": "Алӣ\n",
+    "name": { "tj": "Хондани ном", "ru": "Ввод имени", "en": "Reading a name" }
+  },
+  {
+    "id": "jam",
+    "file": "05-jam.som",
+    "input": "2\n3\n",
+    "name": {
+      "tj": "Ҷамъи ду рақам",
+      "ru": "Сумма двух чисел",
+      "en": "Sum of two numbers"
+    }
+  },
+  {
+    "id": "juft-yo-toq",
+    "file": "06-juft-yo-toq.som",
+    "input": "7\n",
+    "name": {
+      "tj": "Ҷуфт ё тоқ (агар)",
+      "ru": "Чётное или нечётное (агар)",
+      "en": "Even or odd (агар)"
+    }
+  },
+  {
+    "id": "baho",
+    "file": "07-baho.som",
+    "input": "85\n",
+    "name": {
+      "tj": "Баҳо аз рӯи хол",
+      "ru": "Оценка по баллам",
+      "en": "Grade from points"
+    }
+  },
+  {
+    "id": "zarb",
+    "file": "08-zarb.som",
+    "input": "7\n",
+    "name": {
+      "tj": "Ҷадвали зарб (барои)",
+      "ru": "Таблица умножения (барои)",
+      "en": "Times table (барои)"
+    }
+  },
+  {
+    "id": "shumorish",
+    "file": "09-shumorish.som",
+    "name": {
+      "tj": "Шумориш (то)",
+      "ru": "Обратный отсчёт (то)",
+      "en": "Countdown (то)"
+    }
+  },
+  {
+    "id": "funksiya",
+    "file": "10-funksiya.som",
+    "name": { "tj": "Функсия", "ru": "Функция", "en": "A function" }
+  },
+  {
+    "id": "ruykhat",
+    "file": "11-ruykhat.som",
+    "name": { "tj": "Рӯйхат", "ru": "Массив", "en": "A list" }
+  },
+  {
+    "id": "satr",
+    "file": "12-satr.som",
+    "input": "китоб\n",
+    "name": { "tj": "Сатрҳо", "ru": "Строки", "en": "Strings" }
+  },
+  {
+    "id": "obyekt",
+    "file": "13-obyekt.som",
+    "name": { "tj": "Объект", "ru": "Объект", "en": "An object" }
+  },
+  {
+    "id": "khatoi-kompayl",
+    "file": "14-khatoi-kompayl.som",
+    "expectErrors": true,
+    "name": {
+      "tj": "Хато дар барнома",
+      "ru": "Ошибка в программе",
+      "en": "A mistake in the program"
+    }
+  },
+  {
+    "id": "davrai-beokhir",
+    "file": "15-davrai-beokhir.som",
+    "endless": true,
+    "name": {
+      "tj": "Давраи беохир",
+      "ru": "Бесконечный цикл",
+      "en": "An endless loop"
+    }
+  }
+]

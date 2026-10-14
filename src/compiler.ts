@@ -1,9 +1,11 @@
-import { transformSync, type PluginItem } from '@babel/core';
+import type { PluginItem } from '@babel/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapGenerator } from 'source-map';
 
 import { CodeGenerator, type CodeMapping } from './codegen';
+import type { Diagnostic, DiagnosticLanguage } from './diagnostics';
+import { localizedMessages, Problems } from './diagnostics/problems';
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import {
@@ -16,7 +18,8 @@ import {
   type Target,
   type TargetDiagnostic,
 } from './targets';
-import { TypeChecker, type TypeCheckError } from './type-checker';
+import { checkForLearners } from './learner/warnings';
+import { TypeChecker, type TypeCheckError, type TypeCheckResult } from './type-checker';
 
 /**
  * Configuration flags that control how SomonScript source is transformed into JavaScript.
@@ -100,8 +103,21 @@ export interface CompileOptions {
   checker?: 'somon' | 'typescript';
   /** Language of the TypeScript checker's diagnostics: English (default), Russian or Tajik. */
   locale?: 'en' | 'ru' | 'tj';
+  /**
+   * Report every diagnostic in this language, written for learners: `errors`
+   * and `warnings` hold the message with the line of code and a caret under
+   * the place (`Хато дар сатри 4: …`), and `diagnostics` the same as data
+   * (code, message, line, column, hint). Implies `locale`. Without it the
+   * messages are the compiler's English ones, as they always were.
+   */
+  language?: DiagnosticLanguage;
   /** Also produce a TypeScript declaration file (`CompileResult.declaration`). */
   declaration?: boolean;
+  /**
+   * The learning mode: warnings about what beginners write by mistake but runs
+   * without an error (src/learner/warnings.ts), with SomonScript's checker.
+   */
+  learningMode?: boolean;
   /**
    * Path of the source file. The TypeScript checker (and `declaration`)
    * resolve imports and node_modules typings from it; defaults to
@@ -129,6 +145,8 @@ export interface CompileResult {
   warnings: string[];
   /** TypeScript declarations (`.d.ts` text) when `declaration` is enabled and code was emitted. */
   declaration?: string;
+  /** With `language`: the errors and warnings as data, in that language (errors first). */
+  diagnostics?: Diagnostic[];
 }
 
 /**
@@ -144,36 +162,77 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   // parse loop. The thrown error fired in a future tick, became an uncaught
   // exception, and did not interrupt CPU-bound work. If pathological inputs
   // become a problem, enforce timeouts via a worker thread at the CLI layer.
-  return compileInternal(source, options);
+  if (options.language === undefined) return compileInternal(source, options, new Problems());
+  const problems = new Problems();
+  const result = compileInternal(
+    source,
+    { ...options, locale: options.locale ?? options.language },
+    problems
+  );
+  return localize(result, problems.diagnostics(source, options.language), source, options.language);
 }
 
-function compileInternal(source: string, options: CompileOptions): CompileResult {
+/** The result with its messages in `language`, for learners. */
+function localize(
+  result: CompileResult,
+  diagnostics: Diagnostic[],
+  source: string,
+  language: DiagnosticLanguage
+): CompileResult {
+  return { ...result, ...localizedMessages(diagnostics, source, language) };
+}
+
+function compileInternal(
+  source: string,
+  options: CompileOptions,
+  problems: Problems
+): CompileResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   try {
     if (routeTargetOptionErrors(options, errors)) {
+      errors.forEach(text => problems.add({ kind: 'option', text }));
       return { code: '', errors, warnings };
     }
 
-    const { ast, parserErrors } = parseSource(source);
+    const parsed = parseSource(source);
+    if ('lexerError' in parsed) {
+      errors.push(parsed.lexerError);
+      problems.add({ kind: 'syntax', text: parsed.lexerError });
+      return { code: '', errors, warnings };
+    }
+    const { ast, parserErrors } = parsed;
 
-    if (routeParserErrors(parserErrors, errors)) {
+    if (
+      routeParserErrors(
+        parserErrors.map(err => `Parse error: ${err}`),
+        errors
+      )
+    ) {
+      parserErrors.forEach(text => problems.add({ kind: 'syntax', text }));
       return { code: '', errors, warnings };
     }
 
     const typeScript = runTypeScriptStage(ast, source, options);
-    if (runTypeCheckStage(ast, source, options, { errors, warnings }, typeScript?.errors)) {
-      return { code: '', errors, warnings };
-    }
+    const stop = runTypeCheckStage(
+      ast,
+      source,
+      options,
+      { errors, warnings, problems },
+      typeScript?.errors
+    );
+    if (stop) return { code: '', errors, warnings };
 
-    const result = emitCode(ast, options, errors, warnings, source);
+    const result = emitCode(ast, options, { errors, warnings, problems }, source);
     if (typeScript?.declaration !== undefined && result.code !== '') {
       result.declaration = typeScript.declaration;
     }
     return result;
   } catch (error) {
-    errors.push(error instanceof Error ? error.message : String(error));
+    const text = error instanceof Error ? error.message : String(error);
+    errors.push(text);
+    problems.add({ kind: 'internal', text });
     return { code: '', errors, warnings };
   }
 }
@@ -216,18 +275,30 @@ function runTypeCheckStage(
   ast: ReturnType<Parser['parse']>,
   source: string,
   options: CompileOptions,
-  { errors, warnings }: { errors: string[]; warnings: string[] },
+  { errors, warnings, problems }: Collected,
   typeScriptErrors: TypeCheckError[] | undefined
 ): boolean {
   if (options.typeCheck === false) return false;
   // With `checker: 'typescript'` and type checking on, the TypeScript stage has run
-  const result =
-    options.checker === 'typescript'
-      ? { errors: typeScriptErrors!.map(formatTypeError), warnings: [] }
-      : runTypeCheck(source, ast, Boolean(options.strict));
-  errors.push(...result.errors);
-  warnings.push(...result.warnings);
+  let result: TypeCheckResult;
+  if (options.checker === 'typescript') {
+    result = { errors: typeScriptErrors!, warnings: [] };
+  } else if (options.learningMode) {
+    result = checkForLearners(ast, source, Boolean(options.strict));
+  } else {
+    result = new TypeChecker(source, { strict: Boolean(options.strict) }).check(ast);
+  }
+  errors.push(...result.errors.map(formatTypeError));
+  warnings.push(...result.warnings.map(formatTypeWarning));
+  [...result.errors, ...result.warnings].forEach(error => problems.add({ kind: 'type', error }));
   return Boolean(options.strict) && result.errors.length > 0;
+}
+
+/** What the stages report: the compiler's messages and, for other languages, the problems. */
+interface Collected {
+  errors: string[];
+  warnings: string[];
+  problems: Problems;
 }
 
 /**
@@ -264,11 +335,14 @@ export function formatTypeError(err: TypeCheckError): string {
   return `Type error [${err.code}] at line ${err.line}, column ${err.column}: ${err.message}\n> ${err.snippet}`;
 }
 
+function formatTypeWarning(warn: TypeCheckError): string {
+  return `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`;
+}
+
 function emitCode(
   ast: ReturnType<Parser['parse']>,
   options: CompileOptions,
-  errors: string[],
-  warnings: string[],
+  { errors, warnings, problems }: Collected,
   source: string
 ): CompileResult {
   const generator = new CodeGenerator({
@@ -282,6 +356,7 @@ function emitCode(
   const codegenErrors = generator.getErrors();
   if (codegenErrors.length > 0) {
     errors.push(...codegenErrors.map(err => `Code generation error: ${err}`));
+    codegenErrors.forEach(text => problems.add({ kind: 'codegen', text }));
     return { code: '', errors, warnings };
   }
 
@@ -297,7 +372,10 @@ function emitCode(
     downlevel: options.downlevel,
   });
   if (lowered.diagnostics.length > 0) {
-    errors.push(...targetErrors(lowered.diagnostics, generated.mappings, source));
+    for (const target of targetErrors(lowered.diagnostics, generated.mappings, source)) {
+      errors.push(target.text);
+      problems.add({ kind: 'target', ...target.diagnostic });
+    }
     return { code: '', errors, warnings };
   }
   let code = lowered.code;
@@ -335,25 +413,20 @@ function directoryImports(filePath: string): (_specifier: string) => boolean {
   };
 }
 
-function parseSource(source: string) {
-  const lexer = new Lexer(source);
-  const tokens = lexer.tokenize();
+/** The syntax tree and the parser's errors, or the lexer's error when it could not read the source. */
+function parseSource(
+  source: string
+): { ast: ReturnType<Parser['parse']>; parserErrors: string[] } | { lexerError: string } {
+  let tokens;
+  try {
+    tokens = new Lexer(source).tokenize();
+  } catch (error) {
+    // The lexer reports what it cannot read with an Error
+    return { lexerError: (error as Error).message };
+  }
   const parser = new Parser(tokens);
   const ast = parser.parse();
-  const parserErrors = parser.getErrors().map(err => `Parse error: ${err}`);
-  return { ast, parserErrors };
-}
-
-function runTypeCheck(source: string, ast: ReturnType<Parser['parse']>, strict: boolean) {
-  const checker = new TypeChecker(source, { strict });
-  const result = checker.check(ast);
-  return {
-    errors: result.errors.map(formatTypeError),
-    warnings: result.warnings.map(
-      warn =>
-        `Type warning [${warn.code}] at line ${warn.line}, column ${warn.column}: ${warn.message}\n> ${warn.snippet}`
-    ),
-  };
+  return { ast, parserErrors: parser.getErrors() };
 }
 
 /**
@@ -364,9 +437,10 @@ function targetErrors(
   diagnostics: TargetDiagnostic[],
   mappings: CodeMapping[],
   source: string
-): string[] {
+): Array<{ text: string; diagnostic: { text: string; line: number; column: number } }> {
   const sourceLines = source.split(/\r?\n/);
-  const messages = diagnostics.map(diagnostic => {
+  const errors = new Map<string, { text: string; line: number; column: number }>();
+  for (const diagnostic of diagnostics) {
     let original = { line: diagnostic.line, column: 0 };
     for (const mapping of mappings) {
       const { line, column } = mapping.generated;
@@ -375,10 +449,12 @@ function targetErrors(
     }
     // Every target error is inside a statement, which has a mapping
     const snippet = sourceLines[original.line - 1].trim();
-    return `Target error at line ${original.line}, column ${original.column + 1}: ${diagnostic.message}\n> ${snippet}`;
-  });
-  // Two literals in one statement end up at the same position
-  return [...new Set(messages)];
+    const position = { line: original.line, column: original.column + 1 };
+    const text = `Target error at line ${position.line}, column ${position.column}: ${diagnostic.message}\n> ${snippet}`;
+    // Two literals in one statement end up at the same position
+    errors.set(text, { text: diagnostic.message, ...position });
+  }
+  return [...errors].map(([text, diagnostic]) => ({ text, diagnostic }));
 }
 
 function outputFileName(sourceFileName: string): string {
@@ -423,6 +499,9 @@ function minifyCode(
   map: RawSourceMap | undefined,
   sourceMap?: boolean
 ): { code: string; map: RawSourceMap | undefined } {
+  // Babel is loaded only to minify (and the compiler for browsers does without it)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { transformSync } = require('@babel/core') as typeof import('@babel/core');
   const babel = transformSync(code, {
     // The options here are the whole configuration: no babel.config.json or .babelrc
     configFile: false,

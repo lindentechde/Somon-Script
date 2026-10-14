@@ -167,7 +167,8 @@ describe('CLI: TypeScript backend', () => {
       write('b.som', 'тағ н: рақам = "н";\n');
       const result = cli(['compile', 'b.som', '--checker', 'typescript', '--lang', 'tj'], dir);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("[TS2322] at line 1, column 5: Навъи 'сатр'");
+      // In Tajik the error reads as the learner's diagnostics do (src/diagnostics)
+      expect(result.stderr).toContain("Хато дар b.som, сатри 1:\n  Навъи 'сатр'");
     });
 
     test('invalid option values are rejected', () => {
@@ -210,7 +211,8 @@ describe('CLI: TypeScript backend', () => {
       );
       const result = cli(['run', 'main.som', '--module', 'esm', '--', 'а', 'б'], dir);
       expect(result.stderr).toBe('');
-      expect(result.stdout).toBe('42 7 6 10 true\nа,б\n');
+      // somon run prints values with SomonScript's names (src/runtime/format.ts)
+      expect(result.stdout).toBe('42 7 6 10 дуруст\nа,б\n');
       expect(result.status).toBe(0);
     });
 

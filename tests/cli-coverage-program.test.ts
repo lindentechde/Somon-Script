@@ -21,7 +21,13 @@ import { i18n, type Language } from '../src/cli/i18n';
 import en from '../src/cli/i18n/translations/en';
 import ru from '../src/cli/i18n/translations/ru';
 import tj from '../src/cli/i18n/translations/tj';
-import { cliRuntime, compileFile, createProgram, type ExecutionResult } from '../src/cli/program';
+import {
+  cliRuntime,
+  compileFile,
+  createProgram,
+  runtimePreludePath,
+  type ExecutionResult,
+} from '../src/cli/program';
 import { runInProcess, slash, writeFiles } from './helpers/cli-in-process';
 import { canonicalTmpDir } from './helpers/paths';
 
@@ -608,7 +614,11 @@ describe('run', () => {
     const [run] = runs;
     expect(run.stdout).toBe('42\n');
     expect(run.argv).toEqual(['а', '--б']);
-    expect(run.options).toEqual({ cwd: dir, enableSourceMaps: false });
+    expect(run.options).toEqual({
+      cwd: dir,
+      enableSourceMaps: false,
+      preload: [runtimePreludePath()],
+    });
     expect(path.basename(run.file)).toBe('main.js');
     expect(Object.keys(run.files)).toEqual(['main.js']);
     // The temporary directory is removed afterwards.
@@ -740,7 +750,11 @@ describe('run', () => {
     await runInProcess(['run', 'main.som'], { cwd: dir });
     const [run] = runs;
     expect(run.stdout).toBe('42\n');
-    expect(run.options).toEqual({ cwd: dir, enableSourceMaps: false });
+    expect(run.options).toEqual({
+      cwd: dir,
+      enableSourceMaps: false,
+      preload: [runtimePreludePath()],
+    });
     expect(Object.keys(run.files).sort()).toEqual(['lib.js', 'main.js', 'package.json']);
   });
 
@@ -1382,9 +1396,23 @@ describe('the same errors in every language', () => {
     const tr = translations[lang];
     writeFiles(dir, { 'a.som': TYPE_ERROR, 'ok.som': OK, 'w.som': WARNING });
     const failed = await runInProcess(['compile', 'a.som'], { cwd: dir, lang });
-    expect(failed.stderr.split('\n')[0]).toBe(tr.commands.compile.messages.compilationErrors);
     const warned = await runInProcess(['compile', 'w.som'], { cwd: dir, lang });
-    expect(warned.stderr.split('\n')[0]).toBe(tr.commands.compile.messages.warnings);
+    if (lang === 'en') {
+      expect(failed.stderr.split('\n')[0]).toBe(tr.commands.compile.messages.compilationErrors);
+      expect(warned.stderr.split('\n')[0]).toBe(tr.commands.compile.messages.warnings);
+    } else {
+      // Russian and Tajik: each error with its line of code (src/diagnostics), then a summary
+      const lines = failed.stderr.split('\n');
+      expect(lines[0]).toBe(
+        lang === 'tj' ? 'Хато дар a.som, сатри 1:' : 'Ошибка в a.som, строка 1:'
+      );
+      expect(lines[lines.length - 1]).toBe(
+        lang === 'tj' ? 'Барнома компайл нашуд: 1 хато.' : 'Программа не скомпилирована: 1 ошибка.'
+      );
+      expect(warned.stderr.split('\n')[0]).toBe(
+        lang === 'tj' ? 'Огоҳӣ дар w.som, сатри 3:' : 'Предупреждение в w.som, строка 3:'
+      );
+    }
     const same = await runInProcess(['compile', 'ok.som', '-o', 'ok.som'], { cwd: dir, lang });
     expect(same.stderr).toBe(tr.common.outputEqualsInput('ok.som'));
     const exists = await runInProcess(['init', 'ok.som'], { cwd: dir, lang });

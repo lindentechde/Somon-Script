@@ -64,8 +64,8 @@ describe('the configuration file', () => {
 
   test('unknown top-level properties are listed with the known ones', () => {
     expect(problems({ compilerOption: {}, plugins: [] })).toEqual([
-      'compilerOption: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt',
-      'plugins: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt',
+      'compilerOption: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt, режим',
+      'plugins: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt, режим',
     ]);
   });
 
@@ -138,7 +138,7 @@ describe('the configuration file', () => {
         fmt: { indent: 0 },
       })
     ).toEqual([
-      'extra: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt',
+      'extra: unknown configuration property. Known properties: compilerOptions, moduleSystem, bundle, fmt, режим',
       `compilerOptions.target: must be one of: ${TARGET_LIST}`,
       'compilerOptions.minify: must be a boolean',
       'moduleSystem.loading.cache: must be a boolean',

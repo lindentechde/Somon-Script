@@ -16,7 +16,7 @@ By the end of this tutorial, you'll be able to:
 ## Prerequisites
 
 - Basic programming knowledge (any language)
-- Node.js 20.x or 22.x installed on your system
+- Node.js 20.x, 22.x, 23.x or 24.x installed on your system
 - A text editor or IDE (VS Code recommended)
 
 ## Step 1: Installation
@@ -48,7 +48,7 @@ Check that SomonScript is installed correctly:
 somon --version
 ```
 
-You should see the current version number (0.2.57 or newer).
+You should see the version number, for example `0.4.0`.
 
 ## Step 2: Your First Program
 
@@ -328,7 +328,7 @@ Create `error-handling.som`:
     тағйирёбанда натиҷа2 = тақсим_кардан(10, 0); // This will throw an error
     чоп.сабт("Натиҷа: " + натиҷа2);
 } гирифтан (хато) {
-    чоп.сабт("Хато рух дод: " + хато.паём);
+    чоп.сабт("Хато рух дод:", хато);
 }
 ```
 
@@ -374,7 +374,6 @@ Try building these projects to reinforce your learning:
 ### Getting Help
 
 - 📚 [Documentation](../../README.md)
-- 💬 [GitHub Discussions](https://github.com/Slashmsu/somoni-script/discussions)
-- 🐛 [Report Issues](https://github.com/Slashmsu/somoni-script/issues)
+- 🐛 [Report Issues](https://github.com/lindentechde/Somon-Script/issues)
 
 Happy coding with SomonScript! 🚀

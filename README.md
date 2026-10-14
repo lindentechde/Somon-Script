@@ -4,7 +4,11 @@
   <img src="https://raw.githubusercontent.com/lindentechde/Somon-Script/main/images/somon-script-banner.png" alt="SomonScript Banner" width="500" style="max-width: 100%; height: auto;" />
 </div>
 
-**Production-Grade Programming Language with Tajik Syntax**
+**Learn to program in your native language — a first step towards JavaScript**
+
+**▶
+[Try SomonScript in your browser](https://lindentechde.github.io/Somon-Script/)**
+— nothing to install; a saved copy of the page works without the internet.
 
 [![Version](https://img.shields.io/npm/v/@lindentech/somon-script)](https://www.npmjs.com/package/@lindentech/somon-script)
 [![VS Code Extension](https://img.shields.io/visual-studio-marketplace/v/LindenTechITConsulting.somonscript?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=LindenTechITConsulting.somonscript)
@@ -19,9 +23,12 @@
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=security_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=lindentechde_Somon-Script&metric=sqale_rating)](https://sonarcloud.io/project/overview?id=lindentechde_Somon-Script)
 
-A feature-complete programming language that combines modern type safety with
-Tajik Cyrillic syntax, compiling to optimized JavaScript. Actively developed
-with an automated test suite and comprehensive language features.
+SomonScript is a programming language for learning to program in Tajik. Its
+keywords and built-in names are Tajik words written in Cyrillic, and every
+program compiles to JavaScript, which you can look at side by side: what you
+learn carries over to JavaScript, one of the most widely used languages. The
+compiler is actively developed (version 0.4.0) and suitable for evaluation,
+teaching pilots and experiments; please report the problems you find.
 
 ## 🗣️ **Other Languages**
 
@@ -31,20 +38,13 @@ with an automated test suite and comprehensive language features.
 
 ---
 
-**Breaking Language Barriers in Software Development**
+**Programming without a language barrier**
 
-SomonScript was specifically created to eliminate the language barrier that
-prevents many talented developers from fully expressing their programming
-potential. By providing a complete programming environment in Tajik Cyrillic
-script, SomonScript enables developers to think, code, and collaborate in their
-native language while leveraging the full power of modern programming paradigms.
-
-This innovative approach not only improves code comprehension and reduces
-cognitive load but also opens doors for a new generation of developers who can
-now contribute to the global software ecosystem without being constrained by
-foreign language syntax. Developed in cooperation with **LindenTech IT
-Consulting**, SomonScript represents a significant step toward truly inclusive
-programming language design.
+Learning to program usually means learning English keywords at the same time.
+SomonScript lets a learner who reads Tajik start with the ideas — values,
+variables, conditions, loops, functions — written in words they know, and see
+the same program in JavaScript when they are ready for it. SomonScript is
+developed in cooperation with **LindenTech IT Consulting**.
 
 ---
 
@@ -69,13 +69,10 @@ providing complete Tajik Cyrillic syntax, developers can:
 - **Enable Cultural Context**: Incorporate domain-specific terminology and
   cultural nuances directly into code
 
-**Real Impact**: Studies show that native-language programming can improve
-development speed by up to 40% and significantly reduce bugs caused by
-misunderstood English keywords or concepts.
+### 🔒 **Type Checking**
 
-### 🔒 **Professional-Grade Type Safety**
-
-Advanced static analysis system with TypeScript-level safety features:
+The compiler checks types before the program runs, with TypeScript's kinds of
+types:
 
 - Union and intersection types
 - Tuple types with length inference
@@ -94,14 +91,14 @@ Advanced static analysis system with TypeScript-level safety features:
 - **Layered architecture** – Compiler, CLI, and module system are maintained as
   separate, well-defined packages within the monorepo.
 - **Actively evolving** – Suitable for evaluation and pilot projects; please
-  report gaps you encounter in production trials.
+  report the gaps you find.
 
 ### 🚀 **Developer Experience**
 
 ```bash
 # Quick setup and deployment
 npm install -g @lindentech/somon-script
-echo 'чоп.сабт("Hello, World!");' > hello.som
+echo 'чоп("Салом, ҷаҳон!");' > hello.som
 somon run hello.som
 ```
 
@@ -222,7 +219,7 @@ Get full IDE support with syntax highlighting, IntelliSense, and code snippets:
 кӯшиш {
     тағ натиҷа = тақсим_кардан(10, 0);
 } гирифтан (хато) {
-    чоп.сабт("Хато рух дод: " + хато.паём);
+    чоп.сабт("Хато рух дод:", хато);
 }
 ```
 
@@ -365,6 +362,11 @@ somon --lang ru compile app.som
 # Use English interface (default)
 somon --lang en compile app.som
 ```
+
+With `--lang tj` or `--lang ru`, the compiler explains its errors for learners
+in that language: the line of code with a caret under the place, and a hint
+(«Шояд `агар`-ро дар назар доштед?»). See
+[Diagnostics in the learner's language](docs/reference/diagnostics.md).
 
 #### Automatic Language Detection
 
@@ -581,11 +583,17 @@ npm run audit:examples
 
 ## � Learning Resources
 
-### **For Business Teams**
+### **For Learners and Teachers**
 
+- [🎒 Lessons for beginners](docs/tutorial/tj/README.md) - 18 lessons in Tajik
+  ([in Russian](docs/tutorial/ru/README.md)) with tasks that check themselves,
+  and [a guide for teachers](docs/tutorial/omuzgor.md)
 - [🎓 Tutorial](docs/tutorial/) - Structured learning pathway
-- [📋 Examples](examples/) - 32+ production-ready code samples
+- [📋 Examples](examples/) - Example programs
 - [🎯 Quick Reference](docs/reference/quick-start.md) - Essential syntax guide
+- [🩺 Compiler messages in Tajik and Russian](docs/reference/diagnostics.md) -
+  what the errors say and their codes
+- [⌨️ Reading input](docs/reference/input.md) - `хондан()` and `хонданиРақам()`
 
 ### **For Technical Teams**
 
@@ -625,7 +633,6 @@ npm run audit:examples
   Technical discussions and Q&A
 - 🐛 [Issues](https://github.com/lindentechde/Somon-Script/issues) - Bug reports
   and feature requests
-- 📧 [Email](mailto:support@somoni-script.org) - Professional support inquiries
 
 ### Professional Services
 
@@ -637,23 +644,11 @@ LindenTech IT Consulting offers professional development services:
 4. **Integration**: Build tooling and IDE support
 5. **Performance**: Optimize compilation and runtime efficiency
 
-**🚀 New: Automated Release Process**
-
-SomonScript now uses semantic-release for automated, professional-grade
-releases:
-
-- **Conventional Commits**: Use `feat:`, `fix:`, `docs:` etc. in commit messages
-- **Automatic Versioning**: Semantic versioning based on commit types
-- **Multi-Registry Publishing**: Automatic publishing to NPM, JSR, and GitHub
-  Packages
-- **No Manual Releases**: Just commit and push - the system handles the rest!
-
 📖 **Documentation**:
 
-- [Release Process Guide](docs/RELEASE-PROCESS.md) - Complete automation details
-- [CI/CD Migration Guide](docs/CICD-MIGRATION.md) - Step-by-step migration info
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Community participation guidelines
-- [AGENTS.md](AGENTS.md) - Code style, commit message, and testing rules
+- [Release Process Guide](docs/RELEASE-PROCESS.md) - How versions are bumped and
+  published to npm and JSR
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Code style, commit messages and tests
 
 ---
 
@@ -708,11 +703,8 @@ Built on proven software engineering principles and modern compiler technology:
 
 <div align="center">
 
-**SomonScript** - _Professional programming with localized syntax_
+**SomonScript** - _Learn to program in Tajik, then in JavaScript_
 
-Professional software development solution
-
-[Website](https://somoni-script.org) _(in development)_ •
 [GitHub](https://github.com/lindentechde/Somon-Script) • [Documentation](docs/)
 • [Support](https://github.com/lindentechde/Somon-Script/discussions)
 

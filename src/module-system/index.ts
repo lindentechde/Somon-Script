@@ -12,12 +12,13 @@ export type {
 } from './module-loader';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleMetadata, ModuleImports, DependencyNode } from './module-registry';
-export { ModuleSystem } from './module-system';
+export { BundleError, ModuleSystem } from './module-system';
 export type {
   ModuleSystemOptions,
   CompiledModule,
   CompilationResult,
   CompilationError,
+  CompilationWarning,
   BundleOptions,
   BundleOutput,
   ModuleSystemWatchOptions,

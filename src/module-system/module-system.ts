@@ -29,6 +29,15 @@ import {
   type CompileOptions as PipelineCompileOptions,
 } from '../compiler';
 import {
+  detailDiagnostic,
+  message as diagnosticMessage,
+  renderHint,
+  renderMessage,
+  syntaxDiagnostic,
+  type Diagnostic,
+  type DiagnosticLanguage,
+} from '../diagnostics';
+import {
   BUNDLE_FORMATS,
   composeSourceMaps,
   DEFAULT_TARGET,
@@ -82,6 +91,34 @@ export interface CompilationError {
   specifier?: string;
   suggestion?: string;
   originalError?: Error;
+  /** With a Russian or Tajik `locale`: the error in that language, as data. */
+  diagnostic?: Diagnostic;
+}
+
+/** A warning of a build: the compiler's warning and the file it is about. */
+export interface CompilationWarning {
+  /** As the compiler reports it (`Type warning [CODE] at line …`), without the file. */
+  message: string;
+  /** The module the warning is about; none for warnings about the whole build (cycles). */
+  filePath?: string;
+  /** With a Russian or Tajik `locale`: the warning in that language, as data. */
+  diagnostic?: Diagnostic;
+}
+
+/**
+ * Thrown by `bundle()` when modules do not compile; its message lists the
+ * errors in English, `errors` and `warnings` hold them as data.
+ */
+export class BundleError extends Error {
+  readonly errors: CompilationError[];
+  readonly warnings: CompilationWarning[];
+
+  constructor(message: string, errors: CompilationError[], warnings: CompilationWarning[]) {
+    super(message);
+    this.name = 'BundleError';
+    this.errors = errors;
+    this.warnings = warnings;
+  }
 }
 
 export interface CompilationResult {
@@ -89,7 +126,10 @@ export interface CompilationResult {
   entryPoint: string;
   dependencies: string[];
   errors: CompilationError[];
+  /** Each warning with its file: `Warning in <file>: <message>`. */
   warnings: string[];
+  /** The same warnings, with the file apart from the message. */
+  warningDetails?: CompilationWarning[];
 }
 
 export interface BundleOptions {
@@ -115,6 +155,11 @@ export interface BundleOptions {
    * absolute paths, so the bundle only works on the machine that built it.
    */
   modulePaths?: boolean;
+  /**
+   * Log the warnings of the build (default true). The caller that reports
+   * them itself, from `BundleOutput.warnings`, turns this off.
+   */
+  logWarnings?: boolean;
 }
 
 export interface BundleOutput {
@@ -122,6 +167,8 @@ export interface BundleOutput {
   map?: string;
   /** How many modules the bundle holds (externals, packages and Node.js modules are not in it). */
   moduleCount: number;
+  /** The warnings of compiling the modules. */
+  warnings?: CompilationWarning[];
 }
 
 /**
@@ -196,6 +243,19 @@ type RequireRewriteContext = {
   entryPoint: string;
 };
 
+/** The warnings of a build, as strings and with their files apart. */
+class WarningCollector {
+  readonly warnings: string[] = [];
+  readonly details: CompilationWarning[] = [];
+
+  add(message: string, filePath?: string, diagnostic?: Diagnostic): void {
+    this.warnings.push(filePath === undefined ? message : `Warning in ${filePath}: ${message}`);
+    const detail: CompilationWarning = filePath === undefined ? { message } : { message, filePath };
+    if (diagnostic) detail.diagnostic = diagnostic;
+    this.details.push(detail);
+  }
+}
+
 export class ModuleSystem {
   private readonly resolver: ModuleResolver;
   private readonly loader: ModuleLoader;
@@ -231,7 +291,7 @@ export class ModuleSystem {
     originalError?: Error
   ): CompilationError {
     if (originalError instanceof ModuleLoadError) {
-      return {
+      const error: CompilationError = {
         message,
         filePath: originalError.filePath,
         line: originalError.line,
@@ -241,6 +301,9 @@ export class ModuleSystem {
         suggestion: this.getSuggestionForError(message),
         originalError,
       };
+      const language = this.diagnosticLanguage();
+      if (language) this.localizeLoadError(error, originalError, language);
+      return error;
     }
 
     // Compiler diagnostics are strings; take the line and column from the message
@@ -254,6 +317,52 @@ export class ModuleSystem {
       suggestion: this.getSuggestionForError(message),
       originalError,
     };
+  }
+
+  /**
+   * The language diagnostics are reported in: the `locale` of the compilation
+   * when it is Russian or Tajik (in English the compiler's own messages stay).
+   */
+  private diagnosticLanguage(): DiagnosticLanguage | undefined {
+    const locale = this.resolveCompilationOptions().locale;
+    return locale === 'ru' || locale === 'tj' ? locale : undefined;
+  }
+
+  /** The diagnostic of a module that did not load: it does not parse, or an import is missing. */
+  private localizeLoadError(
+    error: CompilationError,
+    failure: Error & Partial<Pick<ModuleLoadError, 'syntax' | 'specifier' | 'line' | 'column'>>,
+    language: DiagnosticLanguage
+  ): void {
+    let diagnostic: Diagnostic;
+    if (failure.syntax) {
+      diagnostic = syntaxDiagnostic(failure.syntax.message, failure.syntax.source, language);
+    } else if (failure.specifier !== undefined && /Cannot resolve/.test(failure.message)) {
+      const msg = diagnosticMessage('MODULE_NOT_FOUND', { specifier: failure.specifier });
+      diagnostic = {
+        code: 'MODULE_NOT_FOUND',
+        severity: 'error',
+        message: renderMessage(msg, language),
+        hint: renderHint(diagnosticMessage('CHECK_PATH'), language),
+      };
+    } else if (/Cannot resolve module/.test(failure.message)) {
+      const msg = diagnosticMessage('MODULE_FILE_NOT_FOUND', {
+        file: path.basename(error.filePath),
+      });
+      diagnostic = {
+        code: 'MODULE_FILE_NOT_FOUND',
+        severity: 'error',
+        message: renderMessage(msg, language),
+      };
+    } else {
+      diagnostic = detailDiagnostic('MODULE_ERROR', failure.message, language);
+    }
+    if (diagnostic.line === undefined && failure.line !== undefined) {
+      Object.assign(diagnostic, { line: failure.line, column: failure.column });
+    }
+    error.diagnostic = diagnostic;
+    error.line = diagnostic.line;
+    error.column = diagnostic.column;
   }
 
   /**
@@ -522,7 +631,7 @@ export class ModuleSystem {
    */
   private checkCircularDependencies(
     buildIds: Set<string>,
-    warnings: string[],
+    warnings: WarningCollector,
     errors: CompilationError[]
   ): boolean {
     const strategy = this.loader.getCircularDependencyStrategy();
@@ -538,13 +647,24 @@ export class ModuleSystem {
     }
 
     const description = cycles.map(cycle => cycle.join(' -> ')).join(', ');
+    const language = this.diagnosticLanguage();
+    const localized = (severity: Diagnostic['severity']): Diagnostic | undefined => {
+      if (!language) return undefined;
+      const cycle = cycles.map(c => c.map(id => path.basename(id)).join(' → ')).join(', ');
+      const msg = diagnosticMessage('CIRCULAR_DEPENDENCY', { cycle });
+      return { code: 'CIRCULAR_DEPENDENCY', severity, message: renderMessage(msg, language) };
+    };
     if (strategy === 'error') {
-      errors.push(
-        this.createCompilationError(`Circular dependency detected: ${description}`, cycles[0][0])
+      const error = this.createCompilationError(
+        `Circular dependency detected: ${description}`,
+        cycles[0][0]
       );
+      const diagnostic = localized('error');
+      if (diagnostic) error.diagnostic = diagnostic;
+      errors.push(error);
       return false;
     }
-    warnings.push(`Circular dependencies detected: ${description}`);
+    warnings.add(`Circular dependencies detected: ${description}`, undefined, localized('warning'));
     return true;
   }
 
@@ -553,7 +673,7 @@ export class ModuleSystem {
     compilationConfig: ModuleCompilationOptions,
     modules: Map<string, CompiledModule>,
     errors: CompilationError[],
-    warnings: string[]
+    warnings: WarningCollector
   ): void {
     for (const moduleId of compilationOrder) {
       // The modules of this build are in the loader's cache
@@ -593,7 +713,12 @@ export class ModuleSystem {
       failure instanceof ModuleLoadError
         ? failure.message
         : `Failed to load entry point: ${failure.message}`;
-    errors.push(this.createCompilationError(message, entryPoint, failure));
+    const compilationError = this.createCompilationError(message, entryPoint, failure);
+    const language = this.diagnosticLanguage();
+    if (language && !(failure instanceof ModuleLoadError)) {
+      this.localizeLoadError(compilationError, failure, language);
+    }
+    errors.push(compilationError);
   }
 
   /**
@@ -605,7 +730,8 @@ export class ModuleSystem {
     overrideCompilation?: Partial<ModuleCompilationOptions>
   ): Promise<CompilationResult> {
     const errors: CompilationError[] = [];
-    const warnings: string[] = [];
+    const collector = new WarningCollector();
+    const { warnings, details: warningDetails } = collector;
     const modules = new Map<string, CompiledModule>();
     const previousExternals = this.loader.getExternals();
 
@@ -628,12 +754,19 @@ export class ModuleSystem {
       const compilationOrder = this.registry
         .getTopologicalSort()
         .filter(moduleId => buildIds.has(moduleId));
-      if (!this.checkCircularDependencies(buildIds, warnings, errors)) {
-        return { modules, entryPoint: entryModule.id, dependencies: [], errors, warnings };
+      if (!this.checkCircularDependencies(buildIds, collector, errors)) {
+        return {
+          modules,
+          entryPoint: entryModule.id,
+          dependencies: [],
+          errors,
+          warnings,
+          warningDetails,
+        };
       }
 
       const compilationConfig = this.resolveCompilationOptions(overrideCompilation);
-      this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, warnings);
+      this.compileModulesInOrder(compilationOrder, compilationConfig, modules, errors, collector);
 
       return {
         modules,
@@ -641,6 +774,7 @@ export class ModuleSystem {
         dependencies: compilationOrder,
         errors,
         warnings,
+        warningDetails,
       };
     } catch (error) {
       // Watchers stay: a watch loop recompiles once the file is fixed
@@ -652,6 +786,7 @@ export class ModuleSystem {
         dependencies: [],
         errors,
         warnings,
+        warningDetails,
       };
     } finally {
       this.loader.setExternals(previousExternals);
@@ -712,11 +847,15 @@ export class ModuleSystem {
       const errorMessage = `Bundle process failed with ${compilationResult.errors.length} error(s):\n\n${errorDetails}${warningInfo}`;
 
       // Stop bundling immediately - no partial bundles on errors
-      throw new Error(errorMessage);
+      throw new BundleError(
+        errorMessage,
+        compilationResult.errors,
+        compilationResult.warningDetails ?? []
+      );
     }
 
     // Log warnings even if compilation succeeded
-    if (compilationResult.warnings.length > 0) {
+    if (compilationResult.warnings.length > 0 && options.logWarnings !== false) {
       this.logger.warn('Bundle compilation succeeded with warnings', {
         warningCount: compilationResult.warnings.length,
         warnings: compilationResult.warnings,
@@ -725,7 +864,8 @@ export class ModuleSystem {
 
     // Generate bundle based on format
     try {
-      return await this.generateBundle(compilationResult, { ...options, format, minify });
+      const output = await this.generateBundle(compilationResult, { ...options, format, minify });
+      return { ...output, warnings: compilationResult.warningDetails };
     } catch (error) {
       // Fail fast on bundle generation errors (all of them Error objects)
       throw new Error(`Failed to generate bundle: ${(error as Error).message}`);
@@ -971,11 +1111,15 @@ export class ModuleSystem {
     if (config.module !== undefined) {
       options.module = config.module;
     }
+    if (config.learningMode !== undefined) {
+      options.learningMode = config.learningMode;
+    }
     if (config.checker !== undefined) {
       options.checker = config.checker;
     }
     if (config.locale !== undefined) {
       options.locale = config.locale;
+      if (config.locale !== 'en') options.language = config.locale;
     }
 
     return options;
@@ -1520,7 +1664,7 @@ export class ModuleSystem {
     compilationConfig: ModuleCompilationOptions;
     modules: Map<string, { code: string; map?: RawSourceMap }>;
     errors: CompilationError[];
-    warnings: string[];
+    warnings: WarningCollector;
   }): void {
     const { module, moduleId, compilationConfig, modules, errors, warnings } = params;
     try {
@@ -1530,18 +1674,28 @@ export class ModuleSystem {
         filePath: module.resolvedPath,
       });
 
+      const diagnostics = compileResult.diagnostics;
       if (compileResult.errors.length > 0) {
-        for (const message of compileResult.errors) {
-          errors.push(this.createCompilationError(message, module.resolvedPath));
-        }
+        compileResult.errors.forEach((message, index) => {
+          const diagnostic = diagnostics?.[index];
+          const error = this.createCompilationError(
+            diagnostic ? diagnostic.message : message,
+            module.resolvedPath
+          );
+          if (diagnostic) {
+            Object.assign(error, { line: diagnostic.line, column: diagnostic.column, diagnostic });
+          }
+          errors.push(error);
+        });
         return;
       }
 
       const map = this.parseModuleSourceMap(module, compileResult.sourceMap);
       modules.set(moduleId, { code: compileResult.code, map });
-      warnings.push(
-        ...compileResult.warnings.map(warning => `Warning in ${module.resolvedPath}: ${warning}`)
-      );
+      compileResult.warnings.forEach((warning, index) => {
+        const diagnostic = diagnostics?.filter(d => d.severity === 'warning')[index];
+        warnings.add(warning, module.resolvedPath, diagnostic);
+      });
     } catch (error) {
       // A crash of the compiler (it reports problems in `errors`), always an Error
       const failure = error as Error;

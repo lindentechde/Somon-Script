@@ -62,10 +62,14 @@ const translations: Translations = {
         input: 'Input .som file',
         args: 'Arguments passed to the program (use -- before arguments that start with -)',
       },
+      options: {
+        stack: 'Show the full stack of an error of the program (for debugging)',
+      },
       messages: {
         failedToExecute: 'Failed to execute Node:',
         terminatedWithSignal: (signal: string) => `Process terminated with signal ${signal}`,
         cleanupFailed: 'Warning: unable to clean temporary files:',
+        warning: 'Warning',
       },
     },
     init: {

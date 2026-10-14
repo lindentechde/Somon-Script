@@ -29,3 +29,6 @@ example-audit-report.json
 
 # Documentation that should preserve formatting
 CHANGELOG.md
+
+# Tests of the tutorial's tasks: exact input and output, not code
+docs/tutorial/tasks/*/tests/

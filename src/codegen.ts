@@ -124,6 +124,31 @@ export interface CodeMapping {
 }
 
 /**
+ * The `.som` position (line 1-based, column 0-based) of a position in the
+ * generated code: that of the nearest mapping at or before it.
+ */
+export function originalPosition(
+  mappings: CodeMapping[],
+  line: number,
+  column: number
+): { line: number; column: number } | undefined {
+  let low = 0;
+  let high = mappings.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const generated = mappings[middle].generated;
+    if (generated.line < line || (generated.line === line && generated.column <= column)) {
+      found = middle;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return found === -1 ? undefined : mappings[found].original;
+}
+
+/**
  * TypeScript syntax the generated code keeps because no JavaScript runtime
  * runs it yet: the compiler lowers it with `ts.transpileModule`.
  */
@@ -293,6 +318,24 @@ const NODE_PRECEDENCE: Readonly<Record<string, number>> = {
 };
 
 /**
+ * The input functions of a program that reads input (`хондан`,
+ * `хонданиРақам`): the run time of `somon run` and the playground provide them
+ * (src/runtime/input.ts); elsewhere a call says where they work.
+ */
+const INPUT_PROLOGUE = [
+  'const { хондан, хонданиРақам } = globalThis.__somonInput || {',
+  '  хондан: __somonNoInput,',
+  '  хонданиРақам: __somonNoInput,',
+  '};',
+  'function __somonNoInput() {',
+  '  throw new Error("хондан() and хонданиРақам() read input when the program runs with \'somon run\' or in the playground");',
+  '}',
+].join('\n');
+
+/** The names of the input functions. */
+const INPUT_FUNCTIONS: ReadonlySet<string> = new Set(['хондан', 'хонданиРақам']);
+
+/**
  * The namespace of a deferred import (`ворид мавқуф * чун Н аз "./м";`) in
  * CommonJS output: the module is required when one of its members is first
  * read (`Н.х`, `"х" дар Н`, `Object.keys(Н)`), as `import defer` (TypeScript
@@ -395,6 +438,8 @@ export class CodeGenerator {
   private lowering: LoweringNeeds = CodeGenerator.noLowering();
   /** CommonJS output defers an import, with `__somonDefer` (see `DEFER_HELPER`). */
   private usesDeferHelper = false;
+  /** The program reads input with `хондан`/`хонданиРақам` it does not declare. */
+  private usesInput = false;
   /** Declarations that merge with others of their name (namespaces, enums). */
   private readonly mergeGroups = new WeakMap<Statement, MergeGroup>();
   /**
@@ -572,6 +617,7 @@ export class CodeGenerator {
   private generateProgram(node: Program): string {
     this.lowering = CodeGenerator.noLowering();
     this.usesDeferHelper = false;
+    this.usesInput = false;
     this.esmExportedNames = new Set();
     if (this.module === 'esm' && this.elidesTypes()) {
       this.valueNames = CodeGenerator.collectValueNames(node);
@@ -583,6 +629,7 @@ export class CodeGenerator {
       node.body.map(stmt => this.generateStatement(stmt)).filter(stmt => stmt.length > 0)
     );
     if (this.usesDeferHelper) statements.unshift(DEFER_HELPER);
+    if (this.usesInput) statements.unshift(this.inputPrologue());
     // A module is strict mode code; in CommonJS (as in TypeScript's output) only by the directive
     if (this.module === 'commonjs' && statements.length > 0 && CodeGenerator.isModule(node.body)) {
       statements.unshift('"use strict";');
@@ -591,6 +638,11 @@ export class CodeGenerator {
     if (node.shebang !== undefined) statements.unshift(node.shebang);
 
     return statements.join('\n');
+  }
+
+  /** Where a program that reads input gets `хондан` and `хонданиРақам` (see `INPUT_PROLOGUE`). */
+  protected inputPrologue(): string {
+    return INPUT_PROLOGUE;
   }
 
   /**
@@ -1886,7 +1938,9 @@ export class CodeGenerator {
     // Built-in names (`рӯйхат` → `Array`, `чоп` → `console`, …) are mapped only
     // when the program does not declare a binding of that name in scope;
     // otherwise `тағ рӯйхат = []` would shadow the global `Array`.
-    const mapped = this.isDeclared(node.name) ? undefined : this.mapBuiltinIdentifier(node.name);
+    const declared = this.isDeclared(node.name);
+    if (!declared && !binding && INPUT_FUNCTIONS.has(node.name)) this.usesInput = true;
+    const mapped = declared ? undefined : this.mapBuiltinIdentifier(node.name);
     if (mapped) {
       return mapped;
     }
@@ -1913,6 +1967,7 @@ export class CodeGenerator {
 
     // Map built-in constructors/objects (when used as identifiers)
     const builtinConstructors = [
+      'чоп',
       'сатр',
       'рӯйхат',
       'объект',
@@ -2322,14 +2377,23 @@ export class CodeGenerator {
   private generateCallExpression(node: CallExpression): string {
     let callee = this.generateExpression(node.callee, PREC.CALL);
 
-    // Special handling for нишондиҳӣ function
-    if (stripPositionMarkers(callee) === 'нишондиҳӣ') {
+    // `чоп(…)` prints as `чоп.сабт(…)` does; so does the older `нишондиҳӣ(…)`
+    if (this.isPrintCall(node) || stripPositionMarkers(callee) === 'нишондиҳӣ') {
       callee = this.markPosition(node.callee, 'console.log');
     }
 
     const args = this.generateArguments(node.arguments);
     const typeArguments = this.typeArgumentsText(node.typeArguments);
     return `${callee}${node.optional ? '?.' : ''}${typeArguments}(${args})`;
+  }
+
+  /** `чоп(…)`, calling the built-in `чоп` (not a binding of that name). */
+  private isPrintCall(node: CallExpression): boolean {
+    return (
+      node.callee.type === 'Identifier' &&
+      (node.callee as Identifier).name === 'чоп' &&
+      !this.isDeclared('чоп')
+    );
   }
 
   /** Call/new argument list; elements may be `SpreadElement`s. */

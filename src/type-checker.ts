@@ -89,8 +89,19 @@ import {
   AmbientModuleDeclaration,
   InstantiationExpression,
 } from './ast';
-import { translateMemberName } from './builtin-names';
+import {
+  builtinObjectHasMember,
+  builtinObjectMemberName,
+  builtinObjectMemberNames,
+  isCheckedBuiltinObject,
+  isNotCallableBuiltin,
+} from './builtin-globals';
+import { BUILTIN_MAPPINGS, MEMBER_ALIASES, translateMemberName } from './builtin-names';
+import { message, renderMessage } from './diagnostics/catalog';
+import { closestName } from './diagnostics/suggest';
+import type { DiagnosticMessage, DiagnosticParams } from './diagnostics/types';
 import { nullishSemantics, skipOuterExpressions, truthySemantics } from './syntactic-conditions';
+import { declaredTypeNames, isUnknownTypeName, TYPE_NAMES } from './type-names';
 
 /**
  * Represents a type checking error or warning
@@ -102,6 +113,10 @@ export interface TypeCheckError {
   code: string;
   snippet: string;
   severity: 'error' | 'warning';
+  /** The message in the diagnostics catalog (src/diagnostics), for other languages. */
+  messageId?: string;
+  /** The values of the message. */
+  params?: DiagnosticParams;
 }
 
 /**
@@ -125,6 +140,14 @@ export const TypeCheckErrorCode = {
   AbstractInstantiation: 'ABSTRACT_INSTANTIATION',
   /** A condition or `??` operand its syntax decides (TypeScript 5.6: TS2869, TS2871 to TS2873). */
   ConstantCondition: 'CONSTANT_CONDITION',
+  /** A call of a value that is not a function: `математика(1)`. */
+  NotCallable: 'NOT_CALLABLE',
+  /** A new value for a `собит`: `собит х = 1; х = 2;` (TypeScript's TS2588). */
+  ConstAssignment: 'CONST_ASSIGNMENT',
+  /** `агар (х = 1)`: a condition that assigns, where a comparison was meant. */
+  AssignmentInCondition: 'ASSIGNMENT_IN_CONDITION',
+  /** A type name that is neither built in nor declared: `тағ а: мантики`. */
+  TypeNotFound: 'TYPE_NOT_FOUND',
 } as const;
 // eslint-disable-next-line no-redeclare, @typescript-eslint/no-redeclare
 export type TypeCheckErrorCode = (typeof TypeCheckErrorCode)[keyof typeof TypeCheckErrorCode];
@@ -147,6 +170,11 @@ export interface TypeCheckOptions {
    * (hover, completion). Not called while expressions are re-inferred quietly.
    */
   onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
+  /**
+   * Called with each binary expression the checker infers and the types of
+   * its operands, for the warnings of the learning mode (src/learner).
+   */
+  onBinaryTypes?: (_binary: BinaryExpression, _left: Type, _right: Type) => void;
 }
 
 /**
@@ -281,6 +309,26 @@ const NULL_TYPE: Type = { kind: 'primitive', name: 'null' };
 const UNDEFINED_TYPE: Type = { kind: 'primitive', name: 'undefined' };
 const NUMBER_TYPE: Type = { kind: 'primitive', name: 'number' };
 const STRING_TYPE: Type = { kind: 'primitive', name: 'string' };
+
+/** `хондан(савол?)` and `хонданиРақам(савол?)`: the input functions of the run time. */
+const INPUT_FUNCTION_TYPES: ReadonlyMap<string, Type> = new Map(
+  (
+    [
+      ['хондан', STRING_TYPE],
+      ['хонданиРақам', NUMBER_TYPE],
+    ] as const
+  ).map(([name, returnType]) => [
+    name,
+    {
+      kind: 'function',
+      name,
+      paramTypes: [{ kind: 'primitive', name: 'any' }],
+      paramNames: ['савол'],
+      paramOptional: [true],
+      returnType,
+    },
+  ])
+);
 const BOOLEAN_TYPE: Type = { kind: 'primitive', name: 'boolean' };
 const VOID_TYPE: Type = { kind: 'primitive', name: 'void' };
 /** `ин` as a type; bound to the receiver's type where a member is used. */
@@ -406,7 +454,6 @@ export class TypeChecker {
     'Риёзӣ',
     'объект',
     'сатрМетодҳо',
-    'хато',
     'Хато',
     'рӯйхат',
     'сатр',
@@ -467,6 +514,7 @@ export class TypeChecker {
   private warnings: TypeCheckError[] = [];
   private readonly strict: boolean;
   private readonly onIdentifierType?: (_identifier: Identifier, _type: Type) => void;
+  private readonly onBinaryTypes?: (_binary: BinaryExpression, _left: Type, _right: Type) => void;
   /** Lexical scope chain; index 0 is the global scope. */
   private scopes: Map<string, Type>[] = [];
   /** Unique id of each scope in `scopes`, so narrowing facts survive shadowing. */
@@ -489,6 +537,10 @@ export class TypeChecker {
   private classStack: Type[] = [];
   /** Enum declarations already declared (merged enums add to the first one's type). */
   private declaredEnums: WeakSet<EnumDeclaration> = new WeakSet();
+  /** The names the program declares that may be types (`declaredTypeNames`). */
+  private declaredTypes: ReadonlySet<string> = new Set();
+  /** Type names already reported as unknown, by their node. */
+  private reportedTypeNames = new WeakSet<Identifier>();
   /** Members of the declarations of a (merged) enum checked so far, by its enum object. */
   private checkedEnumMembers: WeakMap<Type, Set<string>> = new WeakMap();
   /** Types `initializePrimitiveTypes` gives the names `сатр`, `рақам`, … as values. */
@@ -559,6 +611,7 @@ export class TypeChecker {
     BinaryExpression: e => this.inferBinaryType(e as BinaryExpression),
     UnaryExpression: e => this.inferUnaryType(e as UnaryExpression),
     UpdateExpression: e => {
+      this.checkConstTarget((e as UpdateExpression).argument);
       this.checkReadonlyTarget((e as UpdateExpression).argument);
       return this.inferNumericOperand((e as UpdateExpression).argument);
     },
@@ -613,6 +666,7 @@ export class TypeChecker {
     this.sourceLines = source ? source.split(/\r?\n/) : [];
     this.strict = Boolean(options.strict);
     this.onIdentifierType = options.onIdentifierType;
+    this.onBinaryTypes = options.onBinaryTypes;
   }
 
   /** Reports the type of a declared or read name to `onIdentifierType`. */
@@ -664,6 +718,8 @@ export class TypeChecker {
     this.ambientModules = new Map();
     this.builtinAugmentations = new Map();
     this.declaredEnums = new WeakSet();
+    this.declaredTypes = declaredTypeNames(program);
+    this.reportedTypeNames = new WeakSet();
     this.initializePrimitiveTypes();
 
     // `эълон глобалӣ { … }` declares top-level names; `эълон модул "ном"` modules
@@ -957,10 +1013,11 @@ export class TypeChecker {
     if (module.types.has(name) || (exportAssignment && this.isOpenType(exportAssignment))) {
       return UNKNOWN;
     }
-    const message = isDefault
-      ? `Module '"${importDecl.source.value}"' has no default export`
-      : `Module '"${importDecl.source.value}"' has no exported member '${name}'`;
-    this.addError(TypeCheckErrorCode.PropertyNotFound, message, spec.line, spec.column);
+    const moduleName = String(importDecl.source.value);
+    const missing = isDefault
+      ? message('PROPERTY_NOT_FOUND.noDefaultExport', { module: moduleName })
+      : message('PROPERTY_NOT_FOUND.noExportedMember', { module: moduleName, name });
+    this.addError(TypeCheckErrorCode.PropertyNotFound, missing, spec.line, spec.column);
     return UNKNOWN;
   }
 
@@ -1572,7 +1629,7 @@ export class TypeChecker {
         const name = (member.property as Identifier).name;
         this.addError(
           TypeCheckErrorCode.UsedBeforeInitialization,
-          `Property '${name}' is used before its initialization: field initializers run before the constructor assigns parameter properties`,
+          message('USED_BEFORE_INITIALIZATION', { name }),
           member.property.line,
           member.property.column
         );
@@ -1822,7 +1879,7 @@ export class TypeChecker {
   }
 
   private checkIfStatement(statement: IfStatement): void {
-    this.checkConstantCondition(statement.test);
+    this.checkCondition(statement.test);
     this.inferExpressionType(statement.test);
     const whenTrue = this.narrowingsFor(statement.test, true);
     const whenFalse = this.narrowingsFor(statement.test, false);
@@ -1854,7 +1911,7 @@ export class TypeChecker {
     // Assignments in the body may run before the test is evaluated again
     this.invalidateAssignedIn(statement.test, statement.body);
     const entry = new Map(this.narrowed);
-    this.checkConstantCondition(statement.test);
+    this.checkCondition(statement.test);
     this.inferExpressionType(statement.test);
     this.applyFacts(this.narrowingsFor(statement.test, true));
     this.checkBody(statement.body);
@@ -1871,7 +1928,7 @@ export class TypeChecker {
    * checked.
    */
   private checkDoWhileStatement(statement: DoWhileStatement): void {
-    this.checkConstantCondition(statement.test);
+    this.checkCondition(statement.test);
     const before = this.narrowed;
     this.narrowed = new Map(before);
     this.invalidateAssignedIn(statement.body, statement.test);
@@ -1925,7 +1982,7 @@ export class TypeChecker {
       this.invalidateAssignedIn(statement.test, statement.update, statement.body);
       const entry = new Map(this.narrowed);
       if (statement.test) {
-        this.checkConstantCondition(statement.test);
+        this.checkCondition(statement.test);
         this.inferExpressionType(statement.test);
         this.applyFacts(this.narrowingsFor(statement.test, true));
       }
@@ -2042,7 +2099,7 @@ export class TypeChecker {
     this.checkAssignable(statement.argument, actual, expected, (source, target) =>
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Type '${source}' is not assignable to return type '${target}'`,
+        message('TYPE_NOT_ASSIGNABLE.return', { source, target }),
         statement.argument!.line,
         statement.argument!.column
       )
@@ -2067,7 +2124,7 @@ export class TypeChecker {
         this.checkAssignable(init, inferredType, declaredType, (source, target) =>
           this.addError(
             TypeCheckErrorCode.TypeMismatch,
-            `Type '${source}' is not assignable to type '${target}'`,
+            message('TYPE_NOT_ASSIGNABLE', { source, target }),
             init.line,
             init.column
           )
@@ -2251,7 +2308,7 @@ export class TypeChecker {
     if (fn.params.some(param => !param.pattern && param.name?.name === name)) return;
     this.addError(
       TypeCheckErrorCode.UndefinedIdentifier,
-      `Cannot find parameter '${name}'`,
+      message('UNDEFINED_IDENTIFIER.parameter', { name }),
       subject.line,
       subject.column
     );
@@ -2264,7 +2321,7 @@ export class TypeChecker {
       this.checkAssignable(defaultValue, defaultType, paramType, (source, target) =>
         this.addError(
           TypeCheckErrorCode.TypeMismatch,
-          `Type '${source}' is not assignable to type '${target}'`,
+          message('TYPE_NOT_ASSIGNABLE', { source, target }),
           defaultValue.line,
           defaultValue.column
         )
@@ -2327,12 +2384,7 @@ export class TypeChecker {
     for (const member of overriding) {
       const reason = this.invalidOverrideReason(classDecl, base, member);
       if (reason) {
-        this.addError(
-          TypeCheckErrorCode.InvalidOverride,
-          `This member cannot have an 'бознавис' (override) modifier because ${reason}`,
-          member.line,
-          member.column
-        );
+        this.addError(TypeCheckErrorCode.InvalidOverride, reason, member.line, member.column);
       }
     }
   }
@@ -2358,9 +2410,9 @@ export class TypeChecker {
     classDecl: ClassDeclaration,
     base: Type | undefined,
     member: { name: string; isStatic: boolean }
-  ): string | undefined {
+  ): DiagnosticMessage | undefined {
     if (!classDecl.superClass) {
-      return `its containing class '${classDecl.name.name}' does not extend another class`;
+      return message('INVALID_OVERRIDE.noBase', { class: classDecl.name.name });
     }
     if (base?.kind !== 'class' || this.isOpenType(base)) return undefined;
     const jsName = translateMemberName(member.name);
@@ -2368,7 +2420,7 @@ export class TypeChecker {
       ? this.hasStaticMember(base, member.name, jsName)
       : Boolean(this.findProperty(this.getAllProperties(base), member.name, jsName)) ||
         this.hasImplicitMember(base, member.name, jsName);
-    return exists ? undefined : `it is not declared in the base class '${base.name}'`;
+    return exists ? undefined : message('INVALID_OVERRIDE.notInBase', { base: base.name });
   }
 
   private checkClassMembers(classDecl: ClassDeclaration): void {
@@ -2470,7 +2522,11 @@ export class TypeChecker {
     if (interfaceType) {
       this.addError(
         TypeCheckErrorCode.InvalidExtends,
-        `Class '${classDecl.name.name}' can only extend other classes, but '${parentName}' is an interface`,
+        message('INVALID_EXTENDS', {
+          class: classDecl.name.name,
+          parent: parentName,
+          kind: 'interface',
+        }),
         classDecl.line,
         classDecl.column
       );
@@ -2481,7 +2537,7 @@ export class TypeChecker {
       if (!this.isBuiltinValueName(parentName)) {
         this.addError(
           TypeCheckErrorCode.ClassNotFound,
-          `Base class '${parentName}' not found`,
+          message('CLASS_NOT_FOUND', { name: parentName }),
           classDecl.line,
           classDecl.column
         );
@@ -2512,11 +2568,13 @@ export class TypeChecker {
   }
 
   private addInvalidExtendsError(classDecl: ClassDeclaration, parentType: Type): void {
-    const kindDescription =
-      parentType.kind === 'interface' ? 'an interface' : `a ${parentType.kind}`;
     this.addError(
       TypeCheckErrorCode.InvalidExtends,
-      `Class '${classDecl.name.name}' can only extend other classes, but '${TypeChecker.superClassName(classDecl)}' is ${kindDescription}`,
+      message('INVALID_EXTENDS', {
+        class: classDecl.name.name,
+        parent: TypeChecker.superClassName(classDecl),
+        kind: parentType.kind,
+      }),
       classDecl.line,
       classDecl.column
     );
@@ -2535,7 +2593,11 @@ export class TypeChecker {
     this.checkAssignable(value, inferredType, declaredType, (source, target) =>
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Type '${source}' is not assignable to type '${target}' for property '${this.memberKeyName(prop.key)}'`,
+        message('TYPE_NOT_ASSIGNABLE.property', {
+          source,
+          target,
+          property: this.memberKeyName(prop.key),
+        }),
         prop.line,
         prop.column
       )
@@ -2555,11 +2617,11 @@ export class TypeChecker {
     const visited = new Set<string>();
     for (let current: Type | undefined = parentType; current; current = current.baseType) {
       if (current.name === className) {
-        const message =
-          current === parentType
-            ? `Circular inheritance detected: class '${className}' cannot extend itself`
-            : `Circular inheritance detected involving class '${className}'`;
-        this.addError(TypeCheckErrorCode.CircularInheritance, message, line, column);
+        const circular = message(
+          current === parentType ? 'CIRCULAR_INHERITANCE.self' : 'CIRCULAR_INHERITANCE',
+          { class: className }
+        );
+        this.addError(TypeCheckErrorCode.CircularInheritance, circular, line, column);
         return;
       }
       if (visited.has(current.name!)) return;
@@ -2734,6 +2796,7 @@ export class TypeChecker {
     }
 
     const baseType = this.resolveNamedType(baseName);
+    if (baseType.kind === 'unknown') this.checkTypeName(genericType.name);
 
     // Add type parameters for generic types
     if (typeParams.length > 0) {
@@ -2763,7 +2826,32 @@ export class TypeChecker {
     if (PROMISE_NAMES.has(identifierType.name)) {
       return { kind: 'generic', name: 'Promise', typeParameters: [] };
     }
-    return this.resolveNamedType(identifierType.name);
+    const type = this.resolveNamedType(identifierType.name);
+    if (type.kind === 'unknown') this.checkTypeName(identifierType);
+    return type;
+  }
+
+  /**
+   * Reports a type name the program neither declares nor has built in, once:
+   * a typo such as `мантики` for `мантиқӣ` (an error with `strict`).
+   */
+  private checkTypeName(name: Identifier): void {
+    if (this.reportedTypeNames.has(name) || !isUnknownTypeName(name.name, this.declaredTypes)) {
+      return;
+    }
+    if (this.silent > 0) return;
+    this.reportedTypeNames.add(name);
+    const suggestion = closestName(name.name, [...TYPE_NAMES.keys(), ...this.declaredTypes]);
+    const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
+    report(
+      TypeCheckErrorCode.TypeNotFound,
+      message(
+        'TYPE_NOT_FOUND',
+        suggestion === undefined ? { name: name.name } : { name: name.name, suggestion }
+      ),
+      name.line,
+      name.column
+    );
   }
 
   private resolveNamedType(typeName: string): Type {
@@ -2845,6 +2933,39 @@ export class TypeChecker {
     return { kind: 'literal', value: literal.value };
   }
 
+  /** `чоп`, `математика`, … naming the built-in object, not a binding of that name. */
+  private isBuiltinReference(expression: Expression): boolean {
+    return (
+      expression.type === 'Identifier' &&
+      isCheckedBuiltinObject((expression as Identifier).name) &&
+      !this.lookup((expression as Identifier).name)
+    );
+  }
+
+  /** A declared or built-in name close to `name`, for "did you mean". */
+  private similarName(name: string): string | undefined {
+    const names = new Set<string>();
+    this.scopes.forEach(scope => scope.forEach((_type, declared) => names.add(declared)));
+    TypeChecker.BUILTIN_VALUE_NAMES.forEach(builtin => names.add(builtin));
+    INPUT_FUNCTION_TYPES.forEach((_type, input) => names.add(input));
+    return closestName(name, names);
+  }
+
+  /** A member of `type` close to `name`: its own members and the Tajik names of built-in ones. */
+  private similarMember(name: string, type: Type): string | undefined {
+    const candidates = new Set<string>();
+    for (const member of this.unionMembers(type)) {
+      const builtin = this.builtinMembersOf(member);
+      if (builtin) {
+        for (const [alias, jsName] of BUILTIN_MAPPINGS) {
+          if (MEMBER_ALIASES.has(alias) && builtin.has(jsName)) candidates.add(alias);
+        }
+      }
+      this.getAllProperties(member).forEach((_property, key) => candidates.add(key));
+    }
+    return closestName(name, candidates);
+  }
+
   private isBuiltinValueName(name: string): boolean {
     return TypeChecker.BUILTIN_VALUE_NAMES.has(name) || name in global;
   }
@@ -2860,7 +2981,7 @@ export class TypeChecker {
     if (sym?.typeOnly) {
       this.addError(
         TypeCheckErrorCode.TypeOnlyImportValue,
-        `'${identifier.name}' cannot be used as a value because it was imported using 'ворид навъ'`,
+        message('TYPE_ONLY_IMPORT_VALUE', { name: identifier.name }),
         identifier.line,
         identifier.column
       );
@@ -2870,13 +2991,18 @@ export class TypeChecker {
       return this.narrowed.get(this.referenceKey(identifier)!) ?? sym;
     }
     if (identifier.name === 'беқимат' || identifier.name === 'undefined') return UNDEFINED_TYPE;
+    const input = INPUT_FUNCTION_TYPES.get(identifier.name);
+    if (input) return input;
     // Empty names are parser error-recovery placeholders
     if (!identifier.name || this.isBuiltinValueName(identifier.name)) {
       return UNKNOWN;
     }
     this.addError(
       TypeCheckErrorCode.UndefinedIdentifier,
-      `Variable '${identifier.name}' is not defined`,
+      message('UNDEFINED_IDENTIFIER', {
+        name: identifier.name,
+        suggestion: this.similarName(identifier.name),
+      }),
       identifier.line,
       identifier.column
     );
@@ -3132,6 +3258,24 @@ export class TypeChecker {
    */
   private namedMemberType(member: MemberExpression, objectType: Type, property: Identifier): Type {
     const name = property.name;
+    // `чоп.сабтт`, `математика.решаа`: built-in objects have a fixed set of members
+    if (this.isBuiltinReference(member.object)) {
+      const objectName = (member.object as Identifier).name;
+      if (!builtinObjectHasMember(objectName, name)) {
+        this.addError(
+          TypeCheckErrorCode.PropertyNotFound,
+          message('PROPERTY_NOT_FOUND.builtinObject', {
+            name,
+            jsName: builtinObjectMemberName(objectName, name),
+            object: objectName,
+            suggestion: closestName(name, builtinObjectMemberNames(objectName)),
+          }),
+          property.line,
+          property.column
+        );
+      }
+      return UNKNOWN;
+    }
     const jsName = translateMemberName(name);
     // `Синф.статикӣ`: the class itself, not an instance
     if (
@@ -3327,21 +3471,23 @@ export class TypeChecker {
     objectType: Type,
     isStatic: boolean
   ): void {
-    const shown = jsName === name ? `'${name}'` : `'${name}' (${jsName})`;
-    const owner = isStatic
-      ? `class '${objectType.name}'`
-      : `type '${this.typeToString(objectType)}'`;
-    let message = `Property ${shown} does not exist on ${owner}`;
     const isMapOrSet = this.unionMembers(objectType).some(
       t => t.kind === 'generic' && (t.name === 'Map' || t.name === 'Set')
     );
-    if (isMapOrSet && jsName === 'includes') {
-      message += `; use 'дорадКалид' (has) to test membership`;
-    }
+    const suggestion = isStatic ? undefined : this.similarMember(name, objectType);
+    const missing = isStatic
+      ? message('PROPERTY_NOT_FOUND.static', { name, jsName, class: objectType.name })
+      : message('PROPERTY_NOT_FOUND', {
+          name,
+          jsName,
+          type: this.typeToString(objectType),
+          mapSet: isMapOrSet && jsName === 'includes' ? 'yes' : undefined,
+          suggestion,
+        });
     // Reading `о.#ном` from an object whose class doesn't declare `#ном` always throws
     const report =
       this.strict || name.startsWith('#') ? this.addError.bind(this) : this.addWarning.bind(this);
-    report(TypeCheckErrorCode.PropertyNotFound, message, property.line, property.column);
+    report(TypeCheckErrorCode.PropertyNotFound, missing, property.line, property.column);
   }
 
   private indexedAccessType(objectType: Type, indexType: Type): Type {
@@ -3359,6 +3505,9 @@ export class TypeChecker {
     const reference = this.skipAssertions(left);
     const isReference = reference.type === 'Identifier' || reference.type === 'MemberExpression';
     const isPlain = assignment.operator === '=';
+    if (this.checkConstTarget(reference)) {
+      return this.inferExpressionType(assignment.right);
+    }
     // The target accepts its declared type, not what an earlier check narrowed it to
     const leftType = this.inferAssignmentTargetType(left);
     this.checkReadonlyTarget(left);
@@ -3371,7 +3520,7 @@ export class TypeChecker {
       this.checkAssignable(assignment.right, rightType, leftType, (source, target) =>
         this.addError(
           TypeCheckErrorCode.TypeMismatch,
-          `Type '${source}' is not assignable to type '${target}'`,
+          message('TYPE_NOT_ASSIGNABLE', { source, target }),
           assignment.right.line,
           assignment.right.column
         )
@@ -3397,6 +3546,20 @@ export class TypeChecker {
       }
     });
     return rightType;
+  }
+
+  /** Reports a new value for a `собит` (`х = 2`, `х++`); true when it is one. */
+  private checkConstTarget(target: Expression): boolean {
+    if (target.type !== 'Identifier') return false;
+    const key = this.referenceKey(target);
+    if (key === undefined || !this.constKeys.has(key)) return false;
+    this.addError(
+      TypeCheckErrorCode.ConstAssignment,
+      message('CONST_ASSIGNMENT', { name: (target as Identifier).name }),
+      target.line,
+      target.column
+    );
+    return true;
   }
 
   private inferAssignmentTargetType(target: Expression): Type {
@@ -3439,16 +3602,22 @@ export class TypeChecker {
     if (target.type !== 'MemberExpression') return;
     const member = target as MemberExpression;
     const objectType = this.removeNullish(this.quietType(member.object));
-    const message = this.readonlyMemberMessage(member, objectType);
-    if (!message) return;
+    const readonly = this.readonlyMemberMessage(member, objectType);
+    if (!readonly) return;
     const report = this.strict ? this.addError.bind(this) : this.addWarning.bind(this);
-    report(TypeCheckErrorCode.ReadonlyAssignment, message, member.line, member.column);
+    report(TypeCheckErrorCode.ReadonlyAssignment, readonly, member.line, member.column);
   }
 
-  private readonlyMemberMessage(member: MemberExpression, objectType: Type): string | undefined {
+  private readonlyMemberMessage(
+    member: MemberExpression,
+    objectType: Type
+  ): DiagnosticMessage | undefined {
     const list = this.unionMembers(objectType).find(t => t.readonly);
     if (list) {
-      return `Cannot assign to an element of ${this.describeReference(member.object)}: '${this.typeToString(list)}' is read-only`;
+      return message('READONLY_ASSIGNMENT.element', {
+        reference: this.referencePath(member.object),
+        type: this.typeToString(list),
+      });
     }
     const property = member.computed ? undefined : this.memberPropertyName(member);
     // `ин.ном = …` initialises the property in the constructor; `Синф.ном` is a static
@@ -3463,9 +3632,7 @@ export class TypeChecker {
       name,
       translateMemberName(name)
     );
-    return declared?.readonly
-      ? `Cannot assign to '${name}' because it is a read-only property`
-      : undefined;
+    return declared?.readonly ? message('READONLY_ASSIGNMENT', { name }) : undefined;
   }
 
   /** `х -= 1`, `х += 1` on a non-string, … — operators that compute with the old value. */
@@ -3479,6 +3646,7 @@ export class TypeChecker {
     this.checkConstantOperand(binary);
     let left = this.inferExpressionType(binary.left);
     let right = this.inferRightOperand(binary);
+    if (this.silent === 0) this.onBinaryTypes?.(binary, left, right);
 
     if (op === '??') {
       if (this.isAnyLike(left) || this.isAnyLike(right)) return UNKNOWN;
@@ -3552,6 +3720,21 @@ export class TypeChecker {
     (identifier.name === 'беқимат' || identifier.name === 'undefined') &&
     !this.lookup(identifier.name);
 
+  /** The test of `агар`, `то`, `барои` and `?:`. */
+  private checkCondition(test: Expression): void {
+    this.checkConstantCondition(test);
+    // `агар (х = 1)`: a learner who meant to compare
+    const inner = skipOuterExpressions(test);
+    if (inner.type === 'AssignmentExpression' && (inner as AssignmentExpression).operator === '=') {
+      this.addWarning(
+        TypeCheckErrorCode.AssignmentInCondition,
+        message('ASSIGNMENT_IN_CONDITION'),
+        inner.line,
+        inner.column
+      );
+    }
+  }
+
   /**
    * A condition its syntax decides, as TypeScript reports it since 5.6: always
    * truthy (`агар ([])`, TS2872) or always falsy (`то ("")`, TS2873).
@@ -3561,7 +3744,7 @@ export class TypeChecker {
     if (semantics === 'sometimes') return;
     this.reportConstantCondition(
       test,
-      `This kind of expression is always ${semantics === 'always' ? 'truthy' : 'falsy'}`
+      semantics === 'always' ? 'CONSTANT_CONDITION.truthy' : 'CONSTANT_CONDITION.falsy'
     );
   }
 
@@ -3575,9 +3758,7 @@ export class TypeChecker {
     if (semantics === 'sometimes') return;
     this.reportConstantCondition(
       operand,
-      semantics === 'never'
-        ? 'Right operand of ?? is unreachable because the left operand is never nullish'
-        : 'This expression is always nullish'
+      semantics === 'never' ? 'CONSTANT_CONDITION.neverNullish' : 'CONSTANT_CONDITION.alwaysNullish'
     );
   }
 
@@ -3591,10 +3772,10 @@ export class TypeChecker {
   }
 
   /** Reports a constant condition once, also when its expression is inferred again. */
-  private reportConstantCondition(node: Expression, message: string): void {
+  private reportConstantCondition(node: Expression, id: string): void {
     if (this.silent > 0 || this.constantConditions.has(node)) return;
     this.constantConditions.add(node);
-    this.addError(TypeCheckErrorCode.ConstantCondition, message, node.line, node.column);
+    this.addError(TypeCheckErrorCode.ConstantCondition, message(id), node.line, node.column);
   }
 
   /** Conditions and `??` operands reported by `reportConstantCondition`. */
@@ -3607,7 +3788,7 @@ export class TypeChecker {
   }
 
   private inferConditionalType(conditional: ConditionalExpression, targetType?: Type): Type {
-    this.checkConstantCondition(conditional.test);
+    this.checkCondition(conditional.test);
     this.inferExpressionType(conditional.test);
     const consequent = this.withFacts(this.narrowingsFor(conditional.test, true), () =>
       this.inferExpressionType(conditional.consequent, targetType)
@@ -3648,7 +3829,10 @@ export class TypeChecker {
       const sourceName = this.typeToString(this.widenLiterals(source));
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Conversion of type '${sourceName}' to type '${this.typeToString(target)}' may be a mistake because neither type sufficiently overlaps with the other; assert to 'ношинос' first if this is intended`,
+        message('TYPE_NOT_ASSIGNABLE.conversion', {
+          source: sourceName,
+          target: this.typeToString(target),
+        }),
         assertion.line,
         assertion.column
       );
@@ -3725,7 +3909,7 @@ export class TypeChecker {
     if (!this.isConstAssertionOperand(expression)) {
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `A 'чун собит' assertion can only be applied to string, number, boolean, array or object literals`,
+        message('TYPE_NOT_ASSIGNABLE.constAssertion'),
         assertion.line,
         assertion.column
       );
@@ -3819,7 +4003,7 @@ export class TypeChecker {
     this.checkAssignable(node.expression, type, target, (source, expected) =>
       this.addError(
         TypeCheckErrorCode.TypeMismatch,
-        `Type '${source}' does not satisfy the expected type '${expected}'`,
+        message('TYPE_NOT_ASSIGNABLE.satisfies', { source, expected }),
         node.expression.line,
         node.expression.column
       )
@@ -3852,6 +4036,14 @@ export class TypeChecker {
 
   private inferCallType(callExpr: CallExpression): Type {
     const callee = callExpr.callee;
+    if (this.isBuiltinReference(callee) && isNotCallableBuiltin((callee as Identifier).name)) {
+      this.addError(
+        TypeCheckErrorCode.NotCallable,
+        message('NOT_CALLABLE', { name: (callee as Identifier).name }),
+        callee.line,
+        callee.column
+      );
+    }
     // Route identifiers through inferIdentifierType so undefined callees
     // produce a single UndefinedIdentifier diagnostic.
     const functionType = this.callableType(this.inferExpressionType(callee));
@@ -3899,7 +4091,7 @@ export class TypeChecker {
     const signatures = overloads.map(overload => this.functionTypeToString(overload)).join('; ');
     this.addError(
       TypeCheckErrorCode.NoMatchingOverload,
-      `No overload of '${functionType.name ?? 'anonymous'}' matches this call. Overloads: ${signatures}`,
+      message('NO_MATCHING_OVERLOAD', { function: functionType.name, overloads: signatures }),
       callExpr.line,
       callExpr.column
     );
@@ -3968,14 +4160,14 @@ export class TypeChecker {
       spreadIndex === -1 &&
       (args.length < requiredCount || (!hasRest && args.length > fixedCount))
     ) {
-      const expectedStr = hasRest
-        ? `at least ${requiredCount}`
-        : requiredCount === fixedCount
-          ? `${fixedCount}`
-          : `${requiredCount}-${fixedCount}`;
       this.addError(
         TypeCheckErrorCode.ArgumentCountMismatch,
-        `Function '${functionType.name ?? 'anonymous'}' expected ${expectedStr} argument(s) but got ${args.length}`,
+        message('ARGUMENT_COUNT_MISMATCH', {
+          function: functionType.name,
+          min: requiredCount,
+          max: hasRest ? undefined : fixedCount,
+          got: args.length,
+        }),
         callExpr.line,
         callExpr.column
       );
@@ -4001,7 +4193,12 @@ export class TypeChecker {
       this.checkAssignable(argNode, argType, paramType, (source, target) =>
         this.addError(
           TypeCheckErrorCode.ArgumentTypeMismatch,
-          `Argument ${i + 1} of '${functionType.name ?? 'anonymous'}' expected type '${target}' but got '${source}'`,
+          message('ARGUMENT_TYPE_MISMATCH', {
+            index: i + 1,
+            function: functionType.name,
+            expected: target,
+            got: source,
+          }),
           argNode.line,
           argNode.column
         )
@@ -4029,7 +4226,7 @@ export class TypeChecker {
         if (classType.abstract) {
           this.addError(
             TypeCheckErrorCode.AbstractInstantiation,
-            `Cannot create an instance of an abstract class '${className}'`,
+            message('ABSTRACT_INSTANTIATION', { class: className }),
             newExpr.line,
             newExpr.column
           );
@@ -4619,10 +4816,12 @@ export class TypeChecker {
     const nullish = this.nullishNames(type);
     if (nullish.length === 0) return type;
     if (this.strict && !this.isAnyLike(type)) {
-      const possible = nullish.map(name => `'${this.mapPrimitiveToTajik(name)}'`).join(' or ');
       this.addError(
         TypeCheckErrorCode.PossiblyNull,
-        `${this.describeReference(expression)} is possibly ${possible}`,
+        message('POSSIBLY_NULL', {
+          reference: this.referencePath(expression),
+          values: nullish.map(name => this.mapPrimitiveToTajik(name)),
+        }),
         expression.line,
         expression.column
       );
@@ -4630,8 +4829,8 @@ export class TypeChecker {
     return this.removeNullish(type);
   }
 
-  /** `'х'`, `'ин.сар'` for references, 'Object' for any other expression. */
-  private describeReference(expression: Expression): string {
+  /** `х`, `ин.сар` for references; nothing for any other expression. */
+  private referencePath(expression: Expression): string | undefined {
     const path = (e: Expression): string | undefined => {
       if (e.type === 'Identifier') return (e as Identifier).name;
       if (e.type === 'ThisExpression') return 'ин';
@@ -4644,8 +4843,7 @@ export class TypeChecker {
       }
       return undefined;
     };
-    const text = path(expression);
-    return text ? `'${text}'` : 'Object';
+    return path(expression);
   }
 
   // ---------------------------------------------------------------------------
@@ -4723,7 +4921,10 @@ export class TypeChecker {
       if (!targetProp) {
         this.addError(
           TypeCheckErrorCode.TypeMismatch,
-          `Object literal may only specify known properties, and '${keyName}' does not exist in type '${this.typeToString(targetType)}'`,
+          message('TYPE_NOT_ASSIGNABLE.excessProperty', {
+            property: keyName,
+            target: this.typeToString(targetType),
+          }),
           prop.line,
           prop.column
         );
@@ -5134,32 +5335,43 @@ export class TypeChecker {
     }
   }
 
-  private addError(code: TypeCheckErrorCode, message: string, line: number, column: number): void {
-    if (this.silent > 0) return;
-    this.errors.push({
-      code,
-      message,
-      line,
-      column,
-      snippet: this.getSnippet(line),
-      severity: 'error',
-    });
-  }
-
-  private addWarning(
+  private addError(
     code: TypeCheckErrorCode,
-    message: string,
+    text: DiagnosticMessage,
     line: number,
     column: number
   ): void {
     if (this.silent > 0) return;
-    this.warnings.push({
+    this.errors.push(this.diagnostic(code, text, line, column, 'error'));
+  }
+
+  /** A diagnostic with its catalog message, whose id and values give its text in other languages. */
+  private diagnostic(
+    code: TypeCheckErrorCode,
+    text: DiagnosticMessage,
+    line: number,
+    column: number,
+    severity: TypeCheckError['severity']
+  ): TypeCheckError {
+    return {
       code,
-      message,
+      message: renderMessage(text, 'en'),
       line,
       column,
       snippet: this.getSnippet(line),
-      severity: 'warning',
-    });
+      severity,
+      messageId: text.id,
+      params: text.params,
+    };
+  }
+
+  private addWarning(
+    code: TypeCheckErrorCode,
+    text: DiagnosticMessage,
+    line: number,
+    column: number
+  ): void {
+    if (this.silent > 0) return;
+    this.warnings.push(this.diagnostic(code, text, line, column, 'warning'));
   }
 }
