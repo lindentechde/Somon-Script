@@ -586,12 +586,13 @@ npm run audit:examples
 ### **For Learners and Teachers**
 
 - [🎒 Lessons for beginners](docs/tutorial/tj/README.md) - 18 lessons in Tajik
-  ([in Russian](docs/tutorial/ru/README.md)) with tasks that check themselves,
+  ([in Russian](docs/tutorial/ru/README.md),
+  [in English](docs/tutorial/en/README.md)) with tasks that check themselves,
   and [a guide for teachers](docs/tutorial/omuzgor.md)
 - [🎓 Tutorial](docs/tutorial/) - Structured learning pathway
 - [📋 Examples](examples/) - Example programs
 - [🎯 Quick Reference](docs/reference/quick-start.md) - Essential syntax guide
-- [🩺 Compiler messages in Tajik and Russian](docs/reference/diagnostics.md) -
+- [🩺 Compiler messages in Tajik, Russian and English](docs/reference/diagnostics.md) -
   what the errors say and their codes
 - [⌨️ Reading input](docs/reference/input.md) - `хондан()` and `хонданиРақам()`
 
