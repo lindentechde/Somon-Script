@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 0.5.2 (2026-10-15)
+
+### 🔒 Dependencies
+
+* Watching files (`somon compile --watch`, `ModuleSystem.watch()`) uses chokidar 4, which no longer brings braces and micromatch with their advisories. `chokidarOptions` of `ModuleSystemWatchOptions` now takes chokidar 4's options (`ChokidarOptions`): `ignored` accepts paths, regular expressions and functions, but not glob patterns.
+* Development: Jest 30, lint-staged 16, and patched versions of the other packages; `npm audit` finds no vulnerabilities. The `sprintf-js` of Jest's coverage, which has no fixed version, is left out by giving `js-yaml` 3 there `argparse` 2, whose command line it does not use.
+
 ## 0.5.1 (2026-10-14)
 
 ### ✨ Features
