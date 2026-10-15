@@ -1,4 +1,4 @@
-# Хона / Домик
+# Хона / Домик / A little house
 
 ## Масъала 01-khona: Хона
 
@@ -100,5 +100,57 @@ npm run check-task -- 01-khona барнома.som
 
 ---
 
+## Task 01-khona: A little house
+
+Use `чоп` to draw this picture. The spaces at the start of the lines matter too.
+
+```text
+    *
+   ***
+  *****
+ *******
+  |   |
+  |___|
+```
+
+**Input:** None.
+
+**Output:** The picture above.
+
+### Example
+
+Output:
+
+```text
+    *
+   ***
+  *****
+ *******
+  |   |
+  |___|
+```
+
+```som
+// Task 01-khona: A little house
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMS1raG9uYTogQSBsaXR0bGUgaG91c2UKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&t=W3siaSI6IiIsIm8iOiIgICAgKlxuICAgKioqXG4gICoqKioqXG4gKioqKioqKlxuICB8ICAgfFxuICB8X19ffFxuIn1d&task=01-khona)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 01-khona program.som
+```
+
+---
+
 [Дарси 1](../../tj/01-chop.md) · [Урок 1](../../ru/01-chop.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 1](../../en/01-chop.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

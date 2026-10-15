@@ -1,4 +1,4 @@
-# Баҳо / Оценка
+# Баҳо / Оценка / The grade
 
 ## Масъала 09-baho: Баҳо
 
@@ -98,5 +98,56 @@ npm run check-task -- 09-baho барнома.som
 
 ---
 
+## Task 09-baho: The grade
+
+Read a score (from 0 to 100) and print the grade: 90 or more - `5`, 70 or more -
+`4`, 50 or more - `3`, anything less - `2`.
+
+**Input:** One number: the score.
+
+**Output:** The grade.
+
+### Example
+
+Input:
+
+```text
+95
+```
+
+Output:
+
+```text
+5
+```
+
+```som
+// Task 09-baho: The grade
+// Write your program here
+```
+
+Input:
+
+```text
+95
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOS1iYWhvOiBUaGUgZ3JhZGUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=OTUK&t=W3siaSI6Ijk1XG4iLCJvIjoiNVxuIn0seyJpIjoiNzBcbiIsIm8iOiI0XG4ifSx7ImkiOiI1NVxuIiwibyI6IjNcbiJ9LHsiaSI6IjEwXG4iLCJvIjoiMlxuIn1d&task=09-baho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 09-baho program.som
+```
+
+---
+
 [Дарси 9](../../tj/09-shartho.md) · [Урок 9](../../ru/09-shartho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 9](../../en/09-shartho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -1,4 +1,4 @@
-# Саломдиҳӣ / Приветствие
+# Саломдиҳӣ / Приветствие / Greeting
 
 ## Масъала 13-salomdihi: Саломдиҳӣ
 
@@ -104,5 +104,59 @@ npm run check-task -- 13-salomdihi барнома.som
 
 ---
 
+## Task 13-salomdihi: Greeting
+
+Write a function `саломДиҳ(ном)` ("greet(name)") that prints `Салом, ном!`
+("Hello, name!"). Read two names and call the function for each of them.
+
+**Input:** Two lines: two names.
+
+**Output:** Two greetings.
+
+### Example
+
+Input:
+
+```text
+Алӣ
+Зарина
+```
+
+Output:
+
+```text
+Салом, Алӣ!
+Салом, Зарина!
+```
+
+```som
+// Task 13-salomdihi: Greeting
+// Write your program here
+```
+
+Input:
+
+```text
+Алӣ
+Зарина
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMy1zYWxvbWRpaGk6IEdyZWV0aW5nCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=0JDQu9OjCtCX0LDRgNC40L3QsAo&t=W3siaSI6ItCQ0LvTo1xu0JfQsNGA0LjQvdCwXG4iLCJvIjoi0KHQsNC70L7QvCwg0JDQu9OjIVxu0KHQsNC70L7QvCwg0JfQsNGA0LjQvdCwIVxuIn0seyJpIjoi0KHQuNC90L5cbtCk0LDRgNKz0L7QtFxuIiwibyI6ItCh0LDQu9C-0LwsINCh0LjQvdC-IVxu0KHQsNC70L7QvCwg0KTQsNGA0rPQvtC0IVxuIn1d&task=13-salomdihi)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 13-salomdihi program.som
+```
+
+---
+
 [Дарси 13](../../tj/13-funksiya.md) · [Урок 13](../../ru/13-funksiya.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 13](../../en/13-funksiya.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

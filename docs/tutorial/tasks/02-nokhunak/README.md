@@ -1,4 +1,4 @@
-# Нохунак / Кавычка
+# Нохунак / Кавычка / The quote mark
 
 ## Масъала 02-nokhunak: Нохунак
 
@@ -78,5 +78,46 @@ npm run check-task -- 02-nokhunak барнома.som
 
 ---
 
+## Task 02-nokhunak: The quote mark
+
+This program has a mistake. Fix it so that two lines are printed.
+
+**Input:** None.
+
+**Output:** `Салом, дӯстон!` and `Ман хатоҳоро ислоҳ мекунам.` on two lines.
+
+### Example
+
+Output:
+
+```text
+Салом, дӯстон!
+Ман хатоҳоро ислоҳ мекунам.
+```
+
+The broken program:
+
+```text
+чоп("Салом, дӯстон!);
+чоп("Ман хатоҳоро ислоҳ мекунам.");
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hKTsK0YfQvtC_KCLQnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LiIpOwo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDQtNOv0YHRgtC-0L0hXG7QnNCw0L0g0YXQsNGC0L7Ss9C-0YDQviDQuNGB0LvQvtKzINC80LXQutGD0L3QsNC8LlxuIn1d&task=02-nokhunak)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 02-nokhunak program.som
+```
+
+---
+
 [Дарси 2](../../tj/02-khato.md) · [Урок 2](../../ru/02-khato.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 2](../../en/02-khato.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

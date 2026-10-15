@@ -1,4 +1,4 @@
-# Соат ва дақиқа / Часы и минуты
+# Соат ва дақиқа / Часы и минуты / Hours and minutes
 
 ## Масъала 06-soat: Соат ва дақиқа
 
@@ -97,5 +97,55 @@ npm run check-task -- 06-soat барнома.som
 
 ---
 
+## Task 06-soat: Hours and minutes
+
+Read a number of minutes and turn it into hours and minutes: `2 соат 15 дақиқа`.
+
+**Input:** One number: the minutes.
+
+**Output:** `Н соат М дақиқа`
+
+### Example
+
+Input:
+
+```text
+135
+```
+
+Output:
+
+```text
+2 соат 15 дақиқа
+```
+
+```som
+// Task 06-soat: Hours and minutes
+// Write your program here
+```
+
+Input:
+
+```text
+135
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNi1zb2F0OiBIb3VycyBhbmQgbWludXRlcwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MTM1Cg&t=W3siaSI6IjEzNVxuIiwibyI6IjIg0YHQvtCw0YIgMTUg0LTQsNKb0LjSm9CwXG4ifSx7ImkiOiI2MFxuIiwibyI6IjEg0YHQvtCw0YIgMCDQtNCw0pvQuNKb0LBcbiJ9LHsiaSI6IjU5XG4iLCJvIjoiMCDRgdC-0LDRgiA1OSDQtNCw0pvQuNKb0LBcbiJ9XQ&task=06-soat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 06-soat program.som
+```
+
+---
+
 [Дарси 6](../../tj/06-hisob.md) · [Урок 6](../../ru/06-hisob.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 6](../../en/06-hisob.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

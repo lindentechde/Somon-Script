@@ -1,4 +1,4 @@
-# Хат / Линия
+# Хат / Линия / A line
 
 ## Масъала 13-khat: Хат
 
@@ -98,5 +98,56 @@ npm run check-task -- 13-khat барнома.som
 
 ---
 
+## Task 13-khat: A line
+
+Write a function `хат(н)` ("line") that prints `н` equals signs `=` on one line.
+Read a number and call the function.
+
+**Input:** One number.
+
+**Output:** One line of `=`.
+
+### Example
+
+Input:
+
+```text
+5
+```
+
+Output:
+
+```text
+=====
+```
+
+```som
+// Task 13-khat: A line
+// Write your program here
+```
+
+Input:
+
+```text
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMy1raGF0OiBBIGxpbmUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NQo&t=W3siaSI6IjVcbiIsIm8iOiI9PT09PVxuIn0seyJpIjoiMVxuIiwibyI6Ij1cbiJ9XQ&task=13-khat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 13-khat program.som
+```
+
+---
+
 [Дарси 13](../../tj/13-funksiya.md) · [Урок 13](../../ru/13-funksiya.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 13](../../en/13-funksiya.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

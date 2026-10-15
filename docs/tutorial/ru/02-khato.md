@@ -60,14 +60,14 @@
 Комментарий - текст, который компьютер не выполняет. Его пишут для людей:
 
 ```som
-// Ин барнома саломро чоп мекунад
+// Эта программа выводит приветствие
 чоп("Салом!"); // комментарий может стоять в конце строки
 
 /* Многострочный
    комментарий */
 ```
 
-[▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0JjQvSDQsdCw0YDQvdC-0LzQsCDRgdCw0LvQvtC80YDQviDRh9C-0L8g0LzQtdC60YPQvdCw0LQK0YfQvtC_KCLQodCw0LvQvtC8ISIpOyAvLyDQutC-0LzQvNC10L3RgtCw0YDQuNC5INC80L7QttC10YIg0YHRgtC-0Y_RgtGMINCyINC60L7QvdGG0LUg0YHRgtGA0L7QutC4CgovKiDQnNC90L7Qs9C-0YHRgtGA0L7Rh9C90YvQuQogICDQutC-0LzQvNC10L3RgtCw0YDQuNC5ICovCg)
+[▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=Ly8g0K3RgtCwINC_0YDQvtCz0YDQsNC80LzQsCDQstGL0LLQvtC00LjRgiDQv9GA0LjQstC10YLRgdGC0LLQuNC1CtGH0L7Qvygi0KHQsNC70L7QvCEiKTsgLy8g0LrQvtC80LzQtdC90YLQsNGA0LjQuSDQvNC-0LbQtdGCINGB0YLQvtGP0YLRjCDQsiDQutC-0L3RhtC1INGB0YLRgNC-0LrQuAoKLyog0JzQvdC-0LPQvtGB0YLRgNC-0YfQvdGL0LkKICAg0LrQvtC80LzQtdC90YLQsNGA0LjQuSAqLwo)
 
 - `//` - комментарий до конца строки.
 - `/* … */` - комментарий на несколько строк.

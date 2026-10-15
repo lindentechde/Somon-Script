@@ -1,4 +1,4 @@
-# Соли оянда / В следующем году
+# Соли оянда / В следующем году / Next year
 
 ## Масъала 03-soli-oyanda: Соли оянда
 
@@ -76,6 +76,46 @@ npm run check-task -- 03-soli-oyanda барнома.som
 
 ---
 
+## Task 03-soli-oyanda: Next year
+
+Start with `тағ синну = 12;`. Increase `синну` by one and print
+`Соли оянда ман 13 сола мешавам.`. Do not write the number `13` yourself: take
+it from `синну`.
+
+**Input:** None.
+
+**Output:** `Соли оянда ман 13 сола мешавам.`
+
+### Example
+
+Output:
+
+```text
+Соли оянда ман 13 сола мешавам.
+```
+
+```som
+// Task 03-soli-oyanda: Next year
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMy1zb2xpLW95YW5kYTogTmV4dCB5ZWFyCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&t=W3siaSI6IiIsIm8iOiLQodC-0LvQuCDQvtGP0L3QtNCwINC80LDQvSAxMyDRgdC-0LvQsCDQvNC10YjQsNCy0LDQvC5cbiJ9XQ&task=03-soli-oyanda)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 03-soli-oyanda program.som
+```
+
+---
+
 [Дарси 3](../../tj/03-taghyirjobanda.md) ·
 [Урок 3](../../ru/03-taghyirjobanda.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 3](../../en/03-taghyirjobanda.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

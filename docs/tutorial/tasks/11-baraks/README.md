@@ -1,4 +1,4 @@
-# Баръакс / Наоборот
+# Баръакс / Наоборот / Backwards
 
 ## Масъала 11-baraks: Баръакс
 
@@ -98,5 +98,56 @@ npm run check-task -- 11-baraks барнома.som
 
 ---
 
+## Task 11-baraks: Backwards
+
+Read a positive whole number and print its digits in reverse order: from `123`
+you get `321`, from `1200` you get `21`.
+
+**Input:** One positive number.
+
+**Output:** The reversed number.
+
+### Example
+
+Input:
+
+```text
+123
+```
+
+Output:
+
+```text
+321
+```
+
+```som
+// Task 11-baraks: Backwards
+// Write your program here
+```
+
+Input:
+
+```text
+123
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMS1iYXJha3M6IEJhY2t3YXJkcwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjMyMVxuIn0seyJpIjoiMTIwMFxuIiwibyI6IjIxXG4ifSx7ImkiOiI1XG4iLCJvIjoiNVxuIn1d&task=11-baraks)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 11-baraks program.som
+```
+
+---
+
 [Дарси 11](../../tj/11-to.md) · [Урок 11](../../ru/11-to.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 11](../../en/11-to.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

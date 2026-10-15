@@ -1,4 +1,4 @@
-# Факториал / Факториал
+# Факториал / Факториал / Factorial
 
 ## Масъала 10-faktorial: Факториал
 
@@ -98,5 +98,56 @@ npm run check-task -- 10-faktorial барнома.som
 
 ---
 
+## Task 10-faktorial: Factorial
+
+Read the number `н` and print its factorial: `1 × 2 × … × н`. The factorial of
+`0` is `1`.
+
+**Input:** One number: `н`.
+
+**Output:** The factorial.
+
+### Example
+
+Input:
+
+```text
+5
+```
+
+Output:
+
+```text
+120
+```
+
+```som
+// Task 10-faktorial: Factorial
+// Write your program here
+```
+
+Input:
+
+```text
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMC1mYWt0b3JpYWw6IEZhY3RvcmlhbAovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=NQo&t=W3siaSI6IjVcbiIsIm8iOiIxMjBcbiJ9LHsiaSI6IjBcbiIsIm8iOiIxXG4ifSx7ImkiOiIxMFxuIiwibyI6IjM2Mjg4MDBcbiJ9XQ&task=10-faktorial)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 10-faktorial program.som
+```
+
+---
+
 [Дарси 10](../../tj/10-baroi.md) · [Урок 10](../../ru/10-baroi.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 10](../../en/10-baroi.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

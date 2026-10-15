@@ -1,4 +1,4 @@
-# Шиносномаи ман / Моя карточка
+# Шиносномаи ман / Моя карточка / My card
 
 ## Масъала 03-shinosnoma: Шиносномаи ман
 
@@ -76,6 +76,46 @@ npm run check-task -- 03-shinosnoma барнома.som
 
 ---
 
+## Task 03-shinosnoma: My card
+
+Declare a variable `ном` with the value `"Сино"` and a variable `синну` with the
+value `12`. Then use them to print two lines: `Ном: Сино` and `Синну: 12`.
+
+**Input:** None.
+
+**Output:** `Ном: Сино` and `Синну: 12`.
+
+### Example
+
+Output:
+
+```text
+Ном: Сино
+Синну: 12
+```
+
+```som
+// Task 03-shinosnoma: My card
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMy1zaGlub3Nub21hOiBNeSBjYXJkCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&t=W3siaSI6IiIsIm8iOiLQndC-0Lw6INCh0LjQvdC-XG7QodC40L3QvdGDOiAxMlxuIn1d&task=03-shinosnoma)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 03-shinosnoma program.som
+```
+
+---
+
 [Дарси 3](../../tj/03-taghyirjobanda.md) ·
 [Урок 3](../../ru/03-taghyirjobanda.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 3](../../en/03-taghyirjobanda.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

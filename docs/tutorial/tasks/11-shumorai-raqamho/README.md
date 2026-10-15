@@ -1,4 +1,4 @@
-# Шумораи рақамҳо / Количество цифр
+# Шумораи рақамҳо / Количество цифр / Number of digits
 
 ## Масъала 11-shumorai-raqamho: Шумораи рақамҳо
 
@@ -96,5 +96,55 @@ npm run check-task -- 11-shumorai-raqamho барнома.som
 
 ---
 
+## Task 11-shumorai-raqamho: Number of digits
+
+Read a positive whole number and print how many digits it has.
+
+**Input:** One positive number.
+
+**Output:** The number of digits.
+
+### Example
+
+Input:
+
+```text
+2026
+```
+
+Output:
+
+```text
+4
+```
+
+```som
+// Task 11-shumorai-raqamho: Number of digits
+// Write your program here
+```
+
+Input:
+
+```text
+2026
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMS1zaHVtb3JhaS1yYXFhbWhvOiBOdW1iZXIgb2YgZGlnaXRzCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=MjAyNgo&t=W3siaSI6IjIwMjZcbiIsIm8iOiI0XG4ifSx7ImkiOiI3XG4iLCJvIjoiMVxuIn0seyJpIjoiMTAwMDAwXG4iLCJvIjoiNlxuIn1d&task=11-shumorai-raqamho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 11-shumorai-raqamho program.som
+```
+
+---
+
 [Дарси 11](../../tj/11-to.md) · [Урок 11](../../ru/11-to.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 11](../../en/11-to.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

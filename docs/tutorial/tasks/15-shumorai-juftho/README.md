@@ -1,4 +1,4 @@
-# Шумораи ҷуфтҳо / Количество чётных
+# Шумораи ҷуфтҳо / Количество чётных / Number of even numbers
 
 ## Масъала 15-shumorai-juftho: Шумораи ҷуфтҳо
 
@@ -118,5 +118,66 @@ npm run check-task -- 15-shumorai-juftho барнома.som
 
 ---
 
+## Task 15-shumorai-juftho: Number of even numbers
+
+Read numbers into a list and print how many of them are even.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The number of even numbers.
+
+### Example
+
+Input:
+
+```text
+5
+1
+2
+3
+4
+6
+```
+
+Output:
+
+```text
+3
+```
+
+```som
+// Task 15-shumorai-juftho: Number of even numbers
+// Write your program here
+```
+
+Input:
+
+```text
+5
+1
+2
+3
+4
+6
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNS1zaHVtb3JhaS1qdWZ0aG86IE51bWJlciBvZiBldmVuIG51bWJlcnMKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NQoxCjIKMwo0CjYK&t=W3siaSI6IjVcbjFcbjJcbjNcbjRcbjZcbiIsIm8iOiIzXG4ifSx7ImkiOiIyXG4xXG4zXG4iLCJvIjoiMFxuIn1d&task=15-shumorai-juftho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 15-shumorai-juftho program.som
+```
+
+---
+
 [Дарси 15](../../tj/15-ruykhat.md) · [Урок 15](../../ru/15-ruykhat.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 15](../../en/15-ruykhat.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

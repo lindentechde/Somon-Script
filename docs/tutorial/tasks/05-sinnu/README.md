@@ -1,4 +1,4 @@
-# Синну сол / Возраст
+# Синну сол / Возраст / Age
 
 ## Масъала 05-sinnu: Синну сол
 
@@ -101,5 +101,58 @@ npm run check-task -- 05-sinnu барнома.som
 
 ---
 
+## Task 05-sinnu: Age
+
+Read the year of birth and the current year, and print how old the person turns
+this year.
+
+**Input:** Two lines: the year of birth, then the current year.
+
+**Output:** One number.
+
+### Example
+
+Input:
+
+```text
+2012
+2026
+```
+
+Output:
+
+```text
+14
+```
+
+```som
+// Task 05-sinnu: Age
+// Write your program here
+```
+
+Input:
+
+```text
+2012
+2026
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNS1zaW5udTogQWdlCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=MjAxMgoyMDI2Cg&t=W3siaSI6IjIwMTJcbjIwMjZcbiIsIm8iOiIxNFxuIn0seyJpIjoiMjAwMFxuMjAyNlxuIiwibyI6IjI2XG4ifV0&task=05-sinnu)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 05-sinnu program.som
+```
+
+---
+
 [Дарси 5](../../tj/05-vurud.md) · [Урок 5](../../ru/05-vurud.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 5](../../en/05-vurud.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

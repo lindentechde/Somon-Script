@@ -1,4 +1,4 @@
-# Сонияҳои рӯз / Секунды в сутках
+# Сонияҳои рӯз / Секунды в сутках / Seconds in a day
 
 ## Масъала 04-soniyaho: Сонияҳои рӯз
 
@@ -74,5 +74,44 @@ npm run check-task -- 04-soniyaho барнома.som
 
 ---
 
+## Task 04-soniyaho: Seconds in a day
+
+A day has 24 hours, an hour has 60 minutes, and a minute has 60 seconds. Use
+arithmetic to work out the number of seconds in a day, and print it.
+
+**Input:** None.
+
+**Output:** One number.
+
+### Example
+
+Output:
+
+```text
+86400
+```
+
+```som
+// Task 04-soniyaho: Seconds in a day
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNC1zb25peWFobzogU2Vjb25kcyBpbiBhIGRheQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&t=W3siaSI6IiIsIm8iOiI4NjQwMFxuIn1d&task=04-soniyaho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 04-soniyaho program.som
+```
+
+---
+
 [Дарси 4](../../tj/04-raqam.md) · [Урок 4](../../ru/04-raqam.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 4](../../en/04-raqam.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

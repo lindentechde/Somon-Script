@@ -55,10 +55,11 @@ const printed = (events: RunEvent[]) =>
   events.flatMap(event => (event.type === 'output' ? [event.text] : [])).join('\n');
 
 describe('tutorial lessons', () => {
-  test('15 to 20 lessons, the same in Tajik and Russian', () => {
+  test('15 to 20 lessons, the same in Tajik, Russian and English', () => {
     expect(lessons('tj').length).toBeGreaterThanOrEqual(15);
     expect(lessons('tj').length).toBeLessThanOrEqual(20);
     expect(lessons('ru')).toEqual(lessons('tj'));
+    expect(lessons('en')).toEqual(lessons('tj'));
   });
 
   test('the playground links are made from the code above them', () => {
@@ -77,22 +78,25 @@ describe('tutorial lessons', () => {
     expect(updateLinks(crlf(page), '05-vurud.md')).toBe(crlf(page));
   });
 
-  test.each(['tj', 'ru'])('every %s lesson has examples and 3-5 tasks that exist', language => {
-    const linked = new Set<string>();
-    for (const lesson of lessons(language)) {
-      const text = fs.readFileSync(path.join(TUTORIAL, language, lesson), 'utf8');
-      const examples = text.match(/\]\(https:\/\/lindentechde\.github\.io\/Somon-Script\/#c=/g);
-      expect([lesson, (examples ?? []).length >= 2]).toEqual([lesson, true]);
-      const tasks = [...text.matchAll(/\]\(\.\.\/tasks\/([^/]+)\/README\.md\)/g)].map(m => m[1]);
-      expect([lesson, tasks.length >= 3 && tasks.length <= 5]).toEqual([lesson, true]);
-      for (const task of tasks) {
-        expect(taskIds).toContain(task);
-        linked.add(task);
+  test.each(['tj', 'ru', 'en'])(
+    'every %s lesson has examples and 3-5 tasks that exist',
+    language => {
+      const linked = new Set<string>();
+      for (const lesson of lessons(language)) {
+        const text = fs.readFileSync(path.join(TUTORIAL, language, lesson), 'utf8');
+        const examples = text.match(/\]\(https:\/\/lindentechde\.github\.io\/Somon-Script\/#c=/g);
+        expect([lesson, (examples ?? []).length >= 2]).toEqual([lesson, true]);
+        const tasks = [...text.matchAll(/\]\(\.\.\/tasks\/([^/]+)\/README\.md\)/g)].map(m => m[1]);
+        expect([lesson, tasks.length >= 3 && tasks.length <= 5]).toEqual([lesson, true]);
+        for (const task of tasks) {
+          expect(taskIds).toContain(task);
+          linked.add(task);
+        }
       }
+      // Every task belongs to a lesson
+      expect([...linked].sort()).toEqual(taskIds);
     }
-    // Every task belongs to a lesson
-    expect([...linked].sort()).toEqual(taskIds);
-  });
+  );
 
   test('the examples of the lessons run as the lessons say', async () => {
     for (const lesson of lessons('tj')) {
@@ -130,7 +134,8 @@ describe('tutorial tasks', () => {
     for (const id of taskIds) {
       const readme = fs.readFileSync(path.join(TASKS, id, 'README.md'), 'utf8');
       const links = [...readme.matchAll(/&t=([\w-]+)&task=([\w-]+)\)/g)];
-      expect([id, links.length]).toEqual([id, 2]);
+      // One link in each language: Tajik, Russian and English
+      expect([id, links.length]).toEqual([id, 3]);
       const tests = readTests(path.join(TASKS, id)).map(
         (test: { input: string; expected: string }) => ({
           i: test.input,
@@ -142,7 +147,7 @@ describe('tutorial tasks', () => {
         expect(link[2]).toBe(id);
       }
     }
-    for (const language of ['tj', 'ru']) {
+    for (const language of ['tj', 'ru', 'en']) {
       for (const lesson of lessons(language)) {
         expect(fs.readFileSync(path.join(TUTORIAL, language, lesson), 'utf8')).not.toContain('&t=');
       }

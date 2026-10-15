@@ -1,4 +1,4 @@
-# Хонанда / Ученик
+# Хонанда / Ученик / The student
 
 ## Масъала 18-khonanda: Хонанда
 
@@ -110,5 +110,63 @@ npm run check-task -- 18-khonanda барнома.som
 
 ---
 
+## Task 18-khonanda: The student
+
+Read the name and the three marks of a student. Create the object
+`{ ном, холҳо }` ("name", "marks") and print `name: average`, where the average
+is the average of the three marks.
+
+**Input:** Four lines: the name, then three marks.
+
+**Output:** `name: average`
+
+### Example
+
+Input:
+
+```text
+Зарина
+5
+4
+3
+```
+
+Output:
+
+```text
+Зарина: 4
+```
+
+```som
+// Task 18-khonanda: The student
+// Write your program here
+```
+
+Input:
+
+```text
+Зарина
+5
+4
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxOC1raG9uYW5kYTogVGhlIHN0dWRlbnQKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=0JfQsNGA0LjQvdCwCjUKNAozCg&t=W3siaSI6ItCX0LDRgNC40L3QsFxuNVxuNFxuM1xuIiwibyI6ItCX0LDRgNC40L3QsDogNFxuIn0seyJpIjoi0JDQu9OjXG41XG41XG41XG4iLCJvIjoi0JDQu9OjOiA1XG4ifV0&task=18-khonanda)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 18-khonanda program.som
+```
+
+---
+
 [Дарси 18](../../tj/18-obyekt.md) · [Урок 18](../../ru/18-obyekt.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 18](../../en/18-obyekt.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

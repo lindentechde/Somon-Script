@@ -1,4 +1,4 @@
-# Рамз / Пароль
+# Рамз / Пароль / Password
 
 ## Масъала 07-ramz: Рамз
 
@@ -98,5 +98,56 @@ npm run check-task -- 07-ramz барнома.som
 
 ---
 
+## Task 07-ramz: Password
+
+Read a word and print whether it matches the password `сомон`: `дуруст` or
+`нодуруст`.
+
+**Input:** One word.
+
+**Output:** `дуруст` or `нодуруст`
+
+### Example
+
+Input:
+
+```text
+сомон
+```
+
+Output:
+
+```text
+дуруст
+```
+
+```som
+// Task 07-ramz: Password
+// Write your program here
+```
+
+Input:
+
+```text
+сомон
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNy1yYW16OiBQYXNzd29yZAovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=0YHQvtC80L7QvQo&t=W3siaSI6ItGB0L7QvNC-0L1cbiIsIm8iOiLQtNGD0YDRg9GB0YJcbiJ9LHsiaSI6ItCh0L7QvNC-0L1cbiIsIm8iOiLQvdC-0LTRg9GA0YPRgdGCXG4ifSx7ImkiOiLRgdC10LFcbiIsIm8iOiLQvdC-0LTRg9GA0YPRgdGCXG4ifV0&task=07-ramz)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 07-ramz program.som
+```
+
+---
+
 [Дарси 7](../../tj/07-muqoisa.md) · [Урок 7](../../ru/07-muqoisa.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 7](../../en/07-muqoisa.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

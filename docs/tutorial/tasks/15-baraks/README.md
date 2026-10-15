@@ -1,4 +1,4 @@
-# Баръакс / Наоборот
+# Баръакс / Наоборот / Backwards
 
 ## Масъала 15-baraks: Баръакс
 
@@ -116,5 +116,65 @@ npm run check-task -- 15-baraks барнома.som
 
 ---
 
+## Task 15-baraks: Backwards
+
+Read numbers into a list and print them in reverse order, each on a separate
+line.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The numbers in reverse order.
+
+### Example
+
+Input:
+
+```text
+3
+1
+2
+3
+```
+
+Output:
+
+```text
+3
+2
+1
+```
+
+```som
+// Task 15-baraks: Backwards
+// Write your program here
+```
+
+Input:
+
+```text
+3
+1
+2
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNS1iYXJha3M6IEJhY2t3YXJkcwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MwoxCjIKMwo&t=W3siaSI6IjNcbjFcbjJcbjNcbiIsIm8iOiIzXG4yXG4xXG4ifSx7ImkiOiIxXG43XG4iLCJvIjoiN1xuIn1d&task=15-baraks)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 15-baraks program.som
+```
+
+---
+
 [Дарси 15](../../tj/15-ruykhat.md) · [Урок 15](../../ru/15-ruykhat.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 15](../../en/15-ruykhat.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

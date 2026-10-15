@@ -1,4 +1,4 @@
-# Калонтар? / Больше?
+# Калонтар? / Больше? / Greater?
 
 ## Масъала 07-kalontar: Калонтар?
 
@@ -102,5 +102,58 @@ npm run check-task -- 07-kalontar барнома.som
 
 ---
 
+## Task 07-kalontar: Greater?
+
+Read two numbers and print the result of the comparison `а > б`: `дуруст` or
+`нодуруст`.
+
+**Input:** Two numbers.
+
+**Output:** `дуруст` or `нодуруст`
+
+### Example
+
+Input:
+
+```text
+5
+3
+```
+
+Output:
+
+```text
+дуруст
+```
+
+```som
+// Task 07-kalontar: Greater?
+// Write your program here
+```
+
+Input:
+
+```text
+5
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNy1rYWxvbnRhcjogR3JlYXRlcj8KLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NQozCg&t=W3siaSI6IjVcbjNcbiIsIm8iOiLQtNGD0YDRg9GB0YJcbiJ9LHsiaSI6IjJcbjdcbiIsIm8iOiLQvdC-0LTRg9GA0YPRgdGCXG4ifSx7ImkiOiI0XG40XG4iLCJvIjoi0L3QvtC00YPRgNGD0YHRglxuIn1d&task=07-kalontar)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 07-kalontar program.som
+```
+
+---
+
 [Дарси 7](../../tj/07-muqoisa.md) · [Урок 7](../../ru/07-muqoisa.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 7](../../en/07-muqoisa.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

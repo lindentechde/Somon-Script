@@ -1,4 +1,4 @@
-# Тақсими себҳо / Делим яблоки
+# Тақсими себҳо / Делим яблоки / Sharing apples
 
 ## Масъала 06-sebho: Тақсими себҳо
 
@@ -104,5 +104,59 @@ npm run check-task -- 06-sebho барнома.som
 
 ---
 
+## Task 06-sebho: Sharing apples
+
+Read the number of apples and the number of children. The apples are shared
+equally. Print how many apples each child gets and how many are left over.
+
+**Input:** Two lines: the apples, then the children.
+
+**Output:** `Ҳар кас: …` and `Боқӣ: …`
+
+### Example
+
+Input:
+
+```text
+17
+5
+```
+
+Output:
+
+```text
+Ҳар кас: 3
+Боқӣ: 2
+```
+
+```som
+// Task 06-sebho: Sharing apples
+// Write your program here
+```
+
+Input:
+
+```text
+17
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNi1zZWJobzogU2hhcmluZyBhcHBsZXMKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=MTcKNQo&t=W3siaSI6IjE3XG41XG4iLCJvIjoi0rLQsNGAINC60LDRgTogM1xu0JHQvtKb06M6IDJcbiJ9LHsiaSI6IjIwXG40XG4iLCJvIjoi0rLQsNGAINC60LDRgTogNVxu0JHQvtKb06M6IDBcbiJ9XQ&task=06-sebho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 06-sebho program.som
+```
+
+---
+
 [Дарси 6](../../tj/06-hisob.md) · [Урок 6](../../ru/06-hisob.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 6](../../en/06-hisob.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

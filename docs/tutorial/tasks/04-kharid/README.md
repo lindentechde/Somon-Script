@@ -1,4 +1,4 @@
-# Харид / Покупка
+# Харид / Покупка / A purchase
 
 ## Масъала 04-kharid: Харид
 
@@ -74,5 +74,44 @@ npm run check-task -- 04-kharid барнома.som
 
 ---
 
+## Task 04-kharid: A purchase
+
+A notebook costs 3 somoni, and a pen costs 2 somoni. We bought 5 notebooks and 4
+pens. How many somoni did we pay in total? Print: `Ҳамагӣ: …`.
+
+**Input:** None.
+
+**Output:** `Ҳамагӣ: …`
+
+### Example
+
+Output:
+
+```text
+Ҳамагӣ: 23
+```
+
+```som
+// Task 04-kharid: A purchase
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNC1raGFyaWQ6IEEgcHVyY2hhc2UKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&t=W3siaSI6IiIsIm8iOiLSstCw0LzQsNCz06M6IDIzXG4ifV0&task=04-kharid)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 04-kharid program.som
+```
+
+---
+
 [Дарси 4](../../tj/04-raqam.md) · [Урок 4](../../ru/04-raqam.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 4](../../en/04-raqam.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

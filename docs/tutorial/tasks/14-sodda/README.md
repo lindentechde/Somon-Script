@@ -1,4 +1,4 @@
-# Адади содда / Простое число
+# Адади содда / Простое число / Prime number
 
 ## Масъала 14-sodda: Адади содда
 
@@ -100,5 +100,57 @@ npm run check-task -- 14-sodda барнома.som
 
 ---
 
+## Task 14-sodda: Prime number
+
+Write a function `соддаАст(н)` ("isPrime(n)") that returns `дуруст` ("true") if
+`н` is a prime number (greater than 1 and divisible only by 1 and by itself).
+Read a number and print `Содда` ("Prime") or `Содда нест` ("Not prime").
+
+**Input:** One whole number.
+
+**Output:** `Содда` or `Содда нест`
+
+### Example
+
+Input:
+
+```text
+7
+```
+
+Output:
+
+```text
+Содда
+```
+
+```som
+// Task 14-sodda: Prime number
+// Write your program here
+```
+
+Input:
+
+```text
+7
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNC1zb2RkYTogUHJpbWUgbnVtYmVyCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=Nwo&t=W3siaSI6IjdcbiIsIm8iOiLQodC-0LTQtNCwXG4ifSx7ImkiOiIxXG4iLCJvIjoi0KHQvtC00LTQsCDQvdC10YHRglxuIn0seyJpIjoiMTJcbiIsIm8iOiLQodC-0LTQtNCwINC90LXRgdGCXG4ifSx7ImkiOiIyXG4iLCJvIjoi0KHQvtC00LTQsFxuIn1d&task=14-sodda)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 14-sodda program.som
+```
+
+---
+
 [Дарси 14](../../tj/14-bozgasht.md) · [Урок 14](../../ru/14-bozgasht.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 14](../../en/14-bozgasht.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

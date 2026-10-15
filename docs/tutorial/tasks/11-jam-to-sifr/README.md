@@ -1,4 +1,4 @@
-# Ҷамъ то сифр / Сумма до нуля
+# Ҷамъ то сифр / Сумма до нуля / Sum until zero
 
 ## Масъала 11-jam-to-sifr: Ҷамъ то сифр
 
@@ -108,5 +108,61 @@ npm run check-task -- 11-jam-to-sifr барнома.som
 
 ---
 
+## Task 11-jam-to-sifr: Sum until zero
+
+Read numbers one at a time until a `0` comes. Print the sum of all the numbers.
+
+**Input:** Numbers, each on a separate line; the last one is `0`.
+
+**Output:** The sum.
+
+### Example
+
+Input:
+
+```text
+5
+3
+8
+0
+```
+
+Output:
+
+```text
+16
+```
+
+```som
+// Task 11-jam-to-sifr: Sum until zero
+// Write your program here
+```
+
+Input:
+
+```text
+5
+3
+8
+0
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMS1qYW0tdG8tc2lmcjogU3VtIHVudGlsIHplcm8KLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NQozCjgKMAo&t=W3siaSI6IjVcbjNcbjhcbjBcbiIsIm8iOiIxNlxuIn0seyJpIjoiMFxuIiwibyI6IjBcbiJ9XQ&task=11-jam-to-sifr)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 11-jam-to-sifr program.som
+```
+
+---
+
 [Дарси 11](../../tj/11-to.md) · [Урок 11](../../ru/11-to.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 11](../../en/11-to.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

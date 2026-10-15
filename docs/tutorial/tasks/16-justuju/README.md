@@ -1,4 +1,4 @@
-# Ҷустуҷӯ / Поиск
+# Ҷустуҷӯ / Поиск / Search
 
 ## Масъала 16-justuju: Ҷустуҷӯ
 
@@ -118,5 +118,67 @@ npm run check-task -- 16-justuju барнома.som
 
 ---
 
+## Task 16-justuju: Search
+
+Read numbers into a list, then the number to search for. Print its first index
+in the list, or `-1` if it is not there.
+
+**Input:** The first line is `н`, then `н` numbers, then the number to search
+for.
+
+**Output:** The index or `-1`.
+
+### Example
+
+Input:
+
+```text
+4
+5
+8
+2
+8
+8
+```
+
+Output:
+
+```text
+1
+```
+
+```som
+// Task 16-justuju: Search
+// Write your program here
+```
+
+Input:
+
+```text
+4
+5
+8
+2
+8
+8
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNi1qdXN0dWp1OiBTZWFyY2gKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NAo1CjgKMgo4CjgK&t=W3siaSI6IjRcbjVcbjhcbjJcbjhcbjhcbiIsIm8iOiIxXG4ifSx7ImkiOiIzXG4xXG4yXG4zXG43XG4iLCJvIjoiLTFcbiJ9XQ&task=16-justuju)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 16-justuju program.som
+```
+
+---
+
 [Дарси 16](../../tj/16-ruykhatho.md) · [Урок 16](../../ru/16-ruykhatho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 16](../../en/16-ruykhatho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

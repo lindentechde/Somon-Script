@@ -1,4 +1,4 @@
-# Аз 1 то н / От 1 до н
+# Аз 1 то н / От 1 до н / From 1 to n
 
 ## Масъала 10-1-to-n: Аз 1 то н
 
@@ -101,5 +101,58 @@ npm run check-task -- 10-1-to-n барнома.som
 
 ---
 
+## Task 10-1-to-n: From 1 to n
+
+Read the number `н` and print the numbers from 1 to `н`, each on a separate
+line.
+
+**Input:** One number: `н`.
+
+**Output:** The numbers from 1 to `н`.
+
+### Example
+
+Input:
+
+```text
+3
+```
+
+Output:
+
+```text
+1
+2
+3
+```
+
+```som
+// Task 10-1-to-n: From 1 to n
+// Write your program here
+```
+
+Input:
+
+```text
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMC0xLXRvLW46IEZyb20gMSB0byBuCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=Mwo&t=W3siaSI6IjNcbiIsIm8iOiIxXG4yXG4zXG4ifSx7ImkiOiI1XG4iLCJvIjoiMVxuMlxuM1xuNFxuNVxuIn1d&task=10-1-to-n)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 10-1-to-n program.som
+```
+
+---
+
 [Дарси 10](../../tj/10-baroi.md) · [Урок 10](../../ru/10-baroi.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 10](../../en/10-baroi.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

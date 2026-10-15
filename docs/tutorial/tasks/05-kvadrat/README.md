@@ -1,4 +1,4 @@
-# Квадрат / Квадрат
+# Квадрат / Квадрат / Square
 
 ## Масъала 05-kvadrat: Квадрат
 
@@ -96,5 +96,55 @@ npm run check-task -- 05-kvadrat барнома.som
 
 ---
 
+## Task 05-kvadrat: Square
+
+Read a number and print its square (the number multiplied by itself).
+
+**Input:** One number.
+
+**Output:** Its square.
+
+### Example
+
+Input:
+
+```text
+4
+```
+
+Output:
+
+```text
+16
+```
+
+```som
+// Task 05-kvadrat: Square
+// Write your program here
+```
+
+Input:
+
+```text
+4
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNS1rdmFkcmF0OiBTcXVhcmUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NAo&t=W3siaSI6IjRcbiIsIm8iOiIxNlxuIn0seyJpIjoiMTJcbiIsIm8iOiIxNDRcbiJ9LHsiaSI6Ii0zXG4iLCJvIjoiOVxuIn1d&task=05-kvadrat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 05-kvadrat program.som
+```
+
+---
+
 [Дарси 5](../../tj/05-vurud.md) · [Урок 5](../../ru/05-vurud.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 5](../../en/05-vurud.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

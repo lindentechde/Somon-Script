@@ -43,7 +43,8 @@
 [▶ Дар майдони озмоиш иҷро кунед](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7Qu9Kz0L4gPSBbNTUsIDkyLCA0NywgNzgsIDMwXTsK0YLQsNKTINCz0YPQt9Cw0YjRgtCw0LPQvtC9ID0g0YXQvtC70rPQvi7RhNC40LvRgtGAKNGFID0-INGFID49IDUwKTsK0YLQsNKTINC00YPRh9Cw0L3QtCA9INGF0L7Qu9Kz0L4u0YXQsNGA0LjRgtCwKNGFID0-INGFICogMik7CtGH0L7Qvygi0JPRg9C30LDRiNGC0LDQs9C-0L06Iiwg0LPRg9C30LDRiNGC0LDQs9C-0L0pOwrRh9C-0L8oItCU0YPRh9Cw0L3QtDoiLCDQtNGD0YfQsNC90LQpOwo)
 
 - `филтр` танҳо унсурҳоеро нигоҳ медорад, ки барои онҳо шарт `дуруст` аст.
-- `харита` ҳар унсурро иваз карда, рӯйхати нав месозад.
+- `харита` аз натиҷаи функсия барои ҳар унсур рӯйхати нав месозад; худи `холҳо`
+  тағйир намеёбад.
 - `х => х >= 50` - функсияи кӯтоҳ: `х` мегирад ва `х >= 50`-ро бармегардонад.
 
 ## Супоришҳо

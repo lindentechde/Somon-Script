@@ -1,4 +1,4 @@
-# Қимати мутлақ / Модуль числа
+# Қимати мутлақ / Модуль числа / Absolute value
 
 ## Масъала 08-mutlaq: Қимати мутлақ
 
@@ -98,5 +98,56 @@ npm run check-task -- 08-mutlaq барнома.som
 
 ---
 
+## Task 08-mutlaq: Absolute value
+
+Read a number and print its absolute value without using `Риёзӣ.мутлақ`: if the
+number is negative, change its sign.
+
+**Input:** One number.
+
+**Output:** The absolute value.
+
+### Example
+
+Input:
+
+```text
+-7
+```
+
+Output:
+
+```text
+7
+```
+
+```som
+// Task 08-mutlaq: Absolute value
+// Write your program here
+```
+
+Input:
+
+```text
+-7
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOC1tdXRsYXE6IEFic29sdXRlIHZhbHVlCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=LTcK&t=W3siaSI6Ii03XG4iLCJvIjoiN1xuIn0seyJpIjoiM1xuIiwibyI6IjNcbiJ9LHsiaSI6IjBcbiIsIm8iOiIwXG4ifV0&task=08-mutlaq)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 08-mutlaq program.som
+```
+
+---
+
 [Дарси 8](../../tj/08-agar.md) · [Урок 8](../../ru/08-agar.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 8](../../en/08-agar.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

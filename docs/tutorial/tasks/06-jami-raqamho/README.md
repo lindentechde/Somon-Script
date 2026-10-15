@@ -1,4 +1,4 @@
-# Ҷамъи рақамҳо / Сумма цифр
+# Ҷамъи рақамҳо / Сумма цифр / Sum of digits
 
 ## Масъала 06-jami-raqamho: Ҷамъи рақамҳо
 
@@ -98,5 +98,56 @@ npm run check-task -- 06-jami-raqamho барнома.som
 
 ---
 
+## Task 06-jami-raqamho: Sum of digits
+
+Read a three-digit number and print the sum of its digits. For example, for
+`123` the answer is `6`. Hint: `% 10` gives the last digit.
+
+**Input:** A three-digit number.
+
+**Output:** The sum of the digits.
+
+### Example
+
+Input:
+
+```text
+123
+```
+
+Output:
+
+```text
+6
+```
+
+```som
+// Task 06-jami-raqamho: Sum of digits
+// Write your program here
+```
+
+Input:
+
+```text
+123
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNi1qYW1pLXJhcWFtaG86IFN1bSBvZiBkaWdpdHMKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=MTIzCg&t=W3siaSI6IjEyM1xuIiwibyI6IjZcbiJ9LHsiaSI6IjkwOVxuIiwibyI6IjE4XG4ifSx7ImkiOiIxMDBcbiIsIm8iOiIxXG4ifV0&task=06-jami-raqamho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 06-jami-raqamho program.som
+```
+
+---
+
 [Дарси 6](../../tj/06-hisob.md) · [Урок 6](../../ru/06-hisob.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 6](../../en/06-hisob.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -1,4 +1,4 @@
-# Тартиб / Сортировка
+# Тартиб / Сортировка / Sorting
 
 ## Масъала 16-tartib: Тартиб
 
@@ -122,5 +122,68 @@ npm run check-task -- 16-tartib барнома.som
 
 ---
 
+## Task 16-tartib: Sorting
+
+Read numbers into a list and print them from the smallest to the largest, each
+on a separate line.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The numbers from the smallest to the largest.
+
+### Example
+
+Input:
+
+```text
+4
+30
+4
+100
+25
+```
+
+Output:
+
+```text
+4
+25
+30
+100
+```
+
+```som
+// Task 16-tartib: Sorting
+// Write your program here
+```
+
+Input:
+
+```text
+4
+30
+4
+100
+25
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNi10YXJ0aWI6IFNvcnRpbmcKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NAozMAo0CjEwMAoyNQo&t=W3siaSI6IjRcbjMwXG40XG4xMDBcbjI1XG4iLCJvIjoiNFxuMjVcbjMwXG4xMDBcbiJ9LHsiaSI6IjNcbi0xXG4tMTBcbjVcbiIsIm8iOiItMTBcbi0xXG41XG4ifV0&task=16-tartib)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 16-tartib program.som
+```
+
+---
+
 [Дарси 16](../../tj/16-ruykhatho.md) · [Урок 16](../../ru/16-ruykhatho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 16](../../en/16-ruykhatho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -1,4 +1,4 @@
-# Калонтарин аз се / Наибольшее из трёх
+# Калонтарин аз се / Наибольшее из трёх / The greatest of three
 
 ## Масъала 14-kalontarin-az-se: Калонтарин аз се
 
@@ -106,5 +106,61 @@ npm run check-task -- 14-kalontarin-az-se барнома.som
 
 ---
 
+## Task 14-kalontarin-az-se: The greatest of three
+
+Write a function `калонтарин(а, б)` ("greatest(a, b)") that returns the greater
+of two numbers. Read three numbers and print the greatest of them with the help
+of this function.
+
+**Input:** Three numbers.
+
+**Output:** The greatest.
+
+### Example
+
+Input:
+
+```text
+3
+9
+4
+```
+
+Output:
+
+```text
+9
+```
+
+```som
+// Task 14-kalontarin-az-se: The greatest of three
+// Write your program here
+```
+
+Input:
+
+```text
+3
+9
+4
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNC1rYWxvbnRhcmluLWF6LXNlOiBUaGUgZ3JlYXRlc3Qgb2YgdGhyZWUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=Mwo5CjQK&t=W3siaSI6IjNcbjlcbjRcbiIsIm8iOiI5XG4ifSx7ImkiOiItMVxuLTVcbi0yXG4iLCJvIjoiLTFcbiJ9XQ&task=14-kalontarin-az-se)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 14-kalontarin-az-se program.som
+```
+
+---
+
 [Дарси 14](../../tj/14-bozgasht.md) · [Урок 14](../../ru/14-bozgasht.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 14](../../en/14-bozgasht.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

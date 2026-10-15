@@ -1,4 +1,4 @@
-# Се сатр / Три строки
+# Се сатр / Три строки / Three lines
 
 ## Масъала 01-se-satr: Се сатр
 
@@ -88,5 +88,51 @@ npm run check-task -- 01-se-satr барнома.som
 
 ---
 
+## Task 01-se-satr: Three lines
+
+Print these three lines exactly:
+
+```text
+Ман барномасозиро меомӯзам.
+Барнома аз фармонҳо иборат аст.
+Ҳар фармон бо нуқтавергул тамом мешавад.
+```
+
+**Input:** None.
+
+**Output:** The three lines above.
+
+### Example
+
+Output:
+
+```text
+Ман барномасозиро меомӯзам.
+Барнома аз фармонҳо иборат аст.
+Ҳар фармон бо нуқтавергул тамом мешавад.
+```
+
+```som
+// Task 01-se-satr: Three lines
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMS1zZS1zYXRyOiBUaHJlZSBsaW5lcwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&t=W3siaSI6IiIsIm8iOiLQnNCw0L0g0LHQsNGA0L3QvtC80LDRgdC-0LfQuNGA0L4g0LzQtdC-0LzTr9C30LDQvC5cbtCR0LDRgNC90L7QvNCwINCw0Lcg0YTQsNGA0LzQvtC90rPQviDQuNCx0L7RgNCw0YIg0LDRgdGCLlxu0rLQsNGAINGE0LDRgNC80L7QvSDQsdC-INC90YPSm9GC0LDQstC10YDQs9GD0Lsg0YLQsNC80L7QvCDQvNC10YjQsNCy0LDQtC5cbiJ9XQ&task=01-se-satr)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 01-se-satr program.som
+```
+
+---
+
 [Дарси 1](../../tj/01-chop.md) · [Урок 1](../../ru/01-chop.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 1](../../en/01-chop.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

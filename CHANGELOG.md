@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 0.6.0 (2026-10-15)
+
+### ✨ Features
+
+* The tutorial and the learn kit are in English too: docs/tutorial/en has the 18 lessons, each task page (docs/tutorial/tasks/<id>/README.md) has an English section, and `lessons.json` and `tasks.json` carry `en` beside `tj` and `ru` in every text (the lesson and task titles, the steps' HTML, the examples' code with English comments, the quiz options, the task statements). The lessons in all three languages must give the same steps; the build checks it. somonscript.lindentech.de shows them at /en.
+
+### 📚 Documentation
+
+* Lesson 1 (tj) no longer asks for three lines "about yourself": the task prints three given lines. Lesson 6 (ru) writes `рақам % 2` in code, not `число % 2`. Lesson 16 says that `харита` builds a new list and leaves the old one as it is. The comments of two Russian examples (lessons 2 and 11) are in Russian.
+
 ## 0.5.2 (2026-10-15)
 
 ### 🔒 Dependencies

@@ -1,4 +1,4 @@
-# Бе такрор / Без повторов
+# Бе такрор / Без повторов / No repeats
 
 ## Масъала 16-be-takror: Бе такрор
 
@@ -128,5 +128,71 @@ npm run check-task -- 16-be-takror барнома.som
 
 ---
 
+## Task 16-be-takror: No repeats
+
+Read numbers into a list and print each number only once, in the order in which
+it first appears.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The numbers without repeats.
+
+### Example
+
+Input:
+
+```text
+6
+1
+2
+1
+3
+2
+1
+```
+
+Output:
+
+```text
+1
+2
+3
+```
+
+```som
+// Task 16-be-takror: No repeats
+// Write your program here
+```
+
+Input:
+
+```text
+6
+1
+2
+1
+3
+2
+1
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNi1iZS10YWtyb3I6IE5vIHJlcGVhdHMKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NgoxCjIKMQozCjIKMQo&t=W3siaSI6IjZcbjFcbjJcbjFcbjNcbjJcbjFcbiIsIm8iOiIxXG4yXG4zXG4ifSx7ImkiOiIzXG41XG41XG41XG4iLCJvIjoiNVxuIn1d&task=16-be-takror)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 16-be-takror program.som
+```
+
+---
+
 [Дарси 16](../../tj/16-ruykhatho.md) · [Урок 16](../../ru/16-ruykhatho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 16](../../en/16-ruykhatho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

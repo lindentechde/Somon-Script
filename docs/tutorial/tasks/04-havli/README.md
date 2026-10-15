@@ -1,4 +1,4 @@
-# Ҳавлӣ / Двор
+# Ҳавлӣ / Двор / The yard
 
 ## Масъала 04-havli: Ҳавлӣ
 
@@ -76,5 +76,45 @@ npm run check-task -- 04-havli барнома.som
 
 ---
 
+## Task 04-havli: The yard
+
+A yard is 12 meters long and 7 meters wide. Work out its area and perimeter and
+print: `Масоҳат: …` and `Периметр: …`.
+
+**Input:** None.
+
+**Output:** Two lines: the area and the perimeter.
+
+### Example
+
+Output:
+
+```text
+Масоҳат: 84
+Периметр: 38
+```
+
+```som
+// Task 04-havli: The yard
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNC1oYXZsaTogVGhlIHlhcmQKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&t=W3siaSI6IiIsIm8iOiLQnNCw0YHQvtKz0LDRgjogODRcbtCf0LXRgNC40LzQtdGC0YA6IDM4XG4ifV0&task=04-havli)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 04-havli program.som
+```
+
+---
+
 [Дарси 4](../../tj/04-raqam.md) · [Урок 4](../../ru/04-raqam.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 4](../../en/04-raqam.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -37,10 +37,10 @@ interface Step {
   role?: string;
   task?: string;
   anim?: { name: string; params: Record<string, unknown> };
-  code?: { tj: string; ru: string };
+  code?: { tj: string; ru: string; en: string };
   input?: string;
   answer?: number[];
-  options?: { tj: string[]; ru: string[] };
+  options?: { tj: string[]; ru: string[]; en: string[] };
   solution?: string;
   expect?: string;
 }
@@ -211,7 +211,7 @@ describe('the lessons as steps', () => {
   test('the examples compile, but those of lesson 2 that show an error', () => {
     for (const lesson of all) {
       for (const step of lesson.steps.filter(each => each.kind === 'example')) {
-        for (const language of ['tj', 'ru'] as const) {
+        for (const language of ['tj', 'ru', 'en'] as const) {
           const errors = compile(step.code![language]).errors;
           const expected = lesson.id === '02-khato' && /^02-example-1$/.test(step.id);
           expect([step.id, language, errors.length > 0]).toEqual([step.id, language, expected]);
@@ -236,6 +236,7 @@ describe('the lessons as steps', () => {
     expect(quizzes.length).toBeGreaterThanOrEqual(3);
     for (const quiz of quizzes) {
       expect(quiz.options!.tj).toHaveLength(quiz.options!.ru.length);
+      expect(quiz.options!.tj).toHaveLength(quiz.options!.en.length);
       for (const answer of quiz.answer!) expect(answer).toBeLessThan(quiz.options!.tj.length);
     }
   });

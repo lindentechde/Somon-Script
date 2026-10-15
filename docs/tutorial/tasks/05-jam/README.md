@@ -1,4 +1,4 @@
-# Ҷамъ / Сумма
+# Ҷамъ / Сумма / Sum
 
 ## Масъала 05-jam: Ҷамъ
 
@@ -100,5 +100,57 @@ npm run check-task -- 05-jam барнома.som
 
 ---
 
+## Task 05-jam: Sum
+
+Read two numbers and print their sum.
+
+**Input:** Two lines, each with a number.
+
+**Output:** One number - the sum.
+
+### Example
+
+Input:
+
+```text
+2
+3
+```
+
+Output:
+
+```text
+5
+```
+
+```som
+// Task 05-jam: Sum
+// Write your program here
+```
+
+Input:
+
+```text
+2
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNS1qYW06IFN1bQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiI1XG4ifSx7ImkiOiItNFxuMTBcbiIsIm8iOiI2XG4ifSx7ImkiOiIyLjVcbjAuNVxuIiwibyI6IjNcbiJ9XQ&task=05-jam)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 05-jam program.som
+```
+
+---
+
 [Дарси 5](../../tj/05-vurud.md) · [Урок 5](../../ru/05-vurud.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 5](../../en/05-vurud.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

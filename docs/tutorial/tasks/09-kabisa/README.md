@@ -1,4 +1,4 @@
-# Соли кабиса / Високосный год
+# Соли кабиса / Високосный год / Leap year
 
 ## Масъала 09-kabisa: Соли кабиса
 
@@ -98,5 +98,56 @@ npm run check-task -- 09-kabisa барнома.som
 
 ---
 
+## Task 09-kabisa: Leap year
+
+Read a year and print `Кабиса` ("leap year") or `Кабиса нест`. A year is a leap
+year if it is divisible by 4 but not by 100, or if it is divisible by 400.
+
+**Input:** One number: the year.
+
+**Output:** `Кабиса` or `Кабиса нест`
+
+### Example
+
+Input:
+
+```text
+2024
+```
+
+Output:
+
+```text
+Кабиса
+```
+
+```som
+// Task 09-kabisa: Leap year
+// Write your program here
+```
+
+Input:
+
+```text
+2024
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOS1rYWJpc2E6IExlYXAgeWVhcgovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MjAyNAo&t=W3siaSI6IjIwMjRcbiIsIm8iOiLQmtCw0LHQuNGB0LBcbiJ9LHsiaSI6IjE5MDBcbiIsIm8iOiLQmtCw0LHQuNGB0LAg0L3QtdGB0YJcbiJ9LHsiaSI6IjIwMDBcbiIsIm8iOiLQmtCw0LHQuNGB0LBcbiJ9LHsiaSI6IjIwMjNcbiIsIm8iOiLQmtCw0LHQuNGB0LAg0L3QtdGB0YJcbiJ9XQ&task=09-kabisa)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 09-kabisa program.som
+```
+
+---
+
 [Дарси 9](../../tj/09-shartho.md) · [Урок 9](../../ru/09-shartho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 9](../../en/09-shartho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

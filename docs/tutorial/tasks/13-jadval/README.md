@@ -1,4 +1,4 @@
-# Ҷадвал / Таблица
+# Ҷадвал / Таблица / A table
 
 ## Масъала 13-jadval: Ҷадвал
 
@@ -106,5 +106,60 @@ npm run check-task -- 13-jadval барнома.som
 
 ---
 
+## Task 13-jadval: A table
+
+Write a function `ҷадвал(н)` ("table") that prints the lines from `н × 1 = …` to
+`н × 5 = …`. Read a number and call the function.
+
+**Input:** One number.
+
+**Output:** Five lines.
+
+### Example
+
+Input:
+
+```text
+3
+```
+
+Output:
+
+```text
+3 × 1 = 3
+3 × 2 = 6
+3 × 3 = 9
+3 × 4 = 12
+3 × 5 = 15
+```
+
+```som
+// Task 13-jadval: A table
+// Write your program here
+```
+
+Input:
+
+```text
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMy1qYWR2YWw6IEEgdGFibGUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=Mwo&t=W3siaSI6IjNcbiIsIm8iOiIzIMOXIDEgPSAzXG4zIMOXIDIgPSA2XG4zIMOXIDMgPSA5XG4zIMOXIDQgPSAxMlxuMyDDlyA1ID0gMTVcbiJ9LHsiaSI6IjEwXG4iLCJvIjoiMTAgw5cgMSA9IDEwXG4xMCDDlyAyID0gMjBcbjEwIMOXIDMgPSAzMFxuMTAgw5cgNCA9IDQwXG4xMCDDlyA1ID0gNTBcbiJ9XQ&task=13-jadval)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 13-jadval program.som
+```
+
+---
+
 [Дарси 13](../../tj/13-funksiya.md) · [Урок 13](../../ru/13-funksiya.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 13](../../en/13-funksiya.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

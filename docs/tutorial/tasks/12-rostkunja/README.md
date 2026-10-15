@@ -1,4 +1,4 @@
-# Росткунҷа / Прямоугольник
+# Росткунҷа / Прямоугольник / Rectangle
 
 ## Масъала 12-rostkunja: Росткунҷа
 
@@ -102,5 +102,58 @@ npm run check-task -- 12-rostkunja барнома.som
 
 ---
 
+## Task 12-rostkunja: Rectangle
+
+Read the height and the width and print a rectangle made of `*`.
+
+**Input:** Two numbers: the height, then the width.
+
+**Output:** The rectangle.
+
+### Example
+
+Input:
+
+```text
+2
+3
+```
+
+Output:
+
+```text
+***
+***
+```
+
+```som
+// Task 12-rostkunja: Rectangle
+// Write your program here
+```
+
+Input:
+
+```text
+2
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMi1yb3N0a3VuamE6IFJlY3RhbmdsZQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MgozCg&t=W3siaSI6IjJcbjNcbiIsIm8iOiIqKipcbioqKlxuIn0seyJpIjoiM1xuMVxuIiwibyI6IipcbipcbipcbiJ9XQ&task=12-rostkunja)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 12-rostkunja program.som
+```
+
+---
+
 [Дарси 12](../../tj/12-davraho.md) · [Урок 12](../../ru/12-davraho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 12](../../en/12-davraho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

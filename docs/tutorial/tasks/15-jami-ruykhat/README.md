@@ -1,4 +1,4 @@
-# Ҷамъи рӯйхат / Сумма списка
+# Ҷамъи рӯйхат / Сумма списка / Sum of a list
 
 ## Масъала 15-jami-ruykhat: Ҷамъи рӯйхат
 
@@ -110,5 +110,62 @@ npm run check-task -- 15-jami-ruykhat барнома.som
 
 ---
 
+## Task 15-jami-ruykhat: Sum of a list
+
+Read numbers into a list and print their sum.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The sum.
+
+### Example
+
+Input:
+
+```text
+3
+1
+2
+3
+```
+
+Output:
+
+```text
+6
+```
+
+```som
+// Task 15-jami-ruykhat: Sum of a list
+// Write your program here
+```
+
+Input:
+
+```text
+3
+1
+2
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNS1qYW1pLXJ1eWtoYXQ6IFN1bSBvZiBhIGxpc3QKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=MwoxCjIKMwo&t=W3siaSI6IjNcbjFcbjJcbjNcbiIsIm8iOiI2XG4ifSx7ImkiOiIxXG4xMFxuIiwibyI6IjEwXG4ifSx7ImkiOiIwXG4iLCJvIjoiMFxuIn1d&task=15-jami-ruykhat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 15-jami-ruykhat program.som
+```
+
+---
+
 [Дарси 15](../../tj/15-ruykhat.md) · [Урок 15](../../ru/15-ruykhat.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 15](../../en/15-ruykhat.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

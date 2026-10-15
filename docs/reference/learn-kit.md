@@ -9,7 +9,7 @@ The npm package ships it in `dist/learn/`, built by `scripts/build-learn.js`
 | File                               | What it is                                                                                                     |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `worker.js`                        | The compiler and its run time for a classic Web Worker, minified (about 410 KB, 100 KB gzipped)                |
-| `lessons.json`                     | The 18 lessons as steps, in Tajik and Russian                                                                  |
+| `lessons.json`                     | The 18 lessons as steps, in Tajik, Russian and English                                                         |
 | `tasks.json`                       | The 63 tasks: statements, starting programs and tests                                                          |
 | `examples.json`                    | The playground's examples                                                                                      |
 | `words.json`                       | The words to highlight: `{ "агар": "kw", "дуруст": "lit", "рақам": "type", "чоп": "builtin" }`                 |
@@ -106,37 +106,38 @@ itself; it calls the global `__somonTrace`, a `Tracer`.
 {
   "id": "03-taghyirjobanda",
   "n": 3,
-  "title": { "tj": "Тағйирёбандаҳо", "ru": "Переменные" },
+  "title": { "tj": "Тағйирёбандаҳо", "ru": "Переменные", "en": "Variables" },
   "steps": [ … ]
 }
 ```
 
 Texts are HTML (paragraphs, lists, tables, `<pre>`, `<pre class="som">` for
-code, `<code>`, `<strong>`, links to the web), in `{ tj, ru }`. A step has a
+code, `<code>`, `<strong>`, links to the web), in `{ tj, ru, en }`. A step has a
 stable `id` (`03-example-2`, `03-task-03-ivaz`), to keep a learner's progress,
 and a `kind`:
 
-| `kind`    | Fields                                                                                                           |
-| --------- | ---------------------------------------------------------------------------------------------------------------- |
-| `text`    | `title`, `html`; `role: 'intro'` for the lesson's first card, `'pitfalls'` for its common mistakes; maybe `anim` |
-| `example` | `title`, `html` (before the code), `code` (`{ tj, ru }`: the comments differ), `input`, `after`; maybe `anim`    |
-| `quiz`    | `title`, `question`, maybe `code`, `options` (`{ tj: [html], ru: [html] }`), `answer` (indexes), maybe `explain` |
-| `try`     | `title`, `text`, `starter`, `solution`, `input`, `expect` (what the solution prints), maybe `hint`               |
-| `task`    | `task`: the id of a task of `tasks.json`                                                                         |
+| `kind`    | Fields                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `text`    | `title`, `html`; `role: 'intro'` for the lesson's first card, `'pitfalls'` for its common mistakes; maybe `anim`   |
+| `example` | `title`, `html` (before the code), `code` (`{ tj, ru, en }`: the comments differ), `input`, `after`; maybe `anim`  |
+| `quiz`    | `title`, `question`, maybe `code`, `options` (`{ tj: [html], ru: [html], en: [html] }`), `answer`, maybe `explain` |
+| `try`     | `title`, `text`, `starter`, `solution`, `input`, `expect` (what the solution prints), maybe `hint`                 |
+| `task`    | `task`: the id of a task of `tasks.json`                                                                           |
 
 `anim` is `{ name, params }`.
 
 ### Writing steps
 
-The steps come from the Markdown of the lessons (docs/tutorial/tj and ru), by
-`scripts/learn-lessons.js`:
+The steps come from the Markdown of the lessons (docs/tutorial/tj, ru and en),
+by `scripts/learn-lessons.js`:
 
 - the text before the first `##` is the intro;
 - each `##` section is a step; a section with ▶ links gives an `example` step
   for each link, with the code and input of the link, the text before its code
   and the text after it;
-- `## Хатоҳои маъмул` (`## Частые ошибки`) is the `pitfalls` step;
-- each task of `## Супоришҳо` (`## Задачи`) is a `task` step;
+- `## Хатоҳои маъмул` (`## Частые ошибки`, `## Common mistakes`) is the
+  `pitfalls` step;
+- each task of `## Супоришҳо` (`## Задачи`, `## Tasks`) is a `task` step;
 - the links to the other lessons after `---` are left out.
 
 Comments, which GitHub does not show, add to that:
@@ -185,9 +186,12 @@ is a small exercise; the page compares what the learner's program prints with
 `expect`, as a task's test.
 
 A field is `key: value` on one line, or `key: |` and the lines after it indented
-by two spaces. The Tajik and the Russian lesson must give the same steps, with
-the same examples, inputs, tasks, animations and answers; the build and
-`tests/learn-kit.test.ts` check it.
+by two spaces. The Tajik, Russian and English lessons must give the same steps,
+with the same examples, inputs, tasks, animations and answers; the build and
+`tests/learn-kit.test.ts` check it. A task page
+(docs/tutorial/tasks/<id>/README.md) has a section in each language:
+`## Масъала <id>:`, `## Задача <id>:` and `## Task <id>:`, and its title is
+`# Tajik / Russian / English`.
 
 ### Animations
 
