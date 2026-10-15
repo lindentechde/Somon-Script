@@ -1,6 +1,6 @@
 # SomonScript Tutorial
 
-## 🎒 For beginners: lessons in Tajik and Russian
+## 🎒 For beginners: lessons in Tajik, Russian and English
 
 Eighteen short lessons for people who have never programmed, from `чоп` to
 objects, each with examples that open in the
@@ -9,7 +9,8 @@ automatic tests:
 
 - **[Дарсҳо бо забони тоҷикӣ](tj/README.md)** - дарсҳо барои навомӯзон
 - **[Уроки на русском](ru/README.md)** - уроки для начинающих
-- **[Масъалаҳо / Задачи](tasks/README.md)** - 63 tasks with tests
+- **[Lessons in English](en/README.md)** - lessons for beginners
+- **[Масъалаҳо / Задачи / Tasks](tasks/README.md)** - 63 tasks with tests
   (`npm run check-task -- 05-jam барнома.som`)
 - For teachers: **[Дастур барои омӯзгор](omuzgor.md)** ·
   **[Памятка для учителя](uchitelyu.md)** - the playground offline, handing out

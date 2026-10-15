@@ -1,4 +1,4 @@
-# Қавс / Скобка
+# Қавс / Скобка / The bracket
 
 ## Масъала 02-qavs: Қавс
 
@@ -84,5 +84,49 @@ npm run check-task -- 02-qavs барнома.som
 
 ---
 
+## Task 02-qavs: The bracket
+
+This program has two mistakes with brackets. Fix them so that `Як`, `Ду` and
+`Се` are printed on three lines.
+
+**Input:** None.
+
+**Output:** `Як`, `Ду`, `Се`, each on its own line.
+
+### Example
+
+Output:
+
+```text
+Як
+Ду
+Се
+```
+
+The broken program:
+
+```text
+чоп("Як";
+чоп("Ду");
+чоп("Се"));
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=0YfQvtC_KCLQr9C6IjsK0YfQvtC_KCLQlNGDIik7CtGH0L7Qvygi0KHQtSIpKTsK&t=W3siaSI6IiIsIm8iOiLQr9C6XG7QlNGDXG7QodC1XG4ifV0&task=02-qavs)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 02-qavs program.som
+```
+
+---
+
 [Дарси 2](../../tj/02-khato.md) · [Урок 2](../../ru/02-khato.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 2](../../en/02-khato.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

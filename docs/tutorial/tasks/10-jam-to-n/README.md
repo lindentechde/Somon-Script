@@ -1,4 +1,4 @@
-# Ҷамъ аз 1 то н / Сумма от 1 до н
+# Ҷамъ аз 1 то н / Сумма от 1 до н / Sum from 1 to n
 
 ## Масъала 10-jam-to-n: Ҷамъ аз 1 то н
 
@@ -96,5 +96,55 @@ npm run check-task -- 10-jam-to-n барнома.som
 
 ---
 
+## Task 10-jam-to-n: Sum from 1 to n
+
+Read the number `н` and print the sum of all the numbers from 1 to `н`.
+
+**Input:** One number: `н`.
+
+**Output:** The sum.
+
+### Example
+
+Input:
+
+```text
+10
+```
+
+Output:
+
+```text
+55
+```
+
+```som
+// Task 10-jam-to-n: Sum from 1 to n
+// Write your program here
+```
+
+Input:
+
+```text
+10
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMC1qYW0tdG8tbjogU3VtIGZyb20gMSB0byBuCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=MTAK&t=W3siaSI6IjEwXG4iLCJvIjoiNTVcbiJ9LHsiaSI6IjFcbiIsIm8iOiIxXG4ifSx7ImkiOiIxMDBcbiIsIm8iOiI1MDUwXG4ifV0&task=10-jam-to-n)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 10-jam-to-n program.som
+```
+
+---
+
 [Дарси 10](../../tj/10-baroi.md) · [Урок 10](../../ru/10-baroi.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 10](../../en/10-baroi.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

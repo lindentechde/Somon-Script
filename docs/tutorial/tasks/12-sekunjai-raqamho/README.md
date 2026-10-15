@@ -1,4 +1,4 @@
-# Секунҷаи рақамҳо / Треугольник из цифр
+# Секунҷаи рақамҳо / Треугольник из цифр / Triangle of digits
 
 ## Масъала 12-sekunjai-raqamho: Секунҷаи рақамҳо
 
@@ -102,5 +102,58 @@ npm run check-task -- 12-sekunjai-raqamho барнома.som
 
 ---
 
+## Task 12-sekunjai-raqamho: Triangle of digits
+
+Read the number `н` and print `н` lines: `1` on the first, `12` on the second,
+`123` on the third, and so on.
+
+**Input:** One number: `н` (from 1 to 9).
+
+**Output:** `н` lines.
+
+### Example
+
+Input:
+
+```text
+3
+```
+
+Output:
+
+```text
+1
+12
+123
+```
+
+```som
+// Task 12-sekunjai-raqamho: Triangle of digits
+// Write your program here
+```
+
+Input:
+
+```text
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMi1zZWt1bmphaS1yYXFhbWhvOiBUcmlhbmdsZSBvZiBkaWdpdHMKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=Mwo&t=W3siaSI6IjNcbiIsIm8iOiIxXG4xMlxuMTIzXG4ifSx7ImkiOiIxXG4iLCJvIjoiMVxuIn1d&task=12-sekunjai-raqamho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 12-sekunjai-raqamho program.som
+```
+
+---
+
 [Дарси 12](../../tj/12-davraho.md) · [Урок 12](../../ru/12-davraho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 12](../../en/12-davraho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

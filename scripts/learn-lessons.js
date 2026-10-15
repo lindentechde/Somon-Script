@@ -1,5 +1,5 @@
 /**
- * The lessons of the tutorial (docs/tutorial/tj and ru) as steps, for a page
+ * The lessons of the tutorial (docs/tutorial/tj, ru and en) as steps, for a page
  * that shows a lesson card by card (scripts/build-learn.js writes them to
  * dist/learn/lessons.json).
  *
@@ -9,8 +9,9 @@
  *   - each `##` section is a step; a section with ▶ links has one `example`
  *     step for each link, with the link's code and input, the text before its
  *     code and the text after it (`after`);
- *   - `## Хатоҳои маъмул` (`## Частые ошибки`) is a step with `role: 'pitfalls'`;
- *   - the tasks of `## Супоришҳо` (`## Задачи`) are `task` steps;
+ *   - `## Хатоҳои маъмул` (`## Частые ошибки`, `## Common mistakes`) is a step with
+ *     `role: 'pitfalls'`;
+ *   - the tasks of `## Супоришҳо` (`## Задачи`, `## Tasks`) are `task` steps;
  *   - what follows `---` (the links to the other lessons) is left out.
  *
  * Comments, which GitHub does not show, add to that:
@@ -37,9 +38,9 @@
  *   hint: Put your name between the quotes.
  *   -->                                   a small exercise, checked by its output
  *
- * The Tajik and Russian lessons must give the same steps: the same kinds,
- * examples, tasks, animations and answers. Only the texts (and the comments
- * in the code) differ.
+ * The lessons in Tajik, Russian and English must give the same steps: the same
+ * kinds, examples, tasks, animations and answers. Only the texts (and the
+ * comments in the code) differ.
  */
 'use strict';
 
@@ -55,12 +56,13 @@ const {
   linkParams,
 } = require('./learn-data.js');
 
-const LANGUAGES = ['tj', 'ru'];
-const TITLE = /^(?:Дарси|Урок) (\d+)\. (.+)$/;
+const LANGUAGES = ['tj', 'ru', 'en'];
+const LANGUAGE_NAMES = { tj: 'Tajik', ru: 'Russian', en: 'English' };
+const TITLE = /^(?:Дарси|Урок|Lesson) (\d+)\. (.+)$/;
 const RUN_LINK = /^\[▶[^\]]*\]\(https:\/\/lindentechde\.github\.io\/Somon-Script\/#([^)]*)\)$/;
-const INPUT_LABEL = /^(Вуруд|Ввод):$/;
-const PITFALLS = /^(Хатоҳои маъмул|Частые ошибки)$/;
-const TASKS = /^(Супоришҳо|Задачи)$/;
+const INPUT_LABEL = /^(Вуруд|Ввод|Input):$/;
+const PITFALLS = /^(Хатоҳои маъмул|Частые ошибки|Common mistakes)$/;
+const TASKS = /^(Супоришҳо|Задачи|Tasks)$/;
 const TASK_LINK = /\.\.\/tasks\/([^/]+)\/README\.md/;
 
 /** The lesson files, `01-chop.md` … */
@@ -146,7 +148,8 @@ const withoutComments = blocks => blocks.filter(block => block.type !== 'comment
 
 /**
  * Where the code of the ▶ link at `link` is, among the blocks from `from`:
- * the code block above it, and the input block between them after `Вуруд:`.
+ * the code block above it, and the input block between them after `Вуруд:`
+ * (`Ввод:`, `Input:`).
  */
 function codeOf(blocks, link, from, where) {
   let code = link - 1;
@@ -309,22 +312,32 @@ const OWN = {
   task: [],
 };
 
-/** The steps of both languages as one, with the texts of each: { tj, ru }. */
-function mergeSteps(file, versions) {
-  const [tj, ru] = versions;
-  if (tj.steps.length !== ru.steps.length) {
-    throw new Error(`${file}: ${tj.steps.length} steps in Tajik, ${ru.steps.length} in Russian`);
-  }
+/**
+ * The steps of every language as one, with the texts of each: { tj, ru, en }.
+ * `versions` are the parsed lessons in the order of `languages`.
+ */
+function mergeSteps(file, versions, languages = LANGUAGES) {
+  const [first, ...others] = versions;
+  others.forEach((other, i) => {
+    if (other.steps.length !== first.steps.length) {
+      throw new Error(
+        `${file}: ${first.steps.length} steps in ${LANGUAGE_NAMES[languages[0]]}, ${other.steps.length} in ${LANGUAGE_NAMES[languages[i + 1]]}`
+      );
+    }
+  });
   const n = file.slice(0, 2);
   const counts = {};
-  return tj.steps.map((step, index) => {
-    const other = ru.steps[index];
+  return first.steps.map((step, index) => {
     const where = `${file}, step ${index + 1} (${step.kind})`;
-    for (const key of SAME[step.kind] ?? []) {
-      if (JSON.stringify(step[key]) !== JSON.stringify(other[key])) {
-        throw new Error(`${where}: '${key}' differs between Tajik and Russian`);
+    others.forEach((other, i) => {
+      for (const key of SAME[step.kind] ?? []) {
+        if (JSON.stringify(step[key]) !== JSON.stringify(other.steps[index][key])) {
+          throw new Error(
+            `${where}: '${key}' differs between ${LANGUAGE_NAMES[languages[0]]} and ${LANGUAGE_NAMES[languages[i + 1]]}`
+          );
+        }
       }
-    }
+    });
     const id =
       step.kind === 'task'
         ? `${n}-task-${step.task}`
@@ -334,14 +347,15 @@ function mergeSteps(file, versions) {
     const merged = { id };
     for (const key of SAME[step.kind]) if (step[key] !== undefined) merged[key] = step[key];
     for (const key of OWN[step.kind]) {
-      if (step[key] === undefined && other[key] === undefined) continue;
-      merged[key] = { tj: step[key], ru: other[key] };
+      const texts = versions.map(version => version.steps[index][key]);
+      if (texts.every(text => text === undefined)) continue;
+      merged[key] = Object.fromEntries(languages.map((language, i) => [language, texts[i]]));
     }
     return merged;
   });
 }
 
-/** Every lesson, in order, both languages in one. */
+/** Every lesson, in order, every language in one. */
 function lessons() {
   return lessonFiles().map(file => {
     const versions = LANGUAGES.map(language =>
@@ -350,16 +364,16 @@ function lessons() {
         `docs/tutorial/${language}/${file}`
       )
     );
-    if (versions[0].n !== versions[1].n || versions[0].n !== Number(file.slice(0, 2))) {
+    if (versions.some(version => version.n !== Number(file.slice(0, 2)))) {
       throw new Error(`${file}: the lesson's number differs from its file's`);
     }
     return {
       id: file.replace(/\.md$/, ''),
       n: versions[0].n,
-      title: { tj: versions[0].title, ru: versions[1].title },
+      title: Object.fromEntries(LANGUAGES.map((language, i) => [language, versions[i].title])),
       steps: mergeSteps(file, versions),
     };
   });
 }
 
-module.exports = { lessons, parseLesson, mergeSteps, directiveFields };
+module.exports = { LANGUAGES, lessons, parseLesson, mergeSteps, directiveFields };

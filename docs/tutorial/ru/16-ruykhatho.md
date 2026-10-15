@@ -43,7 +43,8 @@
 [▶ Запустить в песочнице](https://lindentechde.github.io/Somon-Script/#c=0YLQsNKTINGF0L7Qu9Kz0L4gPSBbNTUsIDkyLCA0NywgNzgsIDMwXTsK0YLQsNKTINCz0YPQt9Cw0YjRgtCw0LPQvtC9ID0g0YXQvtC70rPQvi7RhNC40LvRgtGAKNGFID0-INGFID49IDUwKTsK0YLQsNKTINC00YPRh9Cw0L3QtCA9INGF0L7Qu9Kz0L4u0YXQsNGA0LjRgtCwKNGFID0-INGFICogMik7CtGH0L7Qvygi0JPRg9C30LDRiNGC0LDQs9C-0L06Iiwg0LPRg9C30LDRiNGC0LDQs9C-0L0pOwrRh9C-0L8oItCU0YPRh9Cw0L3QtDoiLCDQtNGD0YfQsNC90LQpOwo)
 
 - `филтр` оставляет только элементы, для которых условие `дуруст`.
-- `харита` заменяет каждый элемент и строит новый список.
+- `харита` строит новый список из результатов функции для каждого элемента; сам
+  `холҳо` не меняется.
 - `х => х >= 50` - короткая функция: принимает `х` и возвращает `х >= 50`.
 
 ## Задачи

@@ -1,4 +1,4 @@
-# Иваз / Обмен
+# Иваз / Обмен / Swap
 
 ## Масъала 03-ivaz: Иваз
 
@@ -78,6 +78,47 @@ npm run check-task -- 03-ivaz барнома.som
 
 ---
 
+## Task 03-ivaz: Swap
+
+The program starts with `тағ а = 5;` and `тағ б = 8;`. Swap the values of `а`
+and `б` - without writing the numbers 5 and 8 again - and print `а = 8` and
+`б = 5`. Hint: you will need a third variable.
+
+**Input:** None.
+
+**Output:** `а = 8` and `б = 5`.
+
+### Example
+
+Output:
+
+```text
+а = 8
+б = 5
+```
+
+```som
+// Task 03-ivaz: Swap
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMy1pdmF6OiBTd2FwCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&t=W3siaSI6IiIsIm8iOiLQsCA9IDhcbtCxID0gNVxuIn1d&task=03-ivaz)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 03-ivaz program.som
+```
+
+---
+
 [Дарси 3](../../tj/03-taghyirjobanda.md) ·
 [Урок 3](../../ru/03-taghyirjobanda.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 3](../../en/03-taghyirjobanda.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

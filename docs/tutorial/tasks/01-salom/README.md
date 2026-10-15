@@ -1,4 +1,4 @@
-# Салом, ҷаҳон! / Привет, мир!
+# Салом, ҷаҳон! / Привет, мир! / Hello, world!
 
 ## Масъала 01-salom: Салом, ҷаҳон!
 
@@ -72,5 +72,43 @@ npm run check-task -- 01-salom барнома.som
 
 ---
 
+## Task 01-salom: Hello, world!
+
+Write a program that prints the line `Салом, ҷаҳон!`.
+
+**Input:** None.
+
+**Output:** `Салом, ҷаҳон!`
+
+### Example
+
+Output:
+
+```text
+Салом, ҷаҳон!
+```
+
+```som
+// Task 01-salom: Hello, world!
+// Write your program here
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwMS1zYWxvbTogSGVsbG8sIHdvcmxkIQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&t=W3siaSI6IiIsIm8iOiLQodCw0LvQvtC8LCDSt9Cw0rPQvtC9IVxuIn1d&task=01-salom)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 01-salom program.som
+```
+
+---
+
 [Дарси 1](../../tj/01-chop.md) · [Урок 1](../../ru/01-chop.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 1](../../en/01-chop.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -1,4 +1,4 @@
-# Ҳарфи «а» / Буква «а»
+# Ҳарфи «а» / Буква «а» / The letter "а"
 
 ## Масъала 17-harfi-a: Ҳарфи «а»
 
@@ -96,5 +96,55 @@ npm run check-task -- 17-harfi-a барнома.som
 
 ---
 
+## Task 17-harfi-a: The letter "а"
+
+Read a line and print how many times the lowercase letter `а` appears in it.
+
+**Input:** One line.
+
+**Output:** The count.
+
+### Example
+
+Input:
+
+```text
+барномасозӣ
+```
+
+Output:
+
+```text
+2
+```
+
+```som
+// Task 17-harfi-a: The letter "а"
+// Write your program here
+```
+
+Input:
+
+```text
+барномасозӣ
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNy1oYXJmaS1hOiBUaGUgbGV0dGVyICLQsCIKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=0LHQsNGA0L3QvtC80LDRgdC-0LfTowo&t=W3siaSI6ItCx0LDRgNC90L7QvNCw0YHQvtC306NcbiIsIm8iOiIyXG4ifSx7ImkiOiLQlNGD0YjQsNC90LHQtVxuIiwibyI6IjFcbiJ9LHsiaSI6ItC60LjRgtC-0LFcbiIsIm8iOiIwXG4ifV0&task=17-harfi-a)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 17-harfi-a program.som
+```
+
+---
+
 [Дарси 17](../../tj/17-satrho.md) · [Урок 17](../../ru/17-satrho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 17](../../en/17-satrho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

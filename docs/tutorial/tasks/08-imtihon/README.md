@@ -1,4 +1,4 @@
-# Имтиҳон / Экзамен
+# Имтиҳон / Экзамен / The exam
 
 ## Масъала 08-imtihon: Имтиҳон
 
@@ -98,5 +98,56 @@ npm run check-task -- 08-imtihon барнома.som
 
 ---
 
+## Task 08-imtihon: The exam
+
+Read an exam score. If the score is 50 or more, print `Гузашт`, otherwise
+`Нагузашт`.
+
+**Input:** One number: the score.
+
+**Output:** `Гузашт` or `Нагузашт`
+
+### Example
+
+Input:
+
+```text
+50
+```
+
+Output:
+
+```text
+Гузашт
+```
+
+```som
+// Task 08-imtihon: The exam
+// Write your program here
+```
+
+Input:
+
+```text
+50
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOC1pbXRpaG9uOiBUaGUgZXhhbQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=NTAK&t=W3siaSI6IjUwXG4iLCJvIjoi0JPRg9C30LDRiNGCXG4ifSx7ImkiOiI0OVxuIiwibyI6ItCd0LDQs9GD0LfQsNGI0YJcbiJ9LHsiaSI6IjEwMFxuIiwibyI6ItCT0YPQt9Cw0YjRglxuIn1d&task=08-imtihon)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 08-imtihon program.som
+```
+
+---
+
 [Дарси 8](../../tj/08-agar.md) · [Урок 8](../../ru/08-agar.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 8](../../en/08-agar.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

@@ -1,4 +1,4 @@
-# Харид / Покупки
+# Харид / Покупки / Shopping
 
 ## Масъала 18-kharid: Харид
 
@@ -126,5 +126,70 @@ npm run check-task -- 18-kharid барнома.som
 
 ---
 
+## Task 18-kharid: Shopping
+
+Read the number of items `н`, then a name and a price for each item. Keep the
+items as objects in a list. Print the total cost and the name of the most
+expensive item.
+
+**Input:** `н`, then two lines for each item: the name and the price.
+
+**Output:** `Ҳамагӣ: …` ("Total") and `Гаронтарин: …` ("Most expensive")
+
+### Example
+
+Input:
+
+```text
+3
+нон
+3
+шир
+8
+чой
+15
+```
+
+Output:
+
+```text
+Ҳамагӣ: 26
+Гаронтарин: чой
+```
+
+```som
+// Task 18-kharid: Shopping
+// Write your program here
+```
+
+Input:
+
+```text
+3
+нон
+3
+шир
+8
+чой
+15
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxOC1raGFyaWQ6IFNob3BwaW5nCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=MwrQvdC-0L0KMwrRiNC40YAKOArRh9C-0LkKMTUK&t=W3siaSI6IjNcbtC90L7QvVxuM1xu0YjQuNGAXG44XG7Rh9C-0LlcbjE1XG4iLCJvIjoi0rLQsNC80LDQs9OjOiAyNlxu0JPQsNGA0L7QvdGC0LDRgNC40L06INGH0L7QuVxuIn0seyJpIjoiMVxu0LTQsNGE0YLQsNGAXG40XG4iLCJvIjoi0rLQsNC80LDQs9OjOiA0XG7Qk9Cw0YDQvtC90YLQsNGA0LjQvTog0LTQsNGE0YLQsNGAXG4ifV0&task=18-kharid)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 18-kharid program.som
+```
+
+---
+
 [Дарси 18](../../tj/18-obyekt.md) · [Урок 18](../../ru/18-obyekt.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 18](../../en/18-obyekt.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

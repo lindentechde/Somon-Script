@@ -1,4 +1,4 @@
-# Ҳароратҳо / Температура
+# Ҳароратҳо / Температура / Temperature
 
 ## Масъала 14-harorat: Ҳароратҳо
 
@@ -100,5 +100,57 @@ npm run check-task -- 14-harorat барнома.som
 
 ---
 
+## Task 14-harorat: Temperature
+
+Write a function `фаренгейт(с)` ("fahrenheit") that converts a temperature from
+degrees Celsius to degrees Fahrenheit and returns it: `с * 9 / 5 + 32`. Read a
+temperature and print the result.
+
+**Input:** One number: degrees Celsius.
+
+**Output:** Degrees Fahrenheit.
+
+### Example
+
+Input:
+
+```text
+100
+```
+
+Output:
+
+```text
+212
+```
+
+```som
+// Task 14-harorat: Temperature
+// Write your program here
+```
+
+Input:
+
+```text
+100
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNC1oYXJvcmF0OiBUZW1wZXJhdHVyZQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MTAwCg&t=W3siaSI6IjEwMFxuIiwibyI6IjIxMlxuIn0seyJpIjoiMFxuIiwibyI6IjMyXG4ifSx7ImkiOiItNDBcbiIsIm8iOiItNDBcbiJ9XQ&task=14-harorat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 14-harorat program.som
+```
+
+---
+
 [Дарси 14](../../tj/14-bozgasht.md) · [Урок 14](../../ru/14-bozgasht.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 14](../../en/14-bozgasht.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

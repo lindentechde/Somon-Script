@@ -1,4 +1,4 @@
-# Калонтарин / Наибольшее
+# Калонтарин / Наибольшее / The greatest
 
 ## Масъала 08-kalontarin: Калонтарин
 
@@ -100,5 +100,57 @@ npm run check-task -- 08-kalontarin барнома.som
 
 ---
 
+## Task 08-kalontarin: The greatest
+
+Read two numbers and print the greater one.
+
+**Input:** Two numbers.
+
+**Output:** The greater one.
+
+### Example
+
+Input:
+
+```text
+4
+9
+```
+
+Output:
+
+```text
+9
+```
+
+```som
+// Task 08-kalontarin: The greatest
+// Write your program here
+```
+
+Input:
+
+```text
+4
+9
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOC1rYWxvbnRhcmluOiBUaGUgZ3JlYXRlc3QKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NAo5Cg&t=W3siaSI6IjRcbjlcbiIsIm8iOiI5XG4ifSx7ImkiOiIxMFxuMlxuIiwibyI6IjEwXG4ifSx7ImkiOiI1XG41XG4iLCJvIjoiNVxuIn1d&task=08-kalontarin)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 08-kalontarin program.som
+```
+
+---
+
 [Дарси 8](../../tj/08-agar.md) · [Урок 8](../../ru/08-agar.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 8](../../en/08-agar.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

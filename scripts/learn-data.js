@@ -242,7 +242,7 @@ function taskOrder() {
 
 /**
  * The tasks of the tutorial, from their pages (docs/tutorial/tasks/<id>/README.md):
- * the title and statement in Tajik and Russian, and the starting program, input
+ * the title and statement in Tajik, Russian and English, and the starting program, input
  * and tests of the page's playground link (which scripts/tutorial-links.js
  * makes from the code above it and the task's tests).
  */
@@ -255,7 +255,7 @@ function tasks() {
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .map(id => {
       const page = readText(path.join(TASKS, id, 'README.md'));
-      const title = /^# (.+?) \/ (.+)$/m.exec(page);
+      const title = /^# (.+?) \/ (.+?) \/ (.+)$/m.exec(page);
       const link = /\(https:\/\/lindentechde\.github\.io\/Somon-Script\/#([^)]*)\)/.exec(page);
       if (!title || !link)
         throw new Error(`docs/tutorial/tasks/${id}: no title or playground link`);
@@ -263,10 +263,11 @@ function tasks() {
       return {
         id,
         lesson: Number(id.slice(0, 2)),
-        title: { tj: title[1], ru: title[2] },
+        title: { tj: title[1], ru: title[2], en: title[3] },
         text: {
           tj: markdownHtml(section(page, id, 'Масъала', 'Мисол')),
           ru: markdownHtml(section(page, id, 'Задача', 'Пример')),
+          en: markdownHtml(section(page, id, 'Task', 'Example')),
         },
         code: decode('c'),
         input: decode('i'),

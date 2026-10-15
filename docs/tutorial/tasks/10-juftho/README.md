@@ -1,4 +1,4 @@
-# Ҷуфтҳо / Чётные
+# Ҷуфтҳо / Чётные / Even numbers
 
 ## Масъала 10-juftho: Ҷуфтҳо
 
@@ -102,5 +102,58 @@ npm run check-task -- 10-juftho барнома.som
 
 ---
 
+## Task 10-juftho: Even numbers
+
+Read the number `н` and print all the even numbers from 2 to `н`, each on a
+separate line.
+
+**Input:** One number: `н`.
+
+**Output:** The even numbers.
+
+### Example
+
+Input:
+
+```text
+7
+```
+
+Output:
+
+```text
+2
+4
+6
+```
+
+```som
+// Task 10-juftho: Even numbers
+// Write your program here
+```
+
+Input:
+
+```text
+7
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMC1qdWZ0aG86IEV2ZW4gbnVtYmVycwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=Nwo&t=W3siaSI6IjdcbiIsIm8iOiIyXG40XG42XG4ifSx7ImkiOiIyXG4iLCJvIjoiMlxuIn1d&task=10-juftho)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 10-juftho program.som
+```
+
+---
+
 [Дарси 10](../../tj/10-baroi.md) · [Урок 10](../../ru/10-baroi.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 10](../../en/10-baroi.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

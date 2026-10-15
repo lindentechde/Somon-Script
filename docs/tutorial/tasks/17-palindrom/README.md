@@ -1,4 +1,4 @@
-# Палиндром / Палиндром
+# Палиндром / Палиндром / Palindrome
 
 ## Масъала 17-palindrom: Палиндром
 
@@ -98,5 +98,56 @@ npm run check-task -- 17-palindrom барнома.som
 
 ---
 
+## Task 17-palindrom: Palindrome
+
+Read a word. If it reads the same from the end (for example, `нон`, "bread"),
+print `Ҳа` ("Yes"), otherwise `Не` ("No").
+
+**Input:** One word.
+
+**Output:** `Ҳа` or `Не`
+
+### Example
+
+Input:
+
+```text
+нон
+```
+
+Output:
+
+```text
+Ҳа
+```
+
+```som
+// Task 17-palindrom: Palindrome
+// Write your program here
+```
+
+Input:
+
+```text
+нон
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNy1wYWxpbmRyb206IFBhbGluZHJvbWUKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=0L3QvtC9Cg&t=W3siaSI6ItC90L7QvVxuIiwibyI6ItKy0LBcbiJ9LHsiaSI6ItC60LjRgtC-0LFcbiIsIm8iOiLQndC1XG4ifSx7ImkiOiLQtNC-0LRcbiIsIm8iOiLSstCwXG4ifV0&task=17-palindrom)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 17-palindrom program.som
+```
+
+---
+
 [Дарси 17](../../tj/17-satrho.md) · [Урок 17](../../ru/17-satrho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 17](../../en/17-satrho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

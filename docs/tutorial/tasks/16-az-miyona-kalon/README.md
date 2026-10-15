@@ -1,4 +1,4 @@
-# Аз миёна калонтар / Больше среднего
+# Аз миёна калонтар / Больше среднего / Above the average
 
 ## Масъала 16-az-miyona-kalon: Аз миёна калонтар
 
@@ -122,5 +122,68 @@ npm run check-task -- 16-az-miyona-kalon барнома.som
 
 ---
 
+## Task 16-az-miyona-kalon: Above the average
+
+Read numbers into a list, find their average and print the numbers greater than
+the average in the same order, each on a separate line.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The numbers greater than the average.
+
+### Example
+
+Input:
+
+```text
+5
+1
+2
+3
+4
+5
+```
+
+Output:
+
+```text
+4
+5
+```
+
+```som
+// Task 16-az-miyona-kalon: Above the average
+// Write your program here
+```
+
+Input:
+
+```text
+5
+1
+2
+3
+4
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNi1hei1taXlvbmEta2Fsb246IEFib3ZlIHRoZSBhdmVyYWdlCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=NQoxCjIKMwo0CjUK&t=W3siaSI6IjVcbjFcbjJcbjNcbjRcbjVcbiIsIm8iOiI0XG41XG4ifSx7ImkiOiI0XG4yXG44XG40XG42XG4iLCJvIjoiOFxuNlxuIn1d&task=16-az-miyona-kalon)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 16-az-miyona-kalon program.som
+```
+
+---
+
 [Дарси 16](../../tj/16-ruykhatho.md) · [Урок 16](../../ru/16-ruykhatho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 16](../../en/16-ruykhatho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

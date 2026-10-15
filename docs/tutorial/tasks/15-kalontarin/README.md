@@ -1,4 +1,4 @@
-# Калонтарин дар рӯйхат / Наибольшее в списке
+# Калонтарин дар рӯйхат / Наибольшее в списке / The greatest in a list
 
 ## Масъала 15-kalontarin: Калонтарин дар рӯйхат
 
@@ -114,5 +114,64 @@ npm run check-task -- 15-kalontarin барнома.som
 
 ---
 
+## Task 15-kalontarin: The greatest in a list
+
+Read numbers into a list and print the greatest of them.
+
+**Input:** The first line is the count of numbers `н`, then `н` lines with one
+number each.
+
+**Output:** The greatest.
+
+### Example
+
+Input:
+
+```text
+4
+3
+9
+2
+9
+```
+
+Output:
+
+```text
+9
+```
+
+```som
+// Task 15-kalontarin: The greatest in a list
+// Write your program here
+```
+
+Input:
+
+```text
+4
+3
+9
+2
+9
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNS1rYWxvbnRhcmluOiBUaGUgZ3JlYXRlc3QgaW4gYSBsaXN0Ci8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=NAozCjkKMgo5Cg&t=W3siaSI6IjRcbjNcbjlcbjJcbjlcbiIsIm8iOiI5XG4ifSx7ImkiOiIyXG4tNVxuLTFcbiIsIm8iOiItMVxuIn1d&task=15-kalontarin)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 15-kalontarin program.som
+```
+
+---
+
 [Дарси 15](../../tj/15-ruykhat.md) · [Урок 15](../../ru/15-ruykhat.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 15](../../en/15-ruykhat.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

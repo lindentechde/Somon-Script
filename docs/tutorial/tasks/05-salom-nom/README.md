@@ -1,4 +1,4 @@
-# Салом, ном / Привет, имя
+# Салом, ном / Привет, имя / Hello, name
 
 ## Масъала 05-salom-nom: Салом, ном
 
@@ -96,5 +96,55 @@ npm run check-task -- 05-salom-nom барнома.som
 
 ---
 
+## Task 05-salom-nom: Hello, name
+
+Read a name and print `Салом, name!`.
+
+**Input:** One line: a name.
+
+**Output:** `Салом, name!`
+
+### Example
+
+Input:
+
+```text
+Алӣ
+```
+
+Output:
+
+```text
+Салом, Алӣ!
+```
+
+```som
+// Task 05-salom-nom: Hello, name
+// Write your program here
+```
+
+Input:
+
+```text
+Алӣ
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNS1zYWxvbS1ub206IEhlbGxvLCBuYW1lCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=0JDQu9OjCg&t=W3siaSI6ItCQ0LvTo1xuIiwibyI6ItCh0LDQu9C-0LwsINCQ0LvToyFcbiJ9LHsiaSI6ItCX0LDRgNC40L3QsFxuIiwibyI6ItCh0LDQu9C-0LwsINCX0LDRgNC40L3QsCFcbiJ9XQ&task=05-salom-nom)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 05-salom-nom program.som
+```
+
+---
+
 [Дарси 5](../../tj/05-vurud.md) · [Урок 5](../../ru/05-vurud.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 5](../../en/05-vurud.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

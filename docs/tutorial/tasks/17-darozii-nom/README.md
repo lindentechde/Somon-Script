@@ -1,4 +1,4 @@
-# Дарозии ном / Длина имени
+# Дарозии ном / Длина имени / Length of a name
 
 ## Масъала 17-darozii-nom: Дарозии ном
 
@@ -96,5 +96,55 @@ npm run check-task -- 17-darozii-nom барнома.som
 
 ---
 
+## Task 17-darozii-nom: Length of a name
+
+Read a name and print the number of letters in it.
+
+**Input:** One line: a name.
+
+**Output:** The number of letters.
+
+### Example
+
+Input:
+
+```text
+Зарина
+```
+
+Output:
+
+```text
+6
+```
+
+```som
+// Task 17-darozii-nom: Length of a name
+// Write your program here
+```
+
+Input:
+
+```text
+Зарина
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNy1kYXJvemlpLW5vbTogTGVuZ3RoIG9mIGEgbmFtZQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=0JfQsNGA0LjQvdCwCg&t=W3siaSI6ItCX0LDRgNC40L3QsFxuIiwibyI6IjZcbiJ9LHsiaSI6ItCQ0LvTo1xuIiwibyI6IjNcbiJ9XQ&task=17-darozii-nom)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 17-darozii-nom program.som
+```
+
+---
+
 [Дарси 17](../../tj/17-satrho.md) · [Урок 17](../../ru/17-satrho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 17](../../en/17-satrho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

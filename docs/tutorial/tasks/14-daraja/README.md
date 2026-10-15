@@ -1,4 +1,4 @@
-# Дараҷа / Степень
+# Дараҷа / Степень / Power
 
 ## Масъала 14-daraja: Дараҷа
 
@@ -102,5 +102,58 @@ npm run check-task -- 14-daraja барнома.som
 
 ---
 
+## Task 14-daraja: Power
+
+Write a function `дараҷа(асос, нишондиҳанда)` ("power(base, exponent)") with a
+loop (without `Риёзӣ.қувват` and `**`). Read two numbers and print the result.
+
+**Input:** Two numbers: the base, then the exponent (0 or more).
+
+**Output:** The power.
+
+### Example
+
+Input:
+
+```text
+2
+10
+```
+
+Output:
+
+```text
+1024
+```
+
+```som
+// Task 14-daraja: Power
+// Write your program here
+```
+
+Input:
+
+```text
+2
+10
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxNC1kYXJhamE6IFBvd2VyCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=MgoxMAo&t=W3siaSI6IjJcbjEwXG4iLCJvIjoiMTAyNFxuIn0seyJpIjoiNVxuMFxuIiwibyI6IjFcbiJ9LHsiaSI6IjNcbjRcbiIsIm8iOiI4MVxuIn1d&task=14-daraja)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 14-daraja program.som
+```
+
+---
+
 [Дарси 14](../../tj/14-bozgasht.md) · [Урок 14](../../ru/14-bozgasht.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 14](../../en/14-bozgasht.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

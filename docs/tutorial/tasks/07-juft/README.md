@@ -1,4 +1,4 @@
-# Ҷуфт? / Чётное?
+# Ҷуфт? / Чётное? / Even?
 
 ## Масъала 07-juft: Ҷуфт?
 
@@ -96,5 +96,55 @@ npm run check-task -- 07-juft барнома.som
 
 ---
 
+## Task 07-juft: Even?
+
+Read a number and print whether it is even: `дуруст` or `нодуруст`.
+
+**Input:** One number.
+
+**Output:** `дуруст` or `нодуруст`
+
+### Example
+
+Input:
+
+```text
+10
+```
+
+Output:
+
+```text
+дуруст
+```
+
+```som
+// Task 07-juft: Even?
+// Write your program here
+```
+
+Input:
+
+```text
+10
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwNy1qdWZ0OiBFdmVuPwovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=MTAK&t=W3siaSI6IjEwXG4iLCJvIjoi0LTRg9GA0YPRgdGCXG4ifSx7ImkiOiI3XG4iLCJvIjoi0L3QvtC00YPRgNGD0YHRglxuIn0seyJpIjoiMFxuIiwibyI6ItC00YPRgNGD0YHRglxuIn1d&task=07-juft)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 07-juft program.som
+```
+
+---
+
 [Дарси 7](../../tj/07-muqoisa.md) · [Урок 7](../../ru/07-muqoisa.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 7](../../en/07-muqoisa.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

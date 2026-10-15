@@ -1,4 +1,4 @@
-# Ҷадвали зарби пурра / Полная таблица умножения
+# Ҷадвали зарби пурра / Полная таблица умножения / The full multiplication table
 
 ## Масъала 12-jadvali-zarb: Ҷадвали зарби пурра
 
@@ -102,5 +102,58 @@ npm run check-task -- 12-jadvali-zarb барнома.som
 
 ---
 
+## Task 12-jadvali-zarb: The full multiplication table
+
+Read the number `н` and print the `н × н` multiplication table: line `и` has the
+products from `и × 1` to `и × н`, separated by spaces.
+
+**Input:** One number: `н`.
+
+**Output:** `н` lines.
+
+### Example
+
+Input:
+
+```text
+3
+```
+
+Output:
+
+```text
+1 2 3
+2 4 6
+3 6 9
+```
+
+```som
+// Task 12-jadvali-zarb: The full multiplication table
+// Write your program here
+```
+
+Input:
+
+```text
+3
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAxMi1qYWR2YWxpLXphcmI6IFRoZSBmdWxsIG11bHRpcGxpY2F0aW9uIHRhYmxlCi8vIFdyaXRlIHlvdXIgcHJvZ3JhbSBoZXJlCg&i=Mwo&t=W3siaSI6IjNcbiIsIm8iOiIxIDIgM1xuMiA0IDZcbjMgNiA5XG4ifSx7ImkiOiIxXG4iLCJvIjoiMVxuIn1d&task=12-jadvali-zarb)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 12-jadvali-zarb program.som
+```
+
+---
+
 [Дарси 12](../../tj/12-davraho.md) · [Урок 12](../../ru/12-davraho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 12](../../en/12-davraho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

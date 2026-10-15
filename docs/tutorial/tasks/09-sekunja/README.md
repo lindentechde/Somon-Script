@@ -1,4 +1,4 @@
-# Секунҷа / Треугольник
+# Секунҷа / Треугольник / Triangle
 
 ## Масъала 09-sekunja: Секунҷа
 
@@ -106,5 +106,60 @@ npm run check-task -- 09-sekunja барнома.som
 
 ---
 
+## Task 09-sekunja: Triangle
+
+Read three sides. If they can make a triangle (each side is shorter than the sum
+of the other two), print `Ҳа`, otherwise `Не`.
+
+**Input:** Three numbers, each on its own line.
+
+**Output:** `Ҳа` or `Не`
+
+### Example
+
+Input:
+
+```text
+3
+4
+5
+```
+
+Output:
+
+```text
+Ҳа
+```
+
+```som
+// Task 09-sekunja: Triangle
+// Write your program here
+```
+
+Input:
+
+```text
+3
+4
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOS1zZWt1bmphOiBUcmlhbmdsZQovLyBXcml0ZSB5b3VyIHByb2dyYW0gaGVyZQo&i=Mwo0CjUK&t=W3siaSI6IjNcbjRcbjVcbiIsIm8iOiLSstCwXG4ifSx7ImkiOiIxXG4yXG4zXG4iLCJvIjoi0J3QtVxuIn0seyJpIjoiNVxuNVxuNVxuIiwibyI6ItKy0LBcbiJ9XQ&task=09-sekunja)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 09-sekunja program.som
+```
+
+---
+
 [Дарси 9](../../tj/09-shartho.md) · [Урок 9](../../ru/09-shartho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 9](../../en/09-shartho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)

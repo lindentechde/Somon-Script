@@ -1,4 +1,4 @@
-# Аломати рақам / Знак числа
+# Аломати рақам / Знак числа / Sign of a number
 
 ## Масъала 09-alomat: Аломати рақам
 
@@ -96,5 +96,55 @@ npm run check-task -- 09-alomat барнома.som
 
 ---
 
+## Task 09-alomat: Sign of a number
+
+Read a number and print `Мусбат`, `Манфӣ` or `Сифр`.
+
+**Input:** One number.
+
+**Output:** `Мусбат`, `Манфӣ` or `Сифр`
+
+### Example
+
+Input:
+
+```text
+5
+```
+
+Output:
+
+```text
+Мусбат
+```
+
+```som
+// Task 09-alomat: Sign of a number
+// Write your program here
+```
+
+Input:
+
+```text
+5
+```
+
+[▶ Solve in the playground](https://lindentechde.github.io/Somon-Script/#c=Ly8gVGFzayAwOS1hbG9tYXQ6IFNpZ24gb2YgYSBudW1iZXIKLy8gV3JpdGUgeW91ciBwcm9ncmFtIGhlcmUK&i=NQo&t=W3siaSI6IjVcbiIsIm8iOiLQnNGD0YHQsdCw0YJcbiJ9LHsiaSI6Ii0yXG4iLCJvIjoi0JzQsNC90YTTo1xuIn0seyJpIjoiMFxuIiwibyI6ItCh0LjRhNGAXG4ifV0&task=09-alomat)
+
+In the playground, the **✓ Санҷидан** ("Check") button checks the program
+against all the tests of this task.
+
+### Checking on your computer
+
+If Node.js and SomonScript are installed, this checks the program against all
+the tests:
+
+```bash
+npm run check-task -- 09-alomat program.som
+```
+
+---
+
 [Дарси 9](../../tj/09-shartho.md) · [Урок 9](../../ru/09-shartho.md) ·
-[Ҳамаи масъалаҳо / Все задачи](../README.md)
+[Lesson 9](../../en/09-shartho.md) ·
+[Ҳамаи масъалаҳо / Все задачи / All tasks](../README.md)
