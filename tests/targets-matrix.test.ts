@@ -210,6 +210,31 @@ const CONSOLE_METHODS = [
   'clear',
 ];
 
+/**
+ * Jest 30 keeps each test's state in an AsyncLocalStorage, so Node prints a
+ * promise with its async ids and that store, which differ from run to run:
+ * they are left out of the output compared.
+ */
+function stripAsyncInternals(text: string): string {
+  const lines = text.split('\n');
+  const kept: string[] = [];
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (/^\s*\[Symbol\((async_id_symbol|trigger_async_id_symbol)\)\]: \d+,?$/.test(line)) continue;
+    const store = /^(\s*)\[Symbol\(kResourceStore\)\]: (.*)$/.exec(line);
+    if (!store) {
+      kept.push(line);
+      continue;
+    }
+    // A store printed over several lines ends at the brace with its indentation
+    if (store[2] === '{') {
+      while (index + 1 < lines.length && !lines[index + 1].startsWith(`${store[1]}}`)) index++;
+      index++;
+    }
+  }
+  return kept.join('\n');
+}
+
 /** Run compiled code and return what it printed (stack frames left out). */
 async function execute(code: string): Promise<string> {
   const output: string[] = [];
@@ -238,11 +263,13 @@ async function execute(code: string): Promise<string> {
     output.push(describeError(error));
   }
   await timers.drain(error => output.push(describeError(error)));
-  return output
-    .join('\n')
-    .split('\n')
-    .filter(line => !/^\s+at /.test(line))
-    .join('\n');
+  return stripAsyncInternals(
+    output
+      .join('\n')
+      .split('\n')
+      .filter(line => !/^\s+at /.test(line))
+      .join('\n')
+  );
 }
 
 const TARGET_ERROR =

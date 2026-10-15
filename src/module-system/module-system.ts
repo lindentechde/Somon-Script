@@ -1,5 +1,5 @@
 import chokidar from 'chokidar';
-import type { FSWatcher, WatchOptions } from 'chokidar';
+import type { ChokidarOptions, FSWatcher } from 'chokidar';
 import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import { RawSourceMap, SourceMapConsumer, SourceMapGenerator } from 'source-map';
@@ -66,7 +66,7 @@ export interface ModuleSystemWatchOptions {
   onChange?: (_event: ModuleWatchEvent) => void;
   includeNodeModules?: boolean;
   additionalPaths?: string[];
-  chokidarOptions?: WatchOptions;
+  chokidarOptions?: ChokidarOptions;
 }
 
 export interface ModuleSystemOptions {
@@ -990,7 +990,7 @@ export class ModuleSystem {
       addWatchTarget(path.resolve(additional));
     }
 
-    const watchConfig: WatchOptions = {
+    const watchConfig: ChokidarOptions = {
       persistent: true,
       ignoreInitial: true,
       awaitWriteFinish: {
@@ -1004,7 +1004,8 @@ export class ModuleSystem {
     const watcher = chokidar.watch(Array.from(watchRoots), watchConfig);
 
     // chokidar's 'all' event is one of add, addDir, change, unlink and unlinkDir
-    watcher.on('all', (event: ModuleWatchEventType, changedPath: string) => {
+    watcher.on('all', (eventName, changedPath: string) => {
+      const event = eventName as ModuleWatchEventType;
       const filePath = path.resolve(changedPath);
       if (event === 'change' || event === 'unlink') {
         this.invalidate(filePath);
@@ -1016,8 +1017,10 @@ export class ModuleSystem {
       options.onChange?.({ type: event, filePath });
     });
 
-    watcher.on('error', (error: Error) => {
-      this.logger.error('ModuleSystem watch error', { error: error.message });
+    watcher.on('error', (error: unknown) => {
+      this.logger.error('ModuleSystem watch error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       // Close watcher on error - the wrapped close() will handle removal from tracking
       // Handle the promise explicitly to avoid unhandled rejections
